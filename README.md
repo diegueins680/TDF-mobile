@@ -22,3 +22,8 @@ Deploy on all platforms with Expo Application Services (EAS).
 ## 📝 Notes
 
 - [Expo Router: Docs](https://docs.expo.dev/router/introduction/)
+
+## About screen
+
+Set `EXPO_PUBLIC_API_BASE=http://localhost:8080` in your shell (or EAS env).
+Navigate to `/about` in the app to see API base, health, and version.

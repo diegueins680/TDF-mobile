@@ -1,1 +1,0 @@
-export const DEFAULT_TZ = process.env.EXPO_PUBLIC_TZ || 'America/Guayaquil';

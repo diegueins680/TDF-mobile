@@ -1,21 +1,22 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listBookings, createBooking } from '../../src/api/bookings';
-import { Agenda, AgendaSchedule } from 'react-native-calendars';
 import { useMemo } from 'react';
 import { View, Text } from 'react-native';
+import { Agenda, AgendaSchedule } from 'react-native-calendars';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { createBooking, listBookings } from '../../src/api/bookings';
+import type { Booking } from '../../src/types';
 
 export default function Bookings() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['bookings'], queryFn: listBookings });
+  const q = useQuery<Booking[]>({ queryKey: ['bookings'], queryFn: listBookings });
 
   const m = useMutation({
     mutationFn: createBooking,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookings'] })
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookings'] }),
   });
 
   const items: AgendaSchedule = useMemo(() => {
     const acc: AgendaSchedule = {};
-    for (const b of q.data || []) {
+    for (const b of q.data ?? []) {
       const day = (b.start ?? '').slice(0, 10);
       acc[day] ||= [];
       acc[day].push({ name: b.title, height: 64, day });

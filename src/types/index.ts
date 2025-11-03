@@ -19,10 +19,11 @@ export type Booking = {
 };
 
 export type PipelineStage = 'Intake' | 'Editing' | 'Mixing' | 'Revisions' | 'Mastering' | 'Approved';
+export type PipelineKind = 'mixing' | 'mastering';
 export type PipelineCard = {
   id: ID;
   title: string;
   artist?: string | null;
   stage: PipelineStage;
-  kind: 'mixing' | 'mastering';
+  kind: PipelineKind;
 };

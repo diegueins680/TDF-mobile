@@ -1,18 +1,20 @@
 import { get, post, put } from './client';
 import type { PartyDTO, PartyCreate, PartyUpdate, RoleKey } from './types';
-import { api } from '~/lib/api';
-import type { Party } from '~/types';
+import { api } from '../lib/api';
+import type { Party } from '../types';
 
 export async function listParties(q?: string): Promise<Party[]> {
-  const res = await api.get('/parties', { params: q ? { q } : undefined });
+  const res = await api.get<Party[]>('/parties', { params: q ? { q } : undefined });
   return res.data;
 }
+
 export async function createParty(body: Partial<Party>): Promise<Party> {
-  const res = await api.post('/parties', body);
+  const res = await api.post<Party>('/parties', body);
   return res.data;
 }
+
 export async function updateParty(id: Party['id'], body: Partial<Party>): Promise<Party> {
-  const res = await api.patch(`/parties/${id}`, body);
+  const res = await api.patch<Party>(`/parties/${id}`, body);
   return res.data;
 }
 

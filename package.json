@@ -1,0 +1,29 @@
+{
+  "name": "tdf-mobile",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "deploy": "npx expo export -p web && npx eas-cli@latest deploy"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.5",
+    "axios": "^1.12.2",
+    "expo": "^54.0.1",
+    "expo-router": "~6.0.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-hook-form": "^7.65.0",
+    "react-native": "0.81.4",
+    "react-native-calendars": "^1.1313.0",
+    "react-native-web": "^0.21.0",
+    "zod": "^3.25.76"
+  },
+  "private": true,
+  "devDependencies": {
+    "typescript": "~5.9.2"
+  }
+}

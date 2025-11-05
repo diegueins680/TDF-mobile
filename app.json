@@ -1,10 +1,13 @@
 {
   "expo": {
-    "scheme": "acme",
+    "name": "TDF Records",
+    "slug": "tdf-mobile",
+    "scheme": "tdf",
     "plugins": [
       "expo-router"
     ],
-    "name": "tdf-mobile",
-    "slug": "tdf-mobile"
+    "extra": {
+      "eas": { "projectId": "placeholder" }
+    }
   }
 }

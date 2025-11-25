@@ -12,8 +12,10 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.5",
     "axios": "^1.12.2",
+    "expo-barcode-scanner": "~13.0.0",
     "expo": "^54.0.1",
     "expo-router": "~6.0.0",
+    "react-native-qrcode-svg": "^6.3.5",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.65.0",

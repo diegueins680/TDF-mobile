@@ -8,6 +8,7 @@ export default ({ config }: { config: ExpoConfig }) => ({
   scheme: 'tdf',
   ios: { supportsTablet: false },
   android: { package: 'com.tdf.records' },
+  plugins: ['expo-barcode-scanner'],
   experiments: { ...(config.experiments ?? {}), typedRoutes: true }, // plays nice with Expo Router v6
   extra: {
     ...(config.extra ?? {}),

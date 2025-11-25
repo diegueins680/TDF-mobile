@@ -32,5 +32,8 @@
   "private": true,
   "devDependencies": {
     "typescript": "~5.9.2"
+  },
+  "overrides": {
+    "react-native-reanimated": "~3.10.1"
   }
 }

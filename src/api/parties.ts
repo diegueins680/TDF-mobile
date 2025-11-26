@@ -1,7 +1,7 @@
 import { get, post, put } from './client';
 import type { PartyDTO, PartyCreate, PartyUpdate, RoleKey } from './types';
-import { api } from '~/lib/api';
-import type { Party } from '~/types';
+import { api } from '../lib/api';
+import type { Party } from '../types';
 
 export async function listParties(q?: string): Promise<Party[]> {
   const res = await api.get('/parties', { params: q ? { q } : undefined });

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { API_BASE } from '~/lib/api';
+import { API_BASE } from '../lib/api';
 
 export const http = axios.create({
   baseURL: API_BASE,

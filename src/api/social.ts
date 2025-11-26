@@ -1,4 +1,4 @@
-import { api } from '~/lib/api';
+import { api } from '../lib/api';
 
 export interface VCardExchangePayload {
   vcerPartyId: number;
@@ -45,4 +45,3 @@ export function parseVCardPayload(raw: string): ScannedVCard | null {
     return null;
   }
 }
-

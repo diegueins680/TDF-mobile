@@ -2,7 +2,8 @@
 import { patch } from './client';
 import type { PipelineCard } from './types';
 
-const rawFlag = (import.meta.env.VITE_PIPELINES_API_ENABLED ?? '').toString().trim().toLowerCase();
+// Hermes does not support import.meta; use process.env instead (Expo injects EXPO_PUBLIC_*)
+const rawFlag = (process.env.EXPO_PUBLIC_PIPELINES_API_ENABLED ?? '').toString().trim().toLowerCase();
 const PIPELINES_API_ENABLED = ['1', 'true', 'yes', 'on'].includes(rawFlag);
 
 let warnedDisabled = false;

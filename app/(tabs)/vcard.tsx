@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { BarCodeScanner, type BarCodeScannedEvent, PermissionStatus } from 'expo-barcode-scanner';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { BarCodeScannedEvent, PermissionStatus } from 'expo-barcode-scanner';
 import { ScrollView, View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { buildVCardSharePayload, exchangeVCard, parseVCardPayload, type ScannedVCard } from '../../src/api/social';
+
+type BarCodeScannerModule = typeof import('expo-barcode-scanner');
 
 export default function VCardScreen() {
   const [name, setName] = useState('');
@@ -16,6 +18,8 @@ export default function VCardScreen() {
   const [cameraStatus, setCameraStatus] = useState<PermissionStatus | null>(null);
   const [scanned, setScanned] = useState<ScannedVCard | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [scannerModule, setScannerModule] = useState<BarCodeScannerModule | null>(null);
+  const [scannerError, setScannerError] = useState<string | null>(null);
 
   const qrValue = useMemo(
     () =>
@@ -28,13 +32,30 @@ export default function VCardScreen() {
     [name, email, phone, partyId],
   );
 
-  const requestPermission = async () => {
-    const { status } = await BarCodeScanner.requestPermissionsAsync();
-    setCameraStatus(status);
-    if (status !== PermissionStatus.GRANTED) {
-      Alert.alert('Permiso requerido', 'Activa el acceso a la cámara para escanear códigos QR.');
+  const ensureScannerModule = useCallback(async () => {
+    if (scannerModule || scannerError) return;
+    try {
+      const mod = await import('expo-barcode-scanner');
+      setScannerModule(mod);
+    } catch (err) {
+      setScannerError(
+        'El lector de códigos no está disponible en este build de Expo Go. Instala la versión compatible o usa un dev client.'
+      );
+      setIsScanning(false);
     }
-  };
+  }, [scannerModule, scannerError]);
+
+  const requestPermission = useCallback(
+    async (mod: BarCodeScannerModule) => {
+      const { status } = await mod.BarCodeScanner.requestPermissionsAsync();
+      setCameraStatus(status);
+      if (status !== 'granted') {
+        Alert.alert('Permiso requerido', 'Activa el acceso a la cámara para escanear códigos QR.');
+        setIsScanning(false);
+      }
+    },
+    []
+  );
 
   const handleScan = (event: BarCodeScannedEvent) => {
     setIsScanning(false);
@@ -68,10 +89,15 @@ export default function VCardScreen() {
   };
 
   useEffect(() => {
-    if (isScanning && cameraStatus === null) {
-      void requestPermission();
+    if (!isScanning) return;
+    if (!scannerModule && !scannerError) {
+      void ensureScannerModule();
+      return;
     }
-  }, [isScanning, cameraStatus]);
+    if (scannerModule && cameraStatus === null) {
+      void requestPermission(scannerModule);
+    }
+  }, [isScanning, cameraStatus, scannerModule, scannerError, ensureScannerModule, requestPermission]);
 
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
@@ -103,8 +129,16 @@ export default function VCardScreen() {
         <Text style={styles.sectionTitle}>Escanear QR</Text>
         {isScanning ? (
           <View style={styles.scannerBox}>
-            <BarCodeScanner onBarCodeScanned={handleScan} style={StyleSheet.absoluteFillObject} />
-            <Text style={styles.scannerText}>Alinea el QR dentro del recuadro</Text>
+            {scannerError ? (
+              <Text style={styles.errorText}>{scannerError}</Text>
+            ) : scannerModule ? (
+              <>
+                <scannerModule.BarCodeScanner onBarCodeScanned={handleScan} style={StyleSheet.absoluteFillObject} />
+                <Text style={styles.scannerText}>Alinea el QR dentro del recuadro</Text>
+              </>
+            ) : (
+              <Text style={styles.loadingText}>Preparando cámara…</Text>
+            )}
             <Button title="Cancelar" onPress={() => setIsScanning(false)} />
           </View>
         ) : (
@@ -166,8 +200,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#111',
   },
   scannerText: { color: '#fff', textAlign: 'center', padding: 8 },
+  loadingText: { color: '#fff', textAlign: 'center', padding: 12 },
+  errorText: { color: '#ffdddd', textAlign: 'center', padding: 12 },
   scannedBox: { gap: 6 },
   scannedTitle: { fontWeight: '700', fontSize: 15 },
   rowText: { color: '#333' },
 });
-

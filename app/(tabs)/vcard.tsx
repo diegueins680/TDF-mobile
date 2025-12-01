@@ -6,6 +6,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { buildVCardSharePayload, exchangeVCard, parseVCardPayload, type ScannedVCard } from '../../src/api/social';
 
 type BarCodeScannerModule = typeof import('expo-barcode-scanner');
+type BarCodeScannerComponent = BarCodeScannerModule['BarCodeScanner'];
 
 export default function VCardScreen() {
   const [name, setName] = useState('');
@@ -18,7 +19,7 @@ export default function VCardScreen() {
   const [cameraStatus, setCameraStatus] = useState<PermissionStatus | null>(null);
   const [scanned, setScanned] = useState<ScannedVCard | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const [scannerModule, setScannerModule] = useState<BarCodeScannerModule | null>(null);
+  const [scannerModule, setScannerModule] = useState<BarCodeScannerComponent | null>(null);
   const [scannerError, setScannerError] = useState<string | null>(null);
 
   const qrValue = useMemo(
@@ -36,7 +37,7 @@ export default function VCardScreen() {
     if (scannerModule || scannerError) return;
     try {
       const mod = await import('expo-barcode-scanner');
-      setScannerModule(mod);
+      setScannerModule(mod.BarCodeScanner);
     } catch (err) {
       setScannerError(
         'El lector de códigos no está disponible en este build de Expo Go. Instala la versión compatible o usa un dev client.'
@@ -46,8 +47,8 @@ export default function VCardScreen() {
   }, [scannerModule, scannerError]);
 
   const requestPermission = useCallback(
-    async (mod: BarCodeScannerModule) => {
-      const { status } = await mod.BarCodeScanner.requestPermissionsAsync();
+    async (Scanner: BarCodeScannerComponent) => {
+      const { status } = await Scanner.requestPermissionsAsync();
       setCameraStatus(status);
       if (status !== 'granted') {
         Alert.alert('Permiso requerido', 'Activa el acceso a la cámara para escanear códigos QR.');
@@ -133,7 +134,7 @@ export default function VCardScreen() {
               <Text style={styles.errorText}>{scannerError}</Text>
             ) : scannerModule ? (
               <>
-                <scannerModule.BarCodeScanner onBarCodeScanned={handleScan} style={StyleSheet.absoluteFillObject} />
+                <scannerModule onBarCodeScanned={handleScan} style={StyleSheet.absoluteFillObject} />
                 <Text style={styles.scannerText}>Alinea el QR dentro del recuadro</Text>
               </>
             ) : (

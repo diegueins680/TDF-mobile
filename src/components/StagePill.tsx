@@ -1,12 +1,27 @@
-import { Text, View } from 'react-native';
+import { memo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
-export function StagePill({ stage }: { stage: string }) {
+import type { PipelineStage } from '../types';
+
+type Props = { stage: PipelineStage };
+
+function StagePillComponent({ stage }: Props) {
   return (
-    <View style={{
-      paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
-      backgroundColor: '#efefef', alignSelf: 'flex-start'
-    }}>
-      <Text style={{ fontSize: 12 }}>{stage}</Text>
+    <View style={styles.wrap}>
+      <Text style={styles.text}>{stage}</Text>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  wrap: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#efefef',
+    alignSelf: 'flex-start'
+  },
+  text: { fontSize: 12 }
+});
+
+export const StagePill = memo(StagePillComponent);

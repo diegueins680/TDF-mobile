@@ -38,7 +38,7 @@ export default function VCardScreen() {
     try {
       const mod = await import('expo-barcode-scanner');
       setScannerModule(mod.BarCodeScanner);
-    } catch (err) {
+    } catch (_err) {
       setScannerError(
         'El lector de códigos no está disponible en este build de Expo Go. Instala la versión compatible o usa un dev client.'
       );

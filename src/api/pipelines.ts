@@ -22,7 +22,7 @@ export async function updateStage(card: PipelineCard, newStage: string) {
 
   try {
     await patch<void>(`/pipelines/${card.type.toLowerCase()}/${card.id}`, { stage: newStage });
-  } catch (e) {
+  } catch (_error) {
     if (!warnedUnavailable) {
       console.warn('Pipeline API no disponible todavía; se mantiene el estado en memoria.');
       warnedUnavailable = true;

@@ -41,7 +41,7 @@ export function parseVCardPayload(raw: string): ScannedVCard | null {
     const parsed = JSON.parse(raw) as ScannedVCard;
     if (!parsed || parsed.kind !== 'vcard-exchange') return null;
     return parsed;
-  } catch (err) {
+  } catch (_err) {
     return null;
   }
 }

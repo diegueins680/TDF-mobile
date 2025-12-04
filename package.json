@@ -17,6 +17,7 @@
     "expo-barcode-scanner": "^13.0.1",
     "expo-linking": "^8.0.9",
     "expo-router": "~6.0.15",
+    "expo-status-bar": "~2.0.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.65.0",

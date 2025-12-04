@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { Inventory, normalizeAssets } from '../../src/api/inventory';
 import type {
@@ -19,6 +20,7 @@ import type {
   AssetCheckinRequest,
   AssetCreate
 } from '../../src/types';
+import { useAuth } from '../../src/providers/AuthProvider';
 
 const TARGET_KINDS: AssetCheckoutRequest['coTargetKind'][] = ['party', 'room', 'session'];
 
@@ -28,6 +30,8 @@ function toStringId(value: Asset['assetId']): string {
 
 export default function InventoryScreen() {
   const qc = useQueryClient();
+  const router = useRouter();
+  const { token } = useAuth();
   const [search, setSearch] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<{ name: string; category: string; photoUrl: string }>({
@@ -239,6 +243,11 @@ export default function InventoryScreen() {
             <Text style={styles.subheader}>
               Mantén el inventario al día, asigna equipo con check-out y agrega fotos para identificarlo rápido.
             </Text>
+            {!token && (
+              <TouchableOpacity style={styles.authHint} onPress={() => router.push('/auth')}>
+                <Text style={styles.authHintText}>Configura tu token para cargar inventario</Text>
+              </TouchableOpacity>
+            )}
 
             {feedback ? (
               <View style={styles.feedback}>
@@ -248,6 +257,9 @@ export default function InventoryScreen() {
             {assetsQuery.isError ? (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>No pudimos cargar el inventario.</Text>
+                <TouchableOpacity onPress={() => router.push('/auth')}>
+                  <Text style={styles.errorLink}>Configura tu token en Auth</Text>
+                </TouchableOpacity>
               </View>
             ) : null}
 
@@ -577,6 +589,16 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   errorText: { color: '#b91c1c', fontWeight: '600' },
+  errorLink: { color: '#b91c1c', fontWeight: '700', marginTop: 4 },
+  authHint: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#e0f2fe',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10
+  },
+  authHintText: { color: '#0f172a', fontWeight: '600' },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',

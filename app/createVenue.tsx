@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { Venues } from '../src/api/venues';
+import type { VenueCreate } from '../src/types';
 
 export default function CreateVenueScreen() {
   const router = useRouter();
@@ -20,12 +21,10 @@ export default function CreateVenueScreen() {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [capacity, setCapacity] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [website, setWebsite] = useState('');
 
   const createMutation = useMutation({
-    mutationFn: (body: Parameters<typeof Venues.create>[0]) => Venues.create(body),
+    mutationFn: (body: VenueCreate) => Venues.create(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['venues'] });
       Alert.alert('Success', 'Venue created!');
@@ -54,20 +53,32 @@ export default function CreateVenueScreen() {
       return;
     }
 
-    createMutation.mutate({
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    if (isNaN(lat) || isNaN(lng)) {
+      Alert.alert('Validation', 'Latitude and longitude must be valid numbers');
+      return;
+    }
+
+    const venuData: VenueCreate = {
       name: name.trim(),
       address: address.trim(),
       city: city.trim(),
-      state: state.trim() || undefined,
-      zipCode: zipCode.trim() || undefined,
-      latitude: parseFloat(latitude),
-      longitude: parseFloat(longitude),
-      capacity: capacity ? parseInt(capacity) : undefined,
-      imageUrl: imageUrl.trim() || undefined,
-      phoneNumber: phoneNumber.trim() || undefined,
-      website: website.trim() || undefined
-    });
-  }, [name, address, city, state, zipCode, latitude, longitude, capacity, imageUrl, phoneNumber, website, createMutation]);
+      latitude: lat,
+      longitude: lng,
+    };
+
+    // Add optional fields
+    if (state.trim()) venuData.state = state.trim();
+    if (zipCode.trim()) venuData.zipCode = zipCode.trim();
+    if (capacity) {
+      const cap = parseInt(capacity);
+      if (!isNaN(cap)) venuData.capacity = cap;
+    }
+    if (phoneNumber.trim()) venuData.phoneNumber = phoneNumber.trim();
+
+    createMutation.mutate(venuData);
+  }, [name, address, city, state, zipCode, latitude, longitude, capacity, phoneNumber, createMutation]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -169,17 +180,6 @@ export default function CreateVenueScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Image URL</Text>
-          <TextInput
-            placeholder="https://..."
-            value={imageUrl}
-            onChangeText={setImageUrl}
-            style={styles.input}
-            placeholderTextColor="#999"
-          />
-        </View>
-
-        <View style={styles.field}>
           <Text style={styles.label}>Phone Number</Text>
           <TextInput
             placeholder="+1 (555) 000-0000"
@@ -188,17 +188,6 @@ export default function CreateVenueScreen() {
             style={styles.input}
             placeholderTextColor="#999"
             keyboardType="phone-pad"
-          />
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Website</Text>
-          <TextInput
-            placeholder="https://..."
-            value={website}
-            onChangeText={setWebsite}
-            style={styles.input}
-            placeholderTextColor="#999"
           />
         </View>
 

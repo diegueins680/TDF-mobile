@@ -1,4 +1,4 @@
-import { get, post, put, patch } from './client';
+import { get, post, put } from './client';
 import type {
   ID,
   SocialEvent,
@@ -11,59 +11,102 @@ import type {
 } from '../types';
 
 /**
- * Social Events API
+ * Social Events API - Wired to backend endpoints
+ * Maps backend EventDTO to frontend SocialEvent types
  */
 export const Events = {
   // Event CRUD
-  list: async (filters?: { city?: string; artistId?: ID; upcomingOnly?: boolean }): Promise<SocialEvent[]> => {
+  list: async (filters?: { city?: string; startAfter?: string }): Promise<SocialEvent[]> => {
     const query = new URLSearchParams();
     if (filters?.city) query.append('city', filters.city);
-    if (filters?.artistId) query.append('artistId', String(filters.artistId));
-    if (filters?.upcomingOnly) query.append('upcomingOnly', 'true');
+    if (filters?.startAfter) query.append('start_after', filters.startAfter);
     
     const url = `/events${query.toString() ? '?' + query.toString() : ''}`;
-    return get<SocialEvent[]>(url);
+    const events = await get<any[]>(url);
+    return events.map(e => mapBackendEventToFrontend(e));
   },
 
   getById: async (eventId: ID): Promise<SocialEvent> => {
-    return get<SocialEvent>(`/events/${eventId}`);
+    const event = await get<any>(`/events/${eventId}`);
+    return mapBackendEventToFrontend(event);
   },
 
   create: async (body: SocialEventCreate): Promise<SocialEvent> => {
-    return post<SocialEvent>('/events', body);
+    const backendBody = mapFrontendEventToBackend(body);
+    const event = await post<any>('/events', backendBody);
+    return mapBackendEventToFrontend(event);
   },
 
   update: async (eventId: ID, body: SocialEventUpdate): Promise<SocialEvent> => {
-    return put<SocialEvent>(`/events/${eventId}`, body);
+    const backendBody = mapFrontendEventToBackend(body);
+    const event = await put<any>(`/events/${eventId}`, backendBody);
+    return mapBackendEventToFrontend(event);
   },
 
   delete: async (eventId: ID): Promise<void> => {
-    return post<void>(`/events/${eventId}/delete`, {});
+    // Backend uses DELETE, not POST
+    return fetch(`/events/${eventId}`, { method: 'DELETE' }).then(() => {});
   },
 
-  // RSVP management
+  // RSVP management (stubs - backend not yet implemented)
   getRSVPs: async (eventId: ID): Promise<EventRSVP[]> => {
-    return get<EventRSVP[]>(`/events/${eventId}/rsvps`);
+    return [];
   },
 
   rsvp: async (body: EventRSVPCreate): Promise<EventRSVP> => {
-    return post<EventRSVP>('/rsvps', body);
+    return post<EventRSVP>('/events/${body.eventId}/rsvps', { status: body.status });
   },
 
   updateRSVP: async (rsvpId: ID, status: string): Promise<EventRSVP> => {
-    return patch<EventRSVP>(`/rsvps/${rsvpId}`, { status });
+    throw new Error('Not yet implemented on backend');
   },
 
-  // Invitations
+  // Invitations (stubs - backend not yet implemented)
   sendInvitation: async (body: EventInvitationCreate): Promise<EventInvitation> => {
-    return post<EventInvitation>('/invitations', body);
+    return post<EventInvitation>(`/events/${body.eventId}/invitations`, {});
   },
 
   getInvitations: async (userId: ID): Promise<EventInvitation[]> => {
-    return get<EventInvitation[]>(`/users/${userId}/invitations`);
+    return [];
   },
 
   respondToInvitation: async (invitationId: ID, status: 'ACCEPTED' | 'DECLINED'): Promise<EventInvitation> => {
-    return patch<EventInvitation>(`/invitations/${invitationId}`, { status });
+    throw new Error('Not yet implemented on backend');
   }
 };
+
+// Mapping functions to convert between backend EventDTO and frontend SocialEvent
+function mapBackendEventToFrontend(e: any): SocialEvent {
+  return {
+    id: e.eventId,
+    title: e.eventTitle,
+    description: e.eventDescription || null,
+    startTime: e.eventStart, // ISO string from backend
+    endTime: e.eventEnd,     // ISO string from backend
+    venueId: e.eventVenueId ? parseInt(e.eventVenueId) : 0,
+    venue: undefined,
+    artistIds: e.eventArtists?.map((a: any) => a.artistId || a.id) || [],
+    artists: e.eventArtists || [],
+    createdBy: 0, // backend doesn't track organizer yet
+    ticketPrice: e.eventPriceCents ? e.eventPriceCents / 100 : null,
+    ticketUrl: null, // backend doesn't store ticket URL
+    imageUrl: null,  // backend doesn't store image URL
+    isPublic: true,  // backend doesn't track visibility
+    rsvpCount: 0,    // backend doesn't track RSVPs
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function mapFrontendEventToBackend(body: any) {
+  return {
+    eventTitle: body.title,
+    eventDescription: body.description,
+    eventStart: body.startTime,
+    eventEnd: body.endTime,
+    eventVenueId: body.venueId?.toString(),
+    eventPriceCents: body.ticketPrice ? Math.round(body.ticketPrice * 100) : null,
+    eventCapacity: null,
+    eventArtists: body.artistIds?.map((id: ID) => ({ artistId: id })) || []
+  };
+}

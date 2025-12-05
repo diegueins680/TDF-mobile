@@ -102,6 +102,9 @@ export default function CreateEventScreen() {
       return;
     }
 
+    // Convert price from dollars to cents for backend
+    const priceCents = ticketPrice ? Math.round(parseFloat(ticketPrice) * 100) : 0;
+
     createMutation.mutate({
       title: title.trim(),
       description: description.trim(),
@@ -109,11 +112,10 @@ export default function CreateEventScreen() {
       endTime: endTime.toISOString(),
       venueId,
       artistIds,
-      ticketPrice: ticketPrice ? parseFloat(ticketPrice) : undefined,
-      ticketUrl: ticketUrl.trim() || undefined,
+      ticketPrice: priceCents,  // Backend expects cents as integer
       isPublic
     });
-  }, [title, description, venueId, artistIds, startTime, endTime, ticketPrice, ticketUrl, isPublic, createMutation]);
+  }, [title, description, venueId, artistIds, startTime, endTime, ticketPrice, isPublic, createMutation]);
 
   const renderVenueItem = useCallback(({ item }: { item: Venue }) => (
     <TouchableOpacity

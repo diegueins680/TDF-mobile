@@ -3,6 +3,7 @@ import axios from 'axios';
 export const API_BASE =
   (process.env.EXPO_PUBLIC_API_BASE || 'http://localhost:8080').replace(/\/+$/, '');
 const API_TOKEN = process.env.EXPO_PUBLIC_API_TOKEN?.trim();
+export const UPLOAD_BASE = process.env.EXPO_PUBLIC_UPLOAD_URL;
 
 export const api = axios.create({
   baseURL: API_BASE,

@@ -5,6 +5,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Alert,
   StyleSheet,
   Text,
   TextInput,
@@ -12,6 +13,7 @@ import {
   View
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 
 import { Inventory, normalizeAssets } from '../../src/api/inventory';
 import type {
@@ -21,6 +23,7 @@ import type {
   AssetCreate
 } from '../../src/types';
 import { useAuth } from '../../src/providers/AuthProvider';
+import { uploadImage } from '../../src/api/upload';
 
 const TARGET_KINDS: AssetCheckoutRequest['coTargetKind'][] = ['party', 'room', 'session'];
 
@@ -32,6 +35,10 @@ export default function InventoryScreen() {
   const qc = useQueryClient();
   const router = useRouter();
   const { token } = useAuth();
+  const [localImage, setLocalImage] = useState<{ uri: string; mime?: string; name?: string } | null>(
+    null
+  );
+  const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<{ name: string; category: string; photoUrl: string }>({
@@ -115,7 +122,10 @@ export default function InventoryScreen() {
   }, [assets, search]);
 
   const canCreate =
-    createForm.name.trim().length > 1 && createForm.category.trim().length > 1 && !createMutation.isPending;
+    createForm.name.trim().length > 1 &&
+    createForm.category.trim().length > 1 &&
+    !createMutation.isPending &&
+    !uploading;
 
   const openCheckout = useCallback((asset: Asset) => {
     setCheckoutAsset(asset);
@@ -228,6 +238,59 @@ export default function InventoryScreen() {
     [openCheckout, openCheckin, setSearch]
   );
 
+  const pickImage = useCallback(
+    async (mode: 'camera' | 'library') => {
+      if (mode === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permiso requerido', 'Activa el permiso de cámara para tomar fotos.');
+          return;
+        }
+      }
+      const result =
+        mode === 'camera'
+          ? await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              quality: 0.8
+            });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      setLocalImage({ uri: asset.uri, mime: asset.mimeType ?? 'image/jpeg', name: asset.fileName });
+      setCreateForm((prev) => ({ ...prev, photoUrl: '' }));
+    },
+    []
+  );
+
+  const submitCreate = useCallback(async () => {
+    let photoUrl: string | undefined = createForm.photoUrl.trim() || undefined;
+    if (localImage) {
+      try {
+        setUploading(true);
+        const uploaded = await uploadImage({
+          uri: localImage.uri,
+          mimeType: localImage.mime,
+          fileName: localImage.name
+        });
+        photoUrl = uploaded;
+        setCreateForm((prev) => ({ ...prev, photoUrl: uploaded }));
+      } catch (err) {
+        setFeedback(err instanceof Error ? err.message : 'No se pudo subir la foto.');
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+    const payload: AssetCreate = {
+      cName: createForm.name.trim(),
+      cCategory: createForm.category.trim(),
+      cPhotoUrl: photoUrl
+    };
+    createMutation.mutate(payload);
+  }, [createForm, createMutation, localImage]);
+
   return (
     <View style={styles.page}>
       <FlatList
@@ -278,31 +341,47 @@ export default function InventoryScreen() {
                 onChangeText={(text) => setCreateForm((prev) => ({ ...prev, category: text }))}
                 style={styles.input}
               />
-              <TextInput
-                placeholder="URL de foto (opcional)"
-                value={createForm.photoUrl}
-                onChangeText={(text) => setCreateForm((prev) => ({ ...prev, photoUrl: text }))}
-                style={styles.input}
-                autoCapitalize="none"
-              />
-              {createForm.photoUrl.trim() ? (
+            <TextInput
+              placeholder="URL de foto (opcional)"
+              value={createForm.photoUrl}
+              onChangeText={(text) => setCreateForm((prev) => ({ ...prev, photoUrl: text }))}
+              style={styles.input}
+              autoCapitalize="none"
+            />
+              {createForm.photoUrl.trim() || localImage ? (
                 <View style={styles.previewBox}>
                   <Image
-                    source={{ uri: createForm.photoUrl.trim() }}
+                    source={{ uri: localImage?.uri ?? createForm.photoUrl.trim() }}
                     style={styles.previewImage}
                     resizeMode="cover"
                   />
+                  <View style={styles.previewActions}>
+                    {localImage ? (
+                      <TouchableOpacity
+                        style={styles.ghostBtn}
+                        onPress={() => {
+                          setLocalImage(null);
+                          setCreateForm((prev) => ({ ...prev, photoUrl: '' }));
+                        }}
+                      >
+                        <Text style={styles.ghostBtnText}>Quitar foto</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 </View>
               ) : null}
+              <View style={styles.metaRow}>
+                <TouchableOpacity style={styles.ghostBtn} onPress={() => pickImage('camera')}>
+                  <Text style={styles.ghostBtnText}>Tomar foto</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.ghostBtn} onPress={() => pickImage('library')}>
+                  <Text style={styles.ghostBtnText}>Desde galería</Text>
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity
                 style={[styles.primaryBtn, !canCreate && styles.primaryBtnDisabled]}
                 onPress={() => {
-                  const payload: AssetCreate = {
-                    cName: createForm.name.trim(),
-                    cCategory: createForm.category.trim(),
-                    cPhotoUrl: createForm.photoUrl.trim() || undefined
-                  };
-                  createMutation.mutate(payload);
+                  void submitCreate();
                 }}
                 disabled={!canCreate}
               >
@@ -572,6 +651,7 @@ const styles = StyleSheet.create({
   badgeWarning: { backgroundColor: '#fff7ed', borderColor: '#fed7aa' },
   badgeText: { fontWeight: '700', color: '#0f172a' },
   assetImage: { width: '100%', height: 160, borderRadius: 10 },
+  previewActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
   empty: { alignItems: 'center', padding: 20, gap: 8 },
   feedback: {
     backgroundColor: '#ecfeff',

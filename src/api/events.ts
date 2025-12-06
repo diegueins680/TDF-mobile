@@ -16,10 +16,13 @@ import type {
  */
 export const Events = {
   // Event CRUD
-  list: async (filters?: { city?: string; startAfter?: string }): Promise<SocialEvent[]> => {
+  list: async (filters?: { city?: string; startAfter?: string; upcomingOnly?: boolean }): Promise<SocialEvent[]> => {
     const query = new URLSearchParams();
     if (filters?.city) query.append('city', filters.city);
     if (filters?.startAfter) query.append('start_after', filters.startAfter);
+    if (filters?.upcomingOnly && !filters.startAfter) {
+      query.append('start_after', new Date().toISOString());
+    }
     
     const url = `/events${query.toString() ? '?' + query.toString() : ''}`;
     const events = await get<any[]>(url);
@@ -48,13 +51,34 @@ export const Events = {
     return fetch(`/events/${eventId}`, { method: 'DELETE' }).then(() => {});
   },
 
-  // RSVP management (stubs - backend not yet implemented)
+  // RSVP management
   getRSVPs: async (eventId: ID): Promise<EventRSVP[]> => {
-    return [];
+    const rsvps = await get<any[]>(`/events/${eventId}/rsvps`);
+    return rsvps.map(r => ({
+      id: r.rsvpId ? parseInt(r.rsvpId) : 0,
+      eventId: parseInt(r.rsvpEventId) || eventId,
+      userId: r.rsvpPartyId as any,
+      status: mapBackendRsvpStatus(r.rsvpStatus),
+      createdAt: r.rsvpCreatedAt || new Date().toISOString(),
+      updatedAt: r.rsvpCreatedAt || new Date().toISOString()
+    }));
   },
 
   rsvp: async (body: EventRSVPCreate): Promise<EventRSVP> => {
-    return post<EventRSVP>('/events/${body.eventId}/rsvps', { status: body.status });
+    const rsvpBody = {
+      rsvpEventId: String(body.eventId),
+      rsvpPartyId: String(body.userId),
+      rsvpStatus: mapFrontendRsvpStatus(body.status)
+    };
+    const result = await post<any>(`/events/${body.eventId}/rsvps`, rsvpBody);
+    return {
+      id: result.rsvpId ? parseInt(result.rsvpId) : 0,
+      eventId: body.eventId,
+      userId: body.userId,
+      status: body.status,
+      createdAt: result.rsvpCreatedAt || new Date().toISOString(),
+      updatedAt: result.rsvpCreatedAt || new Date().toISOString()
+    };
   },
 
   updateRSVP: async (rsvpId: ID, status: string): Promise<EventRSVP> => {

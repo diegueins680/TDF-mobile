@@ -16,13 +16,10 @@ import type {
  */
 export const Events = {
   // Event CRUD
-  list: async (filters?: { city?: string; startAfter?: string; upcomingOnly?: boolean }): Promise<SocialEvent[]> => {
+  list: async (filters?: { city?: string; startAfter?: string }): Promise<SocialEvent[]> => {
     const query = new URLSearchParams();
     if (filters?.city) query.append('city', filters.city);
     if (filters?.startAfter) query.append('start_after', filters.startAfter);
-    if (filters?.upcomingOnly && !filters.startAfter) {
-      query.append('start_after', new Date().toISOString());
-    }
     
     const url = `/events${query.toString() ? '?' + query.toString() : ''}`;
     const events = await get<any[]>(url);
@@ -133,4 +130,23 @@ function mapFrontendEventToBackend(body: any) {
     eventCapacity: null,
     eventArtists: body.artistIds?.map((id: ID) => ({ artistId: id })) || []
   };
+}
+
+// RSVP status mapping: backend uses "Accepted|Declined|Maybe", frontend uses "GOING|INTERESTED|NOT_GOING|NONE"
+function mapBackendRsvpStatus(status: string): any {
+  switch (status?.toLowerCase()) {
+    case 'accepted': return 'GOING';
+    case 'declined': return 'NOT_GOING';
+    case 'maybe': return 'INTERESTED';
+    default: return 'NONE';
+  }
+}
+
+function mapFrontendRsvpStatus(status: string): string {
+  switch (status) {
+    case 'GOING': return 'Accepted';
+    case 'NOT_GOING': return 'Declined';
+    case 'INTERESTED': return 'Maybe';
+    default: return 'Declined';
+  }
 }

@@ -4,10 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 
-import { Events } from '../src/api/events';
-import { EventCard } from '../components/EventCard';
-import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import type { SocialEvent } from '../src/types';
+import { Events } from '../../src/api/events';
+import { EventCard } from '../../src/components/EventCard';
+import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
+import type { SocialEvent } from '../../src/types';
 
 type ViewMode = 'calendar' | 'list';
 

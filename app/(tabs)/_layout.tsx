@@ -38,6 +38,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="social"
+        options={{
+          title: 'Social',
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="account-heart" size={24} color={color} />
+        }}
+      />
+      <Tabs.Screen
         name="vcard"
         options={{
           title: 'vCard',

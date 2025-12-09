@@ -224,3 +224,10 @@ export type EventInvitationCreate = {
   status?: EventInvitationStatus;
   message?: string | null;
 };
+
+export type PartyFollow = {
+  pfFollowerId: number;
+  pfFollowingId: number;
+  pfViaNfc: boolean;
+  pfStartedAt: string; // ISO date
+};

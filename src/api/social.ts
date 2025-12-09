@@ -1,4 +1,5 @@
-import { api } from '../lib/api';
+import { http } from './client';
+import type { PartyFollow } from '../types';
 
 export interface VCardExchangePayload {
   vcerPartyId: number;
@@ -8,7 +9,7 @@ export async function exchangeVCard(targetPartyId: number, token?: string): Prom
   const headers = token?.trim()
     ? { Authorization: `Bearer ${token.trim()}` }
     : undefined;
-  await api.post('/social/vcard-exchange', { vcerPartyId: targetPartyId } satisfies VCardExchangePayload, { headers });
+  await http.post('/social/vcard-exchange', { vcerPartyId: targetPartyId } satisfies VCardExchangePayload, { headers });
 }
 
 export function buildVCardSharePayload(input: {
@@ -45,3 +46,25 @@ export function parseVCardPayload(raw: string): ScannedVCard | null {
     return null;
   }
 }
+
+export const Social = {
+  listFollowers: async (): Promise<PartyFollow[]> => {
+    const res = await http.get<PartyFollow[]>('/social/followers');
+    return res.data;
+  },
+  listFollowing: async (): Promise<PartyFollow[]> => {
+    const res = await http.get<PartyFollow[]>('/social/following');
+    return res.data;
+  },
+  listFriends: async (): Promise<PartyFollow[]> => {
+    const res = await http.get<PartyFollow[]>('/social/friends');
+    return res.data;
+  },
+  addFriend: async (partyId: number): Promise<PartyFollow[]> => {
+    const res = await http.post<PartyFollow[]>(`/social/friends/${partyId}`, {});
+    return res.data;
+  },
+  removeFriend: async (partyId: number): Promise<void> => {
+    await http.delete(`/social/friends/${partyId}`);
+  }
+};

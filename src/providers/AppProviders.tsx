@@ -4,12 +4,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { queryClient } from '../lib/queryClient';
 import { AuthProvider } from './AuthProvider';
+import { UserSettingsProvider } from './UserSettingsProvider';
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        <UserSettingsProvider>
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        </UserSettingsProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

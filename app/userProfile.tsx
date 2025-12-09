@@ -1,63 +1,95 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, FlatList
+  View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, FlatList, TextInput, Alert
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
-
-interface UserProfile {
-  id: string;
-  name: string;
-  email: string;
-}
+import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
 export default function UserProfileScreen() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'artist' | 'attending' | 'saved'>('artist');
+  const { partyId, displayName, setIdentity, clearIdentity, loading } = useUserSettings();
+  const [activeTab, setActiveTab] = useState<'artist' | 'events' | 'saved'>('artist');
+  const [draftPartyId, setDraftPartyId] = useState(partyId ?? '');
+  const [draftName, setDraftName] = useState(displayName ?? '');
 
-  // Mock current user - in real app would come from auth context
-  const currentUser: UserProfile = {
-    id: 'current-user',
-    name: 'John Doe',
-    email: 'john@example.com'
-  };
+  useEffect(() => {
+    setDraftPartyId(partyId ?? '');
+    setDraftName(displayName ?? '');
+  }, [partyId, displayName]);
 
   // Query user's artist profile
   const artistQuery = useQuery({
-    queryKey: ['user-artist-profile'],
-    queryFn: () => Artists.getByParty(currentUser.id)
+    queryKey: ['user-artist-profile', partyId],
+    queryFn: () => Artists.getByParty(partyId as string),
+    enabled: Boolean(partyId)
   });
 
-  // Query events user is attending
-  const attendingQuery = useQuery({
-    queryKey: ['user-attending-events'],
-    queryFn: () => Events.list({ userId: currentUser.id })
+  const eventsQuery = useQuery({
+    queryKey: ['upcoming-events'],
+    queryFn: () => Events.list({ upcomingOnly: true })
   });
 
   const upcomingEvents = useMemo(() => {
-    if (!attendingQuery.data) return [];
+    if (!eventsQuery.data) return [];
     const now = new Date();
-    return attendingQuery.data
-      .filter(e => new Date(e.startDateTime) > now)
-      .sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
-  }, [attendingQuery.data]);
+    return eventsQuery.data
+      .filter(e => new Date(e.startTime) > now)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [eventsQuery.data]);
 
   const handleCreateArtistProfile = useCallback(() => {
+    if (!partyId) {
+      Alert.alert('Party ID requerido', 'Guarda tu Party ID antes de crear tu perfil de artista.');
+      return;
+    }
     router.push('/createArtistProfile');
-  }, [router]);
+  }, [partyId, router]);
 
   const handleEditArtistProfile = useCallback(() => {
+    if (!partyId) {
+      Alert.alert('Party ID requerido', 'Guarda tu Party ID antes de editar tu perfil de artista.');
+      return;
+    }
     if (artistQuery.data) {
       router.push({ pathname: '/editArtistProfile', params: { artistId: artistQuery.data.id } });
     }
-  }, [artistQuery.data, router]);
+  }, [artistQuery.data, partyId, router]);
 
   const handleEventPress = useCallback((eventId: string) => {
     router.push({ pathname: '/eventDetail', params: { eventId } });
   }, [router]);
+
+  const handleSaveIdentity = useCallback(() => {
+    if (!draftPartyId.trim()) {
+      Alert.alert('Party ID requerido', 'Ingresa tu Party ID para conectar RSVP e invitaciones.');
+      return;
+    }
+    setIdentity(draftPartyId.trim(), draftName.trim());
+    Alert.alert('Guardado', 'Actualizamos tu Party ID.');
+  }, [draftPartyId, draftName, setIdentity]);
+
+  const handleClearIdentity = useCallback(() => {
+    clearIdentity();
+    setDraftPartyId('');
+    setDraftName('');
+  }, [clearIdentity]);
+
+  const headerName = draftName || displayName || 'Tu perfil';
+  const headerSubtitle = partyId ? `Party ID: ${partyId}` : 'Agrega tu Party ID para RSVP e invitaciones';
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const renderEventItem = ({ item }: { item: typeof upcomingEvents[0] }) => (
     <TouchableOpacity
@@ -67,12 +99,12 @@ export default function UserProfileScreen() {
       <View style={styles.eventHeader}>
         <Text style={styles.eventTitle}>{item.title}</Text>
         {item.ticketPrice && (
-          <Text style={styles.eventPrice}>${(item.ticketPrice / 100).toFixed(2)}</Text>
+          <Text style={styles.eventPrice}>${item.ticketPrice.toFixed(2)}</Text>
         )}
       </View>
       <Text style={styles.eventDateTime}>
-        {new Date(item.startDateTime).toLocaleDateString()} at{' '}
-        {new Date(item.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        {new Date(item.startTime).toLocaleDateString()} at{' '}
+        {new Date(item.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </Text>
       {item.venue && (
         <Text style={styles.eventVenue}>{item.venue.name}</Text>
@@ -86,13 +118,41 @@ export default function UserProfileScreen() {
         <View style={styles.profileHeader}>
           <View style={styles.avatarPlaceholder}>
             <Text style={styles.avatarInitial}>
-              {currentUser.name.charAt(0).toUpperCase()}
+              {headerName.charAt(0).toUpperCase()}
             </Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{currentUser.name}</Text>
-            <Text style={styles.profileEmail}>{currentUser.email}</Text>
+            <Text style={styles.profileName}>{headerName}</Text>
+            <Text style={styles.profileEmail}>{headerSubtitle}</Text>
           </View>
+        </View>
+
+        <View style={styles.identityCard}>
+          <Text style={styles.sectionTitle}>Identidad social</Text>
+          <TextInput
+            placeholder="Party ID"
+            value={draftPartyId}
+            onChangeText={setDraftPartyId}
+            style={styles.input}
+            keyboardType="number-pad"
+          />
+          <TextInput
+            placeholder="Nombre para mostrar (opcional)"
+            value={draftName}
+            onChangeText={setDraftName}
+            style={styles.input}
+          />
+          <View style={styles.identityActions}>
+            <TouchableOpacity style={styles.saveButton} onPress={handleSaveIdentity}>
+              <Text style={styles.saveButtonText}>Guardar</Text>
+            </TouchableOpacity>
+            {partyId && (
+              <TouchableOpacity style={styles.clearButton} onPress={handleClearIdentity}>
+                <Text style={styles.clearButtonText}>Limpiar</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={styles.helperText}>Usaremos estos datos en RSVP, invitaciones y vCard.</Text>
         </View>
 
         <View style={styles.tabContainer}>
@@ -105,11 +165,11 @@ export default function UserProfileScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'attending' && styles.tabActive]}
-            onPress={() => setActiveTab('attending')}
+            style={[styles.tab, activeTab === 'events' && styles.tabActive]}
+            onPress={() => setActiveTab('events')}
           >
-            <Text style={[styles.tabLabel, activeTab === 'attending' && styles.tabLabelActive]}>
-              Attending
+            <Text style={[styles.tabLabel, activeTab === 'events' && styles.tabLabelActive]}>
+              Eventos
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -124,7 +184,9 @@ export default function UserProfileScreen() {
 
         {activeTab === 'artist' && (
           <View style={styles.section}>
-            {artistQuery.isLoading ? (
+            {!partyId ? (
+              <Text style={styles.noDataText}>Guarda tu Party ID para enlazar tu perfil de artista.</Text>
+            ) : artistQuery.isLoading ? (
               <ActivityIndicator size="large" color="#2563eb" />
             ) : artistQuery.data ? (
               <>
@@ -156,13 +218,13 @@ export default function UserProfileScreen() {
           </View>
         )}
 
-        {activeTab === 'attending' && (
+        {activeTab === 'events' && (
           <View style={styles.section}>
-            {attendingQuery.isLoading ? (
+            {eventsQuery.isLoading ? (
               <ActivityIndicator size="large" color="#2563eb" />
             ) : upcomingEvents.length > 0 ? (
               <>
-                <Text style={styles.sectionTitle}>Your Upcoming Events ({upcomingEvents.length})</Text>
+                <Text style={styles.sectionTitle}>Próximos eventos ({upcomingEvents.length})</Text>
                 <FlatList
                   data={upcomingEvents}
                   renderItem={renderEventItem}
@@ -171,7 +233,9 @@ export default function UserProfileScreen() {
                 />
               </>
             ) : (
-              <Text style={styles.noDataText}>You&apos;re not attending any events yet</Text>
+              <Text style={styles.noDataText}>
+                Aún no hay eventos disponibles. Guarda tu Party ID para usar RSVP e invitaciones.
+              </Text>
             )}
           </View>
         )}
@@ -188,6 +252,7 @@ export default function UserProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fafafa' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 24 },
   profileHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, backgroundColor: '#fff', padding: 16, borderRadius: 8 },
   avatarPlaceholder: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
@@ -195,6 +260,14 @@ const styles = StyleSheet.create({
   profileInfo: { flex: 1 },
   profileName: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 },
   profileEmail: { fontSize: 13, color: '#666' },
+  identityCard: { backgroundColor: '#fff', borderRadius: 8, padding: 16, borderWidth: 1, borderColor: '#f0f0f0', marginBottom: 16, gap: 10 },
+  input: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10 },
+  identityActions: { flexDirection: 'row', gap: 8 },
+  saveButton: { backgroundColor: '#2563eb', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center' },
+  saveButtonText: { color: '#fff', fontWeight: '700' },
+  clearButton: { backgroundColor: '#f3f4f6', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center' },
+  clearButtonText: { color: '#111827', fontWeight: '700' },
+  helperText: { fontSize: 12, color: '#6b7280' },
   tabContainer: { flexDirection: 'row', gap: 8, marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   tab: { flex: 1, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: '#2563eb' },

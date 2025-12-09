@@ -1,35 +1,100 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, Image, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
-  Modal, SafeAreaView, Linking
+  Modal, SafeAreaView, Linking, TextInput
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
-import type { ID, EventRSVPStatus } from '../types';
+import type { ID, RSVPStatus, EventInvitationStatus } from '../types';
+import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
 export default function EventDetailScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const qc = useQueryClient();
   const eventId = params.eventId as string;
+  const { partyId, displayName } = useUserSettings();
+  const normalizedPartyId = partyId?.trim() || null;
 
-  const [rsvpStatus, setRsvpStatus] = useState<EventRSVPStatus>('NONE');
+  const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('NONE');
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteeId, setInviteeId] = useState('');
+  const [inviteMessage, setInviteMessage] = useState('');
 
   const { data: event, isLoading, isError } = useQuery({
     queryKey: ['event', eventId],
     queryFn: () => Events.getById(eventId as ID)
   });
 
+  const rsvpQuery = useQuery({
+    queryKey: ['event-rsvps', eventId],
+    queryFn: () => Events.getRSVPs(eventId as ID),
+    enabled: Boolean(eventId)
+  });
+
+  const invitationsQuery = useQuery({
+    queryKey: ['event-invitations', eventId],
+    queryFn: () => Events.getInvitations(eventId as ID),
+    enabled: Boolean(eventId)
+  });
+
+  useEffect(() => {
+    if (!normalizedPartyId || !rsvpQuery.data) return;
+    const mine = rsvpQuery.data.find((r) => String(r.userId) === normalizedPartyId);
+    setRsvpStatus(mine?.status ?? 'NONE');
+  }, [normalizedPartyId, rsvpQuery.data]);
+
   const rsvpMutation = useMutation({
-    mutationFn: (status: EventRSVPStatus) =>
-      Events.rsvp({ eventId: eventId as ID, userId: 'current-user' as ID, status }),
+    mutationFn: (status: RSVPStatus) => {
+      if (!normalizedPartyId) throw new Error('Party ID requerido para RSVP');
+      return Events.rsvp({ eventId: eventId as ID, userId: normalizedPartyId, status });
+    },
     onSuccess: (_data, status) => {
       setRsvpStatus(status);
       qc.invalidateQueries({ queryKey: ['event', eventId] });
-      Alert.alert('Success', `You're ${status.toLowerCase()}`);
+      qc.invalidateQueries({ queryKey: ['event-rsvps', eventId] });
+      Alert.alert('Listo', `Marcaste tu asistencia como ${status.toLowerCase()}`);
+    },
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : 'No pudimos guardar tu RSVP';
+      Alert.alert('Error', msg);
+    }
+  });
+
+  const invitationMutation = useMutation({
+    mutationFn: async () => {
+      const target = inviteeId.trim();
+      if (!target) throw new Error('Ingresa el ID de la persona a invitar');
+      return Events.sendInvitation({
+        eventId: eventId as ID,
+        toUserId: target,
+        fromUserId: normalizedPartyId ?? undefined,
+        message: inviteMessage.trim() || undefined
+      });
+    },
+    onSuccess: () => {
+      setInviteeId('');
+      setInviteMessage('');
+      qc.invalidateQueries({ queryKey: ['event-invitations', eventId] });
+      setShowInviteModal(false);
+      Alert.alert('Listo', 'Invitación enviada');
+    },
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : 'No pudimos enviar la invitación';
+      Alert.alert('Error', msg);
+    }
+  });
+
+  const respondInvitationMutation = useMutation({
+    mutationFn: ({ invitationId, status }: { invitationId: ID; status: EventInvitationStatus }) =>
+      Events.respondToInvitation(eventId as ID, invitationId, status),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['event-invitations', eventId] });
+    },
+    onError: () => {
+      Alert.alert('Error', 'No pudimos actualizar la invitación.');
     }
   });
 
@@ -41,16 +106,13 @@ export default function EventDetailScreen() {
     }
   }, [event?.ticketUrl]);
 
-  const _handleInvite = useCallback((userId: ID) => {
-    Events.sendInvitation({ eventId: eventId as ID, toUserId: userId })
-      .then(() => {
-        Alert.alert('Success', 'Invitation sent!');
-        setShowInviteModal(false);
-      })
-      .catch(() => {
-        Alert.alert('Error', 'Failed to send invitation');
-      });
-  }, [eventId]);
+  const handleRsvpPress = useCallback((status: RSVPStatus) => {
+    if (!normalizedPartyId) {
+      Alert.alert('Configura tu Party ID', 'Ve a tu perfil y guarda tu Party ID para confirmar asistencia.');
+      return;
+    }
+    rsvpMutation.mutate(status);
+  }, [normalizedPartyId, rsvpMutation]);
 
   if (isLoading) {
     return (
@@ -73,6 +135,8 @@ export default function EventDetailScreen() {
 
   const startDate = new Date(event.startTime);
   const endDate = new Date(event.endTime);
+  const rsvpCount = rsvpQuery.data?.length ?? event.rsvpCount ?? 0;
+  const invitations = invitationsQuery.data ?? [];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -148,11 +212,17 @@ export default function EventDetailScreen() {
 
         {/* RSVP */}
         <View style={styles.section}>
-          <Text style={styles.label}>Going? ({event.rsvpCount})</Text>
+          <Text style={styles.label}>Going? ({rsvpCount})</Text>
+          {!normalizedPartyId && (
+            <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para confirmar asistencia.</Text>
+          )}
+          {rsvpQuery.isLoading && (
+            <Text style={styles.text}>Cargando RSVP...</Text>
+          )}
           <View style={styles.rsvpButtons}>
             <TouchableOpacity
               style={[styles.rsvpButton, rsvpStatus === 'GOING' && styles.rsvpButtonActive]}
-              onPress={() => rsvpMutation.mutate('GOING')}
+              onPress={() => handleRsvpPress('GOING')}
               disabled={rsvpMutation.isPending}
             >
               <Text style={[styles.rsvpButtonText, rsvpStatus === 'GOING' && styles.rsvpButtonTextActive]}>
@@ -161,7 +231,7 @@ export default function EventDetailScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.rsvpButton, rsvpStatus === 'INTERESTED' && styles.rsvpButtonActive]}
-              onPress={() => rsvpMutation.mutate('INTERESTED')}
+              onPress={() => handleRsvpPress('INTERESTED')}
               disabled={rsvpMutation.isPending}
             >
               <Text style={[styles.rsvpButtonText, rsvpStatus === 'INTERESTED' && styles.rsvpButtonTextActive]}>
@@ -170,7 +240,7 @@ export default function EventDetailScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.rsvpButton, rsvpStatus === 'NOT_GOING' && styles.rsvpButtonActive]}
-              onPress={() => rsvpMutation.mutate('NOT_GOING')}
+              onPress={() => handleRsvpPress('NOT_GOING')}
               disabled={rsvpMutation.isPending}
             >
               <Text style={[styles.rsvpButtonText, rsvpStatus === 'NOT_GOING' && styles.rsvpButtonTextActive]}>
@@ -197,7 +267,76 @@ export default function EventDetailScreen() {
             <View style={{ width: 60 }} />
           </View>
           <View style={styles.modalContent}>
-            <Text style={styles.modalMessage}>Feature to invite friends coming soon!</Text>
+            <Text style={styles.modalMessage}>
+              Usa el Party ID de tus contactos para enviarles la invitación.{'\n'}
+              {normalizedPartyId
+                ? `Se enviará como ${displayName ?? 'contacto'} #${normalizedPartyId}.`
+                : 'Guarda tu Party ID en tu perfil para aparecer como remitente.'}
+            </Text>
+            <View style={styles.inputGroup}>
+              <TextInput
+                placeholder="Party ID del invitado"
+                value={inviteeId}
+                onChangeText={setInviteeId}
+                style={styles.input}
+                keyboardType="number-pad"
+              />
+              <TextInput
+                placeholder="Mensaje (opcional)"
+                value={inviteMessage}
+                onChangeText={setInviteMessage}
+                style={[styles.input, styles.inputMultiline]}
+                multiline
+              />
+              <TouchableOpacity
+                style={[styles.primaryButton, invitationMutation.isPending && styles.buttonDisabled]}
+                onPress={() => invitationMutation.mutate()}
+                disabled={invitationMutation.isPending}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {invitationMutation.isPending ? 'Enviando…' : 'Enviar invitación'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.invitationList}>
+              <Text style={[styles.label, { marginTop: 12 }]}>Invitaciones</Text>
+              {invitationsQuery.isLoading ? (
+                <ActivityIndicator color="#2563eb" />
+              ) : invitations.length === 0 ? (
+                <Text style={styles.text}>Aún no has enviado invitaciones.</Text>
+              ) : (
+                invitations.map((inv) => (
+                  <View key={String(inv.id)} style={styles.invitationItem}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.invitationTitle}>Para #{inv.toUserId}</Text>
+                      <Text style={styles.invitationMeta}>
+                        Estado: <Text style={styles.invitationStatus}>{inv.status}</Text>
+                      </Text>
+                      {inv.message && <Text style={styles.invitationMeta}>Mensaje: {inv.message}</Text>}
+                    </View>
+                    {normalizedPartyId && String(inv.toUserId) === normalizedPartyId && (
+                      <View style={styles.invitationActions}>
+                        <TouchableOpacity
+                          style={[styles.secondaryButton, respondInvitationMutation.isPending && styles.buttonDisabled]}
+                          onPress={() => respondInvitationMutation.mutate({ invitationId: inv.id, status: 'ACCEPTED' })}
+                          disabled={respondInvitationMutation.isPending}
+                        >
+                          <Text style={styles.secondaryButtonText}>Aceptar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.secondaryButton, respondInvitationMutation.isPending && styles.buttonDisabled]}
+                          onPress={() => respondInvitationMutation.mutate({ invitationId: inv.id, status: 'DECLINED' })}
+                          disabled={respondInvitationMutation.isPending}
+                        >
+                          <Text style={styles.secondaryButtonText}>Rechazar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                ))
+              )}
+            </View>
           </View>
         </SafeAreaView>
       </Modal>
@@ -216,6 +355,7 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 16, marginBottom: 16 },
   label: { fontSize: 12, fontWeight: '700', color: '#666', textTransform: 'uppercase', marginBottom: 6 },
   text: { fontSize: 14, color: '#1a1a1a', lineHeight: 20 },
+  helperText: { fontSize: 12, color: '#6b7280', marginBottom: 6 },
   price: { fontSize: 18, fontWeight: '700', color: '#2563eb', marginBottom: 8 },
   ticketButton: { backgroundColor: '#2563eb', paddingVertical: 10, borderRadius: 6, alignItems: 'center', marginTop: 8 },
   ticketButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
@@ -233,7 +373,21 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   modalClose: { fontSize: 14, color: '#2563eb', fontWeight: '600' },
   modalTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-  modalContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
-  modalMessage: { fontSize: 14, color: '#999', textAlign: 'center' },
+  modalContent: { flex: 1, paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  modalMessage: { fontSize: 14, color: '#555', textAlign: 'left', lineHeight: 20 },
+  inputGroup: { gap: 10 },
+  input: { borderWidth: 1, borderColor: '#d4d4d4', borderRadius: 10, padding: 10 },
+  inputMultiline: { minHeight: 70, textAlignVertical: 'top' },
+  primaryButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  primaryButtonText: { color: '#fff', fontWeight: '700' },
+  buttonDisabled: { opacity: 0.6 },
+  invitationList: { gap: 8 },
+  invitationItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, padding: 10 },
+  invitationTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  invitationMeta: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  invitationStatus: { fontWeight: '700', color: '#2563eb' },
+  invitationActions: { flexDirection: 'row', gap: 6 },
+  secondaryButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#eef2ff' },
+  secondaryButtonText: { color: '#1e3a8a', fontWeight: '700', fontSize: 12 },
   error: { fontSize: 14, color: '#dc2626' }
 });

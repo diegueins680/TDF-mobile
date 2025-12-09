@@ -40,6 +40,11 @@ export async function put<T>(path: string, body: unknown): Promise<T> {
   return res.data;
 }
 
+export async function del<T>(path: string): Promise<T> {
+  const res = await http.delete<T>(path);
+  return res.data;
+}
+
 export async function patch<T>(path: string, body: unknown): Promise<T> {
   const res = await http.patch<T>(path, body);
   return res.data;

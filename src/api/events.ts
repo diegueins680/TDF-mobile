@@ -1,4 +1,4 @@
-import { get, post, put } from './client';
+import { del, get, post, put } from './client';
 import type {
   ID,
   SocialEvent,
@@ -7,8 +7,52 @@ import type {
   EventRSVP,
   EventRSVPCreate,
   EventInvitation,
-  EventInvitationCreate
+  EventInvitationCreate,
+  RSVPStatus,
+  EventInvitationStatus
 } from '../types';
+
+type BackendArtistDTO = {
+  artistId?: ID;
+  id?: ID;
+  artistName?: string;
+  artistGenres?: string[];
+  artistBio?: string | null;
+  artistAvatarUrl?: string | null;
+};
+
+type BackendEventDTO = {
+  eventId: ID;
+  eventTitle: string;
+  eventDescription?: string | null;
+  eventStart: string;
+  eventEnd: string;
+  eventVenueId?: string | null;
+  eventPriceCents?: number | null;
+  eventCapacity?: number | null;
+  eventArtists?: BackendArtistDTO[];
+  eventRsvps?: BackendRsvpDTO[];
+};
+
+type BackendRsvpDTO = {
+  rsvpId?: ID;
+  rsvpEventId?: ID;
+  rsvpPartyId?: ID;
+  rsvpStatus?: string;
+  rsvpCreatedAt?: string;
+  rsvpUpdatedAt?: string;
+};
+
+type BackendInvitationDTO = {
+  invitationId?: ID;
+  invitationEventId?: ID;
+  invitationFromPartyId?: ID | null;
+  invitationToPartyId: ID;
+  invitationStatus?: string | null;
+  invitationMessage?: string | null;
+  invitationCreatedAt?: string;
+  invitationUpdatedAt?: string;
+};
 
 /**
  * Social Events API - Wired to backend endpoints
@@ -23,106 +67,111 @@ export const Events = {
     if (filters?.upcomingOnly && !filters.startAfter) {
       query.append('start_after', new Date().toISOString());
     }
-    
-    const url = `/events${query.toString() ? '?' + query.toString() : ''}`;
-    const events = await get<any[]>(url);
-    return events.map(e => mapBackendEventToFrontend(e));
+
+    const url = `/events${query.toString() ? `?${query.toString()}` : ''}`;
+    const events = await get<BackendEventDTO[]>(url);
+    return events.map((e) => mapBackendEventToFrontend(e));
   },
 
   getById: async (eventId: ID): Promise<SocialEvent> => {
-    const event = await get<any>(`/events/${eventId}`);
+    const event = await get<BackendEventDTO>(`/events/${eventId}`);
     return mapBackendEventToFrontend(event);
   },
 
   create: async (body: SocialEventCreate): Promise<SocialEvent> => {
     const backendBody = mapFrontendEventToBackend(body);
-    const event = await post<any>('/events', backendBody);
+    const event = await post<BackendEventDTO>('/events', backendBody);
     return mapBackendEventToFrontend(event);
   },
 
   update: async (eventId: ID, body: SocialEventUpdate): Promise<SocialEvent> => {
     const backendBody = mapFrontendEventToBackend(body);
-    const event = await put<any>(`/events/${eventId}`, backendBody);
+    const event = await put<BackendEventDTO>(`/events/${eventId}`, backendBody);
     return mapBackendEventToFrontend(event);
   },
 
   delete: async (eventId: ID): Promise<void> => {
-    // Backend uses DELETE, not POST
-    return fetch(`/events/${eventId}`, { method: 'DELETE' }).then(() => {});
+    await del<void>(`/events/${eventId}`);
   },
 
   // RSVP management
   getRSVPs: async (eventId: ID): Promise<EventRSVP[]> => {
-    const rsvps = await get<any[]>(`/events/${eventId}/rsvps`);
-    return rsvps.map(r => ({
-      id: r.rsvpId ? parseInt(r.rsvpId) : 0,
-      eventId: parseInt(r.rsvpEventId) || eventId,
-      userId: r.rsvpPartyId as any,
-      status: mapBackendRsvpStatus(r.rsvpStatus),
-      createdAt: r.rsvpCreatedAt || new Date().toISOString(),
-      updatedAt: r.rsvpCreatedAt || new Date().toISOString()
-    }));
+    const rsvps = await get<BackendRsvpDTO[]>(`/events/${eventId}/rsvps`);
+    return rsvps.map((dto) => mapRsvpDto(dto, eventId));
   },
 
   rsvp: async (body: EventRSVPCreate): Promise<EventRSVP> => {
-    const rsvpBody = {
+    const payload = {
       rsvpEventId: String(body.eventId),
       rsvpPartyId: String(body.userId),
       rsvpStatus: mapFrontendRsvpStatus(body.status)
     };
-    const result = await post<any>(`/events/${body.eventId}/rsvps`, rsvpBody);
-    return {
-      id: result.rsvpId ? parseInt(result.rsvpId) : 0,
-      eventId: body.eventId,
-      userId: body.userId,
-      status: body.status,
-      createdAt: result.rsvpCreatedAt || new Date().toISOString(),
-      updatedAt: result.rsvpCreatedAt || new Date().toISOString()
-    };
+    const result = await post<BackendRsvpDTO>(`/events/${body.eventId}/rsvps`, payload);
+    return mapRsvpDto(result, body.eventId, body.userId);
   },
 
-  updateRSVP: async (rsvpId: ID, status: string): Promise<EventRSVP> => {
-    throw new Error('Not yet implemented on backend');
+  updateRSVP: async (body: EventRSVPCreate): Promise<EventRSVP> => {
+    // Backend upserts RSVPs on POST, so reuse the same endpoint.
+    return Events.rsvp(body);
   },
 
-  // Invitations (stubs - backend not yet implemented)
+  // Invitations
   sendInvitation: async (body: EventInvitationCreate): Promise<EventInvitation> => {
-    return post<EventInvitation>(`/events/${body.eventId}/invitations`, {});
+    const payload = {
+      invitationEventId: String(body.eventId),
+      invitationFromPartyId: body.fromUserId ? String(body.fromUserId) : undefined,
+      invitationToPartyId: String(body.toUserId),
+      invitationStatus: body.status ?? 'PENDING',
+      invitationMessage: body.message ?? null
+    };
+    const dto = await post<BackendInvitationDTO>(`/events/${body.eventId}/invitations`, payload);
+    return mapInvitationDto(dto, body.eventId);
   },
 
-  getInvitations: async (userId: ID): Promise<EventInvitation[]> => {
-    return [];
+  getInvitations: async (eventId: ID): Promise<EventInvitation[]> => {
+    const list = await get<BackendInvitationDTO[]>(`/events/${eventId}/invitations`);
+    return list.map((dto) => mapInvitationDto(dto, eventId));
   },
 
-  respondToInvitation: async (invitationId: ID, status: 'ACCEPTED' | 'DECLINED'): Promise<EventInvitation> => {
-    throw new Error('Not yet implemented on backend');
+  respondToInvitation: async (
+    eventId: ID,
+    invitationId: ID,
+    status: EventInvitationStatus,
+    message?: string
+  ): Promise<EventInvitation> => {
+    const payload = {
+      invitationStatus: status,
+      invitationMessage: message ?? undefined
+    };
+    const dto = await put<BackendInvitationDTO>(`/events/${eventId}/invitations/${invitationId}`, payload);
+    return mapInvitationDto(dto, eventId);
   }
 };
 
 // Mapping functions to convert between backend EventDTO and frontend SocialEvent
-function mapBackendEventToFrontend(e: any): SocialEvent {
+function mapBackendEventToFrontend(e: BackendEventDTO): SocialEvent {
   return {
     id: e.eventId,
     title: e.eventTitle,
     description: e.eventDescription || null,
     startTime: e.eventStart, // ISO string from backend
     endTime: e.eventEnd,     // ISO string from backend
-    venueId: e.eventVenueId ? parseInt(e.eventVenueId) : 0,
+    venueId: e.eventVenueId ? parseInt(e.eventVenueId, 10) : 0,
     venue: undefined,
-    artistIds: e.eventArtists?.map((a: any) => a.artistId || a.id) || [],
+    artistIds: e.eventArtists?.map((a) => a.artistId || a.id) || [],
     artists: e.eventArtists || [],
     createdBy: 0, // backend doesn't track organizer yet
     ticketPrice: e.eventPriceCents ? e.eventPriceCents / 100 : null,
     ticketUrl: null, // backend doesn't store ticket URL
     imageUrl: null,  // backend doesn't store image URL
     isPublic: true,  // backend doesn't track visibility
-    rsvpCount: 0,    // backend doesn't track RSVPs
+    rsvpCount: Array.isArray(e.eventRsvps) ? e.eventRsvps.length : 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
 }
 
-function mapFrontendEventToBackend(body: any) {
+function mapFrontendEventToBackend(body: SocialEventCreate | SocialEventUpdate) {
   return {
     eventTitle: body.title,
     eventDescription: body.description,
@@ -132,5 +181,59 @@ function mapFrontendEventToBackend(body: any) {
     eventPriceCents: body.ticketPrice ? Math.round(body.ticketPrice * 100) : null,
     eventCapacity: null,
     eventArtists: body.artistIds?.map((id: ID) => ({ artistId: id })) || []
+  };
+}
+
+function mapRsvpDto(dto: BackendRsvpDTO, fallbackEventId: ID, fallbackPartyId?: ID): EventRSVP {
+  return {
+    id: dto.rsvpId ?? `${dto.rsvpPartyId}-${dto.rsvpEventId ?? fallbackEventId}`,
+    eventId: dto.rsvpEventId ?? fallbackEventId,
+    userId: dto.rsvpPartyId ?? fallbackPartyId ?? '',
+    status: mapBackendRsvpStatus(dto.rsvpStatus),
+    createdAt: dto.rsvpCreatedAt || new Date().toISOString(),
+    updatedAt: dto.rsvpUpdatedAt || dto.rsvpCreatedAt || new Date().toISOString()
+  };
+}
+
+function mapBackendRsvpStatus(raw: unknown): RSVPStatus {
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'going' || normalized === 'accepted' || normalized === 'yes') return 'GOING';
+  if (normalized === 'interested' || normalized === 'maybe') return 'INTERESTED';
+  if (normalized === 'not_going' || normalized === 'not-going' || normalized === 'declined' || normalized === 'no') {
+    return 'NOT_GOING';
+  }
+  return 'NONE';
+}
+
+function mapFrontendRsvpStatus(status: RSVPStatus): string {
+  switch (status) {
+    case 'GOING':
+      return 'going';
+    case 'INTERESTED':
+      return 'interested';
+    case 'NOT_GOING':
+      return 'not_going';
+    default:
+      return 'none';
+  }
+}
+
+function mapInvitationStatus(raw: unknown): EventInvitationStatus {
+  const normalized = String(raw || '').trim().toUpperCase();
+  if (normalized === 'ACCEPTED') return 'ACCEPTED';
+  if (normalized === 'DECLINED') return 'DECLINED';
+  return 'PENDING';
+}
+
+function mapInvitationDto(dto: BackendInvitationDTO, fallbackEventId: ID): EventInvitation {
+  return {
+    id: dto.invitationId ?? `${dto.invitationToPartyId}-${dto.invitationEventId ?? fallbackEventId}`,
+    eventId: dto.invitationEventId ?? fallbackEventId,
+    fromUserId: dto.invitationFromPartyId ?? null,
+    toUserId: dto.invitationToPartyId,
+    status: mapInvitationStatus(dto.invitationStatus),
+    message: dto.invitationMessage ?? null,
+    createdAt: dto.invitationCreatedAt || new Date().toISOString(),
+    updatedAt: dto.invitationUpdatedAt || dto.invitationCreatedAt || null
   };
 }

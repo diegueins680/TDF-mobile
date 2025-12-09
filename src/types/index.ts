@@ -204,18 +204,23 @@ export type EventRSVPCreate = {
   status: RSVPStatus;
 };
 
+export type EventInvitationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED';
+
 export type EventInvitation = {
   id: ID;
   eventId: ID;
-  fromUserId: ID;
+  fromUserId?: ID | null;
   toUserId: ID;
-  status: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  status: EventInvitationStatus;
+  message?: string | null;
   createdAt: string;
-  respondedAt?: string | null;
+  updatedAt?: string | null;
 };
 
 export type EventInvitationCreate = {
   eventId: ID;
   toUserId: ID;
+  fromUserId?: ID | null;
+  status?: EventInvitationStatus;
+  message?: string | null;
 };
-

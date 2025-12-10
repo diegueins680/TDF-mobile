@@ -231,3 +231,8 @@ export type PartyFollow = {
   pfViaNfc: boolean;
   pfStartedAt: string; // ISO date
 };
+
+export type SuggestedFriend = {
+  sfPartyId: number;
+  sfMutualCount: number;
+};

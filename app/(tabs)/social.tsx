@@ -45,16 +45,22 @@ export default function SocialScreen() {
     queryFn: Social.listFriends,
     enabled: Boolean(token)
   });
+  const suggestionsQuery = useQuery({
+    queryKey: ['social-suggestions'],
+    queryFn: Social.listSuggestions,
+    enabled: Boolean(token)
+  });
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['social-followers'] });
     qc.invalidateQueries({ queryKey: ['social-following'] });
     qc.invalidateQueries({ queryKey: ['social-friends'] });
+    qc.invalidateQueries({ queryKey: ['social-suggestions'] });
   };
 
-  const addMutation = useMutation({
-    mutationFn: async () => {
-      const numeric = Number(addId.trim());
+  const addMutation = useMutation<void, Error, number | undefined>({
+    mutationFn: async (targetId) => {
+      const numeric = targetId ?? Number(addId.trim());
       if (!Number.isFinite(numeric) || numeric <= 0) throw new Error('Ingresa un ID válido.');
       await Social.addFriend(numeric);
     },
@@ -155,6 +161,50 @@ export default function SocialScreen() {
       </View>
 
       <View style={styles.card}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.sectionTitle}>Sugerencias de amigos</Text>
+          <TouchableOpacity
+            style={[styles.secondaryButton, suggestionsQuery.isFetching && styles.buttonDisabled]}
+            onPress={() => suggestionsQuery.refetch()}
+            disabled={suggestionsQuery.isFetching}
+          >
+            <Text style={styles.secondaryButtonText}>{suggestionsQuery.isFetching ? 'Actualizando…' : 'Actualizar'}</Text>
+          </TouchableOpacity>
+        </View>
+        {!token ? (
+          <Text style={styles.helper}>Agrega tu token para ver sugerencias.</Text>
+        ) : suggestionsQuery.isError ? (
+          <Text style={styles.errorText}>No pudimos cargar sugerencias.</Text>
+        ) : suggestionsQuery.isLoading ? (
+          <Text style={styles.helper}>Buscando conexiones…</Text>
+        ) : (suggestionsQuery.data?.length ?? 0) === 0 ? (
+          <Text style={styles.helper}>No tenemos sugerencias todavía. Conecta con más personas y vuelve a intentar.</Text>
+        ) : (
+          <View style={styles.list}>
+            {suggestionsQuery.data?.map((suggestion) => {
+              const label = formatParty(suggestion.sfPartyId);
+              return (
+                <View key={`suggestion-${suggestion.sfPartyId}`} style={styles.item}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.itemTitle}>{label}</Text>
+                    <Text style={styles.itemMeta}>ID #{suggestion.sfPartyId}</Text>
+                    <Text style={styles.tag}>{`${suggestion.sfMutualCount} conexión${suggestion.sfMutualCount === 1 ? '' : 'es'} en común`}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { paddingHorizontal: 12, paddingVertical: 10 }, addMutation.isPending && styles.buttonDisabled]}
+                    onPress={() => addMutation.mutate(suggestion.sfPartyId)}
+                    disabled={addMutation.isPending}
+                  >
+                    <Text style={styles.primaryButtonText}>Conectar</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.card}>
         <View style={styles.tabs}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'friends' && styles.tabActive]}
@@ -234,6 +284,7 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: '#fff', fontWeight: '700' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
   row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tabs: { flexDirection: 'row', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' },
   tab: { flex: 1, paddingVertical: 10, backgroundColor: '#f9fafb' },
   tabActive: { backgroundColor: '#e0f2fe' },

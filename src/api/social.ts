@@ -1,5 +1,5 @@
 import { http } from './client';
-import type { PartyFollow } from '../types';
+import type { PartyFollow, SuggestedFriend } from '../types';
 
 export interface VCardExchangePayload {
   vcerPartyId: number;
@@ -58,6 +58,10 @@ export const Social = {
   },
   listFriends: async (): Promise<PartyFollow[]> => {
     const res = await http.get<PartyFollow[]>('/social/friends');
+    return res.data;
+  },
+  listSuggestions: async (): Promise<SuggestedFriend[]> => {
+    const res = await http.get<SuggestedFriend[]>('/social/suggestions');
     return res.data;
   },
   addFriend: async (partyId: number): Promise<PartyFollow[]> => {

@@ -9,8 +9,10 @@ import type {
   EventInvitation,
   EventInvitationCreate,
   RSVPStatus,
-  EventInvitationStatus
+  EventInvitationStatus,
+  ArtistSocialLinks
 } from '../types';
+import { mapBackendArtistToFrontend } from './artists';
 
 type BackendArtistDTO = {
   artistId?: ID;
@@ -19,6 +21,7 @@ type BackendArtistDTO = {
   artistGenres?: string[];
   artistBio?: string | null;
   artistAvatarUrl?: string | null;
+   artistSocialLinks?: ArtistSocialLinks;
 };
 
 type BackendEventDTO = {
@@ -150,6 +153,7 @@ export const Events = {
 
 // Mapping functions to convert between backend EventDTO and frontend SocialEvent
 function mapBackendEventToFrontend(e: BackendEventDTO): SocialEvent {
+  const artists = (e.eventArtists ?? []).map((artist) => mapBackendArtistToFrontend(artist));
   return {
     id: e.eventId,
     title: e.eventTitle,
@@ -158,8 +162,8 @@ function mapBackendEventToFrontend(e: BackendEventDTO): SocialEvent {
     endTime: e.eventEnd,     // ISO string from backend
     venueId: e.eventVenueId ? parseInt(e.eventVenueId, 10) : 0,
     venue: undefined,
-    artistIds: e.eventArtists?.map((a) => a.artistId || a.id) || [],
-    artists: e.eventArtists || [],
+    artistIds: artists.map((a) => a.id),
+    artists,
     createdBy: 0, // backend doesn't track organizer yet
     ticketPrice: e.eventPriceCents ? e.eventPriceCents / 100 : null,
     ticketUrl: null, // backend doesn't store ticket URL

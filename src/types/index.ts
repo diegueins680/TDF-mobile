@@ -98,6 +98,7 @@ export type ArtistProfile = {
   spotifyUrl?: string | null;
   createdAt: string;
   updatedAt: string;
+  socialLinks?: ArtistSocialLinks;
 };
 
 export type ArtistProfileCreate = {
@@ -108,6 +109,15 @@ export type ArtistProfileCreate = {
   genres?: string[];
   instagramHandle?: string;
   spotifyUrl?: string;
+  socialLinks?: ArtistSocialLinks;
+};
+
+export type ArtistSocialLinks = {
+  spotify?: string | null;
+  instagram?: string | null;
+  twitter?: string | null;
+  youtube?: string | null;
+  soundcloud?: string | null;
 };
 
 export type Venue = {

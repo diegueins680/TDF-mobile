@@ -1,5 +1,5 @@
 import { get, post, put } from './client';
-import type { ArtistProfile, ArtistProfileCreate, ID } from '../types';
+import type { ArtistProfile, ArtistProfileCreate, ArtistSocialLinks, ID } from '../types';
 
 type BackendArtistDTO = {
   artistId?: ID;
@@ -8,6 +8,7 @@ type BackendArtistDTO = {
   artistBio?: string | null;
   artistAvatarUrl?: string | null;
   artistGenres?: string[];
+  artistSocialLinks?: ArtistSocialLinks;
 };
 
 /**
@@ -58,7 +59,8 @@ export const Artists = {
 };
 
 // Mapping functions to convert between backend ArtistDTO and frontend ArtistProfile
-function mapBackendArtistToFrontend(a: BackendArtistDTO): ArtistProfile {
+export function mapBackendArtistToFrontend(a: BackendArtistDTO): ArtistProfile {
+  const socialLinks = normalizeSocialLinks(a.artistSocialLinks);
   const id = a.artistId ? Number(a.artistId) : 0;
   return {
     id,
@@ -67,18 +69,51 @@ function mapBackendArtistToFrontend(a: BackendArtistDTO): ArtistProfile {
     bio: a.artistBio ?? null,
     imageUrl: a.artistAvatarUrl ?? null,
     genres: a.artistGenres ?? [],
-    instagramHandle: null,  // Not yet in backend
-    spotifyUrl: null,       // Not yet in backend
+    instagramHandle: socialLinks?.instagram ?? null,
+    spotifyUrl: socialLinks?.spotify ?? null,
+    socialLinks,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
 }
 
 function mapFrontendArtistToBackend(body: Partial<ArtistProfileCreate>) {
+  const socialLinks = buildSocialLinksPayload(body);
   return {
     artistName: body.name,
     artistBio: body.bio || undefined,
     artistAvatarUrl: body.imageUrl || undefined,
-    artistGenres: body.genres || []
+    artistGenres: body.genres || [],
+    artistSocialLinks: socialLinks
   };
+}
+
+function normalizeSocialLinks(raw?: ArtistSocialLinks | null): ArtistSocialLinks | undefined {
+  if (!raw) return undefined;
+  const clean: ArtistSocialLinks = {
+    spotify: raw.spotify ? raw.spotify.trim() : raw.spotify ?? undefined,
+    instagram: raw.instagram ? raw.instagram.trim() : raw.instagram ?? undefined,
+    twitter: raw.twitter ? raw.twitter.trim() : raw.twitter ?? undefined,
+    youtube: raw.youtube ? raw.youtube.trim() : raw.youtube ?? undefined,
+    soundcloud: raw.soundcloud ? raw.soundcloud.trim() : raw.soundcloud ?? undefined
+  };
+  const hasAny = Object.values(clean).some((val) => typeof val === 'string' && val.length > 0);
+  return hasAny ? clean : undefined;
+}
+
+function buildSocialLinksPayload(body: Partial<ArtistProfileCreate>): ArtistSocialLinks | undefined {
+  const candidate: ArtistSocialLinks = {
+    instagram: body.instagramHandle ?? body.socialLinks?.instagram ?? undefined,
+    spotify: body.spotifyUrl ?? body.socialLinks?.spotify ?? undefined,
+    twitter: body.socialLinks?.twitter ?? undefined,
+    youtube: body.socialLinks?.youtube ?? undefined,
+    soundcloud: body.socialLinks?.soundcloud ?? undefined
+  };
+  const cleaned: ArtistSocialLinks = Object.fromEntries(
+    Object.entries(candidate)
+      .map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])
+      .filter(([, value]) => value !== '')
+  ) as ArtistSocialLinks;
+  const hasAny = Object.values(cleaned).some((val) => typeof val === 'string' && val.length > 0);
+  return hasAny ? cleaned : undefined;
 }

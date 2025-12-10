@@ -23,12 +23,24 @@ export default function ArtistDetailScreen() {
   });
 
   const artist = artistQuery.data;
+  const socialRows = useMemo(() => {
+    if (!artist) return [];
+    const links = artist.socialLinks || {};
+    const rows = [
+      { label: 'Instagram', value: artist.instagramHandle ?? links.instagram },
+      { label: 'Spotify', value: artist.spotifyUrl ?? links.spotify },
+      { label: 'Twitter', value: links.twitter },
+      { label: 'YouTube', value: links.youtube },
+      { label: 'SoundCloud', value: links.soundcloud }
+    ];
+    return rows.filter((row) => row.value && `${row.value}`.trim().length > 0);
+  }, [artist]);
   const upcomingEvents = useMemo(() => {
     if (!eventsQuery.data) return [];
     const now = new Date();
     return eventsQuery.data
-      .filter(e => new Date(e.startDateTime) > now)
-      .sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
+      .filter(e => new Date(e.startTime) > now)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   }, [eventsQuery.data]);
 
   const handleEditProfile = useCallback(() => {
@@ -72,14 +84,13 @@ export default function ArtistDetailScreen() {
           </View>
         )}
 
-        <View style={styles.socialContainer}>
-          {artist.instagramHandle && (
-            <Text style={styles.socialLink}>Instagram: {artist.instagramHandle}</Text>
-          )}
-          {artist.spotifyUrl && (
-            <Text style={styles.socialLink}>Spotify: {artist.spotifyUrl}</Text>
-          )}
-        </View>
+        {socialRows.length > 0 && (
+          <View style={styles.socialContainer}>
+            {socialRows.map((row) => (
+              <Text key={row.label} style={styles.socialLink}>{row.label}: {row.value}</Text>
+            ))}
+          </View>
+        )}
 
         <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
           <Text style={styles.editButtonText}>Edit Profile</Text>
@@ -101,8 +112,8 @@ export default function ArtistDetailScreen() {
                   )}
                 </View>
                 <Text style={styles.eventDateTime}>
-                  {new Date(event.startDateTime).toLocaleDateString()} at{' '}
-                  {new Date(event.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(event.startTime).toLocaleDateString()} at{' '}
+                  {new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
                 {event.venue && (
                   <Text style={styles.eventVenue}>{event.venue.name}</Text>

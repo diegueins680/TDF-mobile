@@ -146,8 +146,10 @@ export const Events = {
       invitationStatus: status,
       invitationMessage: message ?? undefined
     };
+    // Backend expects PATCH for updating invitation status
     const dto = await put<BackendInvitationDTO>(`/events/${eventId}/invitations/${invitationId}`, payload);
     return mapInvitationDto(dto, eventId);
+  }
   }
 };
 
@@ -201,9 +203,9 @@ function mapRsvpDto(dto: BackendRsvpDTO, fallbackEventId: ID, fallbackPartyId?: 
 
 function mapBackendRsvpStatus(raw: unknown): RSVPStatus {
   const normalized = String(raw || '').trim().toLowerCase();
-  if (normalized === 'going' || normalized === 'accepted' || normalized === 'yes') return 'GOING';
-  if (normalized === 'interested' || normalized === 'maybe') return 'INTERESTED';
-  if (normalized === 'not_going' || normalized === 'not-going' || normalized === 'declined' || normalized === 'no') {
+  if (normalized === 'accepted' || normalized === 'going' || normalized === 'yes') return 'GOING';
+  if (normalized === 'maybe' || normalized === 'interested') return 'INTERESTED';
+  if (normalized === 'declined' || normalized === 'not_going' || normalized === 'not-going' || normalized === 'no') {
     return 'NOT_GOING';
   }
   return 'NONE';
@@ -212,20 +214,20 @@ function mapBackendRsvpStatus(raw: unknown): RSVPStatus {
 function mapFrontendRsvpStatus(status: RSVPStatus): string {
   switch (status) {
     case 'GOING':
-      return 'going';
+      return 'Accepted';
     case 'INTERESTED':
-      return 'interested';
+      return 'Maybe';
     case 'NOT_GOING':
-      return 'not_going';
+      return 'Declined';
     default:
-      return 'none';
+      return 'Maybe';
   }
 }
 
 function mapInvitationStatus(raw: unknown): EventInvitationStatus {
-  const normalized = String(raw || '').trim().toUpperCase();
-  if (normalized === 'ACCEPTED') return 'ACCEPTED';
-  if (normalized === 'DECLINED') return 'DECLINED';
+  const normalized = String(raw || '').trim().toLowerCase();
+  if (normalized === 'accepted') return 'ACCEPTED';
+  if (normalized === 'declined') return 'DECLINED';
   return 'PENDING';
 }
 

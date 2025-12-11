@@ -23,9 +23,11 @@ type BackendVenueDTO = {
  * Maps backend VenueDTO to frontend Venue types
  */
 export const Venues = {
-  list: async (filters?: { city?: string }): Promise<Venue[]> => {
+  list: async (filters?: { city?: string; limit?: number; offset?: number }): Promise<Venue[]> => {
     const query = new URLSearchParams();
     if (filters?.city) query.append('city', filters.city);
+    if (filters?.limit) query.append('limit', filters.limit.toString());
+    if (filters?.offset) query.append('offset', filters.offset.toString());
     
     const url = `/venues${query.toString() ? '?' + query.toString() : ''}`;
     const venues = await get<BackendVenueDTO[]>(url);

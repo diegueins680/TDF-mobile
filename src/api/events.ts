@@ -63,13 +63,15 @@ type BackendInvitationDTO = {
  */
 export const Events = {
   // Event CRUD
-  list: async (filters?: { city?: string; startAfter?: string; upcomingOnly?: boolean }): Promise<SocialEvent[]> => {
+  list: async (filters?: { city?: string; startAfter?: string; upcomingOnly?: boolean; limit?: number; offset?: number }): Promise<SocialEvent[]> => {
     const query = new URLSearchParams();
     if (filters?.city) query.append('city', filters.city);
     if (filters?.startAfter) query.append('start_after', filters.startAfter);
     if (filters?.upcomingOnly && !filters.startAfter) {
       query.append('start_after', new Date().toISOString());
     }
+    if (filters?.limit) query.append('limit', filters.limit.toString());
+    if (filters?.offset) query.append('offset', filters.offset.toString());
 
     const url = `/events${query.toString() ? `?${query.toString()}` : ''}`;
     const events = await get<BackendEventDTO[]>(url);

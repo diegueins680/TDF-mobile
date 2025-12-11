@@ -16,10 +16,12 @@ type BackendArtistDTO = {
  * Maps backend ArtistDTO to frontend ArtistProfile types
  */
 export const Artists = {
-  list: async (filters?: { name?: string; genre?: string }): Promise<ArtistProfile[]> => {
+  list: async (filters?: { name?: string; genre?: string; limit?: number; offset?: number }): Promise<ArtistProfile[]> => {
     const query = new URLSearchParams();
     if (filters?.name) query.append('name', filters.name);
     if (filters?.genre) query.append('genre', filters.genre);
+    if (filters?.limit) query.append('limit', filters.limit.toString());
+    if (filters?.offset) query.append('offset', filters.offset.toString());
     
     const url = `/artists${query.toString() ? '?' + query.toString() : ''}`;
     const artists = await get<BackendArtistDTO[]>(url);

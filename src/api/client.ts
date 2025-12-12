@@ -1,24 +1,32 @@
 import axios from 'axios';
 import { API_BASE } from '../lib/api';
 
-let currentToken: string | undefined =
-  process.env.EXPO_PUBLIC_API_TOKEN?.trim() || undefined;
+const normalizeBearer = (token?: string | null) => {
+  const trimmed = token?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.toLowerCase().startsWith('bearer ') ? trimmed : `Bearer ${trimmed}`;
+};
+
+let currentToken: string | undefined = normalizeBearer(process.env.EXPO_PUBLIC_API_TOKEN);
 
 export const http = axios.create({
   baseURL: API_BASE,
-  headers: {
-    'Content-Type': 'application/json',
-    ...(currentToken ? { Authorization: currentToken } : {})
-  }
+  headers: { 'Content-Type': 'application/json' }
 });
 
-export function setAuthToken(token: string | null | undefined) {
-  currentToken = token?.trim() || undefined;
-  if (currentToken) {
-    http.defaults.headers.common.Authorization = currentToken;
+const applyAuthHeader = (token?: string) => {
+  if (token) {
+    http.defaults.headers.common.Authorization = token;
   } else {
     delete http.defaults.headers.common.Authorization;
   }
+};
+
+applyAuthHeader(currentToken);
+
+export function setAuthToken(token: string | null | undefined) {
+  currentToken = normalizeBearer(token);
+  applyAuthHeader(currentToken);
 }
 
 export function getAuthToken(): string | undefined {

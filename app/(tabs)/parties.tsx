@@ -17,7 +17,7 @@ export default function Parties() {
   const hasToken = Boolean(token);
   const debouncedQ = useDebouncedValue(q, 300);
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['parties', debouncedQ],
     queryFn: () => listParties(debouncedQ),
     enabled: hasToken
@@ -55,6 +55,28 @@ export default function Parties() {
     </View>
   ), [hasToken, router]);
 
+  const errorText = useMemo(() => {
+    if (!hasToken) return 'Añade tu token en Auth para cargar clientes.';
+    if (error instanceof Error) return error.message;
+    return 'No pudimos cargar clientes. Revisa tu conexión o token.';
+  }, [error, hasToken]);
+
+  const renderError = useCallback(() => {
+    if (!isError) return null;
+    return (
+      <View style={styles.errorBox}>
+        <Text style={styles.errorText}>{errorText}</Text>
+        <View style={styles.row}>
+          {hasToken ? (
+            <Button title={isFetching ? 'Reintentando…' : 'Reintentar'} onPress={() => refetch()} disabled={isFetching} />
+          ) : (
+            <Button title="Ir a Auth" onPress={() => router.push('/auth')} />
+          )}
+        </View>
+      </View>
+    );
+  }, [errorText, hasToken, isError, isFetching, refetch, router]);
+
   return (
     <View style={styles.wrap}>
       {!hasToken && (
@@ -89,11 +111,7 @@ export default function Parties() {
       </View>
 
       {hasToken && isLoading && <Text>Loading…</Text>}
-      {hasToken && isError && (
-        <Text style={styles.error}>
-          {error instanceof Error ? error.message : 'Failed to load clients. Check your token in Auth.'}
-        </Text>
-      )}
+      {renderError()}
 
       <FlatList
         data={parties}
@@ -121,5 +139,14 @@ const styles = StyleSheet.create({
   notice: { padding: 12, borderRadius: 8, backgroundColor: '#eef2ff', borderWidth: 1, borderColor: '#c7d2fe' },
   noticeTitle: { fontWeight: '700', color: '#0f172a', marginBottom: 4 },
   link: { color: '#2563eb', fontWeight: '700', marginTop: 4 },
-  error: { color: 'red' }
+  errorBox: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    backgroundColor: '#fff1f2',
+    gap: 8
+  },
+  errorText: { color: '#b91c1c' }
 });

@@ -1,7 +1,12 @@
-import { api } from '../lib/api';
 import type { Party } from '../types';
 import type { PartyDTO, PartyCreate, PartyUpdate, RoleKey } from './types';
 import { get, post, put } from './client';
+
+const buildListPath = (q?: string) => {
+  const query = q?.trim();
+  if (!query) return '/parties';
+  return `/parties?q=${encodeURIComponent(query)}`;
+};
 
 const toParty = (dto: PartyDTO): Party => ({
   id: dto.partyId,
@@ -13,8 +18,8 @@ const toParty = (dto: PartyDTO): Party => ({
 });
 
 export async function listParties(q?: string): Promise<Party[]> {
-  const res = await api.get<PartyDTO[]>('/parties', { params: q ? { q } : undefined });
-  return res.data.map(toParty);
+  const res = await get<PartyDTO[]>(buildListPath(q));
+  return res.map(toParty);
 }
 
 export async function createParty(body: Partial<Party>): Promise<Party> {
@@ -25,8 +30,8 @@ export async function createParty(body: Partial<Party>): Promise<Party> {
     cPrimaryPhone: body.phone ?? null,
     cInstagram: body.instagram ?? null,
   };
-  const res = await api.post<PartyDTO>('/parties', payload);
-  return toParty(res.data);
+  const res = await post<PartyDTO>('/parties', payload);
+  return toParty(res);
 }
 
 export async function updateParty(id: Party['id'], body: Partial<Party>): Promise<Party> {
@@ -37,12 +42,12 @@ export async function updateParty(id: Party['id'], body: Partial<Party>): Promis
     uInstagram: body.instagram,
     uNotes: body.notes,
   };
-  const res = await api.put<PartyDTO>(`/parties/${id}`, payload);
-  return toParty(res.data);
+  const res = await put<PartyDTO>(`/parties/${id}`, payload);
+  return toParty(res);
 }
 
 export const Parties = {
-  list: () => get<PartyDTO[]>('/parties'),
+  list: (q?: string) => get<PartyDTO[]>(buildListPath(q)),
   create: (body: PartyCreate) => post<PartyDTO>('/parties', body),
   getOne: (id: number) => get<PartyDTO>(`/parties/${id}`),
   update: (id: number, body: PartyUpdate) => put<PartyDTO>(`/parties/${id}`, body),

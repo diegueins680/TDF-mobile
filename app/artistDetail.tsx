@@ -1,14 +1,17 @@
 import React, { useCallback, useMemo } from 'react';
 import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../src/providers/AuthProvider';
 
-import { Artists } from '../src/api/artists';
+import { Artists, type ArtistFollower } from '../src/api/artists';
 import { Events } from '../src/api/events';
 
 export default function ArtistDetailScreen() {
   const { artistId } = useLocalSearchParams<{ artistId: string }>();
   const router = useRouter();
+  const { partyId } = useAuth();
+  const qc = useQueryClient();
 
   const artistQuery = useQuery({
     queryKey: ['artist', artistId],
@@ -46,6 +49,31 @@ export default function ArtistDetailScreen() {
   const handleEditProfile = useCallback(() => {
     router.push({ pathname: '/editArtistProfile', params: { artistId } });
   }, [artistId, router]);
+
+  const followersQuery = useQuery<ArtistFollower[]>({
+    queryKey: ['artist-followers', artistId],
+    queryFn: () => (artistId ? Artists.listFollowers(artistId) : Promise.resolve([])),
+    enabled: !!artistId
+  });
+
+  const isFollowing = useMemo(() => {
+    if (!followersQuery.data || !partyId) return false;
+    return followersQuery.data.some((r) => String(r.followerPartyId) === String(partyId));
+  }, [followersQuery.data, partyId]);
+
+  const handleToggleFollow = useCallback(async () => {
+    if (!artistId || !partyId) return;
+    try {
+      if (isFollowing) {
+        await Artists.unfollow(artistId, partyId);
+      } else {
+        await Artists.follow(artistId, partyId);
+      }
+      void qc.invalidateQueries(['artist-followers', artistId]);
+    } catch (err) {
+      console.warn('follow action failed', err);
+    }
+  }, [artistId, partyId, isFollowing, qc]);
 
   const handleEventPress = useCallback((eventId: string) => {
     router.push({ pathname: '/eventDetail', params: { eventId } });
@@ -92,9 +120,19 @@ export default function ArtistDetailScreen() {
           </View>
         )}
 
-        <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
-          <Text style={styles.editButtonText}>Edit Profile</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+          <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.followButton, isFollowing ? styles.following : styles.notFollowing]}
+            onPress={handleToggleFollow}
+            disabled={!partyId}
+          >
+            <Text style={styles.followButtonText}>{partyId ? (isFollowing ? 'Following' : 'Follow') : 'Sign in to follow'}</Text>
+          </TouchableOpacity>
+        </View>
 
         {upcomingEvents.length > 0 && (
           <View style={styles.eventsSection}>
@@ -153,5 +191,9 @@ const styles = StyleSheet.create({
   eventPrice: { fontSize: 13, fontWeight: '700', color: '#2563eb', marginLeft: 8 },
   eventDateTime: { fontSize: 12, color: '#999', marginBottom: 4 },
   eventVenue: { fontSize: 12, color: '#666' },
-  noEventsText: { fontSize: 14, color: '#999', textAlign: 'center', marginTop: 16 }
+  noEventsText: { fontSize: 14, color: '#999', textAlign: 'center', marginTop: 16 },
+  followButton: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  following: { backgroundColor: '#e6f0ff' },
+  notFollowing: { backgroundColor: '#2563eb' },
+  followButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' }
 });

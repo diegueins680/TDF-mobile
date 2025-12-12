@@ -1,4 +1,4 @@
-import { get, post, put } from './client';
+import { get, post, put, del } from './client';
 import type { ArtistProfile, ArtistProfileCreate, ArtistSocialLinks, ID } from '../types';
 
 type BackendArtistDTO = {
@@ -9,6 +9,13 @@ type BackendArtistDTO = {
   artistAvatarUrl?: string | null;
   artistGenres?: string[];
   artistSocialLinks?: ArtistSocialLinks;
+};
+
+export type ArtistFollower = {
+  followId?: ID;
+  artistId?: ID;
+  followerPartyId: string;
+  createdAt?: string;
 };
 
 /**
@@ -57,6 +64,22 @@ export const Artists = {
   searchByName: async (name: string): Promise<ArtistProfile[]> => {
     const artists = await get<BackendArtistDTO[]>(`/artists?name=${encodeURIComponent(name)}`);
     return artists.map((a) => mapBackendArtistToFrontend(a));
+  }
+
+  , follow: async (artistId: ID, followerPartyId: string) => {
+    const body = { followerPartyId };
+    const res = await post<ArtistFollower>(`/artists/${artistId}/follow`, body);
+    return res;
+  },
+
+  unfollow: async (artistId: ID, followerPartyId: string) => {
+    await del<void>(`/artists/${artistId}/follow?follower=${encodeURIComponent(String(followerPartyId))}`);
+    return true;
+  },
+
+  listFollowers: async (artistId: ID): Promise<ArtistFollower[]> => {
+    const rows = await get<ArtistFollower[]>(`/artists/${artistId}/followers`);
+    return rows;
   }
 };
 

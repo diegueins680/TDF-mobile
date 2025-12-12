@@ -2,12 +2,18 @@ import axios from 'axios';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+type LegacyConstants = {
+  manifest?: { hostUri?: string };
+  manifest2?: { extra?: { expoClient?: { hostUri?: string } } };
+};
+
 const deriveDevHost = () => {
+  const legacy = Constants as LegacyConstants;
   const hostUri =
     Constants.expoConfig?.hostUri ||
     // Fallback for classic manifest
-    (Constants as any).manifest?.hostUri ||
-    (Constants as any).manifest2?.extra?.expoClient?.hostUri;
+    legacy.manifest?.hostUri ||
+    legacy.manifest2?.extra?.expoClient?.hostUri;
   if (hostUri) {
     const host = hostUri.split(':')[0];
     if (host) return host;

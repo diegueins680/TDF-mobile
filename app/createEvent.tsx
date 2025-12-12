@@ -1,11 +1,10 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator,
   FlatList, Modal, SafeAreaView
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { Events } from '../src/api/events';
 import { Venues } from '../src/api/venues';
@@ -20,14 +19,14 @@ export default function CreateEventScreen() {
   const [description, setDescription] = useState('');
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date(new Date().getTime() + 2 * 60 * 60 * 1000));
+  const [startInput, setStartInput] = useState(startTime.toISOString());
+  const [endInput, setEndInput] = useState(endTime.toISOString());
   const [venueId, setVenueId] = useState<ID | null>(null);
   const [artistIds, setArtistIds] = useState<ID[]>([]);
   const [ticketPrice, setTicketPrice] = useState('');
   const [ticketUrl, setTicketUrl] = useState('');
   const [isPublic, setIsPublic] = useState(true);
 
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
   const [showVenueModal, setShowVenueModal] = useState(false);
   const [showArtistModal, setShowArtistModal] = useState(false);
   const [venueSearch, setVenueSearch] = useState('');
@@ -58,15 +57,22 @@ export default function CreateEventScreen() {
   const selectedVenue = useMemo(() => venues?.find(v => v.id === venueId), [venues, venueId]);
   const selectedArtists = useMemo(() => artists?.filter(a => artistIds.includes(a.id)) || [], [artists, artistIds]);
 
-  const handleStartTimeChange = useCallback((_event: unknown, date?: Date) => {
-    setShowStartPicker(false);
-    if (date) setStartTime(date);
+  const parseDateInput = useCallback((text: string) => {
+    const parsed = new Date(text);
+    if (isNaN(parsed.getTime())) {
+      Alert.alert('Formato de fecha', 'Usa un formato válido, por ejemplo 2025-12-15T15:00:00Z');
+      return null;
+    }
+    return parsed;
   }, []);
 
-  const handleEndTimeChange = useCallback((_event: unknown, date?: Date) => {
-    setShowEndPicker(false);
-    if (date) setEndTime(date);
-  }, []);
+  useEffect(() => {
+    setStartInput(startTime.toISOString());
+  }, [startTime]);
+
+  useEffect(() => {
+    setEndInput(endTime.toISOString());
+  }, [endTime]);
 
   const toggleArtist = useCallback((artistId: ID) => {
     setArtistIds(prev =>
@@ -85,6 +91,14 @@ export default function CreateEventScreen() {
   }, [router]);
 
   const handleCreateEvent = useCallback(async () => {
+    const parsedStart = parseDateInput(startInput);
+    const parsedEnd = parseDateInput(endInput);
+
+    if (!parsedStart || !parsedEnd) return;
+
+    setStartTime(parsedStart);
+    setEndTime(parsedEnd);
+
     if (!title.trim()) {
       Alert.alert('Validation', 'Event title is required');
       return;
@@ -97,7 +111,7 @@ export default function CreateEventScreen() {
       Alert.alert('Validation', 'Please select at least one artist');
       return;
     }
-    if (startTime >= endTime) {
+    if (parsedStart >= parsedEnd) {
       Alert.alert('Validation', 'End time must be after start time');
       return;
     }
@@ -108,14 +122,15 @@ export default function CreateEventScreen() {
     createMutation.mutate({
       title: title.trim(),
       description: description.trim(),
-      startTime: startTime.toISOString(),
-      endTime: endTime.toISOString(),
+      startTime: parsedStart.toISOString(),
+      endTime: parsedEnd.toISOString(),
       venueId,
       artistIds,
       ticketPrice: priceCents,  // Backend expects cents as integer
+      ticketUrl: ticketUrl.trim() || undefined,
       isPublic
     });
-  }, [title, description, venueId, artistIds, startTime, endTime, ticketPrice, isPublic, createMutation]);
+  }, [title, description, venueId, artistIds, startInput, endInput, ticketPrice, ticketUrl, isPublic, createMutation, parseDateInput]);
 
   const renderVenueItem = useCallback(({ item }: { item: Venue }) => (
     <TouchableOpacity
@@ -171,25 +186,87 @@ export default function CreateEventScreen() {
 
         <Text style={styles.sectionTitle}>Date & Time</Text>
 
-        <TouchableOpacity style={styles.field} onPress={() => setShowStartPicker(true)}>
+        <View style={styles.field}>
           <Text style={styles.label}>Start Time *</Text>
-          <View style={styles.input}>
-            <Text>{startTime.toLocaleString()}</Text>
+          <TextInput
+            placeholder="YYYY-MM-DDTHH:mm:ssZ"
+            value={startInput}
+            onChangeText={setStartInput}
+            onBlur={() => {
+              const parsed = parseDateInput(startInput);
+              if (parsed) {
+                setStartTime(parsed);
+              } else {
+                setStartInput(startTime.toISOString());
+              }
+            }}
+            style={styles.input}
+            placeholderTextColor="#999"
+          />
+          <View style={styles.row}>
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() => {
+                const now = new Date();
+                setStartTime(now);
+                setStartInput(now.toISOString());
+              }}
+            >
+              <Text style={styles.smallButtonText}>Now</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() => {
+                const nextHour = new Date(Date.now() + 60 * 60 * 1000);
+                setStartTime(nextHour);
+                setStartInput(nextHour.toISOString());
+              }}
+            >
+              <Text style={styles.smallButtonText}>+1h</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-        {showStartPicker && (
-          <DateTimePicker value={startTime} mode="datetime" onChange={handleStartTimeChange} />
-        )}
+        </View>
 
-        <TouchableOpacity style={styles.field} onPress={() => setShowEndPicker(true)}>
+        <View style={styles.field}>
           <Text style={styles.label}>End Time *</Text>
-          <View style={styles.input}>
-            <Text>{endTime.toLocaleString()}</Text>
+          <TextInput
+            placeholder="YYYY-MM-DDTHH:mm:ssZ"
+            value={endInput}
+            onChangeText={setEndInput}
+            onBlur={() => {
+              const parsed = parseDateInput(endInput);
+              if (parsed) {
+                setEndTime(parsed);
+              } else {
+                setEndInput(endTime.toISOString());
+              }
+            }}
+            style={styles.input}
+            placeholderTextColor="#999"
+          />
+          <View style={styles.row}>
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() => {
+                const plusTwo = new Date(Date.now() + 2 * 60 * 60 * 1000);
+                setEndTime(plusTwo);
+                setEndInput(plusTwo.toISOString());
+              }}
+            >
+              <Text style={styles.smallButtonText}>+2h</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() => {
+                const plusOne = new Date(endTime.getTime() + 60 * 60 * 1000);
+                setEndTime(plusOne);
+                setEndInput(plusOne.toISOString());
+              }}
+            >
+              <Text style={styles.smallButtonText}>+1h from current</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-        {showEndPicker && (
-          <DateTimePicker value={endTime} mode="datetime" onChange={handleEndTimeChange} />
-        )}
+        </View>
 
         <Text style={styles.sectionTitle}>Location & Artists</Text>
 
@@ -345,6 +422,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 24 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginTop: 16, marginBottom: 12, textTransform: 'uppercase' },
   field: { marginBottom: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   label: { fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 6 },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a1a1a' },
   inputMultiline: { height: 80, textAlignVertical: 'top', paddingVertical: 10 },
@@ -368,5 +446,7 @@ const styles = StyleSheet.create({
   modalItemSelected: { backgroundColor: '#f0f8ff', borderColor: '#2563eb' },
   modalItemTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
   modalItemSubtitle: { fontSize: 12, color: '#999', marginTop: 4 },
-  modalLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+  modalLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  smallButton: { backgroundColor: '#111827', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
+  smallButtonText: { color: '#fff', fontWeight: '700' }
 });

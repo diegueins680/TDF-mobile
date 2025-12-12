@@ -1,7 +1,22 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+
+const deriveDevHost = () => {
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    // Fallback for classic manifest
+    (Constants as any).manifest?.hostUri ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri;
+  if (hostUri) {
+    const host = hostUri.split(':')[0];
+    if (host) return host;
+  }
+  return Platform.select({ android: '10.0.2.2', ios: 'localhost', default: 'localhost' }) ?? 'localhost';
+};
 
 export const API_BASE =
-  (process.env.EXPO_PUBLIC_API_BASE || 'http://localhost:8080').replace(/\/+$/, '');
+  (process.env.EXPO_PUBLIC_API_BASE || `http://${deriveDevHost()}:8080`).replace(/\/+$/, '');
 const API_TOKEN = process.env.EXPO_PUBLIC_API_TOKEN?.trim();
 export const UPLOAD_BASE = process.env.EXPO_PUBLIC_UPLOAD_URL;
 

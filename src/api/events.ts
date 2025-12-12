@@ -152,7 +152,6 @@ export const Events = {
     const dto = await put<BackendInvitationDTO>(`/events/${eventId}/invitations/${invitationId}`, payload);
     return mapInvitationDto(dto, eventId);
   }
-  }
 };
 
 // Mapping functions to convert between backend EventDTO and frontend SocialEvent

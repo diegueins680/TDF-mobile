@@ -6,7 +6,12 @@ const reactHooks = require('eslint-plugin-react-hooks');
 const prettierConfig = require('eslint-config-prettier');
 const globals = require('globals');
 
-const ignores = ['node_modules', '.expo', 'dist', 'build', 'web-build', 'coverage', 'eslint.config.js'];
+const ignores = ['node_modules', '.expo', 'dist', 'build', 'web-build', 'coverage', 'eslint.config.js', 'jest.config.js'];
+
+const baseGlobals = {
+  ...globals.browser,
+  ...globals.node,
+};
 
 module.exports = [
   { ignores },
@@ -20,8 +25,7 @@ module.exports = [
         sourceType: 'module'
       },
       globals: {
-        ...globals.browser,
-        ...globals.node
+        ...baseGlobals
       }
     },
     plugins: {
@@ -51,6 +55,18 @@ module.exports = [
     settings: {
       react: { version: 'detect' }
     }
+  },
+  {
+    files: ['**/__tests__/**/*.{ts,tsx}', '**/*.{test,spec}.{ts,tsx}'],
+    languageOptions: {
+      globals: {
+        ...baseGlobals,
+        ...globals.jest,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
   },
   prettierConfig
 ];

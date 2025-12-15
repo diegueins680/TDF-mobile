@@ -1,10 +1,12 @@
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { setAuthToken, getAuthToken } from '../api/client';
+import { setAuthToken, getAuthToken, get } from '../api/client';
+import type { Party } from '../types';
 
 type AuthContextValue = {
   token: string | null;
+  partyId: string | null;
   loading: boolean;
   setToken: (next: string | null) => void;
   clearToken: () => void;
@@ -16,6 +18,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [token, setTokenState] = useState<string | null>(getAuthToken() ?? null);
+  const [partyId, setPartyIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,6 +28,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (stored) {
           setTokenState(stored);
           setAuthToken(stored);
+          try {
+            const profile = await get<Party>('/parties/me');
+            setPartyIdState(String(profile.id));
+          } catch (_) {
+            setPartyIdState(null);
+          }
         }
       } finally {
         setLoading(false);
@@ -38,7 +47,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setAuthToken(normalized);
     if (normalized) {
       void AsyncStorage.setItem(STORAGE_KEY, normalized);
+      (async () => {
+        try {
+          const profile = await get<Party>('/parties/me');
+          setPartyIdState(String(profile.id));
+        } catch (_) {
+          setPartyIdState(null);
+        }
+      })();
     } else {
+      setPartyIdState(null);
       void AsyncStorage.removeItem(STORAGE_KEY);
     }
   }, []);
@@ -46,8 +64,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const clearToken = useCallback(() => setToken(null), [setToken]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ token, loading, setToken, clearToken }),
-    [token, loading, setToken, clearToken]
+    () => ({ token, partyId, loading, setToken, clearToken }),
+    [token, partyId, loading, setToken, clearToken]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

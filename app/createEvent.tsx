@@ -116,8 +116,12 @@ export default function CreateEventScreen() {
       return;
     }
 
-    // Convert price from dollars to cents for backend
-    const priceCents = ticketPrice ? Math.round(parseFloat(ticketPrice) * 100) : 0;
+    const trimmedPrice = ticketPrice.trim();
+    const parsedPrice = trimmedPrice ? Number(trimmedPrice) : undefined;
+    if (trimmedPrice && !Number.isFinite(parsedPrice)) {
+      Alert.alert('Validation', 'Ticket price must be a valid number');
+      return;
+    }
 
     createMutation.mutate({
       title: title.trim(),
@@ -126,7 +130,7 @@ export default function CreateEventScreen() {
       endTime: parsedEnd.toISOString(),
       venueId,
       artistIds,
-      ticketPrice: priceCents,  // Backend expects cents as integer
+      ticketPrice: parsedPrice,
       ticketUrl: ticketUrl.trim() || undefined,
       isPublic
     });

@@ -97,7 +97,7 @@ export default function VenueDetailScreen() {
                 <View style={styles.eventHeader}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
                   {event.ticketPrice && (
-                    <Text style={styles.eventPrice}>${(event.ticketPrice / 100).toFixed(2)}</Text>
+                    <Text style={styles.eventPrice}>${event.ticketPrice.toFixed(2)}</Text>
                   )}
                 </View>
                 <Text style={styles.eventDateTime}>

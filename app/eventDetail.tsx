@@ -199,7 +199,7 @@ export default function EventDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.label}>Tickets</Text>
           {event.ticketPrice ? (
-            <Text style={styles.price}>${event.ticketPrice}</Text>
+            <Text style={styles.price}>${event.ticketPrice.toFixed(2)}</Text>
           ) : (
             <Text style={styles.text}>Free</Text>
           )}

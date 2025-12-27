@@ -83,35 +83,35 @@ export const Events = {
     if (filters?.artistId != null) query.append('artistId', String(filters.artistId));
     if (filters?.venueId != null) query.append('venueId', String(filters.venueId));
 
-    const url = `/events${query.toString() ? `?${query.toString()}` : ''}`;
+    const url = `/social-events/events${query.toString() ? `?${query.toString()}` : ''}`;
     const events = await get<BackendEventDTO[]>(url);
     return events.map((e) => mapBackendEventToFrontend(e));
   },
 
   getById: async (eventId: ID): Promise<SocialEvent> => {
-    const event = await get<BackendEventDTO>(`/events/${eventId}`);
+    const event = await get<BackendEventDTO>(`/social-events/events/${eventId}`);
     return mapBackendEventToFrontend(event);
   },
 
   create: async (body: SocialEventCreate): Promise<SocialEvent> => {
     const backendBody = mapFrontendEventToBackend(body);
-    const event = await post<BackendEventDTO>('/events', backendBody);
+    const event = await post<BackendEventDTO>('/social-events/events', backendBody);
     return mapBackendEventToFrontend(event);
   },
 
   update: async (eventId: ID, body: SocialEventUpdate): Promise<SocialEvent> => {
     const backendBody = mapFrontendEventToBackend(body);
-    const event = await put<BackendEventDTO>(`/events/${eventId}`, backendBody);
+    const event = await put<BackendEventDTO>(`/social-events/events/${eventId}`, backendBody);
     return mapBackendEventToFrontend(event);
   },
 
   delete: async (eventId: ID): Promise<void> => {
-    await del<void>(`/events/${eventId}`);
+    await del<void>(`/social-events/events/${eventId}`);
   },
 
   // RSVP management
   getRSVPs: async (eventId: ID): Promise<EventRSVP[]> => {
-    const rsvps = await get<BackendRsvpDTO[]>(`/events/${eventId}/rsvps`);
+    const rsvps = await get<BackendRsvpDTO[]>(`/social-events/events/${eventId}/rsvps`);
     return rsvps.map((dto) => mapRsvpDto(dto, eventId));
   },
 
@@ -121,7 +121,7 @@ export const Events = {
       rsvpPartyId: String(body.userId),
       rsvpStatus: mapFrontendRsvpStatus(body.status)
     };
-    const result = await post<BackendRsvpDTO>(`/events/${body.eventId}/rsvps`, payload);
+    const result = await post<BackendRsvpDTO>(`/social-events/events/${body.eventId}/rsvps`, payload);
     return mapRsvpDto(result, body.eventId, body.userId);
   },
 
@@ -139,12 +139,12 @@ export const Events = {
       invitationStatus: body.status ?? 'PENDING',
       invitationMessage: body.message ?? null
     };
-    const dto = await post<BackendInvitationDTO>(`/events/${body.eventId}/invitations`, payload);
+    const dto = await post<BackendInvitationDTO>(`/social-events/events/${body.eventId}/invitations`, payload);
     return mapInvitationDto(dto, body.eventId);
   },
 
   getInvitations: async (eventId: ID): Promise<EventInvitation[]> => {
-    const list = await get<BackendInvitationDTO[]>(`/events/${eventId}/invitations`);
+    const list = await get<BackendInvitationDTO[]>(`/social-events/events/${eventId}/invitations`);
     return list.map((dto) => mapInvitationDto(dto, eventId));
   },
 
@@ -159,7 +159,7 @@ export const Events = {
       invitationMessage: message ?? undefined
     };
     // Backend expects PATCH for updating invitation status
-    const dto = await put<BackendInvitationDTO>(`/events/${eventId}/invitations/${invitationId}`, payload);
+    const dto = await put<BackendInvitationDTO>(`/social-events/events/${eventId}/invitations/${invitationId}`, payload);
     return mapInvitationDto(dto, eventId);
   }
 };
@@ -178,7 +178,7 @@ function mapBackendEventToFrontend(e: BackendEventDTO): SocialEvent {
     artistIds: artists.map((a) => a.id),
     artists,
     createdBy: 0, // backend doesn't track organizer yet
-    ticketPrice: e.eventPriceCents ? e.eventPriceCents / 100 : null,
+    ticketPrice: typeof e.eventPriceCents === 'number' ? e.eventPriceCents / 100 : null,
     ticketUrl: null, // backend doesn't store ticket URL
     imageUrl: null,  // backend doesn't store image URL
     isPublic: true,  // backend doesn't track visibility
@@ -195,7 +195,7 @@ function mapFrontendEventToBackend(body: SocialEventCreate | SocialEventUpdate) 
     eventStart: body.startTime,
     eventEnd: body.endTime,
     eventVenueId: body.venueId?.toString(),
-    eventPriceCents: body.ticketPrice ? Math.round(body.ticketPrice * 100) : null,
+    eventPriceCents: typeof body.ticketPrice === 'number' ? Math.round(body.ticketPrice * 100) : null,
     eventCapacity: null,
     eventArtists: body.artistIds?.map((id: ID) => ({ artistId: id })) || []
   };

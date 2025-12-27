@@ -29,31 +29,31 @@ export const Venues = {
     if (filters?.limit) query.append('limit', filters.limit.toString());
     if (filters?.offset) query.append('offset', filters.offset.toString());
     
-    const url = `/venues${query.toString() ? '?' + query.toString() : ''}`;
+    const url = `/social-events/venues${query.toString() ? '?' + query.toString() : ''}`;
     const venues = await get<BackendVenueDTO[]>(url);
     return venues.map((v) => mapBackendVenueToFrontend(v));
   },
 
   getById: async (venueId: ID): Promise<Venue> => {
-    const venue = await get<BackendVenueDTO>(`/venues/${venueId}`);
+    const venue = await get<BackendVenueDTO>(`/social-events/venues/${venueId}`);
     return mapBackendVenueToFrontend(venue);
   },
 
   create: async (body: VenueCreate): Promise<Venue> => {
     const backendBody = mapFrontendVenueToBackend(body);
-    const venue = await post<BackendVenueDTO>('/venues', backendBody);
+    const venue = await post<BackendVenueDTO>('/social-events/venues', backendBody);
     return mapBackendVenueToFrontend(venue);
   },
 
   update: async (venueId: ID, body: Partial<VenueCreate>): Promise<Venue> => {
     const backendBody = mapFrontendVenueToBackend(body);
-    const venue = await put<BackendVenueDTO>(`/venues/${venueId}`, backendBody);
+    const venue = await put<BackendVenueDTO>(`/social-events/venues/${venueId}`, backendBody);
     return mapBackendVenueToFrontend(venue);
   },
 
   search: async (query: string): Promise<Venue[]> => {
     // Backend doesn't have search; use list instead
-    const venues = await get<BackendVenueDTO[]>('/venues');
+    const venues = await get<BackendVenueDTO[]>('/social-events/venues');
     return venues
       .map((v) => mapBackendVenueToFrontend(v))
       .filter((v) => 

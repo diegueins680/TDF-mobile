@@ -30,13 +30,13 @@ export const Artists = {
     if (filters?.limit) query.append('limit', filters.limit.toString());
     if (filters?.offset) query.append('offset', filters.offset.toString());
     
-    const url = `/artists${query.toString() ? '?' + query.toString() : ''}`;
+    const url = `/social-events/artists${query.toString() ? '?' + query.toString() : ''}`;
     const artists = await get<BackendArtistDTO[]>(url);
     return artists.map((a) => mapBackendArtistToFrontend(a));
   },
 
   getById: async (artistId: ID): Promise<ArtistProfile> => {
-    const artist = await get<BackendArtistDTO>(`/artists/${artistId}`);
+    const artist = await get<BackendArtistDTO>(`/social-events/artists/${artistId}`);
     return mapBackendArtistToFrontend(artist);
   },
 
@@ -46,39 +46,39 @@ export const Artists = {
 
   create: async (body: ArtistProfileCreate): Promise<ArtistProfile> => {
     const backendBody = mapFrontendArtistToBackend(body);
-    const artist = await post<BackendArtistDTO>('/artists', backendBody);
+    const artist = await post<BackendArtistDTO>('/social-events/artists', backendBody);
     return mapBackendArtistToFrontend(artist);
   },
 
   update: async (artistId: ID, body: Partial<ArtistProfileCreate>): Promise<ArtistProfile> => {
     const backendBody = mapFrontendArtistToBackend(body);
-    const artist = await put<BackendArtistDTO>(`/artists/${artistId}`, backendBody);
+    const artist = await put<BackendArtistDTO>(`/social-events/artists/${artistId}`, backendBody);
     return mapBackendArtistToFrontend(artist);
   },
 
   searchByGenre: async (genre: string): Promise<ArtistProfile[]> => {
-    const artists = await get<BackendArtistDTO[]>(`/artists?genre=${encodeURIComponent(genre)}`);
+    const artists = await get<BackendArtistDTO[]>(`/social-events/artists?genre=${encodeURIComponent(genre)}`);
     return artists.map((a) => mapBackendArtistToFrontend(a));
   },
 
   searchByName: async (name: string): Promise<ArtistProfile[]> => {
-    const artists = await get<BackendArtistDTO[]>(`/artists?name=${encodeURIComponent(name)}`);
+    const artists = await get<BackendArtistDTO[]>(`/social-events/artists?name=${encodeURIComponent(name)}`);
     return artists.map((a) => mapBackendArtistToFrontend(a));
   }
 
   , follow: async (artistId: ID, followerPartyId: string) => {
     const body = { followerPartyId };
-    const res = await post<ArtistFollower>(`/artists/${artistId}/follow`, body);
+    const res = await post<ArtistFollower>(`/social-events/artists/${artistId}/follow`, body);
     return res;
   },
 
   unfollow: async (artistId: ID, followerPartyId: string) => {
-    await del<void>(`/artists/${artistId}/follow?follower=${encodeURIComponent(String(followerPartyId))}`);
+    await del<void>(`/social-events/artists/${artistId}/follow?follower=${encodeURIComponent(String(followerPartyId))}`);
     return true;
   },
 
   listFollowers: async (artistId: ID): Promise<ArtistFollower[]> => {
-    const rows = await get<ArtistFollower[]>(`/artists/${artistId}/followers`);
+    const rows = await get<ArtistFollower[]>(`/social-events/artists/${artistId}/followers`);
     return rows;
   }
 };

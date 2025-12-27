@@ -51,8 +51,8 @@ function EventCardComponent({ event, onPress }: Props) {
         )}
 
         <View style={styles.footer}>
-          {event.ticketPrice && (
-            <Text style={styles.price}>${event.ticketPrice}</Text>
+          {typeof event.ticketPrice === 'number' && (
+            <Text style={styles.price}>${event.ticketPrice.toFixed(2)}</Text>
           )}
           <View style={styles.stats}>
             <Text style={styles.stat}>{event.rsvpCount} going</Text>

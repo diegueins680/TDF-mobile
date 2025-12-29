@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
 import { Inventory, normalizeAssets } from '../../src/api/inventory';
@@ -40,7 +39,6 @@ function toStringId(value: Asset['assetId']): string {
 
 export default function InventoryScreen() {
   const qc = useQueryClient();
-  const router = useRouter();
   const { token } = useAuth();
   const [localImage, setLocalImage] = useState<{ uri: string; mime?: string; name?: string } | null>(
     null
@@ -92,7 +90,8 @@ export default function InventoryScreen() {
 
   const assetsQuery = useQuery({
     queryKey: ['inventory'],
-    queryFn: () => Inventory.list().then(normalizeAssets)
+    queryFn: () => Inventory.list().then(normalizeAssets),
+    enabled: hasToken
   });
 
   const createMutation = useMutation({
@@ -441,9 +440,9 @@ export default function InventoryScreen() {
               Mantén el inventario al día, asigna equipo con check-out y agrega fotos para identificarlo rápido.
             </Text>
             {!token && (
-              <TouchableOpacity style={styles.authHint} onPress={() => router.push('/auth')}>
-                <Text style={styles.authHintText}>Configura tu token para cargar inventario</Text>
-              </TouchableOpacity>
+              <View style={styles.authHint}>
+                <Text style={styles.authHintText}>Acceso restringido para cargar inventario.</Text>
+              </View>
             )}
 
             {feedback ? (
@@ -453,10 +452,9 @@ export default function InventoryScreen() {
             ) : null}
             {assetsQuery.isError ? (
               <View style={styles.errorBox}>
-                <Text style={styles.errorText}>No pudimos cargar el inventario.</Text>
-                <TouchableOpacity onPress={() => router.push('/auth')}>
-                  <Text style={styles.errorLink}>Configura tu token en Auth</Text>
-                </TouchableOpacity>
+                <Text style={styles.errorText}>
+                  {hasToken ? 'No pudimos cargar el inventario.' : 'Acceso restringido para cargar inventario.'}
+                </Text>
               </View>
             ) : null}
 
@@ -911,7 +909,6 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   errorText: { color: '#b91c1c', fontWeight: '600' },
-  errorLink: { color: '#b91c1c', fontWeight: '700', marginTop: 4 },
   authHint: {
     marginTop: 6,
     alignSelf: 'flex-start',

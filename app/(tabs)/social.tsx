@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -13,16 +13,11 @@ type TabKey = 'friends' | 'following' | 'followers';
 
 export default function SocialScreen() {
   const qc = useQueryClient();
-  const { token, setToken } = useAuth();
+  const { token } = useAuth();
   const { partyId, displayName } = useUserSettings();
 
   const [activeTab, setActiveTab] = useState<TabKey>('friends');
   const [addId, setAddId] = useState('');
-  const [tokenInput, setTokenInput] = useState(token ?? '');
-
-  useEffect(() => {
-    setTokenInput(token ?? '');
-  }, [token]);
 
   const partiesQuery = useQuery({
     queryKey: ['parties'],
@@ -106,11 +101,6 @@ export default function SocialScreen() {
     return party.displayName ?? party.legalName ?? `Party #${partyId}`;
   };
 
-  const handleSaveToken = () => {
-    setToken(tokenInput.trim() || null);
-    Alert.alert('Listo', 'Actualizamos tu token de acceso.');
-  };
-
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
       <View style={styles.card}>
@@ -122,19 +112,7 @@ export default function SocialScreen() {
           <Text style={styles.badge}>Party ID: {partyId ?? 'No configurado'}</Text>
           {!!displayName && <Text style={styles.badge}>Nombre: {displayName}</Text>}
         </View>
-        <View style={styles.tokenRow}>
-          <TextInput
-            placeholder="Bearer token"
-            value={tokenInput}
-            onChangeText={setTokenInput}
-            style={[styles.input, { flex: 1 }]}
-            autoCapitalize="none"
-          />
-          <TouchableOpacity style={styles.primaryButton} onPress={handleSaveToken}>
-            <Text style={styles.primaryButtonText}>Guardar</Text>
-          </TouchableOpacity>
-        </View>
-        {!token && <Text style={styles.helper}>Ingresa tu token para cargar tu red.</Text>}
+        {!token && <Text style={styles.helper}>Acceso restringido. Solicita permisos para cargar tu red.</Text>}
       </View>
 
       <View style={styles.card}>
@@ -172,7 +150,7 @@ export default function SocialScreen() {
           </TouchableOpacity>
         </View>
         {!token ? (
-          <Text style={styles.helper}>Agrega tu token para ver sugerencias.</Text>
+          <Text style={styles.helper}>Acceso restringido para ver sugerencias.</Text>
         ) : suggestionsQuery.isError ? (
           <Text style={styles.errorText}>No pudimos cargar sugerencias.</Text>
         ) : suggestionsQuery.isLoading ? (
@@ -233,7 +211,7 @@ export default function SocialScreen() {
         </View>
 
         {!token ? (
-          <Text style={styles.helper}>Agrega tu token para ver tus conexiones.</Text>
+          <Text style={styles.helper}>Acceso restringido para ver tus conexiones.</Text>
         ) : (followersQuery.isLoading || followingQuery.isLoading || friendsQuery.isLoading || partiesQuery.isLoading) ? (
           <Text style={styles.helper}>Cargando red social…</Text>
         ) : activeData.length === 0 ? (
@@ -278,7 +256,6 @@ const styles = StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   badge: { backgroundColor: '#eef2ff', color: '#1e3a8a', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, fontWeight: '700' },
   helper: { color: '#6b7280', fontSize: 13 },
-  tokenRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   input: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, padding: 10 },
   primaryButton: { backgroundColor: '#2563eb', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center' },
   primaryButtonText: { color: '#fff', fontWeight: '700' },

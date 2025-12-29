@@ -4,6 +4,7 @@ import { ScrollView, View, Text, TextInput, Button, StyleSheet, Alert } from 're
 import QRCode from 'react-native-qrcode-svg';
 
 import { buildVCardSharePayload, exchangeVCard, parseVCardPayload, type ScannedVCard } from '../../src/api/social';
+import { useAuth } from '../../src/providers/AuthProvider';
 
 type BarCodeScannerModule = typeof import('expo-barcode-scanner');
 type BarCodeScannerComponent = BarCodeScannerModule['BarCodeScanner'];
@@ -13,7 +14,7 @@ export default function VCardScreen() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [partyId, setPartyId] = useState('');
-  const [apiToken, setApiToken] = useState('');
+  const { token } = useAuth();
 
   const [isScanning, setIsScanning] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<PermissionStatus | null>(null);
@@ -73,13 +74,13 @@ export default function VCardScreen() {
       Alert.alert('Falta ID', 'El QR escaneado no incluye un partyId.');
       return;
     }
-    if (!apiToken.trim()) {
-      Alert.alert('Token requerido', 'Ingresa un token de API para enviar el intercambio.');
+    if (!token) {
+      Alert.alert('Acceso requerido', 'Necesitas permisos para enviar el intercambio al CRM.');
       return;
     }
     try {
       setIsSending(true);
-      await exchangeVCard(scanned.partyId, apiToken);
+      await exchangeVCard(scanned.partyId);
       Alert.alert('Listo', 'Intercambio enviado. Ambas partes verán el contacto en CRM.');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No pudimos enviar el intercambio.';
@@ -104,8 +105,8 @@ export default function VCardScreen() {
     <ScrollView contentContainerStyle={styles.wrap}>
       <Text style={styles.title}>Intercambio de vCard</Text>
       <Text style={styles.subtitle}>
-        Muestra tu QR para compartir tu contacto o escanea el de otra persona. Opcionalmente, envía el intercambio al
-        CRM usando tu token de API.
+        Muestra tu QR para compartir tu contacto o escanea el de otra persona. Si tienes acceso, envía el intercambio al
+        CRM desde aquí.
       </Text>
 
       <View style={styles.card}>
@@ -153,13 +154,6 @@ export default function VCardScreen() {
             {scanned.email && <Text style={styles.rowText}>{scanned.email}</Text>}
             {scanned.phone && <Text style={styles.rowText}>{scanned.phone}</Text>}
             {scanned.partyId && <Text style={styles.rowText}>Party ID: {scanned.partyId}</Text>}
-            <TextInput
-              placeholder="Token API (Bearer)"
-              value={apiToken}
-              onChangeText={setApiToken}
-              style={styles.input}
-              autoCapitalize="none"
-            />
             <Button
               title={isSending ? 'Enviando…' : 'Enviar intercambio al CRM'}
               onPress={() => void handleExchange()}

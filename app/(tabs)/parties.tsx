@@ -2,15 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listParties, createParty } from '../../src/api/parties';
 import type { Party } from '../../src/types';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, TextInput, View, Text, Button, StyleSheet, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import { FlatList, TextInput, View, Text, Button, StyleSheet } from 'react-native';
 
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import { useAuth } from '../../src/providers/AuthProvider';
 
 export default function Parties() {
   const qc = useQueryClient();
-  const router = useRouter();
   const { token } = useAuth();
   const [q, setQ] = useState('');
   const [newName, setNewName] = useState('');
@@ -46,19 +44,14 @@ export default function Parties() {
 
   const renderEmpty = useCallback(() => (
     <View style={styles.empty}>
-      <Text>{hasToken ? 'No clients yet' : 'Add your API token to load clients.'}</Text>
-      {!hasToken && (
-        <TouchableOpacity onPress={() => router.push('/auth')}>
-          <Text style={styles.link}>Open Auth</Text>
-        </TouchableOpacity>
-      )}
+      <Text>{hasToken ? 'No clients yet' : 'Acceso restringido para cargar clientes.'}</Text>
     </View>
-  ), [hasToken, router]);
+  ), [hasToken]);
 
   const errorText = useMemo(() => {
-    if (!hasToken) return 'Añade tu token en Auth para cargar clientes.';
+    if (!hasToken) return 'Acceso restringido para cargar clientes.';
     if (error instanceof Error) return error.message;
-    return 'No pudimos cargar clientes. Revisa tu conexión o token.';
+    return 'No pudimos cargar clientes. Revisa tu conexión.';
   }, [error, hasToken]);
 
   const renderError = useCallback(() => {
@@ -67,24 +60,19 @@ export default function Parties() {
       <View style={styles.errorBox}>
         <Text style={styles.errorText}>{errorText}</Text>
         <View style={styles.row}>
-          {hasToken ? (
+          {hasToken && (
             <Button title={isFetching ? 'Reintentando…' : 'Reintentar'} onPress={() => refetch()} disabled={isFetching} />
-          ) : (
-            <Button title="Ir a Auth" onPress={() => router.push('/auth')} />
           )}
         </View>
       </View>
     );
-  }, [errorText, hasToken, isError, isFetching, refetch, router]);
+  }, [errorText, hasToken, isError, isFetching, refetch]);
 
   return (
     <View style={styles.wrap}>
       {!hasToken && (
         <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>Connect your API token to load and add clients.</Text>
-          <TouchableOpacity onPress={() => router.push('/auth')}>
-            <Text style={styles.link}>Open Auth</Text>
-          </TouchableOpacity>
+          <Text style={styles.noticeTitle}>Acceso restringido para cargar y crear clientes.</Text>
         </View>
       )}
       <TextInput
@@ -138,7 +126,6 @@ const styles = StyleSheet.create({
   list: { paddingBottom: 24 },
   notice: { padding: 12, borderRadius: 8, backgroundColor: '#eef2ff', borderWidth: 1, borderColor: '#c7d2fe' },
   noticeTitle: { fontWeight: '700', color: '#0f172a', marginBottom: 4 },
-  link: { color: '#2563eb', fontWeight: '700', marginTop: 4 },
   errorBox: {
     marginTop: 8,
     padding: 10,

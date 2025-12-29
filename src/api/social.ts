@@ -5,11 +5,8 @@ export interface VCardExchangePayload {
   vcerPartyId: number;
 }
 
-export async function exchangeVCard(targetPartyId: number, token?: string): Promise<void> {
-  const headers = token?.trim()
-    ? { Authorization: `Bearer ${token.trim()}` }
-    : undefined;
-  await http.post('/social/vcard-exchange', { vcerPartyId: targetPartyId } satisfies VCardExchangePayload, { headers });
+export async function exchangeVCard(targetPartyId: number): Promise<void> {
+  await http.post('/social/vcard-exchange', { vcerPartyId: targetPartyId } satisfies VCardExchangePayload);
 }
 
 export function buildVCardSharePayload(input: {

@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "deploy": "npx expo export -p web && npx eas-cli@latest deploy",
     "lint": "eslint . --ext ts,tsx --max-warnings=0",
+    "typecheck": "tsc --noEmit",
     "test": "jest"
   },
   "dependencies": {

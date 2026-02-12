@@ -69,7 +69,7 @@ export default function ArtistDetailScreen() {
       } else {
         await Artists.follow(artistId, partyId);
       }
-      void qc.invalidateQueries(['artist-followers', artistId]);
+      void qc.invalidateQueries({ queryKey: ['artist-followers', artistId] });
     } catch (err) {
       console.warn('follow action failed', err);
     }

@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 
 import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
+import type { ID } from '../src/types';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
 export default function UserProfileScreen() {
@@ -59,8 +60,8 @@ export default function UserProfileScreen() {
     }
   }, [artistQuery.data, partyId, router]);
 
-  const handleEventPress = useCallback((eventId: string) => {
-    router.push({ pathname: '/eventDetail', params: { eventId } });
+  const handleEventPress = useCallback((eventId: ID) => {
+    router.push({ pathname: '/eventDetail', params: { eventId: String(eventId) } });
   }, [router]);
 
   const handleSaveIdentity = useCallback(() => {
@@ -228,7 +229,7 @@ export default function UserProfileScreen() {
                 <FlatList
                   data={upcomingEvents}
                   renderItem={renderEventItem}
-                  keyExtractor={item => item.id}
+                  keyExtractor={item => String(item.id)}
                   scrollEnabled={false}
                 />
               </>

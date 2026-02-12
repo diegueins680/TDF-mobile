@@ -3,12 +3,14 @@ import { listParties, createParty } from '../../src/api/parties';
 import type { Party } from '../../src/types';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, TextInput, View, Text, Button, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import { useAuth } from '../../src/providers/AuthProvider';
 
 export default function Parties() {
   const qc = useQueryClient();
+  const router = useRouter();
   const { token } = useAuth();
   const [q, setQ] = useState('');
   const [newName, setNewName] = useState('');
@@ -73,6 +75,10 @@ export default function Parties() {
       {!hasToken && (
         <View style={styles.notice}>
           <Text style={styles.noticeTitle}>Acceso restringido para cargar y crear clientes.</Text>
+          <Text style={styles.noticeBody}>Connect your API token to load and create clients.</Text>
+          <View style={styles.row}>
+            <Button title="Open Auth" onPress={() => router.push('/auth')} />
+          </View>
         </View>
       )}
       <TextInput
@@ -126,6 +132,7 @@ const styles = StyleSheet.create({
   list: { paddingBottom: 24 },
   notice: { padding: 12, borderRadius: 8, backgroundColor: '#eef2ff', borderWidth: 1, borderColor: '#c7d2fe' },
   noticeTitle: { fontWeight: '700', color: '#0f172a', marginBottom: 4 },
+  noticeBody: { color: '#1e293b', marginBottom: 8 },
   errorBox: {
     marginTop: 8,
     padding: 10,

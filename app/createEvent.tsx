@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import { Events } from '../src/api/events';
 import { Venues } from '../src/api/venues';
 import { Artists } from '../src/api/artists';
-import type { ID, ArtistProfile, Venue } from '../types';
+import type { ID, ArtistProfile, Venue } from '../src/types';
 
 export default function CreateEventScreen() {
   const router = useRouter();

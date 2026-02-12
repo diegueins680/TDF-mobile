@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
-import { useNavigation } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 import type { ArtistProfile } from '../types';
 
@@ -10,13 +10,13 @@ type Props = {
 };
 
 function ArtistCardComponent({ artist, onPress }: Props) {
-  const navigation = useNavigation();
+  const router = useRouter();
 
   const handlePress = () => {
     if (onPress) {
       onPress();
     } else {
-      navigation.navigate('artistDetail', { artistId: artist.id });
+      router.push({ pathname: '/artistDetail', params: { artistId: String(artist.id) } });
     }
   };
 

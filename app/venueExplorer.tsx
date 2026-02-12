@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 
 import { Venues } from '../src/api/venues';
-import type { Venue } from '../src/types';
+import type { ID, Venue } from '../src/types';
 
 interface VenueWithDistance extends Venue {
   distance?: number;
@@ -48,11 +48,7 @@ export default function VenueExplorerScreen() {
   const { data: nearbyVenues, isLoading, isError } = useQuery({
     queryKey: ['venues-nearby', userLocation, radiusKm],
     queryFn: () => {
-      if (!userLocation) return Promise.resolve([]);
-      return Venues.list({
-        nearCoords: { lat: userLocation.lat, lng: userLocation.lng },
-        radiusKm: parseInt(radiusKm) || 5
-      });
+      return Venues.list();
     },
     enabled: !!userLocation
   });
@@ -68,16 +64,17 @@ export default function VenueExplorerScreen() {
         venue.latitude,
         venue.longitude
       )
-    }));
-  }, [nearbyVenues, userLocation]);
+    }))
+      .filter((venue) => venue.distance !== undefined && venue.distance <= (parseInt(radiusKm, 10) || 5));
+  }, [nearbyVenues, userLocation, radiusKm]);
 
   // Sort by distance
   const sortedVenues = useMemo(() => {
     return [...venuesWithDistance].sort((a, b) => (a.distance || 0) - (b.distance || 0));
   }, [venuesWithDistance]);
 
-  const handleVenuePress = useCallback((venueId: string) => {
-    router.push({ pathname: '/venueDetail', params: { venueId } });
+  const handleVenuePress = useCallback((venueId: ID) => {
+    router.push({ pathname: '/venueDetail', params: { venueId: String(venueId) } });
   }, [router]);
 
   const handleCreateVenue = useCallback(() => {
@@ -183,7 +180,7 @@ export default function VenueExplorerScreen() {
         <FlatList
           data={sortedVenues}
           renderItem={renderVenueItem}
-          keyExtractor={item => item.id}
+          keyExtractor={item => String(item.id)}
           contentContainerStyle={styles.listContent}
         />
       )}

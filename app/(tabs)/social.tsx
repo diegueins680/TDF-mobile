@@ -21,7 +21,7 @@ export default function SocialScreen() {
 
   const partiesQuery = useQuery({
     queryKey: ['parties'],
-    queryFn: Parties.list,
+    queryFn: () => Parties.list(),
     enabled: Boolean(token)
   });
 
@@ -127,7 +127,7 @@ export default function SocialScreen() {
           />
           <TouchableOpacity
             style={[styles.primaryButton, addMutation.isPending && styles.buttonDisabled]}
-            onPress={() => addMutation.mutate()}
+            onPress={() => addMutation.mutate(undefined)}
             disabled={addMutation.isPending}
           >
             <Text style={styles.primaryButtonText}>{addMutation.isPending ? 'Agregando…' : 'Agregar'}</Text>

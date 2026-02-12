@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import type { Href } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { setOnboardingSeen } from '../src/lib/onboarding';
@@ -45,7 +46,7 @@ export default function OnboardingScreen() {
     }).start();
   }, [fadeAnim]);
 
-  const complete = (path: string) => {
+  const complete = (path: Href) => {
     void setOnboardingSeen(true);
     router.replace(path);
   };

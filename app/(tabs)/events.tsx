@@ -55,7 +55,7 @@ export default function EventsScreen() {
   }, [eventsByDate, selectedDate]);
 
   const handleCreateEvent = useCallback(() => {
-    router.push('createEvent');
+    router.push('/createEvent');
   }, [router]);
 
   const renderEventItem = useCallback(({ item }: { item: SocialEvent }) => (

@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
-import type { ID, RSVPStatus, EventInvitationStatus } from '../types';
+import type { ID, RSVPStatus, EventInvitationStatus } from '../src/types';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
 export default function EventDetailScreen() {

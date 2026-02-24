@@ -57,6 +57,13 @@ type BackendInvitationDTO = {
   invitationUpdatedAt?: string;
 };
 
+const normalizeVenueId = (value?: string | null): ID => {
+  const trimmed = value?.trim();
+  if (!trimmed) return 0;
+  if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
+  return trimmed;
+};
+
 /**
  * Social Events API - Wired to backend endpoints
  * Maps backend EventDTO to frontend SocialEvent types
@@ -173,7 +180,7 @@ function mapBackendEventToFrontend(e: BackendEventDTO): SocialEvent {
     description: e.eventDescription || null,
     startTime: e.eventStart, // ISO string from backend
     endTime: e.eventEnd,     // ISO string from backend
-    venueId: e.eventVenueId ? parseInt(e.eventVenueId, 10) : 0,
+    venueId: normalizeVenueId(e.eventVenueId),
     venue: undefined,
     artistIds: artists.map((a) => a.id),
     artists,

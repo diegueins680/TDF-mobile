@@ -18,6 +18,28 @@ const STORAGE_KEY = 'tdf-user-settings';
 
 const UserSettingsContext = createContext<UserSettingsContextValue | undefined>(undefined);
 
+const parseUserSettings = (raw: string): UserSettings | null => {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const value = parsed as Record<string, unknown>;
+    return {
+      partyId: typeof value.partyId === 'string' ? value.partyId : null,
+      displayName: typeof value.displayName === 'string' ? value.displayName : null,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const clearStoredSettings = async () => {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Ignore storage cleanup failures to avoid unhandled async rejections during bootstrap.
+  }
+};
+
 export function UserSettingsProvider({ children }: PropsWithChildren) {
   const [settings, setSettings] = useState<UserSettings>({ partyId: null, displayName: null });
   const [loading, setLoading] = useState(true);
@@ -27,12 +49,15 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         if (raw) {
-          const parsed = JSON.parse(raw) as UserSettings;
-          setSettings({
-            partyId: parsed.partyId ?? null,
-            displayName: parsed.displayName ?? null
-          });
+          const parsed = parseUserSettings(raw);
+          if (parsed) {
+            setSettings(parsed);
+          } else {
+            await clearStoredSettings();
+          }
         }
+      } catch {
+        await clearStoredSettings();
       } finally {
         setLoading(false);
       }

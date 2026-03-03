@@ -39,7 +39,7 @@ export default function CreateEventScreen() {
 
   const { data: artists, isLoading: artistsLoading } = useQuery({
     queryKey: ['artists', artistSearch],
-    queryFn: () => artistSearch ? Artists.searchByName(artistSearch) : Promise.resolve([])
+    queryFn: () => artistSearch ? Artists.searchByName(artistSearch) : Artists.list({ limit: 100 })
   });
 
   const createMutation = useMutation({
@@ -49,13 +49,21 @@ export default function CreateEventScreen() {
       Alert.alert('Success', 'Event created!');
       router.back();
     },
-    onError: () => {
-      Alert.alert('Error', 'Failed to create event');
+    onError: (err: Error) => {
+      Alert.alert('Error', err.message || 'Failed to create event');
     }
   });
 
   const selectedVenue = useMemo(() => venues?.find(v => v.id === venueId), [venues, venueId]);
-  const selectedArtists = useMemo(() => artists?.filter(a => artistIds.includes(a.id)) || [], [artists, artistIds]);
+  const artistById = useMemo(() => {
+    const map = new Map<string, ArtistProfile>();
+    (artists ?? []).forEach((artist) => map.set(String(artist.id), artist));
+    return map;
+  }, [artists]);
+  const selectedArtistNames = useMemo(
+    () => artistIds.map((id) => artistById.get(String(id))?.name).filter((name): name is string => Boolean(name)),
+    [artistById, artistIds]
+  );
 
   const parseDateInput = useCallback((text: string) => {
     const parsed = new Date(text);
@@ -288,8 +296,14 @@ export default function CreateEventScreen() {
           {artistIds.length > 0 ? (
             <View style={styles.selectedBox}>
               <Text style={styles.selectedText}>
-                {selectedArtists.length} artist{selectedArtists.length !== 1 ? 's' : ''} selected
+                {artistIds.length} artist{artistIds.length !== 1 ? 's' : ''} selected
               </Text>
+              {selectedArtistNames.length > 0 && (
+                <Text style={styles.selectedSubtext}>
+                  {selectedArtistNames.slice(0, 3).join(', ')}
+                  {selectedArtistNames.length > 3 ? ` +${selectedArtistNames.length - 3}` : ''}
+                </Text>
+              )}
             </View>
           ) : (
             <View style={styles.selectedBox}>
@@ -432,6 +446,7 @@ const styles = StyleSheet.create({
   inputMultiline: { height: 80, textAlignVertical: 'top', paddingVertical: 10 },
   selectedBox: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' },
   selectedText: { fontSize: 14, color: '#1a1a1a', fontWeight: '500' },
+  selectedSubtext: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   placeholder: { fontSize: 14, color: '#999' },
   checkbox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   checkboxBox: { width: 20, height: 20, borderWidth: 1, borderColor: '#ddd', borderRadius: 4, backgroundColor: '#fff' },

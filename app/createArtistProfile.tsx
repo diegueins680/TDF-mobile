@@ -7,6 +7,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { Artists } from '../src/api/artists';
+import { useAuth } from '../src/providers/AuthProvider';
+import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
 const GENRES = [
   'Rock', 'Pop', 'Hip-Hop', 'Jazz', 'Electronic', 'Classical', 'Country',
@@ -16,6 +18,8 @@ const GENRES = [
 export default function CreateArtistProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
+  const { partyId: authPartyId } = useAuth();
+  const { partyId: settingsPartyId } = useUserSettings();
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -23,16 +27,20 @@ export default function CreateArtistProfileScreen() {
   const [instagramHandle, setInstagramHandle] = useState('');
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const effectivePartyId = settingsPartyId?.trim() || authPartyId?.trim() || null;
 
   const createMutation = useMutation({
     mutationFn: (body: Parameters<typeof Artists.create>[0]) => Artists.create(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['artists'] });
+      if (effectivePartyId) {
+        qc.invalidateQueries({ queryKey: ['user-artist-profile', effectivePartyId] });
+      }
       Alert.alert('Success', 'Artist profile created!');
       router.back();
     },
-    onError: () => {
-      Alert.alert('Error', 'Failed to create artist profile');
+    onError: (err: Error) => {
+      Alert.alert('Error', err.message || 'Failed to create artist profile');
     }
   });
 
@@ -47,9 +55,13 @@ export default function CreateArtistProfileScreen() {
       Alert.alert('Validation', 'Artist name is required');
       return;
     }
+    if (!effectivePartyId) {
+      Alert.alert('Validation', 'Set your Party ID in profile or auth before creating an artist profile.');
+      return;
+    }
 
     createMutation.mutate({
-      partyId: 'current-user', // In real app, use actual user ID
+      partyId: effectivePartyId,
       name: name.trim(),
       bio: bio.trim() || undefined,
       imageUrl: imageUrl.trim() || undefined,
@@ -57,12 +69,15 @@ export default function CreateArtistProfileScreen() {
       instagramHandle: instagramHandle.trim() || undefined,
       spotifyUrl: spotifyUrl.trim() || undefined
     });
-  }, [name, bio, imageUrl, instagramHandle, spotifyUrl, selectedGenres, createMutation]);
+  }, [name, bio, imageUrl, instagramHandle, spotifyUrl, selectedGenres, createMutation, effectivePartyId]);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Create Artist Profile</Text>
+        <Text style={styles.identityText}>
+          Party ID: {effectivePartyId ?? 'Not configured'}
+        </Text>
 
         <View style={styles.field}>
           <Text style={styles.label}>Artist Name *</Text>
@@ -159,6 +174,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fafafa' },
   content: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 24 },
   title: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', marginBottom: 20 },
+  identityText: { color: '#4b5563', marginBottom: 12 },
   field: { marginBottom: 16 },
   label: { fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 6, textTransform: 'uppercase' },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a1a1a' },

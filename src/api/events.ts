@@ -13,6 +13,7 @@ import type {
   ArtistSocialLinks
 } from '../types';
 import { mapBackendArtistToFrontend } from './artists';
+import { Venues } from './venues';
 
 type BackendArtistDTO = {
   artistId?: ID;
@@ -21,11 +22,12 @@ type BackendArtistDTO = {
   artistGenres?: string[];
   artistBio?: string | null;
   artistAvatarUrl?: string | null;
-   artistSocialLinks?: ArtistSocialLinks;
+  artistSocialLinks?: ArtistSocialLinks;
 };
 
 type BackendEventDTO = {
   eventId: ID;
+  eventOrganizerPartyId?: ID | null;
   eventTitle: string;
   eventDescription?: string | null;
   eventStart: string;
@@ -33,6 +35,11 @@ type BackendEventDTO = {
   eventVenueId?: string | null;
   eventPriceCents?: number | null;
   eventCapacity?: number | null;
+  eventTicketUrl?: string | null;
+  eventImageUrl?: string | null;
+  eventIsPublic?: boolean | null;
+  eventCreatedAt?: string | null;
+  eventUpdatedAt?: string | null;
   eventArtists?: BackendArtistDTO[];
   eventRsvps?: BackendRsvpDTO[];
 };
@@ -64,6 +71,40 @@ const normalizeVenueId = (value?: string | null): ID => {
   return trimmed;
 };
 
+const normalizePartyId = (value?: ID | null): ID => {
+  if (typeof value === 'number') return value;
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) return 0;
+  if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
+  return trimmed;
+};
+
+const normalizeVenueLookupId = (value?: string | null): string | null => {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return /^\d+$/.test(trimmed) ? String(Number.parseInt(trimmed, 10)) : trimmed;
+};
+
+async function loadVenueMapByIds(rawVenueIds: Array<string | null | undefined>) {
+  const uniqueVenueIds = [...new Set(rawVenueIds.map((value) => normalizeVenueLookupId(value)).filter((value): value is string => Boolean(value)))];
+  if (uniqueVenueIds.length === 0) return new Map<string, Awaited<ReturnType<typeof Venues.getById>>>();
+
+  const settled = await Promise.allSettled(uniqueVenueIds.map((venueId) => Venues.getById(venueId)));
+  const map = new Map<string, Awaited<ReturnType<typeof Venues.getById>>>();
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      map.set(String(result.value.id), result.value);
+    }
+    if (result.status === 'rejected') {
+      const fallbackId = uniqueVenueIds[index];
+      if (fallbackId) {
+        map.delete(String(fallbackId));
+      }
+    }
+  });
+  return map;
+}
+
 /**
  * Social Events API - Wired to backend endpoints
  * Maps backend EventDTO to frontend SocialEvent types
@@ -92,12 +133,16 @@ export const Events = {
 
     const url = `/social-events/events${query.toString() ? `?${query.toString()}` : ''}`;
     const events = await get<BackendEventDTO[]>(url);
-    return events.map((e) => mapBackendEventToFrontend(e));
+    const venueMap = await loadVenueMapByIds(events.map((event) => event.eventVenueId));
+    return events.map((event) =>
+      mapBackendEventToFrontend(event, venueMap.get(String(normalizeVenueId(event.eventVenueId))))
+    );
   },
 
   getById: async (eventId: ID): Promise<SocialEvent> => {
     const event = await get<BackendEventDTO>(`/social-events/events/${eventId}`);
-    return mapBackendEventToFrontend(event);
+    const venueMap = await loadVenueMapByIds([event.eventVenueId]);
+    return mapBackendEventToFrontend(event, venueMap.get(String(normalizeVenueId(event.eventVenueId))));
   },
 
   create: async (body: SocialEventCreate): Promise<SocialEvent> => {
@@ -172,7 +217,11 @@ export const Events = {
 };
 
 // Mapping functions to convert between backend EventDTO and frontend SocialEvent
-function mapBackendEventToFrontend(e: BackendEventDTO): SocialEvent {
+function mapBackendEventToFrontend(
+  e: BackendEventDTO,
+  venueOverride?: SocialEvent['venue']
+): SocialEvent {
+  const nowIso = new Date().toISOString();
   const artists = (e.eventArtists ?? []).map((artist) => mapBackendArtistToFrontend(artist));
   return {
     id: e.eventId,
@@ -181,17 +230,17 @@ function mapBackendEventToFrontend(e: BackendEventDTO): SocialEvent {
     startTime: e.eventStart, // ISO string from backend
     endTime: e.eventEnd,     // ISO string from backend
     venueId: normalizeVenueId(e.eventVenueId),
-    venue: undefined,
+    venue: venueOverride,
     artistIds: artists.map((a) => a.id),
     artists,
-    createdBy: 0, // backend doesn't track organizer yet
+    createdBy: normalizePartyId(e.eventOrganizerPartyId),
     ticketPrice: typeof e.eventPriceCents === 'number' ? e.eventPriceCents / 100 : null,
-    ticketUrl: null, // backend doesn't store ticket URL
-    imageUrl: null,  // backend doesn't store image URL
-    isPublic: true,  // backend doesn't track visibility
+    ticketUrl: e.eventTicketUrl ?? null,
+    imageUrl: e.eventImageUrl ?? null,
+    isPublic: typeof e.eventIsPublic === 'boolean' ? e.eventIsPublic : true,
     rsvpCount: Array.isArray(e.eventRsvps) ? e.eventRsvps.length : 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    createdAt: e.eventCreatedAt ?? nowIso,
+    updatedAt: e.eventUpdatedAt ?? e.eventCreatedAt ?? nowIso
   };
 }
 
@@ -204,6 +253,9 @@ function mapFrontendEventToBackend(body: SocialEventCreate | SocialEventUpdate) 
     eventVenueId: body.venueId?.toString(),
     eventPriceCents: typeof body.ticketPrice === 'number' ? Math.round(body.ticketPrice * 100) : null,
     eventCapacity: null,
+    eventTicketUrl: body.ticketUrl ?? null,
+    eventImageUrl: body.imageUrl ?? null,
+    eventIsPublic: body.isPublic,
     eventArtists: body.artistIds?.map((id: ID) => ({ artistId: id })) || []
   };
 }

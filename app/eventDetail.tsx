@@ -9,6 +9,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Events } from '../src/api/events';
 import type { ID, RSVPStatus, EventInvitationStatus } from '../src/types';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
+import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 
 export default function EventDetailScreen() {
   const params = useLocalSearchParams();
@@ -38,6 +39,11 @@ export default function EventDetailScreen() {
     queryKey: ['event-invitations', eventId],
     queryFn: () => Events.getInvitations(eventId as ID),
     enabled: Boolean(eventId)
+  });
+
+  const savedEventIdsQuery = useQuery({
+    queryKey: ['saved-event-ids'],
+    queryFn: listSavedEventIds
   });
 
   useEffect(() => {
@@ -98,6 +104,17 @@ export default function EventDetailScreen() {
     }
   });
 
+  const saveEventMutation = useMutation({
+    mutationFn: () => toggleSavedEvent(eventId as ID),
+    onSuccess: ({ saved }) => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
+      Alert.alert('Listo', saved ? 'Evento guardado en tu perfil.' : 'Evento removido de guardados.');
+    },
+    onError: () => {
+      Alert.alert('Error', 'No pudimos actualizar tus eventos guardados.');
+    }
+  });
+
   const handleOpenTickets = useCallback(() => {
     if (event?.ticketUrl) {
       Linking.openURL(event.ticketUrl).catch(() => {
@@ -113,6 +130,10 @@ export default function EventDetailScreen() {
     }
     rsvpMutation.mutate(status);
   }, [normalizedPartyId, rsvpMutation]);
+
+  const handleToggleSaved = useCallback(() => {
+    saveEventMutation.mutate();
+  }, [saveEventMutation]);
 
   if (isLoading) {
     return (
@@ -137,6 +158,7 @@ export default function EventDetailScreen() {
   const endDate = new Date(event.endTime);
   const rsvpCount = rsvpQuery.data?.length ?? event.rsvpCount ?? 0;
   const invitations = invitationsQuery.data ?? [];
+  const isSaved = savedEventIdsQuery.data?.includes(String(event.id)) ?? false;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -251,9 +273,24 @@ export default function EventDetailScreen() {
         </View>
 
         {/* Actions */}
-        <TouchableOpacity style={styles.inviteButton} onPress={() => setShowInviteModal(true)}>
-          <Text style={styles.inviteButtonText}>Invite Friends</Text>
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[
+              styles.saveEventButton,
+              isSaved && styles.saveEventButtonActive,
+              saveEventMutation.isPending && styles.buttonDisabled
+            ]}
+            onPress={handleToggleSaved}
+            disabled={saveEventMutation.isPending}
+          >
+            <Text style={[styles.saveEventButtonText, isSaved && styles.saveEventButtonTextActive]}>
+              {saveEventMutation.isPending ? 'Guardando…' : isSaved ? 'Saved' : 'Save Event'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.inviteButton} onPress={() => setShowInviteModal(true)}>
+            <Text style={styles.inviteButtonText}>Invite Friends</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Invite Modal */}
@@ -367,7 +404,12 @@ const styles = StyleSheet.create({
   rsvpButtonActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   rsvpButtonText: { fontSize: 12, fontWeight: '600', color: '#666' },
   rsvpButtonTextActive: { color: '#fff' },
-  inviteButton: { marginHorizontal: 16, backgroundColor: '#f0f0f0', paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
+  actionRow: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginBottom: 8 },
+  saveEventButton: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db', paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
+  saveEventButtonActive: { backgroundColor: '#e0e7ff', borderColor: '#2563eb' },
+  saveEventButtonText: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  saveEventButtonTextActive: { color: '#1d4ed8' },
+  inviteButton: { flex: 1, backgroundColor: '#f0f0f0', paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
   inviteButtonText: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
   modal: { flex: 1, backgroundColor: '#fff' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },

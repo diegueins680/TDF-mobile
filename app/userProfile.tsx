@@ -2,16 +2,18 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, FlatList, TextInput, Alert
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
-import type { ID } from '../src/types';
+import type { ID, SocialEvent } from '../src/types';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
+import { listSavedEventIds, unsaveEvent } from '../src/lib/savedEvents';
 
 export default function UserProfileScreen() {
   const router = useRouter();
+  const qc = useQueryClient();
   const { partyId, displayName, setIdentity, clearIdentity, loading } = useUserSettings();
   const [activeTab, setActiveTab] = useState<'artist' | 'events' | 'saved'>('artist');
   const [draftPartyId, setDraftPartyId] = useState(partyId ?? '');
@@ -34,6 +36,22 @@ export default function UserProfileScreen() {
     queryFn: () => Events.list({ upcomingOnly: true })
   });
 
+  const savedEventIdsQuery = useQuery({
+    queryKey: ['saved-event-ids'],
+    queryFn: listSavedEventIds
+  });
+
+  const savedEventIds = useMemo(() => savedEventIdsQuery.data ?? [], [savedEventIdsQuery.data]);
+
+  const savedEventsQuery = useQuery({
+    queryKey: ['saved-events', savedEventIds],
+    enabled: savedEventIds.length > 0,
+    queryFn: async () => {
+      const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
+      return settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+    }
+  });
+
   const upcomingEvents = useMemo(() => {
     if (!eventsQuery.data) return [];
     const now = new Date();
@@ -41,6 +59,27 @@ export default function UserProfileScreen() {
       .filter(e => new Date(e.startTime) > now)
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   }, [eventsQuery.data]);
+
+  const savedEvents = useMemo(() => {
+    if (!savedEventsQuery.data) return [];
+    const order = new Map(savedEventIds.map((id, index) => [id, index]));
+    return [...savedEventsQuery.data].sort((a, b) => {
+      const aOrder = order.get(String(a.id)) ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = order.get(String(b.id)) ?? Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder;
+    });
+  }, [savedEventIds, savedEventsQuery.data]);
+
+  const unsaveMutation = useMutation({
+    mutationFn: (eventId: ID) => unsaveEvent(eventId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
+      qc.invalidateQueries({ queryKey: ['saved-events'] });
+    },
+    onError: () => {
+      Alert.alert('Error', 'No pudimos remover el evento guardado.');
+    }
+  });
 
   const handleCreateArtistProfile = useCallback(() => {
     if (!partyId) {
@@ -63,6 +102,10 @@ export default function UserProfileScreen() {
   const handleEventPress = useCallback((eventId: ID) => {
     router.push({ pathname: '/eventDetail', params: { eventId: String(eventId) } });
   }, [router]);
+
+  const handleUnsaveEvent = useCallback((eventId: ID) => {
+    unsaveMutation.mutate(eventId);
+  }, [unsaveMutation]);
 
   const handleSaveIdentity = useCallback(() => {
     if (!draftPartyId.trim()) {
@@ -92,25 +135,40 @@ export default function UserProfileScreen() {
     );
   }
 
-  const renderEventItem = ({ item }: { item: typeof upcomingEvents[0] }) => (
-    <TouchableOpacity
-      style={styles.eventItem}
-      onPress={() => handleEventPress(item.id)}
-    >
-      <View style={styles.eventHeader}>
-        <Text style={styles.eventTitle}>{item.title}</Text>
-        {item.ticketPrice && (
-          <Text style={styles.eventPrice}>${item.ticketPrice.toFixed(2)}</Text>
+  const renderEventItem = (item: SocialEvent, isSavedView: boolean) => (
+    <View style={styles.eventItem}>
+      <TouchableOpacity
+        style={styles.eventTapArea}
+        onPress={() => handleEventPress(item.id)}
+      >
+        <View style={styles.eventHeader}>
+          <Text style={styles.eventTitle}>{item.title}</Text>
+          {item.ticketPrice && (
+            <Text style={styles.eventPrice}>${item.ticketPrice.toFixed(2)}</Text>
+          )}
+        </View>
+        <Text style={styles.eventDateTime}>
+          {new Date(item.startTime).toLocaleDateString()} at{' '}
+          {new Date(item.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+        {item.venue && (
+          <Text style={styles.eventVenue}>{item.venue.name}</Text>
         )}
-      </View>
-      <Text style={styles.eventDateTime}>
-        {new Date(item.startTime).toLocaleDateString()} at{' '}
-        {new Date(item.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-      </Text>
-      {item.venue && (
-        <Text style={styles.eventVenue}>{item.venue.name}</Text>
+      </TouchableOpacity>
+      {isSavedView && (
+        <View style={styles.savedActionsRow}>
+          <TouchableOpacity
+            style={[styles.unsaveButton, unsaveMutation.isPending && styles.buttonDisabled]}
+            onPress={() => handleUnsaveEvent(item.id)}
+            disabled={unsaveMutation.isPending}
+          >
+            <Text style={styles.unsaveButtonText}>
+              {unsaveMutation.isPending ? 'Actualizando…' : 'Remove'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
-    </TouchableOpacity>
+    </View>
   );
 
   return (
@@ -228,7 +286,7 @@ export default function UserProfileScreen() {
                 <Text style={styles.sectionTitle}>Próximos eventos ({upcomingEvents.length})</Text>
                 <FlatList
                   data={upcomingEvents}
-                  renderItem={renderEventItem}
+                  renderItem={({ item }) => renderEventItem(item, false)}
                   keyExtractor={item => String(item.id)}
                   scrollEnabled={false}
                 />
@@ -243,7 +301,27 @@ export default function UserProfileScreen() {
 
         {activeTab === 'saved' && (
           <View style={styles.section}>
-            <Text style={styles.noDataText}>Saved events feature coming soon</Text>
+            {savedEventIdsQuery.isLoading ? (
+              <ActivityIndicator size="large" color="#2563eb" />
+            ) : savedEventIds.length === 0 ? (
+              <Text style={styles.noDataText}>No saved events yet. Tap Save Event inside any event.</Text>
+            ) : savedEventsQuery.isLoading ? (
+              <ActivityIndicator size="large" color="#2563eb" />
+            ) : savedEvents.length > 0 ? (
+              <>
+                <Text style={styles.sectionTitle}>Saved events ({savedEvents.length})</Text>
+                <FlatList
+                  data={savedEvents}
+                  renderItem={({ item }) => renderEventItem(item, true)}
+                  keyExtractor={(item) => String(item.id)}
+                  scrollEnabled={false}
+                />
+              </>
+            ) : (
+              <Text style={styles.noDataText}>
+                No pudimos cargar tus eventos guardados. Abre un evento y vuelve a guardarlo.
+              </Text>
+            )}
           </View>
         )}
       </ScrollView>
@@ -283,10 +361,15 @@ const styles = StyleSheet.create({
   actionButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 12 },
   actionButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   noDataText: { fontSize: 13, color: '#999', textAlign: 'center', paddingVertical: 24 },
-  eventItem: { backgroundColor: '#f9f9f9', borderRadius: 6, padding: 12, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#2563eb' },
+  eventItem: { backgroundColor: '#f9f9f9', borderRadius: 6, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#2563eb' },
+  eventTapArea: { padding: 12 },
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 },
   eventTitle: { fontSize: 13, fontWeight: '600', color: '#1a1a1a', flex: 1 },
   eventPrice: { fontSize: 12, fontWeight: '700', color: '#2563eb', marginLeft: 8 },
   eventDateTime: { fontSize: 12, color: '#999', marginBottom: 4 },
-  eventVenue: { fontSize: 12, color: '#666' }
+  eventVenue: { fontSize: 12, color: '#666' },
+  savedActionsRow: { marginTop: 10, flexDirection: 'row', justifyContent: 'flex-end' },
+  unsaveButton: { backgroundColor: '#f3f4f6', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6 },
+  unsaveButtonText: { fontSize: 12, color: '#111827', fontWeight: '700' },
+  buttonDisabled: { opacity: 0.6 }
 });

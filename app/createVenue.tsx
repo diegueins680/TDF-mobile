@@ -22,6 +22,8 @@ export default function CreateVenueScreen() {
   const [longitude, setLongitude] = useState('');
   const [capacity, setCapacity] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [website, setWebsite] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
 
   const createMutation = useMutation({
     mutationFn: (body: VenueCreate) => Venues.create(body),
@@ -76,9 +78,11 @@ export default function CreateVenueScreen() {
       if (!isNaN(cap)) venuData.capacity = cap;
     }
     if (phoneNumber.trim()) venuData.phoneNumber = phoneNumber.trim();
+    if (website.trim()) venuData.website = website.trim();
+    if (imageUrl.trim()) venuData.imageUrl = imageUrl.trim();
 
     createMutation.mutate(venuData);
-  }, [name, address, city, state, zipCode, latitude, longitude, capacity, phoneNumber, createMutation]);
+  }, [name, address, city, state, zipCode, latitude, longitude, capacity, phoneNumber, website, imageUrl, createMutation]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -188,6 +192,32 @@ export default function CreateVenueScreen() {
             style={styles.input}
             placeholderTextColor="#999"
             keyboardType="phone-pad"
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Website</Text>
+          <TextInput
+            placeholder="https://example.com"
+            value={website}
+            onChangeText={setWebsite}
+            style={styles.input}
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            keyboardType="url"
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Image URL</Text>
+          <TextInput
+            placeholder="https://..."
+            value={imageUrl}
+            onChangeText={setImageUrl}
+            style={styles.input}
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            keyboardType="url"
           />
         </View>
 

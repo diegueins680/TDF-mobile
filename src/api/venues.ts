@@ -16,6 +16,11 @@ type BackendVenueDTO = {
   venueLng?: number | null;
   venueCapacity?: number | null;
   venueContact?: string | VenueContact | null;
+  venuePhone?: string | null;
+  venueWebsite?: string | null;
+  venueState?: string | null;
+  venueZipCode?: string | null;
+  venueImageUrl?: string | null;
   venueCreatedAt?: string | null;
   venueUpdatedAt?: string | null;
 };
@@ -71,29 +76,26 @@ function mapBackendVenueToFrontend(v: BackendVenueDTO): Venue {
   const nowIso = new Date().toISOString();
   const contact = normalizeContact(v.venueContact);
   const city = v.venueCity ?? '';
-  const state = city.includes(',') ? city.split(',').map((c) => c.trim())[1] ?? null : null;
+  const state = v.venueState ?? (city.includes(',') ? city.split(',').map((c) => c.trim())[1] ?? null : null);
   return {
     id: v.venueId,
     name: v.venueName,
     address: v.venueAddress || '',
     city,
     state,  // Try to extract state if available
-    zipCode: null, // backend doesn't store zipCode
+    zipCode: v.venueZipCode ?? null,
     latitude: v.venueLat ?? 0,
     longitude: v.venueLng ?? 0,
     capacity: v.venueCapacity ?? null,
-    imageUrl: null, // backend doesn't store images yet
-    phoneNumber: contact.phone ?? null,
-    website: contact.website ?? null,
+    imageUrl: v.venueImageUrl ?? null,
+    phoneNumber: v.venuePhone ?? contact.phone ?? null,
+    website: v.venueWebsite ?? contact.website ?? null,
     createdAt: v.venueCreatedAt ?? nowIso,
     updatedAt: v.venueUpdatedAt ?? v.venueCreatedAt ?? nowIso
   };
 }
 
 function mapFrontendVenueToBackend(body: Partial<VenueCreate>) {
-  const contact: VenueContact | null = body.phoneNumber || body.website
-    ? { phone: body.phoneNumber ?? null, website: body.website ?? null }
-    : null;
   return {
     venueName: body.name,
     venueAddress: body.address,
@@ -102,7 +104,12 @@ function mapFrontendVenueToBackend(body: Partial<VenueCreate>) {
     venueLat: body.latitude,
     venueLng: body.longitude,
     venueCapacity: body.capacity,
-    venueContact: contact
+    venueContact: body.phoneNumber ?? null,
+    venuePhone: body.phoneNumber ?? null,
+    venueWebsite: body.website ?? null,
+    venueState: body.state ?? null,
+    venueZipCode: body.zipCode ?? null,
+    venueImageUrl: body.imageUrl ?? null
   };
 }
 

@@ -222,6 +222,7 @@ export default function SocialScreen() {
               const targetId = activeTab === 'followers' ? row.pfFollowerId : row.pfFollowingId;
               const label = formatParty(targetId);
               const isFriend = friendsQuery.data?.some((f) => f.pfFollowingId === targetId) ?? false;
+              const isFollowing = followingQuery.data?.some((f) => f.pfFollowingId === targetId) ?? false;
               return (
                 <View key={`${activeTab}-${row.pfFollowerId}-${row.pfFollowingId}`} style={styles.item}>
                   <View style={{ flex: 1 }}>
@@ -229,7 +230,21 @@ export default function SocialScreen() {
                     <Text style={styles.itemMeta}>ID #{targetId} · Desde {row.pfStartedAt}</Text>
                     {row.pfViaNfc && <Text style={styles.tag}>Intercambio NFC</Text>}
                   </View>
-                  {activeTab !== 'followers' && (
+                  {activeTab === 'followers' ? (
+                    isFollowing ? (
+                      <View style={styles.followingBadge}>
+                        <Text style={styles.followingBadgeText}>Ya lo sigues</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.primaryButton, { paddingHorizontal: 12, paddingVertical: 10 }, addMutation.isPending && styles.buttonDisabled]}
+                        onPress={() => addMutation.mutate(targetId)}
+                        disabled={addMutation.isPending}
+                      >
+                        <Text style={styles.primaryButtonText}>Seguir</Text>
+                      </TouchableOpacity>
+                    )
+                  ) : (
                     <TouchableOpacity
                       style={[styles.secondaryButton, removeMutation.isPending && styles.buttonDisabled]}
                       onPress={() => removeMutation.mutate(targetId)}
@@ -274,6 +289,8 @@ const styles = StyleSheet.create({
   tag: { color: '#2563eb', fontSize: 12, marginTop: 4, fontWeight: '700' },
   secondaryButton: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: '#f3f4f6' },
   secondaryButtonText: { color: '#1f2937', fontWeight: '700', fontSize: 12 },
+  followingBadge: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, backgroundColor: '#dcfce7' },
+  followingBadgeText: { color: '#166534', fontWeight: '700', fontSize: 12 },
   buttonDisabled: { opacity: 0.6 },
   errorText: { color: '#dc2626', fontSize: 12 }
 });

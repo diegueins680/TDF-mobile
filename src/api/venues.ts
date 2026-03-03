@@ -16,6 +16,8 @@ type BackendVenueDTO = {
   venueLng?: number | null;
   venueCapacity?: number | null;
   venueContact?: string | VenueContact | null;
+  venueCreatedAt?: string | null;
+  venueUpdatedAt?: string | null;
 };
 
 /**
@@ -66,6 +68,7 @@ export const Venues = {
 
 // Mapping functions to convert between backend VenueDTO and frontend Venue
 function mapBackendVenueToFrontend(v: BackendVenueDTO): Venue {
+  const nowIso = new Date().toISOString();
   const contact = normalizeContact(v.venueContact);
   const city = v.venueCity ?? '';
   const state = city.includes(',') ? city.split(',').map((c) => c.trim())[1] ?? null : null;
@@ -82,8 +85,8 @@ function mapBackendVenueToFrontend(v: BackendVenueDTO): Venue {
     imageUrl: null, // backend doesn't store images yet
     phoneNumber: contact.phone ?? null,
     website: contact.website ?? null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    createdAt: v.venueCreatedAt ?? nowIso,
+    updatedAt: v.venueUpdatedAt ?? v.venueCreatedAt ?? nowIso
   };
 }
 

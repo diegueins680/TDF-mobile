@@ -3,12 +3,15 @@ import type { ArtistProfile, ArtistProfileCreate, ArtistSocialLinks, ID } from '
 
 type BackendArtistDTO = {
   artistId?: ID;
+  artistPartyId?: ID;
   partyId?: ID;
   artistName?: string;
   artistBio?: string | null;
   artistAvatarUrl?: string | null;
   artistGenres?: string[];
   artistSocialLinks?: ArtistSocialLinks;
+  artistCreatedAt?: string | null;
+  artistUpdatedAt?: string | null;
 };
 
 export type ArtistFollower = {
@@ -85,11 +88,13 @@ export const Artists = {
 
 // Mapping functions to convert between backend ArtistDTO and frontend ArtistProfile
 export function mapBackendArtistToFrontend(a: BackendArtistDTO): ArtistProfile {
+  const nowIso = new Date().toISOString();
   const socialLinks = normalizeSocialLinks(a.artistSocialLinks);
-  const id = a.artistId ? Number(a.artistId) : 0;
+  const id = normalizeEntityId(a.artistId, 0);
+  const partyId = normalizeEntityId(a.artistPartyId ?? a.partyId, id);
   return {
     id,
-    partyId: a.partyId ? Number(a.partyId) : id,  // backend doesn't track partyId separately
+    partyId,
     name: a.artistName ?? '',
     bio: a.artistBio ?? null,
     imageUrl: a.artistAvatarUrl ?? null,
@@ -97,20 +102,29 @@ export function mapBackendArtistToFrontend(a: BackendArtistDTO): ArtistProfile {
     instagramHandle: socialLinks?.instagram ?? null,
     spotifyUrl: socialLinks?.spotify ?? null,
     socialLinks,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    createdAt: a.artistCreatedAt ?? nowIso,
+    updatedAt: a.artistUpdatedAt ?? a.artistCreatedAt ?? nowIso
   };
 }
 
 function mapFrontendArtistToBackend(body: Partial<ArtistProfileCreate>) {
   const socialLinks = buildSocialLinksPayload(body);
   return {
+    artistPartyId: body.partyId != null ? String(body.partyId) : undefined,
     artistName: body.name,
     artistBio: body.bio || undefined,
     artistAvatarUrl: body.imageUrl || undefined,
     artistGenres: body.genres || [],
     artistSocialLinks: socialLinks
   };
+}
+
+function normalizeEntityId(raw: ID | undefined | null, fallback: ID): ID {
+  if (typeof raw === 'number') return raw;
+  const trimmed = typeof raw === 'string' ? raw.trim() : '';
+  if (!trimmed) return fallback;
+  if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
+  return trimmed;
 }
 
 function normalizeSocialLinks(raw?: ArtistSocialLinks | null): ArtistSocialLinks | undefined {

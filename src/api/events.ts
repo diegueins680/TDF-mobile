@@ -256,7 +256,11 @@ function mapFrontendEventToBackend(body: SocialEventCreate | SocialEventUpdate) 
     eventTicketUrl: body.ticketUrl ?? null,
     eventImageUrl: body.imageUrl ?? null,
     eventIsPublic: body.isPublic,
-    eventArtists: body.artistIds?.map((id: ID) => ({ artistId: id })) || []
+    eventArtists: body.artistIds?.map((id: ID) => ({
+      artistId: id,
+      artistName: '',
+      artistGenres: []
+    })) || []
   };
 }
 

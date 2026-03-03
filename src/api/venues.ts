@@ -30,9 +30,10 @@ type BackendVenueDTO = {
  * Maps backend VenueDTO to frontend Venue types
  */
 export const Venues = {
-  list: async (filters?: { city?: string; limit?: number; offset?: number }): Promise<Venue[]> => {
+  list: async (filters?: { city?: string; query?: string; limit?: number; offset?: number }): Promise<Venue[]> => {
     const query = new URLSearchParams();
     if (filters?.city) query.append('city', filters.city);
+    if (filters?.query) query.append('q', filters.query);
     if (filters?.limit) query.append('limit', filters.limit.toString());
     if (filters?.offset) query.append('offset', filters.offset.toString());
     
@@ -59,15 +60,9 @@ export const Venues = {
   },
 
   search: async (query: string): Promise<Venue[]> => {
-    // Backend doesn't have search; use list instead
-    const venues = await get<BackendVenueDTO[]>('/social-events/venues');
-    return venues
-      .map((v) => mapBackendVenueToFrontend(v))
-      .filter((v) => 
-        v.name.toLowerCase().includes(query.toLowerCase()) ||
-        v.city?.toLowerCase().includes(query.toLowerCase()) ||
-        v.address?.toLowerCase().includes(query.toLowerCase())
-      );
+    const trimmed = query.trim();
+    if (!trimmed) return Venues.list();
+    return Venues.list({ query: trimmed, limit: 100 });
   }
 };
 

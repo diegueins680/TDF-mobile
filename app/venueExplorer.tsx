@@ -105,9 +105,16 @@ export default function VenueExplorerScreen() {
 
   // Query venues near user location
   const { data: nearbyVenues, isLoading, isError } = useQuery({
-    queryKey: ['venues-nearby', userLocation, radiusKm],
+    queryKey: ['venues-nearby', userLocation, normalizedRadiusKm],
     queryFn: () => {
-      return Venues.list();
+      if (!userLocation) return Venues.list();
+      return Venues.list({
+        near: {
+          lat: userLocation.lat,
+          lng: userLocation.lng,
+          radiusKm: normalizedRadiusKm
+        }
+      });
     },
     enabled: !!userLocation
   });

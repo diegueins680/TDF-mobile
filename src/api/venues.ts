@@ -30,12 +30,28 @@ type BackendVenueDTO = {
  * Maps backend VenueDTO to frontend Venue types
  */
 export const Venues = {
-  list: async (filters?: { city?: string; query?: string; limit?: number; offset?: number }): Promise<Venue[]> => {
+  list: async (filters?: {
+    city?: string;
+    query?: string;
+    limit?: number;
+    offset?: number;
+    near?: { lat: number; lng: number; radiusKm?: number };
+  }): Promise<Venue[]> => {
     const query = new URLSearchParams();
     if (filters?.city) query.append('city', filters.city);
     if (filters?.query) query.append('q', filters.query);
     if (filters?.limit) query.append('limit', filters.limit.toString());
     if (filters?.offset) query.append('offset', filters.offset.toString());
+    if (filters?.near) {
+      const { lat, lng, radiusKm } = filters.near;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const nearParts = [lat.toString(), lng.toString()];
+        if (typeof radiusKm === 'number' && Number.isFinite(radiusKm) && radiusKm > 0) {
+          nearParts.push(radiusKm.toString());
+        }
+        query.append('near', nearParts.join(','));
+      }
+    }
     
     const url = `/social-events/venues${query.toString() ? '?' + query.toString() : ''}`;
     const venues = await get<BackendVenueDTO[]>(url);

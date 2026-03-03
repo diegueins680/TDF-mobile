@@ -1,15 +1,4 @@
 /** @type {import('jest').Config} */
-const path = require('path');
-
-function resolveModule(specifier) {
-  const searchPaths = [__dirname, path.join(__dirname, '..')];
-
-  try {
-    return require.resolve(specifier, { paths: searchPaths });
-  } catch {
-    return specifier;
-  }
-}
 
 module.exports = {
   preset: 'jest-expo',
@@ -19,8 +8,16 @@ module.exports = {
     'node_modules/(?!(jest-)?react-native|@react-native|@react-navigation|@expo|expo(nent)?|@expo-google-fonts|@unimodules|unimodules|sentry-expo|native-base|react-clone-referenced-element)',
   ],
   moduleNameMapper: {
-    '^react$': resolveModule('react'),
-    '^react/jsx-runtime$': resolveModule('react/jsx-runtime'),
-    '^react/jsx-dev-runtime$': resolveModule('react/jsx-dev-runtime'),
+    '^react$': ['<rootDir>/node_modules/react', '<rootDir>/../node_modules/react', 'react'],
+    '^react/jsx-runtime$': [
+      '<rootDir>/node_modules/react/jsx-runtime',
+      '<rootDir>/../node_modules/react/jsx-runtime',
+      'react/jsx-runtime',
+    ],
+    '^react/jsx-dev-runtime$': [
+      '<rootDir>/node_modules/react/jsx-dev-runtime',
+      '<rootDir>/../node_modules/react/jsx-dev-runtime',
+      'react/jsx-dev-runtime',
+    ],
   },
 };

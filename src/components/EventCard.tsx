@@ -7,9 +7,12 @@ import type { SocialEvent } from '../types';
 type Props = {
   event: SocialEvent;
   onPress?: () => void;
+  saved?: boolean;
+  onToggleSaved?: () => void;
+  saveDisabled?: boolean;
 };
 
-function EventCardComponent({ event, onPress }: Props) {
+function EventCardComponent({ event, onPress, saved = false, onToggleSaved, saveDisabled = false }: Props) {
   const router = useRouter();
 
   const handlePress = () => {
@@ -25,41 +28,57 @@ function EventCardComponent({ event, onPress }: Props) {
   const isSameDay = startDate.toDateString() === endDate.toDateString();
 
   return (
-    <TouchableOpacity style={styles.card} onPress={handlePress}>
-      {event.imageUrl && (
-        <Image source={{ uri: event.imageUrl }} style={styles.image} />
-      )}
-      
-      <View style={styles.content}>
-        <Text style={styles.title}>{event.title}</Text>
-        
-        <View style={styles.meta}>
-          <Text style={styles.date}>
-            {startDate.toLocaleDateString()} {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            {!isSameDay && ` - ${endDate.toLocaleDateString()}`}
-          </Text>
-          {event.venue && <Text style={styles.venue}>{event.venue.name}</Text>}
-        </View>
-
-        {event.artists && event.artists.length > 0 && (
-          <View style={styles.artists}>
-            <Text style={styles.artistsLabel}>Artists:</Text>
-            <Text style={styles.artistsList}>
-              {event.artists.map(a => a.name).join(', ')}
-            </Text>
-          </View>
+    <View style={styles.card}>
+      <TouchableOpacity onPress={handlePress}>
+        {event.imageUrl && (
+          <Image source={{ uri: event.imageUrl }} style={styles.image} />
         )}
 
-        <View style={styles.footer}>
-          {typeof event.ticketPrice === 'number' && (
-            <Text style={styles.price}>${event.ticketPrice.toFixed(2)}</Text>
+        <View style={styles.content}>
+          <Text style={styles.title}>{event.title}</Text>
+
+          <View style={styles.meta}>
+            <Text style={styles.date}>
+              {startDate.toLocaleDateString()} {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {!isSameDay && ` - ${endDate.toLocaleDateString()}`}
+            </Text>
+            {event.venue && <Text style={styles.venue}>{event.venue.name}</Text>}
+          </View>
+
+          {event.artists && event.artists.length > 0 && (
+            <View style={styles.artists}>
+              <Text style={styles.artistsLabel}>Artists:</Text>
+              <Text style={styles.artistsList}>
+                {event.artists.map(a => a.name).join(', ')}
+              </Text>
+            </View>
           )}
-          <View style={styles.stats}>
-            <Text style={styles.stat}>{event.rsvpCount} going</Text>
+
+          <View style={styles.footer}>
+            {typeof event.ticketPrice === 'number' && (
+              <Text style={styles.price}>${event.ticketPrice.toFixed(2)}</Text>
+            )}
+            <View style={styles.stats}>
+              <Text style={styles.stat}>{event.rsvpCount} going</Text>
+            </View>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+
+      {onToggleSaved && (
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.saveButton, saved && styles.saveButtonActive, saveDisabled && styles.saveButtonDisabled]}
+            onPress={onToggleSaved}
+            disabled={saveDisabled}
+          >
+            <Text style={[styles.saveButtonText, saved && styles.saveButtonTextActive]}>
+              {saveDisabled ? 'Updating…' : saved ? 'Saved' : 'Save'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -134,6 +153,34 @@ const styles = StyleSheet.create({
   stat: {
     fontSize: 12,
     color: '#666'
+  },
+  actions: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    alignItems: 'flex-end'
+  },
+  saveButton: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fff'
+  },
+  saveButtonActive: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff'
+  },
+  saveButtonDisabled: {
+    opacity: 0.6
+  },
+  saveButtonText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '700'
+  },
+  saveButtonTextActive: {
+    color: '#1d4ed8'
   }
 });
 

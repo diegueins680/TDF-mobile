@@ -14,6 +14,17 @@ type PipelineKind = 'mixing' | 'mastering';
 type StageOverrides = Record<string, PipelineStage>;
 
 const FALLBACK_STAGE_OVERRIDES_KEY = 'tdf-mobile-pipeline-stage-overrides-v1';
+const PIPELINE_STAGES: PipelineStage[] = [
+  'Intake',
+  'Editing',
+  'Mixing',
+  'Revisions',
+  'Mastering',
+  'Approved',
+];
+const STAGE_BY_LOWER = new Map<string, PipelineStage>(
+  PIPELINE_STAGES.map((stage) => [stage.toLowerCase(), stage]),
+);
 
 const FALLBACK_PIPELINE_DATA: Record<PipelineKind, PipelineCard[]> = {
   mixing: [
@@ -28,12 +39,22 @@ const FALLBACK_PIPELINE_DATA: Record<PipelineKind, PipelineCard[]> = {
   ],
 };
 
+const normalizeKind = (raw: unknown): PipelineKind => {
+  if (typeof raw !== 'string') return 'mixing';
+  return raw.trim().toLowerCase() === 'mastering' ? 'mastering' : 'mixing';
+};
+
+const normalizeStage = (raw: unknown): PipelineStage | undefined => {
+  if (typeof raw !== 'string') return undefined;
+  return STAGE_BY_LOWER.get(raw.trim().toLowerCase());
+};
+
 const toPipelineCard = (dto: PipelineCardDTO): PipelineCard => ({
   id: dto.id,
   title: dto.title,
   artist: dto.artist ?? null,
-  stage: dto.stage as PipelineStage,
-  kind: dto.type === 'mastering' ? 'mastering' : 'mixing',
+  stage: normalizeStage(dto.stage) ?? 'Intake',
+  kind: normalizeKind(dto.type),
 });
 
 const overrideKey = (kind: PipelineKind, id: PipelineCard['id']): string => `${kind}:${String(id)}`;
@@ -50,8 +71,28 @@ async function readStageOverrides(): Promise<StageOverrides> {
       await AsyncStorage.removeItem(FALLBACK_STAGE_OVERRIDES_KEY);
       return {};
     }
-    return parsed as StageOverrides;
+
+    const next: StageOverrides = {};
+    let sanitized = false;
+    Object.entries(parsed).forEach(([key, value]) => {
+      const cleanKey = key.trim();
+      const cleanStage = normalizeStage(value);
+      if (!cleanKey || !cleanStage) {
+        sanitized = true;
+        return;
+      }
+      if (cleanKey !== key || cleanStage !== value) {
+        sanitized = true;
+      }
+      next[cleanKey] = cleanStage;
+    });
+
+    if (sanitized) {
+      await writeStageOverrides(next);
+    }
+    return next;
   } catch {
+    await AsyncStorage.removeItem(FALLBACK_STAGE_OVERRIDES_KEY);
     return {};
   }
 }

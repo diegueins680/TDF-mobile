@@ -126,8 +126,12 @@ export const Events = {
     if (filters?.upcomingOnly && !filters.startAfter) {
       query.append('start_after', new Date().toISOString());
     }
-    if (filters?.limit) query.append('limit', filters.limit.toString());
-    if (filters?.offset) query.append('offset', filters.offset.toString());
+    if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit) && filters.limit > 0) {
+      query.append('limit', String(Math.trunc(filters.limit)));
+    }
+    if (typeof filters?.offset === 'number' && Number.isFinite(filters.offset) && filters.offset >= 0) {
+      query.append('offset', String(Math.trunc(filters.offset)));
+    }
     if (filters?.artistId != null) query.append('artistId', String(filters.artistId));
     if (filters?.venueId != null) query.append('venueId', String(filters.venueId));
 

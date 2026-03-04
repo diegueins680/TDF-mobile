@@ -30,8 +30,12 @@ export const Artists = {
     const query = new URLSearchParams();
     if (filters?.name) query.append('name', filters.name);
     if (filters?.genre) query.append('genre', filters.genre);
-    if (filters?.limit) query.append('limit', filters.limit.toString());
-    if (filters?.offset) query.append('offset', filters.offset.toString());
+    if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit) && filters.limit > 0) {
+      query.append('limit', String(Math.trunc(filters.limit)));
+    }
+    if (typeof filters?.offset === 'number' && Number.isFinite(filters.offset) && filters.offset >= 0) {
+      query.append('offset', String(Math.trunc(filters.offset)));
+    }
     
     const url = `/social-events/artists${query.toString() ? '?' + query.toString() : ''}`;
     const artists = await get<BackendArtistDTO[]>(url);

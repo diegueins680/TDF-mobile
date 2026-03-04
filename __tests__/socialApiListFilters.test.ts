@@ -1,0 +1,63 @@
+jest.mock('../src/api/client', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  del: jest.fn(),
+}));
+
+jest.mock('../src/api/venues', () => {
+  const actual = jest.requireActual('../src/api/venues');
+  return {
+    ...actual,
+    Venues: {
+      ...actual.Venues,
+      getById: jest.fn(),
+    },
+  };
+});
+
+import { Artists } from '../src/api/artists';
+import { Events } from '../src/api/events';
+import { Venues } from '../src/api/venues';
+
+const { get } = jest.requireMock('../src/api/client') as {
+  get: jest.Mock;
+};
+
+describe('Social list filter serialization', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('Artists.list keeps offset=0', async () => {
+    get.mockResolvedValueOnce([]);
+
+    await Artists.list({ offset: 0 });
+
+    expect(get).toHaveBeenCalledWith('/social-events/artists?offset=0');
+  });
+
+  it('Venues.list keeps offset=0 and truncates limit', async () => {
+    get.mockResolvedValueOnce([]);
+
+    await Venues.list({ limit: 10.8, offset: 0 });
+
+    expect(get).toHaveBeenCalledWith('/social-events/venues?limit=10&offset=0');
+  });
+
+  it('Events.list keeps offset=0', async () => {
+    get.mockResolvedValueOnce([]);
+
+    await Events.list({ limit: 5, offset: 0, upcomingOnly: false });
+
+    expect(get).toHaveBeenCalledWith('/social-events/events?limit=5&offset=0');
+  });
+
+  it('ignores invalid numeric filters', async () => {
+    get.mockResolvedValueOnce([]);
+
+    await Artists.list({ limit: 0, offset: -3 });
+
+    expect(get).toHaveBeenCalledWith('/social-events/artists');
+  });
+});

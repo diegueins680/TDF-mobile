@@ -95,7 +95,8 @@ export const Artists = {
 export function mapBackendArtistToFrontend(a: BackendArtistDTO): ArtistProfile {
   const nowIso = new Date().toISOString();
   const socialLinks = normalizeSocialLinks(a.artistSocialLinks);
-  const id = normalizeEntityId(a.artistId, 0);
+  const partyFallbackId = normalizeEntityId(a.artistPartyId ?? a.partyId, 0);
+  const id = normalizeEntityId(a.artistId, partyFallbackId);
   const partyId = normalizeEntityId(a.artistPartyId ?? a.partyId, id);
   return {
     id,
@@ -117,15 +118,21 @@ function mapFrontendArtistToBackend(body: Partial<ArtistProfileCreate>) {
   return {
     artistPartyId: body.partyId != null ? String(body.partyId) : undefined,
     artistName: body.name,
-    artistBio: body.bio || undefined,
-    artistAvatarUrl: body.imageUrl || undefined,
-    artistGenres: body.genres || [],
+    artistBio: normalizeOptionalText(body.bio),
+    artistAvatarUrl: normalizeOptionalText(body.imageUrl),
+    artistGenres: body.genres ?? [],
     artistSocialLinks: socialLinks
   };
 }
 
+function normalizeOptionalText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
 function normalizeEntityId(raw: ID | undefined | null, fallback: ID): ID {
-  if (typeof raw === 'number') return raw;
+  if (typeof raw === 'number') return Number.isSafeInteger(raw) ? raw : fallback;
   const trimmed = typeof raw === 'string' ? raw.trim() : '';
   if (!trimmed) return fallback;
   if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
@@ -135,13 +142,13 @@ function normalizeEntityId(raw: ID | undefined | null, fallback: ID): ID {
 function normalizeSocialLinks(raw?: ArtistSocialLinks | null): ArtistSocialLinks | undefined {
   if (!raw) return undefined;
   const clean: ArtistSocialLinks = {
-    spotify: raw.spotify ? raw.spotify.trim() : raw.spotify ?? undefined,
-    instagram: raw.instagram ? raw.instagram.trim() : raw.instagram ?? undefined,
-    twitter: raw.twitter ? raw.twitter.trim() : raw.twitter ?? undefined,
-    youtube: raw.youtube ? raw.youtube.trim() : raw.youtube ?? undefined,
-    soundcloud: raw.soundcloud ? raw.soundcloud.trim() : raw.soundcloud ?? undefined
+    spotify: normalizeOptionalText(raw.spotify),
+    instagram: normalizeOptionalText(raw.instagram),
+    twitter: normalizeOptionalText(raw.twitter),
+    youtube: normalizeOptionalText(raw.youtube),
+    soundcloud: normalizeOptionalText(raw.soundcloud)
   };
-  const hasAny = Object.values(clean).some((val) => typeof val === 'string' && val.length > 0);
+  const hasAny = Object.values(clean).some((val) => typeof val === 'string');
   return hasAny ? clean : undefined;
 }
 
@@ -155,10 +162,10 @@ function buildSocialLinksPayload(body: Partial<ArtistProfileCreate>): ArtistSoci
   };
   const cleaned: ArtistSocialLinks = Object.fromEntries(
     Object.entries(candidate)
-      .map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])
-      .filter(([, value]) => value !== '')
+      .map(([key, value]) => [key, normalizeOptionalText(value)])
+      .filter(([, value]) => typeof value === 'string')
   ) as ArtistSocialLinks;
-  const hasAny = Object.values(cleaned).some((val) => typeof val === 'string' && val.length > 0);
+  const hasAny = Object.values(cleaned).some((val) => typeof val === 'string');
   return hasAny ? cleaned : undefined;
 }
 

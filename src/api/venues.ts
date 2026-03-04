@@ -6,6 +6,26 @@ type VenueContact = {
   website?: string | null;
 };
 
+const normalizeOptionalText = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
+const normalizeId = (value: ID, fallback: ID = 0): ID => {
+  if (typeof value === 'number') return Number.isSafeInteger(value) ? value : fallback;
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
+  return trimmed;
+};
+
+const deriveStateFromCity = (city: string): string | null => {
+  if (!city.includes(',')) return null;
+  const parts = city.split(',').map((part) => part.trim());
+  return normalizeOptionalText(parts[1]);
+};
+
 type BackendVenueDTO = {
   venueId: ID;
   venueName: string;
@@ -94,22 +114,22 @@ export const Venues = {
 function mapBackendVenueToFrontend(v: BackendVenueDTO): Venue {
   const nowIso = new Date().toISOString();
   const contact = normalizeContact(v.venueContact);
-  const city = v.venueCity ?? '';
-  const state = v.venueState ?? (city.includes(',') ? city.split(',').map((c) => c.trim())[1] ?? null : null);
+  const city = normalizeOptionalText(v.venueCity) ?? '';
+  const state = normalizeOptionalText(v.venueState) ?? deriveStateFromCity(city);
   return {
-    id: v.venueId,
+    id: normalizeId(v.venueId),
     name: v.venueName,
-    address: v.venueAddress || '',
+    address: normalizeOptionalText(v.venueAddress) ?? '',
     city,
-    country: v.venueCountry ?? null,
-    state,  // Try to extract state if available
-    zipCode: v.venueZipCode ?? null,
+    country: normalizeOptionalText(v.venueCountry),
+    state,
+    zipCode: normalizeOptionalText(v.venueZipCode),
     latitude: v.venueLat ?? 0,
     longitude: v.venueLng ?? 0,
     capacity: v.venueCapacity ?? null,
-    imageUrl: v.venueImageUrl ?? null,
-    phoneNumber: v.venuePhone ?? contact.phone ?? null,
-    website: v.venueWebsite ?? contact.website ?? null,
+    imageUrl: normalizeOptionalText(v.venueImageUrl),
+    phoneNumber: normalizeOptionalText(v.venuePhone) ?? contact.phone ?? null,
+    website: normalizeOptionalText(v.venueWebsite) ?? contact.website ?? null,
     createdAt: v.venueCreatedAt ?? nowIso,
     updatedAt: v.venueUpdatedAt ?? v.venueCreatedAt ?? nowIso
   };
@@ -152,9 +172,9 @@ function mergeVenueUpdate(existing: Venue, patch: Partial<VenueCreate>): VenueCr
 
 function normalizeContact(raw: BackendVenueDTO['venueContact']): VenueContact {
   if (!raw) return {};
-  if (typeof raw === 'string') return { phone: raw };
+  if (typeof raw === 'string') return { phone: normalizeOptionalText(raw) };
   return {
-    phone: raw.phone ?? null,
-    website: raw.website ?? null
+    phone: normalizeOptionalText(raw.phone),
+    website: normalizeOptionalText(raw.website)
   };
 }

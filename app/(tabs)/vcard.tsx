@@ -12,6 +12,13 @@ type ScannerModule = {
   requestPermissionsAsync: () => Promise<{ status: string }>;
 };
 
+const parsePositivePartyId = (value: string): number | undefined => {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+};
+
 export default function VCardScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -33,7 +40,7 @@ export default function VCardScreen() {
         name,
         email,
         phone,
-        partyId: Number(partyId) > 0 ? Number(partyId) : undefined,
+        partyId: parsePositivePartyId(partyId),
       }),
     [name, email, phone, partyId],
   );

@@ -11,6 +11,13 @@ import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 
 type TabKey = 'friends' | 'following' | 'followers';
 
+const parsePositivePartyId = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
+  if (typeof value !== 'string' || !/^\d+$/.test(value.trim())) return null;
+  const parsed = Number.parseInt(value.trim(), 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
 export default function SocialScreen() {
   const qc = useQueryClient();
   const { token } = useAuth();
@@ -55,8 +62,8 @@ export default function SocialScreen() {
 
   const addMutation = useMutation<void, Error, number | undefined>({
     mutationFn: async (targetId) => {
-      const numeric = targetId ?? Number(addId.trim());
-      if (!Number.isFinite(numeric) || numeric <= 0) throw new Error('Ingresa un ID válido.');
+      const numeric = parsePositivePartyId(targetId) ?? parsePositivePartyId(addId);
+      if (numeric === null) throw new Error('Ingresa un ID válido.');
       await Social.addFriend(numeric);
     },
     onSuccess: () => {

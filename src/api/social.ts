@@ -5,11 +5,26 @@ export interface VCardExchangePayload {
   vcerPartyId: number;
 }
 
-export async function exchangeVCard(targetPartyId: number): Promise<void> {
-  if (!Number.isInteger(targetPartyId) || targetPartyId <= 0) {
-    throw new Error('Party ID inválido para intercambio de vCard.');
+const normalizePositivePartyId = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    const parsed = Number.parseInt(value.trim(), 10);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
   }
-  await http.post('/social/vcard-exchange', { vcerPartyId: targetPartyId } satisfies VCardExchangePayload);
+  return null;
+};
+
+const requirePositivePartyId = (value: unknown, action: string): number => {
+  const normalized = normalizePositivePartyId(value);
+  if (normalized === null) {
+    throw new Error(`Party ID inválido para ${action}.`);
+  }
+  return normalized;
+};
+
+export async function exchangeVCard(targetPartyId: number): Promise<void> {
+  const normalizedPartyId = requirePositivePartyId(targetPartyId, 'intercambio de vCard');
+  await http.post('/social/vcard-exchange', { vcerPartyId: normalizedPartyId } satisfies VCardExchangePayload);
 }
 
 const normalizeTextField = (value: unknown): string | null => {
@@ -19,12 +34,7 @@ const normalizeTextField = (value: unknown): string | null => {
 };
 
 const parsePositivePartyId = (value: unknown): number | null => {
-  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
-  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
-    const parsed = Number.parseInt(value.trim(), 10);
-    return parsed > 0 ? parsed : null;
-  }
-  return null;
+  return normalizePositivePartyId(value);
 };
 
 const normalizeTimestamp = (value: unknown): number | undefined =>
@@ -98,10 +108,12 @@ export const Social = {
     return res.data;
   },
   addFriend: async (partyId: number): Promise<PartyFollow[]> => {
-    const res = await http.post<PartyFollow[]>(`/social/friends/${partyId}`, {});
+    const normalizedPartyId = requirePositivePartyId(partyId, 'agregar amistad');
+    const res = await http.post<PartyFollow[]>(`/social/friends/${normalizedPartyId}`, {});
     return res.data;
   },
   removeFriend: async (partyId: number): Promise<void> => {
-    await http.delete(`/social/friends/${partyId}`);
+    const normalizedPartyId = requirePositivePartyId(partyId, 'eliminar amistad');
+    await http.delete(`/social/friends/${normalizedPartyId}`);
   }
 };

@@ -64,13 +64,17 @@ export const Venues = {
   },
 
   create: async (body: VenueCreate): Promise<Venue> => {
-    const backendBody = mapFrontendVenueToBackend(body);
+    const backendBody = mapFrontendVenueToBackend({
+      ...body,
+      country: body.country ?? 'US'
+    });
     const venue = await post<BackendVenueDTO>('/social-events/venues', backendBody);
     return mapBackendVenueToFrontend(venue);
   },
 
   update: async (venueId: ID, body: Partial<VenueCreate>): Promise<Venue> => {
-    const backendBody = mapFrontendVenueToBackend(body);
+    const existing = await Venues.getById(venueId);
+    const backendBody = mapFrontendVenueToBackend(mergeVenueUpdate(existing, body));
     const venue = await put<BackendVenueDTO>(`/social-events/venues/${venueId}`, backendBody);
     return mapBackendVenueToFrontend(venue);
   },
@@ -93,6 +97,7 @@ function mapBackendVenueToFrontend(v: BackendVenueDTO): Venue {
     name: v.venueName,
     address: v.venueAddress || '',
     city,
+    country: v.venueCountry ?? null,
     state,  // Try to extract state if available
     zipCode: v.venueZipCode ?? null,
     latitude: v.venueLat ?? 0,
@@ -111,7 +116,7 @@ function mapFrontendVenueToBackend(body: Partial<VenueCreate>) {
     venueName: body.name,
     venueAddress: body.address,
     venueCity: body.city,
-    venueCountry: body.country || 'US', // Default to US if not specified
+    venueCountry: body.country ?? null,
     venueLat: body.latitude,
     venueLng: body.longitude,
     venueCapacity: body.capacity,
@@ -121,6 +126,23 @@ function mapFrontendVenueToBackend(body: Partial<VenueCreate>) {
     venueState: body.state ?? null,
     venueZipCode: body.zipCode ?? null,
     venueImageUrl: body.imageUrl ?? null
+  };
+}
+
+function mergeVenueUpdate(existing: Venue, patch: Partial<VenueCreate>): VenueCreate {
+  return {
+    name: patch.name ?? existing.name,
+    address: patch.address ?? existing.address,
+    city: patch.city ?? existing.city,
+    country: patch.country ?? existing.country ?? undefined,
+    state: patch.state ?? existing.state ?? undefined,
+    zipCode: patch.zipCode ?? existing.zipCode ?? undefined,
+    latitude: patch.latitude ?? existing.latitude,
+    longitude: patch.longitude ?? existing.longitude,
+    capacity: patch.capacity ?? existing.capacity ?? undefined,
+    imageUrl: patch.imageUrl ?? existing.imageUrl ?? undefined,
+    phoneNumber: patch.phoneNumber ?? existing.phoneNumber ?? undefined,
+    website: patch.website ?? existing.website ?? undefined,
   };
 }
 

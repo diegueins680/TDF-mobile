@@ -152,7 +152,8 @@ export const Events = {
   },
 
   update: async (eventId: ID, body: SocialEventUpdate): Promise<SocialEvent> => {
-    const backendBody = mapFrontendEventToBackend(body);
+    const existing = await Events.getById(eventId);
+    const backendBody = mapFrontendEventToBackend(mergeEventUpdate(existing, body));
     const event = await put<BackendEventDTO>(`/social-events/events/${eventId}`, backendBody);
     return mapBackendEventToFrontend(event);
   },
@@ -244,7 +245,7 @@ function mapBackendEventToFrontend(
   };
 }
 
-function mapFrontendEventToBackend(body: SocialEventCreate | SocialEventUpdate) {
+function mapFrontendEventToBackend(body: SocialEventCreate) {
   return {
     eventTitle: body.title,
     eventDescription: body.description,
@@ -257,6 +258,21 @@ function mapFrontendEventToBackend(body: SocialEventCreate | SocialEventUpdate) 
     eventImageUrl: body.imageUrl ?? null,
     eventIsPublic: body.isPublic,
     eventArtists: body.artistIds?.map((id: ID) => ({ artistId: id })) || []
+  };
+}
+
+function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): SocialEventCreate {
+  return {
+    title: patch.title ?? existing.title,
+    description: patch.description ?? existing.description ?? undefined,
+    startTime: patch.startTime ?? existing.startTime,
+    endTime: patch.endTime ?? existing.endTime,
+    venueId: patch.venueId ?? existing.venueId,
+    artistIds: patch.artistIds ?? existing.artistIds,
+    ticketPrice: patch.ticketPrice ?? existing.ticketPrice ?? undefined,
+    ticketUrl: patch.ticketUrl ?? existing.ticketUrl ?? undefined,
+    imageUrl: patch.imageUrl ?? existing.imageUrl ?? undefined,
+    isPublic: patch.isPublic ?? existing.isPublic,
   };
 }
 

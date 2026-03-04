@@ -125,6 +125,7 @@ export type Venue = {
   name: string;
   address: string;
   city: string;
+  country?: string | null;
   state?: string | null;
   zipCode?: string | null;
   latitude: number;

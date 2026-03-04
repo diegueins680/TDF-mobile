@@ -54,7 +54,8 @@ export const Artists = {
   },
 
   update: async (artistId: ID, body: Partial<ArtistProfileCreate>): Promise<ArtistProfile> => {
-    const backendBody = mapFrontendArtistToBackend(body);
+    const existing = await Artists.getById(artistId);
+    const backendBody = mapFrontendArtistToBackend(mergeArtistUpdate(existing, body));
     const artist = await put<BackendArtistDTO>(`/social-events/artists/${artistId}`, backendBody);
     return mapBackendArtistToFrontend(artist);
   },
@@ -155,4 +156,17 @@ function buildSocialLinksPayload(body: Partial<ArtistProfileCreate>): ArtistSoci
   ) as ArtistSocialLinks;
   const hasAny = Object.values(cleaned).some((val) => typeof val === 'string' && val.length > 0);
   return hasAny ? cleaned : undefined;
+}
+
+function mergeArtistUpdate(existing: ArtistProfile, patch: Partial<ArtistProfileCreate>): ArtistProfileCreate {
+  return {
+    partyId: patch.partyId ?? existing.partyId,
+    name: patch.name ?? existing.name,
+    bio: patch.bio ?? existing.bio ?? undefined,
+    imageUrl: patch.imageUrl ?? existing.imageUrl ?? undefined,
+    genres: patch.genres ?? existing.genres ?? [],
+    instagramHandle: patch.instagramHandle ?? existing.instagramHandle ?? undefined,
+    spotifyUrl: patch.spotifyUrl ?? existing.spotifyUrl ?? undefined,
+    socialLinks: patch.socialLinks ?? existing.socialLinks ?? undefined,
+  };
 }

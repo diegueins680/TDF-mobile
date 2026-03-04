@@ -1,10 +1,18 @@
 import axios from 'axios';
 import { API_BASE } from '../lib/api';
 
+const BEARER_PREFIX = /^bearer\b/i;
+
 const normalizeBearer = (token?: string | null) => {
   const trimmed = token?.trim();
   if (!trimmed) return undefined;
-  return trimmed.toLowerCase().startsWith('bearer ') ? trimmed : `Bearer ${trimmed}`;
+
+  if (BEARER_PREFIX.test(trimmed)) {
+    const credentials = trimmed.replace(BEARER_PREFIX, '').trim();
+    return credentials ? `Bearer ${credentials}` : undefined;
+  }
+
+  return `Bearer ${trimmed}`;
 };
 
 let currentToken: string | undefined = normalizeBearer(process.env.EXPO_PUBLIC_API_TOKEN);

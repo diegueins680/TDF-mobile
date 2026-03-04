@@ -16,6 +16,19 @@ describe('API client auth header', () => {
     expect(getAuthToken()).toBe('Bearer demo-token');
   });
 
+  it('normalizes bearer casing and strips extra spacing', () => {
+    setAuthToken(' bearer    demo-token   ');
+    expect(getAuthToken()).toBe('Bearer demo-token');
+    expect(http.defaults.headers.common.Authorization).toBe('Bearer demo-token');
+  });
+
+  it('rejects bearer keyword without credentials', () => {
+    setAuthToken('demo-token');
+    setAuthToken('Bearer');
+    expect(getAuthToken()).toBeUndefined();
+    expect(http.defaults.headers.common.Authorization).toBeUndefined();
+  });
+
   it('clears header when token is removed', () => {
     setAuthToken('demo-token');
     setAuthToken(null);

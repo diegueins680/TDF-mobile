@@ -211,7 +211,7 @@ export const Events = {
       invitationStatus: status,
       invitationMessage: message ?? undefined
     };
-    // Backend expects PATCH for updating invitation status
+    // Backend endpoint updates invitation status via PUT.
     const dto = await put<BackendInvitationDTO>(`/social-events/events/${eventId}/invitations/${invitationId}`, payload);
     return mapInvitationDto(dto, eventId);
   }

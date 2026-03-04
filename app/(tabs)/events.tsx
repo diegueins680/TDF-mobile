@@ -13,12 +13,23 @@ import { listSavedEventIds, toggleSavedEvent } from '../../src/lib/savedEvents';
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
 
+const toLocalDateKey = (value: string | Date): string => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return typeof value === 'string' ? value.split('T')[0] ?? '' : '';
+  }
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function EventsScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(toLocalDateKey(new Date()));
   const [cityFilter, setCityFilter] = useState('');
   const debouncedCity = useDebouncedValue(cityFilter, 300);
 
@@ -64,7 +75,8 @@ export default function EventsScreen() {
     
     const grouped: Record<string, SocialEvent[]> = {};
     effectiveEvents.forEach(event => {
-      const date = event.startTime.split('T')[0];
+      const date = toLocalDateKey(event.startTime);
+      if (!date) return;
       if (!grouped[date]) grouped[date] = [];
       grouped[date].push(event);
     });

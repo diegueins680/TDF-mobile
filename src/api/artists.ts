@@ -21,6 +21,9 @@ export type ArtistFollower = {
   createdAt?: string;
 };
 
+const ARTIST_LOOKUP_PAGE_SIZE = 100;
+const ARTIST_LOOKUP_MAX_PAGES = 20;
+
 /**
  * Artist Profiles API - Wired to backend endpoints
  * Maps backend ArtistDTO to frontend ArtistProfile types
@@ -48,7 +51,25 @@ export const Artists = {
   },
 
   getByParty: async (partyId: ID): Promise<ArtistProfile> => {
-    return get<ArtistProfile>(`/parties/${partyId}/artist-profile`);
+    const targetPartyId = normalizeLookupId(partyId);
+    if (!targetPartyId) {
+      throw new Error('Party ID inválido para buscar perfil de artista.');
+    }
+
+    for (let page = 0; page < ARTIST_LOOKUP_MAX_PAGES; page += 1) {
+      const offset = page * ARTIST_LOOKUP_PAGE_SIZE;
+      const artists = await Artists.list({
+        limit: ARTIST_LOOKUP_PAGE_SIZE,
+        offset,
+      });
+      const match = artists.find(
+        (artist) => normalizeLookupId(artist.partyId) === targetPartyId,
+      );
+      if (match) return match;
+      if (artists.length < ARTIST_LOOKUP_PAGE_SIZE) break;
+    }
+
+    throw new Error(`No existe perfil de artista para partyId ${targetPartyId}.`);
   },
 
   create: async (body: ArtistProfileCreate): Promise<ArtistProfile> => {
@@ -137,6 +158,24 @@ function normalizeEntityId(raw: ID | undefined | null, fallback: ID): ID {
   if (!trimmed) return fallback;
   if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
   return trimmed;
+}
+
+function normalizeLookupId(raw: ID | undefined | null): string | null {
+  if (typeof raw === 'number') {
+    if (!Number.isSafeInteger(raw) || raw <= 0) return null;
+    return String(raw);
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (/^\d+$/.test(trimmed)) {
+      const parsed = Number.parseInt(trimmed, 10);
+      if (!Number.isSafeInteger(parsed) || parsed <= 0) return null;
+      return String(parsed);
+    }
+    return trimmed;
+  }
+  return null;
 }
 
 function normalizeSocialLinks(raw?: ArtistSocialLinks | null): ArtistSocialLinks | undefined {

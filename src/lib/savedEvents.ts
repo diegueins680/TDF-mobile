@@ -5,47 +5,85 @@ import type { ID } from '../types';
 const STORAGE_KEY = 'tdf-saved-event-ids';
 
 const normalizeEventId = (eventId: unknown): string => {
-  if (typeof eventId !== 'string' && typeof eventId !== 'number') return '';
-  return String(eventId).trim();
+  if (typeof eventId === 'number') {
+    return Number.isSafeInteger(eventId) && eventId > 0 ? String(eventId) : '';
+  }
+  if (typeof eventId !== 'string') return '';
+  const trimmed = eventId.trim();
+  if (!trimmed) return '';
+  if (/^\d+$/.test(trimmed)) {
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? String(parsed) : '';
+  }
+  return trimmed;
 };
 
-const parseStoredIds = (raw: string): string[] => {
+type ParsedStoredIds = {
+  ids: string[];
+  sanitized: boolean;
+};
+
+const parseStoredIds = (raw: string): ParsedStoredIds => {
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) return { ids: [], sanitized: true };
 
     const seen = new Set<string>();
     const ids: string[] = [];
+    let sanitized = false;
 
     parsed.forEach((value) => {
       const normalized = normalizeEventId(value);
-      if (!normalized || seen.has(normalized)) return;
+      if (!normalized) {
+        sanitized = true;
+        return;
+      }
+      if (seen.has(normalized)) {
+        sanitized = true;
+        return;
+      }
       seen.add(normalized);
       ids.push(normalized);
+      if (typeof value !== 'string' || normalized !== value.trim()) {
+        sanitized = true;
+      }
     });
 
-    return ids;
+    return { ids, sanitized };
   } catch {
-    return [];
+    return { ids: [], sanitized: true };
   }
 };
 
 async function writeIds(ids: string[]): Promise<void> {
-  if (ids.length === 0) {
-    await AsyncStorage.removeItem(STORAGE_KEY);
-    return;
+  try {
+    if (ids.length === 0) {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+  } catch {
+    // Ignore storage write failures so save/unsave UX still responds.
   }
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
 }
 
 export async function listSavedEventIds(): Promise<string[]> {
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
-  const parsed = parseStoredIds(raw);
-  if (parsed.length === 0) {
-    await AsyncStorage.removeItem(STORAGE_KEY);
+  let raw: string | null = null;
+  try {
+    raw = await AsyncStorage.getItem(STORAGE_KEY);
+  } catch {
+    return [];
   }
-  return parsed;
+  if (!raw) return [];
+  const { ids, sanitized } = parseStoredIds(raw);
+  if (ids.length === 0) {
+    await writeIds([]);
+    return [];
+  }
+  if (sanitized) {
+    await writeIds(ids);
+  }
+  return ids;
 }
 
 export async function saveEvent(eventId: ID): Promise<string[]> {

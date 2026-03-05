@@ -140,4 +140,47 @@ describe('AuthProvider', () => {
     expect(latest?.token).toBe('Bearer saved-token');
     expect(latest?.partyId).toBe('42');
   });
+
+  it('recovers when token storage bootstrap fails', async () => {
+    getItemMock.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    render(
+      <AuthProvider>
+        <ContextProbe onChange={onProbeChange} />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(latest?.loading).toBe(false));
+
+    expect(setAuthTokenMock).toHaveBeenCalledWith(null);
+    expect(latest?.token).toBeNull();
+    expect(latest?.partyId).toBeNull();
+  });
+
+  it('keeps auth state updates even when persisting token fails', async () => {
+    setItemMock.mockRejectedValueOnce(new Error('disk full'));
+    removeItemMock.mockRejectedValueOnce(new Error('disk full'));
+
+    render(
+      <AuthProvider>
+        <ContextProbe onChange={onProbeChange} />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(latest?.loading).toBe(false));
+
+    act(() => {
+      latest?.setToken('Bearer volatile-token');
+    });
+
+    await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer volatile-token'));
+    await waitFor(() => expect(latest?.token).toBe('Bearer volatile-token'));
+
+    act(() => {
+      latest?.clearToken();
+    });
+
+    await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));
+    await waitFor(() => expect(latest?.token).toBeNull());
+  });
 });

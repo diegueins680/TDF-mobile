@@ -66,11 +66,15 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
 
   const persist = useCallback(async (next: UserSettings) => {
     setSettings(next);
-    if (!next.partyId && !next.displayName) {
-      await AsyncStorage.removeItem(STORAGE_KEY);
-      return;
+    try {
+      if (!next.partyId && !next.displayName) {
+        await AsyncStorage.removeItem(STORAGE_KEY);
+        return;
+      }
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Ignore storage failures to avoid unhandled rejections in event handlers.
     }
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   }, []);
 
   const setIdentity = useCallback((partyId: string | null, displayName?: string | null) => {

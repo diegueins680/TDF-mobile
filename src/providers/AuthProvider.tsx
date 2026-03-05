@@ -21,6 +21,18 @@ const normalizeToken = (value: string | null | undefined): string | null => {
   return trimmed && trimmed.length > 0 ? trimmed : null;
 };
 
+const persistStoredToken = async (token: string | null): Promise<void> => {
+  try {
+    if (token) {
+      await AsyncStorage.setItem(STORAGE_KEY, token);
+    } else {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage failures to avoid unhandled rejections in callers.
+  }
+};
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [token, setTokenState] = useState<string | null>(normalizeToken(getAuthToken()));
   const [partyId, setPartyIdState] = useState<string | null>(null);
@@ -64,9 +76,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const normalized = normalizeToken(stored);
 
         if (!normalized) {
-          if (stored) {
-            await AsyncStorage.removeItem(STORAGE_KEY);
-          }
+          if (stored) await persistStoredToken(null);
           if (isMountedRef.current) {
             setTokenState(null);
             setAuthToken(null);
@@ -75,15 +85,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
           return;
         }
 
-        if (stored !== normalized) {
-          await AsyncStorage.setItem(STORAGE_KEY, normalized);
-        }
+        if (stored !== normalized) await persistStoredToken(normalized);
 
         if (isMountedRef.current) {
           setTokenState(normalized);
           setAuthToken(normalized);
         }
         await refreshPartyId(normalized);
+      } catch {
+        if (isMountedRef.current) {
+          setTokenState(null);
+          setAuthToken(null);
+        }
+        await refreshPartyId(null);
       } finally {
         if (isMountedRef.current) {
           setLoading(false);
@@ -97,11 +111,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setTokenState(normalized);
     setAuthToken(normalized);
 
-    if (normalized) {
-      void AsyncStorage.setItem(STORAGE_KEY, normalized);
-    } else {
-      void AsyncStorage.removeItem(STORAGE_KEY);
-    }
+    void persistStoredToken(normalized);
 
     void refreshPartyId(normalized);
   }, [refreshPartyId]);

@@ -58,8 +58,10 @@ export const Venues = {
     near?: { lat: number; lng: number; radiusKm?: number };
   }): Promise<Venue[]> => {
     const query = new URLSearchParams();
-    if (filters?.city) query.append('city', filters.city);
-    if (filters?.query) query.append('q', filters.query);
+    const city = filters?.city?.trim();
+    const textQuery = filters?.query?.trim();
+    if (city) query.append('city', city);
+    if (textQuery) query.append('q', textQuery);
     if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit) && filters.limit > 0) {
       query.append('limit', String(Math.trunc(filters.limit)));
     }

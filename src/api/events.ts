@@ -155,8 +155,10 @@ export const Events = {
     if (typeof filters?.offset === 'number' && Number.isFinite(filters.offset) && filters.offset >= 0) {
       query.append('offset', String(Math.trunc(filters.offset)));
     }
-    if (filters?.artistId != null) query.append('artistId', String(filters.artistId));
-    if (filters?.venueId != null) query.append('venueId', String(filters.venueId));
+    const artistId = normalizeOptionalIdParam(filters?.artistId);
+    const venueId = normalizeOptionalIdParam(filters?.venueId);
+    if (artistId) query.append('artistId', artistId);
+    if (venueId) query.append('venueId', venueId);
 
     const url = `/social-events/events${query.toString() ? `?${query.toString()}` : ''}`;
     const events = await get<BackendEventDTO[]>(url);

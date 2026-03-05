@@ -60,4 +60,31 @@ describe('Social list filter serialization', () => {
 
     expect(get).toHaveBeenCalledWith('/social-events/artists');
   });
+
+  it('Artists.list trims text filters and skips blank values', async () => {
+    get.mockResolvedValueOnce([]);
+
+    await Artists.list({ name: '  Ana  ', genre: '   ' });
+
+    expect(get).toHaveBeenCalledWith('/social-events/artists?name=Ana');
+  });
+
+  it('Venues.list trims city/query filters and skips blank values', async () => {
+    get.mockResolvedValueOnce([]);
+
+    await Venues.list({ city: '  Quito ', query: '   ' });
+
+    expect(get).toHaveBeenCalledWith('/social-events/venues?city=Quito');
+  });
+
+  it('Events.list trims string ids and ignores blank ids', async () => {
+    get.mockResolvedValueOnce([]);
+    get.mockResolvedValueOnce([]);
+
+    await Events.list({ artistId: ' 42 ', venueId: '  7 ' });
+    await Events.list({ artistId: '   ', venueId: '' });
+
+    expect(get).toHaveBeenNthCalledWith(1, '/social-events/events?artistId=42&venueId=7');
+    expect(get).toHaveBeenNthCalledWith(2, '/social-events/events');
+  });
 });

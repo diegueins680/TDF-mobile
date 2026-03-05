@@ -31,8 +31,10 @@ const ARTIST_LOOKUP_MAX_PAGES = 20;
 export const Artists = {
   list: async (filters?: { name?: string; genre?: string; limit?: number; offset?: number }): Promise<ArtistProfile[]> => {
     const query = new URLSearchParams();
-    if (filters?.name) query.append('name', filters.name);
-    if (filters?.genre) query.append('genre', filters.genre);
+    const name = filters?.name?.trim();
+    const genre = filters?.genre?.trim();
+    if (name) query.append('name', name);
+    if (genre) query.append('genre', genre);
     if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit) && filters.limit > 0) {
       query.append('limit', String(Math.trunc(filters.limit)));
     }

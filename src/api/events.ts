@@ -322,7 +322,7 @@ function mapBackendEventToFrontend(
     artistIds: artists.map((a) => a.id),
     artists,
     createdBy: normalizePartyId(e.eventOrganizerPartyId),
-    ticketPrice: typeof e.eventPriceCents === 'number' ? e.eventPriceCents / 100 : null,
+    ticketPrice: normalizeTicketPrice(e.eventPriceCents),
     ticketUrl: e.eventTicketUrl ?? null,
     imageUrl: e.eventImageUrl ?? null,
     isPublic: typeof e.eventIsPublic === 'boolean' ? e.eventIsPublic : true,
@@ -330,6 +330,13 @@ function mapBackendEventToFrontend(
     createdAt: e.eventCreatedAt ?? nowIso,
     updatedAt: e.eventUpdatedAt ?? e.eventCreatedAt ?? nowIso
   };
+}
+
+function normalizeTicketPrice(value: number | null | undefined): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  return value / 100;
 }
 
 function mapFrontendEventToBackend(body: SocialEventCreate) {

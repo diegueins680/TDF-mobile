@@ -6,6 +6,7 @@ jest.mock('../src/api/client', () => ({
 }));
 
 import { Artists } from '../src/api/artists';
+import { Events } from '../src/api/events';
 import { Venues } from '../src/api/venues';
 
 const { get, post } = jest.requireMock('../src/api/client') as {
@@ -139,5 +140,65 @@ describe('Social API mapper sanitization', () => {
     expect(venues).toHaveLength(1);
     expect(venues[0]?.id).toBe('90071992547409931234');
     expect(typeof venues[0]?.id).toBe('string');
+  });
+
+  it('Venues.list sanitizes invalid numeric coordinate/capacity values', async () => {
+    get.mockResolvedValueOnce([
+      {
+        venueId: 8,
+        venueName: 'Broken Venue',
+        venueAddress: 'Av. 404',
+        venueCity: 'Quito',
+        venueLat: Number.NaN,
+        venueLng: Number.POSITIVE_INFINITY,
+        venueCapacity: Number.NEGATIVE_INFINITY,
+      },
+    ]);
+
+    const venues = await Venues.list();
+
+    expect(venues).toHaveLength(1);
+    expect(venues[0]?.latitude).toBe(0);
+    expect(venues[0]?.longitude).toBe(0);
+    expect(venues[0]?.capacity).toBeNull();
+  });
+
+  it('Events.list sanitizes invalid ticket price values from backend payloads', async () => {
+    get.mockResolvedValueOnce([
+      {
+        eventId: 101,
+        eventTitle: 'Broken Price Event',
+        eventStart: '2026-01-01T00:00:00.000Z',
+        eventEnd: '2026-01-01T01:00:00.000Z',
+        eventVenueId: null,
+        eventPriceCents: Number.NaN,
+        eventIsPublic: true,
+      },
+      {
+        eventId: 102,
+        eventTitle: 'Negative Price Event',
+        eventStart: '2026-01-01T00:00:00.000Z',
+        eventEnd: '2026-01-01T01:00:00.000Z',
+        eventVenueId: null,
+        eventPriceCents: -500,
+        eventIsPublic: true,
+      },
+      {
+        eventId: 103,
+        eventTitle: 'Free Event',
+        eventStart: '2026-01-01T00:00:00.000Z',
+        eventEnd: '2026-01-01T01:00:00.000Z',
+        eventVenueId: null,
+        eventPriceCents: 0,
+        eventIsPublic: true,
+      },
+    ]);
+
+    const events = await Events.list();
+
+    expect(events).toHaveLength(3);
+    expect(events[0]?.ticketPrice).toBeNull();
+    expect(events[1]?.ticketPrice).toBeNull();
+    expect(events[2]?.ticketPrice).toBe(0);
   });
 });

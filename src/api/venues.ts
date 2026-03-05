@@ -33,6 +33,14 @@ const deriveStateFromCity = (city: string): string | null => {
   return normalizeOptionalText(parts[1]);
 };
 
+const normalizeCoordinate = (value: number | null | undefined): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0;
+
+const normalizeCapacity = (value: number | null | undefined): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return value >= 0 ? value : null;
+};
+
 type BackendVenueDTO = {
   venueId: ID;
   venueName: string;
@@ -139,9 +147,9 @@ function mapBackendVenueToFrontend(v: BackendVenueDTO): Venue {
     country: normalizeOptionalText(v.venueCountry),
     state,
     zipCode: normalizeOptionalText(v.venueZipCode),
-    latitude: v.venueLat ?? 0,
-    longitude: v.venueLng ?? 0,
-    capacity: v.venueCapacity ?? null,
+    latitude: normalizeCoordinate(v.venueLat),
+    longitude: normalizeCoordinate(v.venueLng),
+    capacity: normalizeCapacity(v.venueCapacity),
     imageUrl: normalizeOptionalText(v.venueImageUrl),
     phoneNumber: normalizeOptionalText(v.venuePhone) ?? contact.phone ?? null,
     website: normalizeOptionalText(v.venueWebsite) ?? contact.website ?? null,

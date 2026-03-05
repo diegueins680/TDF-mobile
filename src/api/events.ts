@@ -85,6 +85,27 @@ const normalizeVenueLookupId = (value?: string | null): string | null => {
   return /^\d+$/.test(trimmed) ? String(Number.parseInt(trimmed, 10)) : trimmed;
 };
 
+const normalizeOptionalIdParam = (value: ID | null | undefined): string | null => {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  return trimmed === '' ? null : trimmed;
+};
+
+const normalizeBackendVenueId = (value: ID | null | undefined): string | null => {
+  if (value == null) return null;
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value <= 0) return null;
+    return String(value);
+  }
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  if (/^\d+$/.test(trimmed)) {
+    const parsed = Number.parseInt(trimmed, 10);
+    return parsed > 0 ? String(parsed) : null;
+  }
+  return trimmed;
+};
+
 async function loadVenueMapByIds(rawVenueIds: Array<string | null | undefined>) {
   const uniqueVenueIds = [...new Set(rawVenueIds.map((value) => normalizeVenueLookupId(value)).filter((value): value is string => Boolean(value)))];
   if (uniqueVenueIds.length === 0) return new Map<string, Awaited<ReturnType<typeof Venues.getById>>>();
@@ -121,9 +142,11 @@ export const Events = {
     venueId?: ID;
   }): Promise<SocialEvent[]> => {
     const query = new URLSearchParams();
-    if (filters?.city) query.append('city', filters.city);
-    if (filters?.startAfter) query.append('start_after', filters.startAfter);
-    if (filters?.upcomingOnly && !filters.startAfter) {
+    const city = filters?.city?.trim();
+    const startAfter = filters?.startAfter?.trim();
+    if (city) query.append('city', city);
+    if (startAfter) query.append('start_after', startAfter);
+    if (filters?.upcomingOnly && !startAfter) {
       query.append('start_after', new Date().toISOString());
     }
     if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit) && filters.limit > 0) {
@@ -189,9 +212,10 @@ export const Events = {
 
   // Invitations
   sendInvitation: async (body: EventInvitationCreate): Promise<EventInvitation> => {
+    const fromPartyId = normalizeOptionalIdParam(body.fromUserId);
     const payload = {
       invitationEventId: String(body.eventId),
-      invitationFromPartyId: body.fromUserId ? String(body.fromUserId) : undefined,
+      invitationFromPartyId: fromPartyId ?? undefined,
       invitationToPartyId: String(body.toUserId),
       invitationStatus: body.status ?? 'PENDING',
       invitationMessage: body.message ?? null
@@ -255,7 +279,7 @@ function mapFrontendEventToBackend(body: SocialEventCreate) {
     eventDescription: body.description,
     eventStart: body.startTime,
     eventEnd: body.endTime,
-    eventVenueId: body.venueId?.toString(),
+    eventVenueId: normalizeBackendVenueId(body.venueId),
     eventPriceCents: typeof body.ticketPrice === 'number' ? Math.round(body.ticketPrice * 100) : null,
     eventCapacity: null,
     eventTicketUrl: body.ticketUrl ?? null,

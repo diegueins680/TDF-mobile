@@ -85,6 +85,74 @@ describe('Social API update merge behavior', () => {
     }));
   });
 
+  it('Events.create serializes missing venue sentinels as null', async () => {
+    post.mockResolvedValueOnce({
+      eventId: 21,
+      eventTitle: 'No Venue Event',
+      eventStart: '2026-05-01T18:00:00.000Z',
+      eventEnd: '2026-05-01T20:00:00.000Z',
+      eventVenueId: null,
+      eventArtists: [],
+      eventIsPublic: true,
+    });
+
+    await Events.create({
+      title: 'No Venue Event',
+      startTime: '2026-05-01T18:00:00.000Z',
+      endTime: '2026-05-01T20:00:00.000Z',
+      venueId: 0,
+      artistIds: [],
+      isPublic: true,
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      '/social-events/events',
+      expect.objectContaining({
+        eventVenueId: null,
+      }),
+    );
+  });
+
+  it('Events.list trims string filters and still applies upcoming fallback', async () => {
+    get.mockResolvedValueOnce([]);
+
+    await Events.list({
+      city: '  Quito  ',
+      startAfter: '   ',
+      upcomingOnly: true,
+    });
+
+    const calledPath = get.mock.calls[0]?.[0] as string;
+    expect(calledPath).toMatch(/^\/social-events\/events\?city=Quito&start_after=/);
+    expect(calledPath).not.toContain('%20%20Quito');
+  });
+
+  it('Events.sendInvitation preserves explicit fromUserId values like 0', async () => {
+    post.mockResolvedValueOnce({
+      invitationId: 88,
+      invitationEventId: 9,
+      invitationFromPartyId: '0',
+      invitationToPartyId: '12',
+      invitationStatus: 'Pending',
+      invitationMessage: null,
+    });
+
+    await Events.sendInvitation({
+      eventId: 9,
+      fromUserId: 0,
+      toUserId: 12,
+      status: 'PENDING',
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      '/social-events/events/9/invitations',
+      expect.objectContaining({
+        invitationFromPartyId: '0',
+        invitationToPartyId: '12',
+      }),
+    );
+  });
+
   it('Artists.update preserves name and genres when omitted in patch', async () => {
     get.mockResolvedValueOnce({
       artistId: 2,

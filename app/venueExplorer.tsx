@@ -27,6 +27,10 @@ type Styles = {
   createButton: ViewStyle;
   createButtonText: TextStyle;
   controls: ViewStyle;
+  locationNotice: ViewStyle;
+  locationNoticeText: TextStyle;
+  locationNoticeButton: ViewStyle;
+  locationNoticeButtonText: TextStyle;
   radiusControl: ViewStyle;
   label: TextStyle;
   radiusInput: TextStyle;
@@ -70,6 +74,7 @@ type Styles = {
 export default function VenueExplorerScreen() {
   const router = useRouter();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isResolvingLocation, setIsResolvingLocation] = useState(true);
   const [radiusKm, setRadiusKm] = useState('5');
   const [showMapView, setShowMapView] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -80,28 +85,34 @@ export default function VenueExplorerScreen() {
     return Math.min(999, Math.max(1, parsed));
   }, [radiusKm]);
 
+  const requestLocation = useCallback(async () => {
+    setIsResolvingLocation(true);
+    setLocationError(null);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setUserLocation(null);
+        setLocationError('Location permission denied. Showing all venues.');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setUserLocation({
+        lat: location.coords.latitude,
+        lng: location.coords.longitude
+      });
+    } catch (_err) {
+      setUserLocation(null);
+      setLocationError('Failed to get location. Showing all venues.');
+    } finally {
+      setIsResolvingLocation(false);
+    }
+  }, []);
+
   // Request location permission and get current location
   useEffect(() => {
-    const requestLocation = async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setLocationError('Location permission denied');
-          return;
-        }
-
-        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        setUserLocation({
-          lat: location.coords.latitude,
-          lng: location.coords.longitude
-        });
-      } catch (_err) {
-        setLocationError('Failed to get location');
-      }
-    };
-
-    requestLocation();
-  }, []);
+    void requestLocation();
+  }, [requestLocation]);
 
   // Query venues near user location
   const { data: nearbyVenues, isLoading, isError } = useQuery({
@@ -116,12 +127,13 @@ export default function VenueExplorerScreen() {
         }
       });
     },
-    enabled: !!userLocation
+    enabled: !isResolvingLocation
   });
 
   // Calculate distance from user
   const venuesWithDistance = useMemo(() => {
-    if (!nearbyVenues || !userLocation) return [];
+    if (!nearbyVenues) return [];
+    if (!userLocation) return nearbyVenues.map((venue) => ({ ...venue, distance: undefined }));
     return nearbyVenues.map(venue => ({
       ...venue,
       distance: calculateDistance(
@@ -136,15 +148,23 @@ export default function VenueExplorerScreen() {
 
   // Sort by distance
   const sortedVenues = useMemo(() => {
-    return [...venuesWithDistance].sort((a, b) => (a.distance || 0) - (b.distance || 0));
+    return [...venuesWithDistance].sort((a, b) => {
+      const left = typeof a.distance === 'number' ? a.distance : Number.POSITIVE_INFINITY;
+      const right = typeof b.distance === 'number' ? b.distance : Number.POSITIVE_INFINITY;
+      if (left === right) return a.name.localeCompare(b.name);
+      return left - right;
+    });
   }, [venuesWithDistance]);
 
   const mapProjection = useMemo<MapProjection>(() => {
-    if (!userLocation) return { user: null, venues: [] };
-    if (sortedVenues.length === 0) return { user: { x: 50, y: 50 }, venues: [] };
+    if (sortedVenues.length === 0) return { user: userLocation ? { x: 50, y: 50 } : null, venues: [] };
 
-    const latitudes = [userLocation.lat, ...sortedVenues.map((venue) => venue.latitude)];
-    const longitudes = [userLocation.lng, ...sortedVenues.map((venue) => venue.longitude)];
+    const latitudes = sortedVenues.map((venue) => venue.latitude);
+    const longitudes = sortedVenues.map((venue) => venue.longitude);
+    if (userLocation) {
+      latitudes.push(userLocation.lat);
+      longitudes.push(userLocation.lng);
+    }
     const minLat = Math.min(...latitudes);
     const maxLat = Math.max(...latitudes);
     const minLng = Math.min(...longitudes);
@@ -158,7 +178,7 @@ export default function VenueExplorerScreen() {
     const toMapY = (lat: number) => (((maxLat - lat) / latRange) * usablePct) + paddingPct;
 
     return {
-      user: { x: toMapX(userLocation.lng), y: toMapY(userLocation.lat) },
+      user: userLocation ? { x: toMapX(userLocation.lng), y: toMapY(userLocation.lat) } : null,
       venues: sortedVenues.map((venue) => ({
         ...venue,
         x: toMapX(venue.longitude),
@@ -198,20 +218,7 @@ export default function VenueExplorerScreen() {
     </TouchableOpacity>
   ), [handleVenuePress]);
 
-  if (locationError && !userLocation) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{locationError}</Text>
-          <TouchableOpacity style={styles.errorButton} onPress={() => setLocationError(null)}>
-            <Text style={styles.errorButtonText}>Dismiss</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!userLocation) {
+  if (isResolvingLocation) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -254,6 +261,14 @@ export default function VenueExplorerScreen() {
           />
         </View>
       </View>
+      {locationError && (
+        <View style={styles.locationNotice}>
+          <Text style={styles.locationNoticeText}>{locationError}</Text>
+          <TouchableOpacity style={styles.locationNoticeButton} onPress={() => void requestLocation()}>
+            <Text style={styles.locationNoticeButtonText}>Retry location</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {isLoading ? (
         <View style={styles.loadingContainer}>
@@ -265,7 +280,9 @@ export default function VenueExplorerScreen() {
         </View>
       ) : sortedVenues.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No venues found within {normalizedRadiusKm}km</Text>
+          <Text style={styles.emptyText}>
+            {userLocation ? `No venues found within ${normalizedRadiusKm}km` : 'No venues found'}
+          </Text>
           <TouchableOpacity style={styles.emptyButton} onPress={handleCreateVenue}>
             <Text style={styles.emptyButtonText}>Create one!</Text>
           </TouchableOpacity>
@@ -292,16 +309,22 @@ export default function VenueExplorerScreen() {
             )}
           </View>
           <View style={styles.mapLegend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, styles.userMarkerDot]} />
-              <Text style={styles.legendText}>You</Text>
-            </View>
+            {mapProjection.user && (
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, styles.userMarkerDot]} />
+                <Text style={styles.legendText}>You</Text>
+              </View>
+            )}
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, styles.venueMarkerDot]} />
               <Text style={styles.legendText}>Venues</Text>
             </View>
           </View>
-          <Text style={styles.mapHint}>Tap a venue marker to open its details.</Text>
+          <Text style={styles.mapHint}>
+            {mapProjection.user
+              ? 'Tap a venue marker to open its details.'
+              : 'Tap a venue marker to open its details. Location unavailable.'}
+          </Text>
           <FlatList
             data={sortedVenues}
             renderItem={renderVenueItem}
@@ -341,6 +364,23 @@ const styles = StyleSheet.create<Styles>({
   createButton: { backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
   createButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   controls: { paddingHorizontal: 16, paddingVertical: 12, gap: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  locationNotice: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10
+  },
+  locationNoticeText: { flex: 1, fontSize: 12, color: '#1e3a8a' },
+  locationNoticeButton: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: '#2563eb' },
+  locationNoticeButtonText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   radiusControl: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   label: { fontSize: 12, fontWeight: '600', color: '#666', textTransform: 'uppercase' },
   radiusInput: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13 },

@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Venues } from '../src/api/venues';
 import { Events } from '../src/api/events';
+import type { ID } from '../src/types';
 
 export default function VenueDetailScreen() {
   const { venueId } = useLocalSearchParams<{ venueId: string }>();
@@ -18,15 +19,15 @@ export default function VenueDetailScreen() {
 
   const eventsQuery = useQuery({
     queryKey: ['venue-events', venueId],
-    queryFn: () => (venueId ? Events.list({ venueId }) : Promise.resolve([])),
+    queryFn: () => (venueId ? Events.list({ venueId, upcomingOnly: true }) : Promise.resolve([])),
     enabled: !!venueId
   });
 
   const venue = venueQuery.data;
   const venueEvents = eventsQuery.data || [];
 
-  const handleEventPress = useCallback((eventId: string) => {
-    router.push({ pathname: '/eventDetail', params: { eventId } });
+  const handleEventPress = useCallback((eventId: ID) => {
+    router.push({ pathname: '/eventDetail', params: { eventId: String(eventId) } });
   }, [router]);
 
   const handleCreateEvent = useCallback(() => {
@@ -96,13 +97,13 @@ export default function VenueDetailScreen() {
               >
                 <View style={styles.eventHeader}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
-                  {event.ticketPrice && (
+                  {typeof event.ticketPrice === 'number' && (
                     <Text style={styles.eventPrice}>${event.ticketPrice.toFixed(2)}</Text>
                   )}
                 </View>
                 <Text style={styles.eventDateTime}>
-                  {new Date(event.startDateTime).toLocaleDateString()} at{' '}
-                  {new Date(event.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(event.startTime).toLocaleDateString()} at{' '}
+                  {new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
               </TouchableOpacity>
             ))}

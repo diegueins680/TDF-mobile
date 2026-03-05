@@ -67,6 +67,29 @@ describe('Social API mapper sanitization', () => {
     );
   });
 
+  it('Artists.list preserves oversized digit ids and falls back on invalid numeric ids', async () => {
+    get.mockResolvedValueOnce([
+      {
+        artistId: '90071992547409931234',
+        artistPartyId: '55',
+        artistName: 'Big Numeric String Artist',
+      },
+      {
+        artistId: -9,
+        artistPartyId: 44,
+        artistName: 'Fallback Artist',
+      },
+    ]);
+
+    const artists = await Artists.list();
+
+    expect(artists).toHaveLength(2);
+    expect(artists[0]?.id).toBe('90071992547409931234');
+    expect(typeof artists[0]?.id).toBe('string');
+    expect(artists[1]?.id).toBe(44);
+    expect(artists[1]?.partyId).toBe(44);
+  });
+
   it('Venues.list trims contact metadata and ignores blank derived state', async () => {
     get.mockResolvedValueOnce([
       {
@@ -96,5 +119,25 @@ describe('Social API mapper sanitization', () => {
     expect(venues[0]?.state).toBeNull();
     expect(venues[0]?.phoneNumber).toBeNull();
     expect(venues[0]?.website).toBe('https://venue.example');
+  });
+
+  it('Venues.list preserves oversized digit ids without unsafe numeric coercion', async () => {
+    get.mockResolvedValueOnce([
+      {
+        venueId: '90071992547409931234',
+        venueName: 'Large Id Venue',
+        venueAddress: 'Av. 99',
+        venueCity: 'Quito',
+        venueCountry: 'EC',
+        venueLat: -0.18,
+        venueLng: -78.47,
+      },
+    ]);
+
+    const venues = await Venues.list();
+
+    expect(venues).toHaveLength(1);
+    expect(venues[0]?.id).toBe('90071992547409931234');
+    expect(typeof venues[0]?.id).toBe('string');
   });
 });

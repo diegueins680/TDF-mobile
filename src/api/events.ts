@@ -64,31 +64,64 @@ type BackendInvitationDTO = {
   invitationUpdatedAt?: string;
 };
 
+const parseSafeInteger = (value: string): number | null => {
+  if (!/^-?\d+$/.test(value)) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+};
+
 const normalizeVenueId = (value?: string | null): ID => {
   const trimmed = value?.trim();
   if (!trimmed) return 0;
-  if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
+  const parsed = parseSafeInteger(trimmed);
+  if (parsed !== null) return parsed > 0 ? parsed : 0;
   return trimmed;
 };
 
 const normalizePartyId = (value?: ID | null): ID => {
-  if (typeof value === 'number') return value;
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value <= 0) return 0;
+    return value;
+  }
   const trimmed = typeof value === 'string' ? value.trim() : '';
   if (!trimmed) return 0;
-  if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
+  const parsed = parseSafeInteger(trimmed);
+  if (parsed !== null) return parsed > 0 ? parsed : 0;
   return trimmed;
 };
 
 const normalizeVenueLookupId = (value?: string | null): string | null => {
   const trimmed = value?.trim();
   if (!trimmed) return null;
-  return /^\d+$/.test(trimmed) ? String(Number.parseInt(trimmed, 10)) : trimmed;
+  const parsed = parseSafeInteger(trimmed);
+  if (parsed !== null) return parsed > 0 ? String(parsed) : null;
+  return trimmed;
 };
 
 const normalizeOptionalIdParam = (value: ID | null | undefined): string | null => {
   if (value == null) return null;
-  const trimmed = String(value).trim();
-  return trimmed === '' ? null : trimmed;
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) return null;
+    return String(value);
+  }
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  const parsed = parseSafeInteger(trimmed);
+  if (parsed !== null) return parsed >= 0 ? String(parsed) : null;
+  return trimmed;
+};
+
+const normalizeOptionalPositiveIdParam = (value: ID | null | undefined): string | null => {
+  if (value == null) return null;
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value <= 0) return null;
+    return String(value);
+  }
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  const parsed = parseSafeInteger(trimmed);
+  if (parsed !== null) return parsed > 0 ? String(parsed) : null;
+  return trimmed;
 };
 
 const normalizeBackendVenueId = (value: ID | null | undefined): string | null => {
@@ -99,10 +132,8 @@ const normalizeBackendVenueId = (value: ID | null | undefined): string | null =>
   }
   const trimmed = value.trim();
   if (trimmed === '') return null;
-  if (/^\d+$/.test(trimmed)) {
-    const parsed = Number.parseInt(trimmed, 10);
-    return parsed > 0 ? String(parsed) : null;
-  }
+  const parsed = parseSafeInteger(trimmed);
+  if (parsed !== null) return parsed > 0 ? String(parsed) : null;
   return trimmed;
 };
 
@@ -155,8 +186,8 @@ export const Events = {
     if (typeof filters?.offset === 'number' && Number.isFinite(filters.offset) && filters.offset >= 0) {
       query.append('offset', String(Math.trunc(filters.offset)));
     }
-    const artistId = normalizeOptionalIdParam(filters?.artistId);
-    const venueId = normalizeOptionalIdParam(filters?.venueId);
+    const artistId = normalizeOptionalPositiveIdParam(filters?.artistId);
+    const venueId = normalizeOptionalPositiveIdParam(filters?.venueId);
     if (artistId) query.append('artistId', artistId);
     if (venueId) query.append('venueId', venueId);
 

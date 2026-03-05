@@ -154,11 +154,18 @@ function normalizeOptionalText(value: unknown): string | undefined {
   return trimmed === '' ? undefined : trimmed;
 }
 
+function parseSafeInteger(raw: string): number | null {
+  if (!/^-?\d+$/.test(raw)) return null;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
 function normalizeEntityId(raw: ID | undefined | null, fallback: ID): ID {
-  if (typeof raw === 'number') return Number.isSafeInteger(raw) ? raw : fallback;
+  if (typeof raw === 'number') return Number.isSafeInteger(raw) && raw > 0 ? raw : fallback;
   const trimmed = typeof raw === 'string' ? raw.trim() : '';
   if (!trimmed) return fallback;
-  if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
+  const parsed = parseSafeInteger(trimmed);
+  if (parsed !== null) return parsed > 0 ? parsed : fallback;
   return trimmed;
 }
 
@@ -170,11 +177,8 @@ function normalizeLookupId(raw: ID | undefined | null): string | null {
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
     if (!trimmed) return null;
-    if (/^\d+$/.test(trimmed)) {
-      const parsed = Number.parseInt(trimmed, 10);
-      if (!Number.isSafeInteger(parsed) || parsed <= 0) return null;
-      return String(parsed);
-    }
+    const parsed = parseSafeInteger(trimmed);
+    if (parsed !== null) return parsed > 0 ? String(parsed) : null;
     return trimmed;
   }
   return null;

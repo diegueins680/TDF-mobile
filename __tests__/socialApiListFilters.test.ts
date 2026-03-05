@@ -87,4 +87,15 @@ describe('Social list filter serialization', () => {
     expect(get).toHaveBeenNthCalledWith(1, '/social-events/events?artistId=42&venueId=7');
     expect(get).toHaveBeenNthCalledWith(2, '/social-events/events');
   });
+
+  it('Events.list ignores malformed numeric ids and keeps non-numeric string ids', async () => {
+    get.mockResolvedValueOnce([]);
+    get.mockResolvedValueOnce([]);
+
+    await Events.list({ artistId: Number.NaN, venueId: Number.POSITIVE_INFINITY });
+    await Events.list({ artistId: 'party-a', venueId: 'venue-z' });
+
+    expect(get).toHaveBeenNthCalledWith(1, '/social-events/events');
+    expect(get).toHaveBeenNthCalledWith(2, '/social-events/events?artistId=party-a&venueId=venue-z');
+  });
 });

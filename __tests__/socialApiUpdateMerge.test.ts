@@ -113,6 +113,35 @@ describe('Social API update merge behavior', () => {
     );
   });
 
+  it('Events.create preserves oversized venue id strings without precision loss', async () => {
+    const largeVenueId = '90071992547409931234';
+    post.mockResolvedValueOnce({
+      eventId: 22,
+      eventTitle: 'Large Venue Event',
+      eventStart: '2026-05-10T18:00:00.000Z',
+      eventEnd: '2026-05-10T20:00:00.000Z',
+      eventVenueId: largeVenueId,
+      eventArtists: [],
+      eventIsPublic: true,
+    });
+
+    await Events.create({
+      title: 'Large Venue Event',
+      startTime: '2026-05-10T18:00:00.000Z',
+      endTime: '2026-05-10T20:00:00.000Z',
+      venueId: largeVenueId,
+      artistIds: [],
+      isPublic: true,
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      '/social-events/events',
+      expect.objectContaining({
+        eventVenueId: largeVenueId,
+      }),
+    );
+  });
+
   it('Events.list trims string filters and still applies upcoming fallback', async () => {
     get.mockResolvedValueOnce([]);
 
@@ -148,6 +177,32 @@ describe('Social API update merge behavior', () => {
       '/social-events/events/9/invitations',
       expect.objectContaining({
         invitationFromPartyId: '0',
+        invitationToPartyId: '12',
+      }),
+    );
+  });
+
+  it('Events.sendInvitation drops malformed numeric fromUserId values', async () => {
+    post.mockResolvedValueOnce({
+      invitationId: 89,
+      invitationEventId: 9,
+      invitationFromPartyId: null,
+      invitationToPartyId: '12',
+      invitationStatus: 'Pending',
+      invitationMessage: null,
+    });
+
+    await Events.sendInvitation({
+      eventId: 9,
+      fromUserId: Number.NaN,
+      toUserId: 12,
+      status: 'PENDING',
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      '/social-events/events/9/invitations',
+      expect.objectContaining({
+        invitationFromPartyId: undefined,
         invitationToPartyId: '12',
       }),
     );

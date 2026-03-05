@@ -12,11 +12,18 @@ const normalizeOptionalText = (value: unknown): string | null => {
   return trimmed === '' ? null : trimmed;
 };
 
+const parseSafeInteger = (value: string): number | null => {
+  if (!/^-?\d+$/.test(value)) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+};
+
 const normalizeId = (value: ID, fallback: ID = 0): ID => {
-  if (typeof value === 'number') return Number.isSafeInteger(value) ? value : fallback;
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value > 0 ? value : fallback;
   const trimmed = value.trim();
   if (!trimmed) return fallback;
-  if (/^\d+$/.test(trimmed)) return Number.parseInt(trimmed, 10);
+  const parsed = parseSafeInteger(trimmed);
+  if (parsed !== null) return parsed > 0 ? parsed : fallback;
   return trimmed;
 };
 

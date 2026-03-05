@@ -35,11 +35,17 @@ export const Artists = {
     const genre = filters?.genre?.trim();
     if (name) query.append('name', name);
     if (genre) query.append('genre', genre);
-    if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit) && filters.limit > 0) {
-      query.append('limit', String(Math.trunc(filters.limit)));
+    if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit)) {
+      const normalizedLimit = Math.trunc(filters.limit);
+      if (normalizedLimit > 0) {
+        query.append('limit', String(normalizedLimit));
+      }
     }
-    if (typeof filters?.offset === 'number' && Number.isFinite(filters.offset) && filters.offset >= 0) {
-      query.append('offset', String(Math.trunc(filters.offset)));
+    if (typeof filters?.offset === 'number' && Number.isFinite(filters.offset)) {
+      const normalizedOffset = Math.trunc(filters.offset);
+      if (normalizedOffset >= 0) {
+        query.append('offset', String(normalizedOffset));
+      }
     }
     
     const url = `/social-events/artists${query.toString() ? '?' + query.toString() : ''}`;

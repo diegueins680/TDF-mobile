@@ -61,6 +61,20 @@ describe('Social list filter serialization', () => {
     expect(get).toHaveBeenCalledWith('/social-events/artists');
   });
 
+  it('drops limits that truncate to zero while preserving valid offsets', async () => {
+    get.mockResolvedValueOnce([]);
+    get.mockResolvedValueOnce([]);
+    get.mockResolvedValueOnce([]);
+
+    await Artists.list({ limit: 0.9, offset: 0.8 });
+    await Venues.list({ limit: 0.2, offset: 0 });
+    await Events.list({ limit: 0.5, offset: 1.2 });
+
+    expect(get).toHaveBeenNthCalledWith(1, '/social-events/artists?offset=0');
+    expect(get).toHaveBeenNthCalledWith(2, '/social-events/venues?offset=0');
+    expect(get).toHaveBeenNthCalledWith(3, '/social-events/events?offset=1');
+  });
+
   it('Artists.list trims text filters and skips blank values', async () => {
     get.mockResolvedValueOnce([]);
 

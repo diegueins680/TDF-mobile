@@ -69,11 +69,17 @@ export const Venues = {
     const textQuery = filters?.query?.trim();
     if (city) query.append('city', city);
     if (textQuery) query.append('q', textQuery);
-    if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit) && filters.limit > 0) {
-      query.append('limit', String(Math.trunc(filters.limit)));
+    if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit)) {
+      const normalizedLimit = Math.trunc(filters.limit);
+      if (normalizedLimit > 0) {
+        query.append('limit', String(normalizedLimit));
+      }
     }
-    if (typeof filters?.offset === 'number' && Number.isFinite(filters.offset) && filters.offset >= 0) {
-      query.append('offset', String(Math.trunc(filters.offset)));
+    if (typeof filters?.offset === 'number' && Number.isFinite(filters.offset)) {
+      const normalizedOffset = Math.trunc(filters.offset);
+      if (normalizedOffset >= 0) {
+        query.append('offset', String(normalizedOffset));
+      }
     }
     if (filters?.near) {
       const { lat, lng, radiusKm } = filters.near;

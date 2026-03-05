@@ -208,6 +208,48 @@ describe('Social API update merge behavior', () => {
     );
   });
 
+  it('Events.respondToInvitation includes invitationToPartyId for backend update schema', async () => {
+    get.mockResolvedValueOnce([
+      {
+        invitationId: '88',
+        invitationEventId: 9,
+        invitationFromPartyId: '2',
+        invitationToPartyId: '12',
+        invitationStatus: 'Pending',
+        invitationMessage: null,
+      },
+    ]);
+
+    put.mockResolvedValueOnce({
+      invitationId: 88,
+      invitationEventId: 9,
+      invitationFromPartyId: '2',
+      invitationToPartyId: '12',
+      invitationStatus: 'Accepted',
+      invitationMessage: null,
+    });
+
+    await Events.respondToInvitation(9, 88, 'ACCEPTED');
+
+    expect(get).toHaveBeenCalledWith('/social-events/events/9/invitations');
+    expect(put).toHaveBeenCalledWith(
+      '/social-events/events/9/invitations/88',
+      expect.objectContaining({
+        invitationToPartyId: '12',
+        invitationStatus: 'ACCEPTED',
+      }),
+    );
+  });
+
+  it('Events.respondToInvitation throws when invitation does not exist', async () => {
+    get.mockResolvedValueOnce([]);
+
+    await expect(Events.respondToInvitation(9, 999, 'DECLINED')).rejects.toThrow(
+      'Invitation 999 not found for event 9.',
+    );
+    expect(put).not.toHaveBeenCalled();
+  });
+
   it('Artists.update preserves name and genres when omitted in patch', async () => {
     get.mockResolvedValueOnce({
       artistId: 2,

@@ -70,6 +70,17 @@ const parseSafeInteger = (value: string): number | null => {
   return Number.isSafeInteger(parsed) ? parsed : null;
 };
 
+const normalizeComparableId = (value: ID): string => {
+  if (typeof value === 'number') {
+    if (Number.isSafeInteger(value)) return String(value);
+    return String(value).trim();
+  }
+  const trimmed = value.trim();
+  const parsed = parseSafeInteger(trimmed);
+  if (parsed !== null) return String(parsed);
+  return trimmed;
+};
+
 const normalizeVenueId = (value?: string | null): ID => {
   const trimmed = value?.trim();
   if (!trimmed) return 0;
@@ -274,7 +285,16 @@ export const Events = {
     status: EventInvitationStatus,
     message?: string
   ): Promise<EventInvitation> => {
+    const invitationIdKey = normalizeComparableId(invitationId);
+    const invitation = (await Events.getInvitations(eventId)).find(
+      (item) => normalizeComparableId(item.id) === invitationIdKey,
+    );
+    if (!invitation) {
+      throw new Error(`Invitation ${invitationIdKey} not found for event ${String(eventId)}.`);
+    }
+
     const payload = {
+      invitationToPartyId: String(invitation.toUserId),
       invitationStatus: status,
       invitationMessage: message ?? undefined
     };

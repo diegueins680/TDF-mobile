@@ -359,6 +359,19 @@ function normalizeTicketPrice(value: number | null | undefined): number | null {
   return value / 100;
 }
 
+function normalizeTicketPriceInput(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+  return value;
+}
+
+function toBackendTicketPriceCents(value: unknown): number | null {
+  const normalized = normalizeTicketPriceInput(value);
+  if (normalized === undefined) return null;
+  return Math.round(normalized * 100);
+}
+
 function mapFrontendEventToBackend(body: SocialEventCreate) {
   return {
     eventTitle: body.title,
@@ -366,7 +379,7 @@ function mapFrontendEventToBackend(body: SocialEventCreate) {
     eventStart: body.startTime,
     eventEnd: body.endTime,
     eventVenueId: normalizeBackendVenueId(body.venueId),
-    eventPriceCents: typeof body.ticketPrice === 'number' ? Math.round(body.ticketPrice * 100) : null,
+    eventPriceCents: toBackendTicketPriceCents(body.ticketPrice),
     eventCapacity: null,
     eventTicketUrl: body.ticketUrl ?? null,
     eventImageUrl: body.imageUrl ?? null,
@@ -376,6 +389,8 @@ function mapFrontendEventToBackend(body: SocialEventCreate) {
 }
 
 function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): SocialEventCreate {
+  const patchTicketPrice = normalizeTicketPriceInput(patch.ticketPrice);
+  const existingTicketPrice = normalizeTicketPriceInput(existing.ticketPrice);
   return {
     title: patch.title ?? existing.title,
     description: patch.description ?? existing.description ?? undefined,
@@ -383,7 +398,7 @@ function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): Soci
     endTime: patch.endTime ?? existing.endTime,
     venueId: patch.venueId ?? existing.venueId,
     artistIds: patch.artistIds ?? existing.artistIds,
-    ticketPrice: patch.ticketPrice ?? existing.ticketPrice ?? undefined,
+    ticketPrice: patchTicketPrice ?? existingTicketPrice,
     ticketUrl: patch.ticketUrl ?? existing.ticketUrl ?? undefined,
     imageUrl: patch.imageUrl ?? existing.imageUrl ?? undefined,
     isPublic: patch.isPublic ?? existing.isPublic,

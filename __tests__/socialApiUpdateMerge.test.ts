@@ -85,6 +85,41 @@ describe('Social API update merge behavior', () => {
     }));
   });
 
+  it('Events.update keeps existing ticket price when patch ticket price is invalid', async () => {
+    get.mockResolvedValueOnce({
+      eventId: 9,
+      eventTitle: 'Original title',
+      eventDescription: 'Original desc',
+      eventStart: '2026-04-01T10:00:00.000Z',
+      eventEnd: '2026-04-01T12:00:00.000Z',
+      eventVenueId: null,
+      eventPriceCents: 3500,
+      eventIsPublic: true,
+      eventArtists: [],
+    });
+
+    put.mockResolvedValueOnce({
+      eventId: 9,
+      eventTitle: 'Original title',
+      eventDescription: 'Original desc',
+      eventStart: '2026-04-01T10:00:00.000Z',
+      eventEnd: '2026-04-01T12:00:00.000Z',
+      eventVenueId: null,
+      eventPriceCents: 3500,
+      eventIsPublic: true,
+      eventArtists: [],
+    });
+
+    await Events.update(9, { ticketPrice: Number.NaN });
+
+    expect(put).toHaveBeenCalledWith(
+      '/social-events/events/9',
+      expect.objectContaining({
+        eventPriceCents: 3500,
+      }),
+    );
+  });
+
   it('Events.create serializes missing venue sentinels as null', async () => {
     post.mockResolvedValueOnce({
       eventId: 21,
@@ -109,6 +144,65 @@ describe('Social API update merge behavior', () => {
       '/social-events/events',
       expect.objectContaining({
         eventVenueId: null,
+      }),
+    );
+  });
+
+  it('Events.create sanitizes invalid ticket prices before sending payload', async () => {
+    post
+      .mockResolvedValueOnce({
+        eventId: 24,
+        eventTitle: 'Broken Price Event',
+        eventStart: '2026-05-01T18:00:00.000Z',
+        eventEnd: '2026-05-01T20:00:00.000Z',
+        eventVenueId: null,
+        eventArtists: [],
+        eventPriceCents: null,
+        eventIsPublic: true,
+      })
+      .mockResolvedValueOnce({
+        eventId: 25,
+        eventTitle: 'Negative Price Event',
+        eventStart: '2026-05-01T18:00:00.000Z',
+        eventEnd: '2026-05-01T20:00:00.000Z',
+        eventVenueId: null,
+        eventArtists: [],
+        eventPriceCents: null,
+        eventIsPublic: true,
+      });
+
+    await Events.create({
+      title: 'Broken Price Event',
+      startTime: '2026-05-01T18:00:00.000Z',
+      endTime: '2026-05-01T20:00:00.000Z',
+      venueId: 0,
+      artistIds: [],
+      ticketPrice: Number.NaN,
+      isPublic: true,
+    });
+
+    await Events.create({
+      title: 'Negative Price Event',
+      startTime: '2026-05-01T18:00:00.000Z',
+      endTime: '2026-05-01T20:00:00.000Z',
+      venueId: 0,
+      artistIds: [],
+      ticketPrice: -5,
+      isPublic: true,
+    });
+
+    expect(post).toHaveBeenNthCalledWith(
+      1,
+      '/social-events/events',
+      expect.objectContaining({
+        eventPriceCents: null,
+      }),
+    );
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      '/social-events/events',
+      expect.objectContaining({
+        eventPriceCents: null,
       }),
     );
   });

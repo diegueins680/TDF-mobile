@@ -13,6 +13,7 @@ const { get, post } = jest.requireMock('../src/api/client') as {
   get: jest.Mock;
   post: jest.Mock;
 };
+const ISO_TIMESTAMP_PREFIX = /^\d{4}-\d{2}-\d{2}T/;
 
 describe('Social API mapper sanitization', () => {
   beforeEach(() => {
@@ -91,6 +92,24 @@ describe('Social API mapper sanitization', () => {
     expect(artists[1]?.partyId).toBe(44);
   });
 
+  it('Artists.list replaces blank timestamp fields with ISO defaults', async () => {
+    get.mockResolvedValueOnce([
+      {
+        artistId: 11,
+        artistPartyId: 11,
+        artistName: 'Timestamp Artist',
+        artistCreatedAt: '  ',
+        artistUpdatedAt: '',
+      },
+    ]);
+
+    const artists = await Artists.list();
+
+    expect(artists).toHaveLength(1);
+    expect(artists[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(artists[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
+  });
+
   it('Venues.list trims contact metadata and ignores blank derived state', async () => {
     get.mockResolvedValueOnce([
       {
@@ -163,6 +182,25 @@ describe('Social API mapper sanitization', () => {
     expect(venues[0]?.capacity).toBeNull();
   });
 
+  it('Venues.list replaces blank timestamp fields with ISO defaults', async () => {
+    get.mockResolvedValueOnce([
+      {
+        venueId: 12,
+        venueName: 'Timestamp Venue',
+        venueAddress: 'Av. 123',
+        venueCity: 'Quito',
+        venueCreatedAt: ' ',
+        venueUpdatedAt: '   ',
+      },
+    ]);
+
+    const venues = await Venues.list();
+
+    expect(venues).toHaveLength(1);
+    expect(venues[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(venues[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
+  });
+
   it('Events.list sanitizes invalid ticket price values from backend payloads', async () => {
     get.mockResolvedValueOnce([
       {
@@ -200,5 +238,53 @@ describe('Social API mapper sanitization', () => {
     expect(events[0]?.ticketPrice).toBeNull();
     expect(events[1]?.ticketPrice).toBeNull();
     expect(events[2]?.ticketPrice).toBe(0);
+  });
+
+  it('Events mappers sanitize blank timestamp fields across events, RSVPs, and invitations', async () => {
+    get
+      .mockResolvedValueOnce([
+        {
+          eventId: 201,
+          eventTitle: 'Timestamp Event',
+          eventStart: '2026-01-01T00:00:00.000Z',
+          eventEnd: '2026-01-01T01:00:00.000Z',
+          eventVenueId: null,
+          eventCreatedAt: '   ',
+          eventUpdatedAt: ' ',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          rsvpId: 1,
+          rsvpEventId: 201,
+          rsvpPartyId: 300,
+          rsvpStatus: 'accepted',
+          rsvpCreatedAt: ' ',
+          rsvpUpdatedAt: '   ',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          invitationId: 1,
+          invitationEventId: 201,
+          invitationToPartyId: 300,
+          invitationCreatedAt: '   ',
+          invitationUpdatedAt: ' ',
+        },
+      ]);
+
+    const events = await Events.list();
+    const rsvps = await Events.getRSVPs(201);
+    const invitations = await Events.getInvitations(201);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(events[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(rsvps).toHaveLength(1);
+    expect(rsvps[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(rsvps[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(invitations).toHaveLength(1);
+    expect(invitations[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(invitations[0]?.updatedAt).toBeNull();
   });
 });

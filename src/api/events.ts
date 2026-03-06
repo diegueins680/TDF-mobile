@@ -148,6 +148,12 @@ const normalizeBackendVenueId = (value: ID | null | undefined): string | null =>
   return trimmed;
 };
 
+const normalizeOptionalTimestamp = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+};
+
 async function loadVenueMapByIds(rawVenueIds: Array<string | null | undefined>) {
   const uniqueVenueIds = [...new Set(rawVenueIds.map((value) => normalizeVenueLookupId(value)).filter((value): value is string => Boolean(value)))];
   if (uniqueVenueIds.length === 0) return new Map<string, Awaited<ReturnType<typeof Venues.getById>>>();
@@ -311,6 +317,8 @@ function mapBackendEventToFrontend(
 ): SocialEvent {
   const nowIso = new Date().toISOString();
   const artists = (e.eventArtists ?? []).map((artist) => mapBackendArtistToFrontend(artist));
+  const createdAt = normalizeOptionalTimestamp(e.eventCreatedAt) ?? nowIso;
+  const updatedAt = normalizeOptionalTimestamp(e.eventUpdatedAt) ?? createdAt;
   return {
     id: e.eventId,
     title: e.eventTitle,
@@ -327,8 +335,8 @@ function mapBackendEventToFrontend(
     imageUrl: e.eventImageUrl ?? null,
     isPublic: typeof e.eventIsPublic === 'boolean' ? e.eventIsPublic : true,
     rsvpCount: Array.isArray(e.eventRsvps) ? e.eventRsvps.length : 0,
-    createdAt: e.eventCreatedAt ?? nowIso,
-    updatedAt: e.eventUpdatedAt ?? e.eventCreatedAt ?? nowIso
+    createdAt,
+    updatedAt
   };
 }
 
@@ -371,13 +379,18 @@ function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): Soci
 }
 
 function mapRsvpDto(dto: BackendRsvpDTO, fallbackEventId: ID, fallbackPartyId?: ID): EventRSVP {
+  const createdAt = normalizeOptionalTimestamp(dto.rsvpCreatedAt) ?? new Date().toISOString();
+  const updatedAt =
+    normalizeOptionalTimestamp(dto.rsvpUpdatedAt) ??
+    normalizeOptionalTimestamp(dto.rsvpCreatedAt) ??
+    createdAt;
   return {
     id: dto.rsvpId ?? `${dto.rsvpPartyId}-${dto.rsvpEventId ?? fallbackEventId}`,
     eventId: dto.rsvpEventId ?? fallbackEventId,
     userId: dto.rsvpPartyId ?? fallbackPartyId ?? '',
     status: mapBackendRsvpStatus(dto.rsvpStatus),
-    createdAt: dto.rsvpCreatedAt || new Date().toISOString(),
-    updatedAt: dto.rsvpUpdatedAt || dto.rsvpCreatedAt || new Date().toISOString()
+    createdAt,
+    updatedAt
   };
 }
 
@@ -412,6 +425,11 @@ function mapInvitationStatus(raw: unknown): EventInvitationStatus {
 }
 
 function mapInvitationDto(dto: BackendInvitationDTO, fallbackEventId: ID): EventInvitation {
+  const createdAt = normalizeOptionalTimestamp(dto.invitationCreatedAt) ?? new Date().toISOString();
+  const updatedAt =
+    normalizeOptionalTimestamp(dto.invitationUpdatedAt) ??
+    normalizeOptionalTimestamp(dto.invitationCreatedAt) ??
+    null;
   return {
     id: dto.invitationId ?? `${dto.invitationToPartyId}-${dto.invitationEventId ?? fallbackEventId}`,
     eventId: dto.invitationEventId ?? fallbackEventId,
@@ -419,7 +437,7 @@ function mapInvitationDto(dto: BackendInvitationDTO, fallbackEventId: ID): Event
     toUserId: dto.invitationToPartyId,
     status: mapInvitationStatus(dto.invitationStatus),
     message: dto.invitationMessage ?? null,
-    createdAt: dto.invitationCreatedAt || new Date().toISOString(),
-    updatedAt: dto.invitationUpdatedAt || dto.invitationCreatedAt || null
+    createdAt,
+    updatedAt
   };
 }

@@ -127,6 +127,8 @@ export function mapBackendArtistToFrontend(a: BackendArtistDTO): ArtistProfile {
   const partyFallbackId = normalizeEntityId(a.artistPartyId ?? a.partyId, 0);
   const id = normalizeEntityId(a.artistId, partyFallbackId);
   const partyId = normalizeEntityId(a.artistPartyId ?? a.partyId, id);
+  const createdAt = normalizeOptionalTimestamp(a.artistCreatedAt) ?? nowIso;
+  const updatedAt = normalizeOptionalTimestamp(a.artistUpdatedAt) ?? createdAt;
   return {
     id,
     partyId,
@@ -137,8 +139,8 @@ export function mapBackendArtistToFrontend(a: BackendArtistDTO): ArtistProfile {
     instagramHandle: socialLinks?.instagram ?? null,
     spotifyUrl: socialLinks?.spotify ?? null,
     socialLinks,
-    createdAt: a.artistCreatedAt ?? nowIso,
-    updatedAt: a.artistUpdatedAt ?? a.artistCreatedAt ?? nowIso
+    createdAt,
+    updatedAt
   };
 }
 
@@ -155,6 +157,12 @@ function mapFrontendArtistToBackend(body: Partial<ArtistProfileCreate>) {
 }
 
 function normalizeOptionalText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
+function normalizeOptionalTimestamp(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed === '' ? undefined : trimmed;

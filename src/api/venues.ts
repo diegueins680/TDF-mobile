@@ -139,6 +139,8 @@ function mapBackendVenueToFrontend(v: BackendVenueDTO): Venue {
   const contact = normalizeContact(v.venueContact);
   const city = normalizeOptionalText(v.venueCity) ?? '';
   const state = normalizeOptionalText(v.venueState) ?? deriveStateFromCity(city);
+  const createdAt = normalizeOptionalText(v.venueCreatedAt) ?? nowIso;
+  const updatedAt = normalizeOptionalText(v.venueUpdatedAt) ?? createdAt;
   return {
     id: normalizeId(v.venueId),
     name: v.venueName,
@@ -153,8 +155,8 @@ function mapBackendVenueToFrontend(v: BackendVenueDTO): Venue {
     imageUrl: normalizeOptionalText(v.venueImageUrl),
     phoneNumber: normalizeOptionalText(v.venuePhone) ?? contact.phone ?? null,
     website: normalizeOptionalText(v.venueWebsite) ?? contact.website ?? null,
-    createdAt: v.venueCreatedAt ?? nowIso,
-    updatedAt: v.venueUpdatedAt ?? v.venueCreatedAt ?? nowIso
+    createdAt,
+    updatedAt
   };
 }
 

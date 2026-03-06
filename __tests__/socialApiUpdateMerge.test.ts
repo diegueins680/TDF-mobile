@@ -314,6 +314,25 @@ describe('Social API update merge behavior', () => {
     expect(put).not.toHaveBeenCalled();
   });
 
+  it('Events.respondToInvitation rejects malformed numeric invitation ids before fetching', async () => {
+    await expect(Events.respondToInvitation(9, Number.NaN, 'ACCEPTED')).rejects.toThrow(
+      'Invalid invitation id.',
+    );
+    expect(get).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('Events.rsvp rejects NONE status instead of coercing it to Maybe', async () => {
+    await expect(
+      Events.rsvp({
+        eventId: 9,
+        userId: 12,
+        status: 'NONE',
+      }),
+    ).rejects.toThrow('RSVP status NONE cannot be submitted.');
+    expect(post).not.toHaveBeenCalled();
+  });
+
   it('Artists.update preserves name and genres when omitted in patch', async () => {
     get.mockResolvedValueOnce({
       artistId: 2,

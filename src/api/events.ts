@@ -71,14 +71,15 @@ const parseSafeInteger = (value: string): number | null => {
   return Number.isSafeInteger(parsed) ? parsed : null;
 };
 
-const normalizeComparableId = (value: ID): string => {
+const normalizeComparableId = (value: ID): string | null => {
   if (typeof value === 'number') {
-    if (Number.isSafeInteger(value)) return String(value);
-    return String(value).trim();
+    if (!Number.isSafeInteger(value) || value <= 0) return null;
+    return String(value);
   }
   const trimmed = value.trim();
+  if (!trimmed) return null;
   const parsed = parseSafeInteger(trimmed);
-  if (parsed !== null) return String(parsed);
+  if (parsed !== null) return parsed > 0 ? String(parsed) : null;
   return trimmed;
 };
 
@@ -251,10 +252,15 @@ export const Events = {
   },
 
   rsvp: async (body: EventRSVPCreate): Promise<EventRSVP> => {
+    const backendStatus = mapFrontendRsvpStatus(body.status);
+    if (!backendStatus) {
+      throw new Error('RSVP status NONE cannot be submitted.');
+    }
+
     const payload = {
       rsvpEventId: String(body.eventId),
       rsvpPartyId: String(body.userId),
-      rsvpStatus: mapFrontendRsvpStatus(body.status)
+      rsvpStatus: backendStatus
     };
     const result = await post<BackendRsvpDTO>(`/social-events/events/${body.eventId}/rsvps`, payload);
     return mapRsvpDto(result, body.eventId, body.userId);
@@ -291,6 +297,9 @@ export const Events = {
     message?: string
   ): Promise<EventInvitation> => {
     const invitationIdKey = normalizeComparableId(invitationId);
+    if (!invitationIdKey) {
+      throw new Error('Invalid invitation id.');
+    }
     const invitation = (await Events.getInvitations(eventId)).find(
       (item) => normalizeComparableId(item.id) === invitationIdKey,
     );
@@ -407,7 +416,7 @@ function mapBackendRsvpStatus(raw: unknown): RSVPStatus {
   return 'NONE';
 }
 
-function mapFrontendRsvpStatus(status: RSVPStatus): string {
+function mapFrontendRsvpStatus(status: RSVPStatus): string | null {
   switch (status) {
     case 'GOING':
       return 'Accepted';
@@ -415,8 +424,10 @@ function mapFrontendRsvpStatus(status: RSVPStatus): string {
       return 'Maybe';
     case 'NOT_GOING':
       return 'Declined';
+    case 'NONE':
+      return null;
     default:
-      return 'Maybe';
+      return null;
   }
 }
 

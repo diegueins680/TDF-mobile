@@ -305,7 +305,11 @@ export const Events = {
       invitationMessage: message ?? undefined
     };
     // Backend endpoint updates invitation status via PUT.
-    const dto = await put<BackendInvitationDTO>(`/social-events/events/${eventId}/invitations/${invitationId}`, payload);
+    const invitationPathId = encodeURIComponent(invitationIdKey);
+    const dto = await put<BackendInvitationDTO>(
+      `/social-events/events/${eventId}/invitations/${invitationPathId}`,
+      payload
+    );
     return mapInvitationDto(dto, eventId);
   }
 };

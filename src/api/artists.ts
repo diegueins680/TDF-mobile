@@ -1,5 +1,6 @@
 import { get, post, put, del } from './client';
 import type { ArtistProfile, ArtistProfileCreate, ArtistSocialLinks, ID } from '../types';
+import { normalizeOptionalTimestamp } from '../lib/isoDate';
 
 type BackendArtistDTO = {
   artistId?: ID;
@@ -157,12 +158,6 @@ function mapFrontendArtistToBackend(body: Partial<ArtistProfileCreate>) {
 }
 
 function normalizeOptionalText(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
-}
-
-function normalizeOptionalTimestamp(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed === '' ? undefined : trimmed;

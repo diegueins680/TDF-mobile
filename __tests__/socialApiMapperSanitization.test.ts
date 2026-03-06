@@ -110,6 +110,26 @@ describe('Social API mapper sanitization', () => {
     expect(artists[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
   });
 
+  it('Artists.list replaces impossible ISO timestamps with safe defaults', async () => {
+    get.mockResolvedValueOnce([
+      {
+        artistId: 11,
+        artistPartyId: 11,
+        artistName: 'Timestamp Artist',
+        artistCreatedAt: '2026-02-30T10:00:00.000Z',
+        artistUpdatedAt: '2026-13-01T00:00:00.000Z',
+      },
+    ]);
+
+    const artists = await Artists.list();
+
+    expect(artists).toHaveLength(1);
+    expect(artists[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(artists[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(artists[0]?.createdAt).not.toBe('2026-02-30T10:00:00.000Z');
+    expect(artists[0]?.updatedAt).not.toBe('2026-13-01T00:00:00.000Z');
+  });
+
   it('Venues.list trims contact metadata and ignores blank derived state', async () => {
     get.mockResolvedValueOnce([
       {
@@ -201,6 +221,27 @@ describe('Social API mapper sanitization', () => {
     expect(venues[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
   });
 
+  it('Venues.list replaces impossible ISO timestamps with safe defaults', async () => {
+    get.mockResolvedValueOnce([
+      {
+        venueId: 12,
+        venueName: 'Timestamp Venue',
+        venueAddress: 'Av. 123',
+        venueCity: 'Quito',
+        venueCreatedAt: '2026-02-31T12:00:00.000Z',
+        venueUpdatedAt: '2026-11-31T12:00:00.000Z',
+      },
+    ]);
+
+    const venues = await Venues.list();
+
+    expect(venues).toHaveLength(1);
+    expect(venues[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(venues[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(venues[0]?.createdAt).not.toBe('2026-02-31T12:00:00.000Z');
+    expect(venues[0]?.updatedAt).not.toBe('2026-11-31T12:00:00.000Z');
+  });
+
   it('Events.list sanitizes invalid ticket price values from backend payloads', async () => {
     get.mockResolvedValueOnce([
       {
@@ -283,6 +324,60 @@ describe('Social API mapper sanitization', () => {
     expect(rsvps).toHaveLength(1);
     expect(rsvps[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
     expect(rsvps[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(invitations).toHaveLength(1);
+    expect(invitations[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(invitations[0]?.updatedAt).toBeNull();
+  });
+
+  it('Events mappers sanitize impossible ISO timestamps across events, RSVPs, and invitations', async () => {
+    get
+      .mockResolvedValueOnce([
+        {
+          eventId: 202,
+          eventTitle: 'Timestamp Event',
+          eventStart: '2026-01-01T00:00:00.000Z',
+          eventEnd: '2026-01-01T01:00:00.000Z',
+          eventVenueId: null,
+          eventCreatedAt: '2026-02-30T08:00:00.000Z',
+          eventUpdatedAt: '2026-11-31T08:00:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          rsvpId: 1,
+          rsvpEventId: 202,
+          rsvpPartyId: 300,
+          rsvpStatus: 'accepted',
+          rsvpCreatedAt: '2026-02-29T08:00:00.000Z',
+          rsvpUpdatedAt: '2026-13-01T08:00:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          invitationId: 1,
+          invitationEventId: 202,
+          invitationToPartyId: 300,
+          invitationCreatedAt: '2026-02-31T08:00:00.000Z',
+          invitationUpdatedAt: '2026-04-31T08:00:00.000Z',
+        },
+      ]);
+
+    const events = await Events.list();
+    const rsvps = await Events.getRSVPs(202);
+    const invitations = await Events.getInvitations(202);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(events[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(events[0]?.createdAt).not.toBe('2026-02-30T08:00:00.000Z');
+    expect(events[0]?.updatedAt).not.toBe('2026-11-31T08:00:00.000Z');
+
+    expect(rsvps).toHaveLength(1);
+    expect(rsvps[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(rsvps[0]?.updatedAt).toMatch(ISO_TIMESTAMP_PREFIX);
+    expect(rsvps[0]?.createdAt).not.toBe('2026-02-29T08:00:00.000Z');
+    expect(rsvps[0]?.updatedAt).not.toBe('2026-13-01T08:00:00.000Z');
+
     expect(invitations).toHaveLength(1);
     expect(invitations[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
     expect(invitations[0]?.updatedAt).toBeNull();

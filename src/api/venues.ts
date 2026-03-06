@@ -1,5 +1,6 @@
 import { get, post, put } from './client';
 import type { Venue, VenueCreate, ID } from '../types';
+import { normalizeOptionalTimestamp } from '../lib/isoDate';
 
 type VenueContact = {
   phone?: string | null;
@@ -139,8 +140,8 @@ function mapBackendVenueToFrontend(v: BackendVenueDTO): Venue {
   const contact = normalizeContact(v.venueContact);
   const city = normalizeOptionalText(v.venueCity) ?? '';
   const state = normalizeOptionalText(v.venueState) ?? deriveStateFromCity(city);
-  const createdAt = normalizeOptionalText(v.venueCreatedAt) ?? nowIso;
-  const updatedAt = normalizeOptionalText(v.venueUpdatedAt) ?? createdAt;
+  const createdAt = normalizeOptionalTimestamp(v.venueCreatedAt) ?? nowIso;
+  const updatedAt = normalizeOptionalTimestamp(v.venueUpdatedAt) ?? createdAt;
   return {
     id: normalizeId(v.venueId),
     name: v.venueName,

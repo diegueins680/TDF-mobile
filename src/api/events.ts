@@ -12,6 +12,7 @@ import type {
   EventInvitationStatus,
   ArtistSocialLinks
 } from '../types';
+import { normalizeOptionalTimestamp } from '../lib/isoDate';
 import { mapBackendArtistToFrontend } from './artists';
 import { Venues } from './venues';
 
@@ -146,12 +147,6 @@ const normalizeBackendVenueId = (value: ID | null | undefined): string | null =>
   const parsed = parseSafeInteger(trimmed);
   if (parsed !== null) return parsed > 0 ? String(parsed) : null;
   return trimmed;
-};
-
-const normalizeOptionalTimestamp = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
 };
 
 async function loadVenueMapByIds(rawVenueIds: Array<string | null | undefined>) {

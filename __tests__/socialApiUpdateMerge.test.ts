@@ -156,6 +156,38 @@ describe('Social API update merge behavior', () => {
     expect(calledPath).not.toContain('%20%20Quito');
   });
 
+  it('Events.list keeps venue details when venue lookup id is canonicalized by backend', async () => {
+    mockedVenuesModule.Venues.getById.mockResolvedValueOnce({
+      id: 12,
+      name: 'Main Hall',
+      address: 'Av. Venue',
+      city: 'Quito',
+      country: 'EC',
+      latitude: -0.2,
+      longitude: -78.5,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    get.mockResolvedValueOnce([
+      {
+        eventId: 31,
+        eventTitle: 'Canonical Venue Event',
+        eventStart: '2026-05-10T18:00:00.000Z',
+        eventEnd: '2026-05-10T20:00:00.000Z',
+        eventVenueId: 'north-stage',
+        eventIsPublic: true,
+      },
+    ]);
+
+    const events = await Events.list();
+
+    expect(mockedVenuesModule.Venues.getById).toHaveBeenCalledWith('north-stage');
+    expect(events[0]?.venueId).toBe('north-stage');
+    expect(events[0]?.venue?.id).toBe(12);
+    expect(events[0]?.venue?.name).toBe('Main Hall');
+  });
+
   it('Events.sendInvitation preserves explicit fromUserId values like 0', async () => {
     post.mockResolvedValueOnce({
       invitationId: 88,

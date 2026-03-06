@@ -161,13 +161,17 @@ async function loadVenueMapByIds(rawVenueIds: Array<string | null | undefined>) 
   const settled = await Promise.allSettled(uniqueVenueIds.map((venueId) => Venues.getById(venueId)));
   const map = new Map<string, Awaited<ReturnType<typeof Venues.getById>>>();
   settled.forEach((result, index) => {
+    const requestedId = uniqueVenueIds[index];
     if (result.status === 'fulfilled') {
+      if (requestedId) {
+        // Keep lookup stable when backend canonicalizes venue IDs.
+        map.set(String(requestedId), result.value);
+      }
       map.set(String(result.value.id), result.value);
     }
     if (result.status === 'rejected') {
-      const fallbackId = uniqueVenueIds[index];
-      if (fallbackId) {
-        map.delete(String(fallbackId));
+      if (requestedId) {
+        map.delete(String(requestedId));
       }
     }
   });

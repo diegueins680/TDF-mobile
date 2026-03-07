@@ -9,11 +9,11 @@ import { UserSettingsProvider } from './UserSettingsProvider';
 export function AppProviders({ children }: PropsWithChildren) {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <UserSettingsProvider>
-          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-        </UserSettingsProvider>
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <UserSettingsProvider>{children}</UserSettingsProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </SafeAreaProvider>
   );
 }

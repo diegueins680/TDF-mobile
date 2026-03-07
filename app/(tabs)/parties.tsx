@@ -11,16 +11,17 @@ import { useAuth } from '../../src/providers/AuthProvider';
 export default function Parties() {
   const qc = useQueryClient();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, loading } = useAuth();
   const [q, setQ] = useState('');
   const [newName, setNewName] = useState('');
-  const hasToken = Boolean(token);
+  const hasToken = Boolean(token?.trim());
+  const canUseParties = !loading && hasToken;
   const debouncedQ = useDebouncedValue(q, 300);
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['parties', debouncedQ],
     queryFn: () => listParties(debouncedQ),
-    enabled: hasToken
+    enabled: canUseParties
   });
 
   const mCreate = useMutation({
@@ -32,7 +33,7 @@ export default function Parties() {
   });
 
   const parties = useMemo(() => data ?? [], [data]);
-  const canCreate = hasToken && newName.trim().length > 0 && !mCreate.isPending;
+  const canCreate = canUseParties && newName.trim().length > 0 && !mCreate.isPending;
 
   const renderItem = useCallback(({ item }: { item: Party }) => (
     <View style={styles.card}>
@@ -72,7 +73,8 @@ export default function Parties() {
 
   return (
     <View style={styles.wrap}>
-      {!hasToken && (
+      {loading && <Text>Loading session…</Text>}
+      {!loading && !hasToken && (
         <View style={styles.notice}>
           <Text style={styles.noticeTitle}>Acceso restringido para cargar y crear clientes.</Text>
           <Text style={styles.noticeBody}>Connect your API token to load and create clients.</Text>
@@ -104,7 +106,7 @@ export default function Parties() {
         />
       </View>
 
-      {hasToken && isLoading && <Text>Loading…</Text>}
+      {canUseParties && isLoading && <Text>Loading…</Text>}
       {renderError()}
 
       <FlatList

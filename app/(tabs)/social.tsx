@@ -6,6 +6,7 @@ import { Parties } from '../../src/api/parties';
 import { Social } from '../../src/api/social';
 import type { PartyFollow } from '../../src/types';
 import type { PartyDTO } from '../../src/api/types';
+import { resolvePartyId } from '../../src/lib/identity';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 
@@ -20,37 +21,40 @@ const parsePositivePartyId = (value: unknown): number | null => {
 
 export default function SocialScreen() {
   const qc = useQueryClient();
-  const { token } = useAuth();
-  const { partyId, displayName } = useUserSettings();
+  const { token, partyId: authPartyId, loading } = useAuth();
+  const { partyId: settingsPartyId, displayName } = useUserSettings();
 
   const [activeTab, setActiveTab] = useState<TabKey>('friends');
   const [addId, setAddId] = useState('');
+  const hasToken = Boolean(token?.trim());
+  const canUseSocial = !loading && hasToken;
+  const effectivePartyId = resolvePartyId(authPartyId, settingsPartyId);
 
   const partiesQuery = useQuery({
     queryKey: ['parties'],
     queryFn: () => Parties.list(),
-    enabled: Boolean(token)
+    enabled: canUseSocial
   });
 
   const followersQuery = useQuery({
     queryKey: ['social-followers'],
     queryFn: Social.listFollowers,
-    enabled: Boolean(token)
+    enabled: canUseSocial
   });
   const followingQuery = useQuery({
     queryKey: ['social-following'],
     queryFn: Social.listFollowing,
-    enabled: Boolean(token)
+    enabled: canUseSocial
   });
   const friendsQuery = useQuery({
     queryKey: ['social-friends'],
     queryFn: Social.listFriends,
-    enabled: Boolean(token)
+    enabled: canUseSocial
   });
   const suggestionsQuery = useQuery({
     queryKey: ['social-suggestions'],
     queryFn: Social.listSuggestions,
-    enabled: Boolean(token)
+    enabled: canUseSocial
   });
 
   const invalidateAll = () => {
@@ -62,6 +66,7 @@ export default function SocialScreen() {
 
   const addMutation = useMutation<void, Error, number | undefined>({
     mutationFn: async (targetId) => {
+      if (!canUseSocial) throw new Error('Conecta tu token para actualizar tu red.');
       const numeric = parsePositivePartyId(targetId) ?? parsePositivePartyId(addId);
       if (numeric === null) throw new Error('Ingresa un ID válido.');
       await Social.addFriend(numeric);
@@ -78,13 +83,19 @@ export default function SocialScreen() {
   });
 
   const removeMutation = useMutation({
-    mutationFn: (targetId: number) => Social.removeFriend(targetId),
+    mutationFn: (targetId: number) => {
+      if (!canUseSocial) {
+        throw new Error('Conecta tu token para actualizar tu red.');
+      }
+      return Social.removeFriend(targetId);
+    },
     onSuccess: () => {
       invalidateAll();
       Alert.alert('Listo', 'Actualizamos tus conexiones.');
     },
-    onError: () => {
-      Alert.alert('Error', 'No pudimos actualizar tus conexiones.');
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : 'No pudimos actualizar tus conexiones.';
+      Alert.alert('Error', msg);
     }
   });
 
@@ -116,10 +127,14 @@ export default function SocialScreen() {
           Administra seguidores, seguidos y amigos mutuos. Usa IDs para agregar contactos o intercambia vCards.
         </Text>
         <View style={styles.badges}>
-          <Text style={styles.badge}>Party ID: {partyId ?? 'No configurado'}</Text>
+          <Text style={styles.badge}>Party ID: {effectivePartyId ?? 'No configurado'}</Text>
           {!!displayName && <Text style={styles.badge}>Nombre: {displayName}</Text>}
         </View>
-        {!token && <Text style={styles.helper}>Acceso restringido. Solicita permisos para cargar tu red.</Text>}
+        {loading ? (
+          <Text style={styles.helper}>Cargando acceso…</Text>
+        ) : !hasToken ? (
+          <Text style={styles.helper}>Acceso restringido. Solicita permisos para cargar tu red.</Text>
+        ) : null}
       </View>
 
       <View style={styles.card}>
@@ -133,13 +148,19 @@ export default function SocialScreen() {
             keyboardType="number-pad"
           />
           <TouchableOpacity
-            style={[styles.primaryButton, addMutation.isPending && styles.buttonDisabled]}
+            style={[
+              styles.primaryButton,
+              (!canUseSocial || addMutation.isPending) && styles.buttonDisabled
+            ]}
             onPress={() => addMutation.mutate(undefined)}
-            disabled={addMutation.isPending}
+            disabled={!canUseSocial || addMutation.isPending}
           >
             <Text style={styles.primaryButtonText}>{addMutation.isPending ? 'Agregando…' : 'Agregar'}</Text>
           </TouchableOpacity>
         </View>
+        {!canUseSocial && !loading && (
+          <Text style={styles.helper}>Conecta tu token para agregar o editar conexiones.</Text>
+        )}
         {addMutation.error && (
           <Text style={styles.errorText}>{addMutation.error.message}</Text>
         )}
@@ -149,15 +170,22 @@ export default function SocialScreen() {
         <View style={styles.rowBetween}>
           <Text style={styles.sectionTitle}>Sugerencias de amigos</Text>
           <TouchableOpacity
-            style={[styles.secondaryButton, suggestionsQuery.isFetching && styles.buttonDisabled]}
+            style={[
+              styles.secondaryButton,
+              (!canUseSocial || suggestionsQuery.isFetching) && styles.buttonDisabled
+            ]}
             onPress={() => suggestionsQuery.refetch()}
-            disabled={suggestionsQuery.isFetching}
+            disabled={!canUseSocial || suggestionsQuery.isFetching}
           >
             <Text style={styles.secondaryButtonText}>{suggestionsQuery.isFetching ? 'Actualizando…' : 'Actualizar'}</Text>
           </TouchableOpacity>
         </View>
-        {!token ? (
+        {!canUseSocial ? (
+          loading ? (
+            <Text style={styles.helper}>Cargando acceso…</Text>
+          ) : (
           <Text style={styles.helper}>Acceso restringido para ver sugerencias.</Text>
+          )
         ) : suggestionsQuery.isError ? (
           <Text style={styles.errorText}>No pudimos cargar sugerencias.</Text>
         ) : suggestionsQuery.isLoading ? (
@@ -176,9 +204,13 @@ export default function SocialScreen() {
                     <Text style={styles.tag}>{`${suggestion.sfMutualCount} conexión${suggestion.sfMutualCount === 1 ? '' : 'es'} en común`}</Text>
                   </View>
                   <TouchableOpacity
-                    style={[styles.primaryButton, { paddingHorizontal: 12, paddingVertical: 10 }, addMutation.isPending && styles.buttonDisabled]}
+                    style={[
+                      styles.primaryButton,
+                      { paddingHorizontal: 12, paddingVertical: 10 },
+                      (!canUseSocial || addMutation.isPending) && styles.buttonDisabled
+                    ]}
                     onPress={() => addMutation.mutate(suggestion.sfPartyId)}
-                    disabled={addMutation.isPending}
+                    disabled={!canUseSocial || addMutation.isPending}
                   >
                     <Text style={styles.primaryButtonText}>Conectar</Text>
                   </TouchableOpacity>
@@ -217,8 +249,10 @@ export default function SocialScreen() {
           </TouchableOpacity>
         </View>
 
-        {!token ? (
-          <Text style={styles.helper}>Acceso restringido para ver tus conexiones.</Text>
+        {!canUseSocial ? (
+          <Text style={styles.helper}>
+            {loading ? 'Cargando acceso…' : 'Acceso restringido para ver tus conexiones.'}
+          </Text>
         ) : (followersQuery.isLoading || followingQuery.isLoading || friendsQuery.isLoading || partiesQuery.isLoading) ? (
           <Text style={styles.helper}>Cargando red social…</Text>
         ) : activeData.length === 0 ? (
@@ -244,18 +278,25 @@ export default function SocialScreen() {
                       </View>
                     ) : (
                       <TouchableOpacity
-                        style={[styles.primaryButton, { paddingHorizontal: 12, paddingVertical: 10 }, addMutation.isPending && styles.buttonDisabled]}
+                        style={[
+                          styles.primaryButton,
+                          { paddingHorizontal: 12, paddingVertical: 10 },
+                          (!canUseSocial || addMutation.isPending) && styles.buttonDisabled
+                        ]}
                         onPress={() => addMutation.mutate(targetId)}
-                        disabled={addMutation.isPending}
+                        disabled={!canUseSocial || addMutation.isPending}
                       >
                         <Text style={styles.primaryButtonText}>Seguir</Text>
                       </TouchableOpacity>
                     )
                   ) : (
                     <TouchableOpacity
-                      style={[styles.secondaryButton, removeMutation.isPending && styles.buttonDisabled]}
+                      style={[
+                        styles.secondaryButton,
+                        (!canUseSocial || removeMutation.isPending) && styles.buttonDisabled
+                      ]}
                       onPress={() => removeMutation.mutate(targetId)}
-                      disabled={removeMutation.isPending}
+                      disabled={!canUseSocial || removeMutation.isPending}
                     >
                       <Text style={styles.secondaryButtonText}>{isFriend ? 'Eliminar amigo' : 'Dejar de seguir'}</Text>
                     </TouchableOpacity>

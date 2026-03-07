@@ -112,9 +112,10 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
 
   const setIdentity = useCallback((partyId: string | null, displayName?: string | null) => {
     const normalizedId = partyId?.trim() || null;
-    const normalizedName = displayName?.trim() || null;
+    const normalizedName =
+      displayName === undefined ? settings.displayName : displayName?.trim() || null;
     void persist({ partyId: normalizedId, displayName: normalizedName });
-  }, [persist]);
+  }, [persist, settings.displayName]);
 
   const clearIdentity = useCallback(() => {
     void persist({ partyId: null, displayName: null });

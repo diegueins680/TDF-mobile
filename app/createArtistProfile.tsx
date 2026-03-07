@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { Artists } from '../src/api/artists';
+import { resolvePartyId } from '../src/lib/identity';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
@@ -27,7 +28,7 @@ export default function CreateArtistProfileScreen() {
   const [instagramHandle, setInstagramHandle] = useState('');
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const effectivePartyId = settingsPartyId?.trim() || authPartyId?.trim() || null;
+  const effectivePartyId = resolvePartyId(authPartyId, settingsPartyId);
 
   const createMutation = useMutation({
     mutationFn: (body: Parameters<typeof Artists.create>[0]) => Artists.create(body),

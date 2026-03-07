@@ -39,7 +39,7 @@ function toStringId(value: Asset['assetId']): string {
 
 export default function InventoryScreen() {
   const qc = useQueryClient();
-  const { token } = useAuth();
+  const { token, loading } = useAuth();
   const [localImage, setLocalImage] = useState<{ uri: string; mime?: string; name?: string } | null>(
     null
   );
@@ -86,12 +86,13 @@ export default function InventoryScreen() {
     ciConditionIn: '',
     ciNotes: ''
   });
-  const hasToken = Boolean(token);
+  const hasToken = Boolean(token?.trim());
+  const canUseInventory = !loading && hasToken;
 
   const assetsQuery = useQuery({
     queryKey: ['inventory'],
     queryFn: () => Inventory.list().then(normalizeAssets),
-    enabled: hasToken
+    enabled: canUseInventory
   });
 
   const createMutation = useMutation({
@@ -162,12 +163,17 @@ export default function InventoryScreen() {
   }, [assets, search]);
 
   const canCreate =
+    canUseInventory &&
     createForm.name.trim().length > 1 &&
     createForm.category.trim().length > 1 &&
     !createMutation.isPending &&
     !uploading;
 
   const openCheckout = useCallback((asset: Asset) => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para administrar el inventario.');
+      return;
+    }
     setCheckoutAsset(asset);
     setCheckoutForm({
       coTargetKind: 'party',
@@ -178,14 +184,22 @@ export default function InventoryScreen() {
       coConditionOut: '',
       coNotes: ''
     });
-  }, []);
+  }, [canUseInventory]);
 
   const openCheckin = useCallback((asset: Asset) => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para administrar el inventario.');
+      return;
+    }
     setCheckinAsset(asset);
     setCheckinForm({ ciConditionIn: '', ciNotes: '' });
-  }, []);
+  }, [canUseInventory]);
 
   const openEdit = useCallback((asset: Asset) => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para administrar el inventario.');
+      return;
+    }
     setEditAsset(asset);
     setEditLocalImage(null);
     setEditForm({
@@ -195,7 +209,7 @@ export default function InventoryScreen() {
       location: asset.location ?? '',
       photoUrl: asset.photoUrl ?? ''
     });
-  }, []);
+  }, [canUseInventory]);
 
   const closeCheckout = useCallback(() => setCheckoutAsset(null), []);
   const closeCheckin = useCallback(() => setCheckinAsset(null), []);
@@ -206,6 +220,10 @@ export default function InventoryScreen() {
   }, []);
 
   const submitCheckout = useCallback(() => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para registrar check-outs.');
+      return;
+    }
     if (!checkoutAsset) return;
     const targetKind = checkoutForm.coTargetKind ?? 'party';
     if (targetKind === 'room' && !checkoutForm.coTargetRoom?.trim()) {
@@ -235,18 +253,26 @@ export default function InventoryScreen() {
       coNotes: checkoutForm.coNotes?.trim() || undefined
     };
     checkoutMutation.mutate({ assetId: toStringId(checkoutAsset.assetId), payload });
-  }, [checkoutAsset, checkoutForm, checkoutMutation]);
+  }, [canUseInventory, checkoutAsset, checkoutForm, checkoutMutation]);
 
   const submitCheckin = useCallback(() => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para registrar check-ins.');
+      return;
+    }
     if (!checkinAsset) return;
     const payload: AssetCheckinRequest = {
       ciConditionIn: checkinForm.ciConditionIn?.trim() || undefined,
       ciNotes: checkinForm.ciNotes?.trim() || undefined
     };
     checkinMutation.mutate({ assetId: toStringId(checkinAsset.assetId), payload });
-  }, [checkinAsset, checkinForm, checkinMutation]);
+  }, [canUseInventory, checkinAsset, checkinForm, checkinMutation]);
 
   const submitEdit = useCallback(async () => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para actualizar el inventario.');
+      return;
+    }
     if (!editAsset || updateMutation.isPending || editUploading) return;
     let photoUrl: string | undefined = editForm.photoUrl.trim() || undefined;
 
@@ -291,7 +317,7 @@ export default function InventoryScreen() {
       return;
     }
     updateMutation.mutate({ assetId: toStringId(editAsset.assetId), payload });
-  }, [editAsset, editForm, editLocalImage, editUploading, updateMutation]);
+  }, [canUseInventory, editAsset, editForm, editLocalImage, editUploading, updateMutation]);
 
   const renderItem = useCallback(
     ({ item }: { item: Asset }) => {
@@ -321,13 +347,18 @@ export default function InventoryScreen() {
 
           <View style={styles.actionsRow}>
             {!isBooked ? (
-              <TouchableOpacity style={styles.primaryBtn} onPress={() => openCheckout(item)}>
+              <TouchableOpacity
+                style={[styles.primaryBtn, !canUseInventory && styles.primaryBtnDisabled]}
+                onPress={() => openCheckout(item)}
+                disabled={!canUseInventory}
+              >
                 <Text style={styles.primaryBtnText}>Check-out</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                style={[styles.primaryBtn, styles.dangerBtn]}
+                style={[styles.primaryBtn, styles.dangerBtn, !canUseInventory && styles.primaryBtnDisabled]}
                 onPress={() => openCheckin(item)}
+                disabled={!canUseInventory}
               >
                 <Text style={styles.primaryBtnText}>Registrar retorno</Text>
               </TouchableOpacity>
@@ -340,7 +371,7 @@ export default function InventoryScreen() {
             >
               <Text style={styles.ghostBtnText}>Filtrar similares</Text>
             </TouchableOpacity>
-            {hasToken ? (
+            {canUseInventory ? (
               <TouchableOpacity
                 style={[styles.ghostBtn, styles.secondaryActionBtn]}
                 onPress={() => openEdit(item)}
@@ -352,7 +383,7 @@ export default function InventoryScreen() {
         </View>
       );
     },
-    [openCheckout, openCheckin, openEdit, setSearch, hasToken]
+    [canUseInventory, openCheckout, openCheckin, openEdit, setSearch]
   );
 
   const selectImage = useCallback(async (mode: 'camera' | 'library') => {
@@ -397,6 +428,10 @@ export default function InventoryScreen() {
   );
 
   const submitCreate = useCallback(async () => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para agregar equipo.');
+      return;
+    }
     let photoUrl: string | undefined = createForm.photoUrl.trim() || undefined;
     if (localImage) {
       try {
@@ -422,7 +457,7 @@ export default function InventoryScreen() {
       cPhotoUrl: photoUrl
     };
     createMutation.mutate(payload);
-  }, [createForm, createMutation, localImage]);
+  }, [canUseInventory, createForm, createMutation, localImage]);
 
   return (
     <View style={styles.page}>
@@ -431,19 +466,27 @@ export default function InventoryScreen() {
         keyExtractor={(item) => toStringId(item.assetId)}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
-        refreshing={assetsQuery.isFetching}
-        onRefresh={() => assetsQuery.refetch()}
+        refreshing={canUseInventory && assetsQuery.isFetching}
+        onRefresh={() => {
+          if (canUseInventory) {
+            void assetsQuery.refetch();
+          }
+        }}
         ListHeaderComponent={
           <View style={{ gap: 12 }}>
             <Text style={styles.header}>Inventario</Text>
             <Text style={styles.subheader}>
               Mantén el inventario al día, asigna equipo con check-out y agrega fotos para identificarlo rápido.
             </Text>
-            {!token && (
+            {loading ? (
+              <View style={styles.authHint}>
+                <Text style={styles.authHintText}>Cargando acceso…</Text>
+              </View>
+            ) : !hasToken ? (
               <View style={styles.authHint}>
                 <Text style={styles.authHintText}>Acceso restringido para cargar inventario.</Text>
               </View>
-            )}
+            ) : null}
 
             {feedback ? (
               <View style={styles.feedback}>
@@ -453,13 +496,16 @@ export default function InventoryScreen() {
             {assetsQuery.isError ? (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>
-                  {hasToken ? 'No pudimos cargar el inventario.' : 'Acceso restringido para cargar inventario.'}
+                  {canUseInventory ? 'No pudimos cargar el inventario.' : 'Acceso restringido para cargar inventario.'}
                 </Text>
               </View>
             ) : null}
 
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Agregar equipo</Text>
+              {!canUseInventory && !loading ? (
+                <Text style={styles.helperText}>Conecta tu token antes de crear o editar equipos.</Text>
+              ) : null}
               <TextInput
                 placeholder="Nombre del equipo"
                 value={createForm.name}
@@ -473,13 +519,13 @@ export default function InventoryScreen() {
                 onChangeText={(text) => setCreateForm((prev) => ({ ...prev, category: text }))}
                 style={styles.input}
               />
-            <TextInput
-              placeholder="URL de foto (opcional)"
-              value={createForm.photoUrl}
-              onChangeText={(text) => setCreateForm((prev) => ({ ...prev, photoUrl: text }))}
-              style={styles.input}
-              autoCapitalize="none"
-            />
+              <TextInput
+                placeholder="URL de foto (opcional)"
+                value={createForm.photoUrl}
+                onChangeText={(text) => setCreateForm((prev) => ({ ...prev, photoUrl: text }))}
+                style={styles.input}
+                autoCapitalize="none"
+              />
               {createForm.photoUrl.trim() || localImage ? (
                 <View style={styles.previewBox}>
                   <Image
@@ -503,10 +549,18 @@ export default function InventoryScreen() {
                 </View>
               ) : null}
               <View style={styles.metaRow}>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => pickCreateImage('camera')}>
+                <TouchableOpacity
+                  style={[styles.ghostBtn, !canUseInventory && styles.primaryBtnDisabled]}
+                  onPress={() => pickCreateImage('camera')}
+                  disabled={!canUseInventory}
+                >
                   <Text style={styles.ghostBtnText}>Tomar foto</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => pickCreateImage('library')}>
+                <TouchableOpacity
+                  style={[styles.ghostBtn, !canUseInventory && styles.primaryBtnDisabled]}
+                  onPress={() => pickCreateImage('library')}
+                  disabled={!canUseInventory}
+                >
                   <Text style={styles.ghostBtnText}>Desde galería</Text>
                 </TouchableOpacity>
               </View>
@@ -536,7 +590,14 @@ export default function InventoryScreen() {
               />
               <View style={styles.metaRow}>
                 <Text style={styles.muted}>{filtered.length} resultados</Text>
-                <TouchableOpacity onPress={() => assetsQuery.refetch()}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (canUseInventory) {
+                      void assetsQuery.refetch();
+                    }
+                  }}
+                  disabled={!canUseInventory}
+                >
                   <Text style={[styles.muted, { fontWeight: '700' }]}>Actualizar</Text>
                 </TouchableOpacity>
               </View>
@@ -544,10 +605,19 @@ export default function InventoryScreen() {
           </View>
         }
         ListEmptyComponent={
-          assetsQuery.isLoading ? (
+          loading ? (
+            <View style={styles.empty}>
+              <ActivityIndicator />
+              <Text style={styles.muted}>Cargando acceso…</Text>
+            </View>
+          ) : assetsQuery.isLoading ? (
             <View style={styles.empty}>
               <ActivityIndicator />
               <Text style={styles.muted}>Cargando inventario…</Text>
+            </View>
+          ) : !canUseInventory ? (
+            <View style={styles.empty}>
+              <Text style={styles.muted}>Conecta tu token para consultar y administrar inventario.</Text>
             </View>
           ) : (
             <View style={styles.empty}>

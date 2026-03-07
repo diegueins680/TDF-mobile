@@ -128,4 +128,33 @@ describe('UserSettingsProvider', () => {
     expect(latest?.displayName).toBeNull();
     expect(removeItemMock).not.toHaveBeenCalled();
   });
+
+  it('preserves the current display name when only the party id is updated', async () => {
+    getItemMock.mockResolvedValueOnce(JSON.stringify({
+      partyId: '123',
+      displayName: 'Existing Name',
+    }));
+
+    render(
+      <UserSettingsProvider>
+        <ContextProbe onChange={onProbeChange} />
+      </UserSettingsProvider>,
+    );
+
+    await waitFor(() => expect(latest?.loading).toBe(false));
+
+    act(() => {
+      latest?.setIdentity('456');
+    });
+
+    await waitFor(() =>
+      expect(setItemMock).toHaveBeenLastCalledWith(
+        'tdf-user-settings',
+        JSON.stringify({ partyId: '456', displayName: 'Existing Name' }),
+      )
+    );
+
+    expect(latest?.partyId).toBe('456');
+    expect(latest?.displayName).toBe('Existing Name');
+  });
 });

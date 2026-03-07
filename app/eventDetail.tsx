@@ -8,8 +8,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
 import type { ID, RSVPStatus, EventInvitationStatus } from '../src/types';
+import { resolvePartyId } from '../src/lib/identity';
 import { normalizeRouteParam } from '../src/lib/routeParams';
 import { countGoingRsvps } from '../src/lib/rsvp';
+import { useAuth } from '../src/providers/AuthProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 
@@ -18,8 +20,9 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const eventId = normalizeRouteParam(rawEventId);
-  const { partyId, displayName } = useUserSettings();
-  const normalizedPartyId = partyId?.trim() || null;
+  const { partyId: authPartyId } = useAuth();
+  const { partyId: settingsPartyId, displayName } = useUserSettings();
+  const normalizedPartyId = resolvePartyId(authPartyId, settingsPartyId);
 
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('NONE');
   const [showInviteModal, setShowInviteModal] = useState(false);

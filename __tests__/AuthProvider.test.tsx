@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { act, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider, useAuth } from '../src/providers/AuthProvider';
 import { get, getAuthToken, setAuthToken } from '../src/api/client';
@@ -54,6 +55,27 @@ function ContextProbe({ onChange }: { onChange: (value: AuthSnapshot) => void })
   return null;
 }
 
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
+function renderAuthProvider(onChange: (value: AuthSnapshot) => void, queryClient = createTestQueryClient()) {
+  return {
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <ContextProbe onChange={onChange} />
+        </AuthProvider>
+      </QueryClientProvider>,
+    ),
+  };
+}
+
 describe('AuthProvider', () => {
   const getItemMock = jest.mocked(AsyncStorage.getItem);
   const setItemMock = jest.mocked(AsyncStorage.setItem);
@@ -81,11 +103,7 @@ describe('AuthProvider', () => {
   });
 
   it('normalizes blank tokens to null and clears persisted storage', async () => {
-    render(
-      <AuthProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </AuthProvider>,
-    );
+    renderAuthProvider(onProbeChange);
 
     await waitFor(() => expect(latest?.loading).toBe(false));
 
@@ -102,11 +120,7 @@ describe('AuthProvider', () => {
   });
 
   it('normalizes raw tokens into bearer format before persisting them', async () => {
-    render(
-      <AuthProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </AuthProvider>,
-    );
+    renderAuthProvider(onProbeChange);
 
     await waitFor(() => expect(latest?.loading).toBe(false));
 
@@ -124,11 +138,7 @@ describe('AuthProvider', () => {
     const pendingStoredToken = createDeferred<string | null>();
     getItemMock.mockReturnValueOnce(pendingStoredToken.promise);
 
-    render(
-      <AuthProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </AuthProvider>,
-    );
+    renderAuthProvider(onProbeChange);
 
     await waitFor(() => expect(latest?.setToken).toBeDefined());
 
@@ -152,11 +162,7 @@ describe('AuthProvider', () => {
   });
 
   it('ignores stale party profile lookups after token is cleared', async () => {
-    render(
-      <AuthProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </AuthProvider>,
-    );
+    renderAuthProvider(onProbeChange);
 
     await waitFor(() => expect(latest?.loading).toBe(false));
 
@@ -188,11 +194,7 @@ describe('AuthProvider', () => {
     getItemMock.mockResolvedValueOnce('   Bearer saved-token   ');
     getMock.mockResolvedValueOnce({ id: 42 } as never);
 
-    render(
-      <AuthProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </AuthProvider>,
-    );
+    renderAuthProvider(onProbeChange);
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer saved-token'));
     await waitFor(() => expect(latest?.loading).toBe(false));
@@ -206,11 +208,7 @@ describe('AuthProvider', () => {
     getAuthTokenMock.mockReturnValue('Bearer in-memory-token');
     getMock.mockResolvedValueOnce({ id: 55 } as never);
 
-    render(
-      <AuthProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </AuthProvider>,
-    );
+    renderAuthProvider(onProbeChange);
 
     await waitFor(() => expect(latest?.loading).toBe(false));
 
@@ -223,11 +221,7 @@ describe('AuthProvider', () => {
   it('recovers when token storage bootstrap fails', async () => {
     getItemMock.mockRejectedValueOnce(new Error('storage unavailable'));
 
-    render(
-      <AuthProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </AuthProvider>,
-    );
+    renderAuthProvider(onProbeChange);
 
     await waitFor(() => expect(latest?.loading).toBe(false));
 
@@ -241,11 +235,7 @@ describe('AuthProvider', () => {
     getItemMock.mockRejectedValueOnce(new Error('storage unavailable'));
     getMock.mockResolvedValueOnce({ id: 99 } as never);
 
-    render(
-      <AuthProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </AuthProvider>,
-    );
+    renderAuthProvider(onProbeChange);
 
     await waitFor(() => expect(latest?.loading).toBe(false));
 
@@ -258,11 +248,7 @@ describe('AuthProvider', () => {
     setItemMock.mockRejectedValueOnce(new Error('disk full'));
     removeItemMock.mockRejectedValueOnce(new Error('disk full'));
 
-    render(
-      <AuthProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </AuthProvider>,
-    );
+    renderAuthProvider(onProbeChange);
 
     await waitFor(() => expect(latest?.loading).toBe(false));
 
@@ -279,5 +265,65 @@ describe('AuthProvider', () => {
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));
     await waitFor(() => expect(latest?.token).toBeNull());
+  });
+
+  it('clears stale party id immediately when switching to a different token', async () => {
+    renderAuthProvider(onProbeChange);
+
+    await waitFor(() => expect(latest?.loading).toBe(false));
+
+    getMock.mockResolvedValueOnce({ id: 11 } as never);
+
+    act(() => {
+      latest?.setToken('Bearer first-token');
+    });
+
+    await waitFor(() => expect(latest?.partyId).toBe('11'));
+
+    const pendingProfile = createDeferred<{ id: number }>();
+    getMock.mockReturnValueOnce(pendingProfile.promise as never);
+
+    act(() => {
+      latest?.setToken('Bearer second-token');
+    });
+
+    await waitFor(() => expect(latest?.partyId).toBeNull());
+
+    await act(async () => {
+      pendingProfile.resolve({ id: 22 });
+      await pendingProfile.promise;
+    });
+
+    await waitFor(() => expect(latest?.partyId).toBe('22'));
+  });
+
+  it('clears cached queries when the auth token changes', async () => {
+    const queryClient = createTestQueryClient();
+    const clearSpy = jest.spyOn(queryClient, 'clear');
+
+    renderAuthProvider(onProbeChange, queryClient);
+
+    await waitFor(() => expect(latest?.loading).toBe(false));
+
+    act(() => {
+      latest?.setToken('Bearer first-token');
+    });
+
+    await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer first-token'));
+    expect(clearSpy).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      latest?.setToken('Bearer first-token');
+    });
+
+    await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer first-token'));
+    expect(clearSpy).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      latest?.clearToken();
+    });
+
+    await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));
+    expect(clearSpy).toHaveBeenCalledTimes(2);
   });
 });

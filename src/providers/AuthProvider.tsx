@@ -1,7 +1,7 @@
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { setAuthToken, getAuthToken, get } from '../api/client';
+import { setAuthToken, getAuthToken, get, normalizeAuthToken } from '../api/client';
 import type { Party } from '../types';
 
 type AuthContextValue = {
@@ -17,8 +17,7 @@ const STORAGE_KEY = 'tdf-auth-token';
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const normalizeToken = (value: string | null | undefined): string | null => {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : null;
+  return normalizeAuthToken(value) ?? null;
 };
 
 const persistStoredToken = async (token: string | null): Promise<void> => {
@@ -39,12 +38,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
   const isMountedRef = useRef(true);
   const profileLookupIdRef = useRef(0);
+  const authVersionRef = useRef(0);
 
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
       profileLookupIdRef.current += 1;
+      authVersionRef.current += 1;
     };
+  }, []);
+
+  const syncTokenState = useCallback((next: string | null) => {
+    setTokenState(next);
+    setAuthToken(next);
   }, []);
 
   const refreshPartyId = useCallback(async (forToken: string | null) => {
@@ -70,51 +76,63 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const bootstrapVersion = authVersionRef.current;
+    const isStaleBootstrap = () =>
+      cancelled || !isMountedRef.current || bootstrapVersion !== authVersionRef.current;
+
     (async () => {
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         const normalized = normalizeToken(stored);
 
+        if (isStaleBootstrap()) return;
+
         if (!normalized) {
-          if (stored) await persistStoredToken(null);
-          if (isMountedRef.current) {
-            setTokenState(null);
-            setAuthToken(null);
+          if (stored) {
+            await persistStoredToken(null);
+            if (isStaleBootstrap()) return;
           }
+
+          syncTokenState(null);
           await refreshPartyId(null);
           return;
         }
 
-        if (stored !== normalized) await persistStoredToken(normalized);
-
-        if (isMountedRef.current) {
-          setTokenState(normalized);
-          setAuthToken(normalized);
+        if (stored !== normalized) {
+          await persistStoredToken(normalized);
+          if (isStaleBootstrap()) return;
         }
+
+        syncTokenState(normalized);
         await refreshPartyId(normalized);
       } catch {
-        if (isMountedRef.current) {
-          setTokenState(null);
-          setAuthToken(null);
-        }
+        if (isStaleBootstrap()) return;
+
+        syncTokenState(null);
         await refreshPartyId(null);
       } finally {
-        if (isMountedRef.current) {
+        if (!cancelled && isMountedRef.current) {
           setLoading(false);
         }
       }
     })();
-  }, [refreshPartyId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshPartyId, syncTokenState]);
 
   const setToken = useCallback((next: string | null) => {
+    authVersionRef.current += 1;
     const normalized = normalizeToken(next);
-    setTokenState(normalized);
-    setAuthToken(normalized);
+    setLoading(false);
+    syncTokenState(normalized);
 
     void persistStoredToken(normalized);
 
     void refreshPartyId(normalized);
-  }, [refreshPartyId]);
+  }, [refreshPartyId, syncTokenState]);
 
   const clearToken = useCallback(() => setToken(null), [setToken]);
 

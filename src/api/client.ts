@@ -3,7 +3,7 @@ import { API_BASE } from '../lib/api';
 
 const BEARER_PREFIX = /^bearer\b/i;
 
-const normalizeBearer = (token?: string | null) => {
+export const normalizeAuthToken = (token?: string | null) => {
   const trimmed = token?.trim();
   if (!trimmed) return undefined;
 
@@ -15,7 +15,7 @@ const normalizeBearer = (token?: string | null) => {
   return `Bearer ${trimmed}`;
 };
 
-let currentToken: string | undefined = normalizeBearer(process.env.EXPO_PUBLIC_API_TOKEN);
+let currentToken: string | undefined = normalizeAuthToken(process.env.EXPO_PUBLIC_API_TOKEN);
 
 export const http = axios.create({
   baseURL: API_BASE,
@@ -33,7 +33,7 @@ const applyAuthHeader = (token?: string) => {
 applyAuthHeader(currentToken);
 
 export function setAuthToken(token: string | null | undefined) {
-  currentToken = normalizeBearer(token);
+  currentToken = normalizeAuthToken(token);
   applyAuthHeader(currentToken);
 }
 

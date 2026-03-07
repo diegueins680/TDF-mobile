@@ -14,6 +14,17 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 jest.mock('../src/api/client', () => ({
   get: jest.fn(),
   getAuthToken: jest.fn(),
+  normalizeAuthToken: jest.fn((value?: string | null) => {
+    const trimmed = value?.trim();
+    if (!trimmed) return undefined;
+
+    if (/^bearer\b/i.test(trimmed)) {
+      const credentials = trimmed.replace(/^bearer\b/i, '').trim();
+      return credentials ? `Bearer ${credentials}` : undefined;
+    }
+
+    return `Bearer ${trimmed}`;
+  }),
   setAuthToken: jest.fn(),
 }));
 
@@ -88,6 +99,56 @@ describe('AuthProvider', () => {
     expect(removeItemMock).toHaveBeenCalledWith('tdf-auth-token');
     expect(latest?.token).toBeNull();
     expect(latest?.partyId).toBeNull();
+  });
+
+  it('normalizes raw tokens into bearer format before persisting them', async () => {
+    render(
+      <AuthProvider>
+        <ContextProbe onChange={onProbeChange} />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(latest?.loading).toBe(false));
+
+    act(() => {
+      latest?.setToken('  demo-token  ');
+    });
+
+    await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer demo-token'));
+
+    expect(setItemMock).toHaveBeenLastCalledWith('tdf-auth-token', 'Bearer demo-token');
+    expect(latest?.token).toBe('Bearer demo-token');
+  });
+
+  it('does not let slow storage bootstrap overwrite a newer manual token', async () => {
+    const pendingStoredToken = createDeferred<string | null>();
+    getItemMock.mockReturnValueOnce(pendingStoredToken.promise);
+
+    render(
+      <AuthProvider>
+        <ContextProbe onChange={onProbeChange} />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(latest?.setToken).toBeDefined());
+
+    act(() => {
+      latest?.setToken('fresh-token');
+    });
+
+    await waitFor(() => expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer fresh-token'));
+    await waitFor(() => expect(latest?.token).toBe('Bearer fresh-token'));
+
+    await act(async () => {
+      pendingStoredToken.resolve('Bearer stale-token');
+      await pendingStoredToken.promise;
+    });
+
+    await waitFor(() => expect(latest?.loading).toBe(false));
+
+    expect(setAuthTokenMock).not.toHaveBeenCalledWith('Bearer stale-token');
+    expect(setItemMock).toHaveBeenLastCalledWith('tdf-auth-token', 'Bearer fresh-token');
+    expect(latest?.token).toBe('Bearer fresh-token');
   });
 
   it('ignores stale party profile lookups after token is cleared', async () => {

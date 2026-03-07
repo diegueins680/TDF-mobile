@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import { ScrollView, View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { buildVCardSharePayload, exchangeVCard, parseVCardPayload, type ScannedVCard } from '../../src/api/social';
+import { resolvePartyId } from '../../src/lib/identity';
 import { useAuth } from '../../src/providers/AuthProvider';
+import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 
 type ScanEvent = { data: string };
 type ScannerModule = {
@@ -20,11 +22,17 @@ const parsePositivePartyId = (value: string): number | undefined => {
 };
 
 export default function VCardScreen() {
+  const { token, partyId: authPartyId } = useAuth();
+  const { partyId: settingsPartyId, displayName } = useUserSettings();
+  const hydratedDefaultsRef = useRef({ name: false, partyId: false });
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [partyId, setPartyId] = useState('');
-  const { token } = useAuth();
+  const effectivePartyId = useMemo(
+    () => resolvePartyId(authPartyId, settingsPartyId),
+    [authPartyId, settingsPartyId],
+  );
 
   const [isScanning, setIsScanning] = useState(false);
   const [cameraStatus, setCameraStatus] = useState<string | null>(null);
@@ -33,6 +41,28 @@ export default function VCardScreen() {
   const [scannerModule, setScannerModule] = useState<ScannerModule | null>(null);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const ScannerComponent = scannerModule?.BarCodeScanner;
+
+  useEffect(() => {
+    if (!displayName || hydratedDefaultsRef.current.name) return;
+    hydratedDefaultsRef.current.name = true;
+    setName(displayName);
+  }, [displayName]);
+
+  useEffect(() => {
+    if (!effectivePartyId || hydratedDefaultsRef.current.partyId) return;
+    hydratedDefaultsRef.current.partyId = true;
+    setPartyId(effectivePartyId);
+  }, [effectivePartyId]);
+
+  const handleNameChange = useCallback((value: string) => {
+    hydratedDefaultsRef.current.name = true;
+    setName(value);
+  }, []);
+
+  const handlePartyIdChange = useCallback((value: string) => {
+    hydratedDefaultsRef.current.partyId = true;
+    setPartyId(value);
+  }, []);
 
   const qrValue = useMemo(
     () =>
@@ -122,13 +152,13 @@ export default function VCardScreen() {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Tu tarjeta</Text>
-        <TextInput placeholder="Nombre" value={name} onChangeText={setName} style={styles.input} />
+        <TextInput placeholder="Nombre" value={name} onChangeText={handleNameChange} style={styles.input} />
         <TextInput placeholder="Correo" value={email} onChangeText={setEmail} style={styles.input} autoCapitalize="none" />
         <TextInput placeholder="Teléfono" value={phone} onChangeText={setPhone} style={styles.input} keyboardType="phone-pad" />
         <TextInput
           placeholder="Party ID (opcional)"
           value={partyId}
-          onChangeText={setPartyId}
+          onChangeText={handlePartyIdChange}
           style={styles.input}
           keyboardType="number-pad"
         />

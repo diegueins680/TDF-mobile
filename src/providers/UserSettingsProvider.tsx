@@ -6,6 +6,8 @@ type UserSettings = {
   displayName: string | null;
 };
 
+type UserSettingsUpdate = UserSettings | ((current: UserSettings) => UserSettings);
+
 type UserSettingsContextValue = {
   partyId: string | null;
   displayName: string | null;
@@ -45,6 +47,7 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
   const isMountedRef = useRef(true);
   const settingsVersionRef = useRef(0);
   const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const settingsRef = useRef<UserSettings>(EMPTY_SETTINGS);
 
   useEffect(() => {
     return () => {
@@ -72,6 +75,11 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
     return queued;
   }, []);
 
+  const applySettings = useCallback((next: UserSettings) => {
+    settingsRef.current = next;
+    setSettings(next);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const bootstrapVersion = settingsVersionRef.current;
@@ -85,7 +93,7 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
 
         const parsed = parseUserSettings(raw);
         if (parsed) {
-          setSettings(parsed);
+          applySettings(parsed);
           return;
         }
 
@@ -101,21 +109,26 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
     return () => {
       cancelled = true;
     };
-  }, [queuePersist]);
+  }, [applySettings, queuePersist]);
 
-  const persist = useCallback(async (next: UserSettings) => {
+  const persist = useCallback(async (nextUpdate: UserSettingsUpdate) => {
     settingsVersionRef.current += 1;
     setLoading(false);
-    setSettings(next);
+    const next =
+      typeof nextUpdate === 'function'
+        ? nextUpdate(settingsRef.current)
+        : nextUpdate;
+    applySettings(next);
     await queuePersist(next);
-  }, [queuePersist]);
+  }, [applySettings, queuePersist]);
 
   const setIdentity = useCallback((partyId: string | null, displayName?: string | null) => {
-    const normalizedId = partyId?.trim() || null;
-    const normalizedName =
-      displayName === undefined ? settings.displayName : displayName?.trim() || null;
-    void persist({ partyId: normalizedId, displayName: normalizedName });
-  }, [persist, settings.displayName]);
+    void persist((current) => ({
+      partyId: partyId?.trim() || null,
+      displayName:
+        displayName === undefined ? current.displayName : displayName?.trim() || null,
+    }));
+  }, [persist]);
 
   const clearIdentity = useCallback(() => {
     void persist({ partyId: null, displayName: null });

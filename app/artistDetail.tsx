@@ -1,19 +1,24 @@
 import React, { useCallback, useMemo } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../src/providers/AuthProvider';
+import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
 import { Artists, type ArtistFollower } from '../src/api/artists';
 import { Events } from '../src/api/events';
+import { resolvePartyId } from '../src/lib/identity';
 import { normalizeRouteParam } from '../src/lib/routeParams';
 
 export default function ArtistDetailScreen() {
   const { artistId: rawArtistId } = useLocalSearchParams<{ artistId?: string | string[] }>();
   const router = useRouter();
-  const { partyId } = useAuth();
+  const { partyId: authPartyId } = useAuth();
+  const { partyId: settingsPartyId } = useUserSettings();
   const qc = useQueryClient();
   const artistId = normalizeRouteParam(rawArtistId);
+  const partyId = resolvePartyId(authPartyId, settingsPartyId);
 
   const artistQuery = useQuery({
     queryKey: ['artist', artistId],

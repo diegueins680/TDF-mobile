@@ -157,4 +157,29 @@ describe('UserSettingsProvider', () => {
     expect(latest?.partyId).toBe('456');
     expect(latest?.displayName).toBe('Existing Name');
   });
+
+  it('preserves the latest display name across back-to-back identity updates', async () => {
+    render(
+      <UserSettingsProvider>
+        <ContextProbe onChange={onProbeChange} />
+      </UserSettingsProvider>,
+    );
+
+    await waitFor(() => expect(latest?.loading).toBe(false));
+
+    act(() => {
+      latest?.setIdentity('123', 'Fresh Name');
+      latest?.setIdentity('456');
+    });
+
+    await waitFor(() =>
+      expect(setItemMock).toHaveBeenLastCalledWith(
+        'tdf-user-settings',
+        JSON.stringify({ partyId: '456', displayName: 'Fresh Name' }),
+      )
+    );
+
+    expect(latest?.partyId).toBe('456');
+    expect(latest?.displayName).toBe('Fresh Name');
+  });
 });

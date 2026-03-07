@@ -1,5 +1,5 @@
 import { get, post, put } from './client';
-import type { Venue, VenueCreate, ID } from '../types';
+import type { Venue, VenueCreate, VenueUpdate, ID } from '../types';
 import { normalizeOptionalTimestamp } from '../lib/isoDate';
 
 type VenueContact = {
@@ -61,6 +61,24 @@ type BackendVenueDTO = {
   venueUpdatedAt?: string | null;
 };
 
+type VenueWrite = {
+  name?: string;
+  address?: string;
+  city?: string;
+  country?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  latitude?: number;
+  longitude?: number;
+  capacity?: number | null;
+  imageUrl?: string | null;
+  phoneNumber?: string | null;
+  website?: string | null;
+};
+
+const hasOwn = (value: object, key: PropertyKey): boolean =>
+  Object.prototype.hasOwnProperty.call(value, key);
+
 /**
  * Venues API - Wired to backend endpoints
  * Maps backend VenueDTO to frontend Venue types
@@ -120,7 +138,7 @@ export const Venues = {
     return mapBackendVenueToFrontend(venue);
   },
 
-  update: async (venueId: ID, body: Partial<VenueCreate>): Promise<Venue> => {
+  update: async (venueId: ID, body: VenueUpdate): Promise<Venue> => {
     const existing = await Venues.getById(venueId);
     const backendBody = mapFrontendVenueToBackend(mergeVenueUpdate(existing, body));
     const venue = await put<BackendVenueDTO>(`/social-events/venues/${venueId}`, backendBody);
@@ -161,7 +179,7 @@ function mapBackendVenueToFrontend(v: BackendVenueDTO): Venue {
   };
 }
 
-function mapFrontendVenueToBackend(body: Partial<VenueCreate>) {
+function mapFrontendVenueToBackend(body: VenueWrite) {
   return {
     venueName: body.name,
     venueAddress: body.address,
@@ -179,20 +197,65 @@ function mapFrontendVenueToBackend(body: Partial<VenueCreate>) {
   };
 }
 
-function mergeVenueUpdate(existing: Venue, patch: Partial<VenueCreate>): VenueCreate {
+function mergeVenueUpdate(existing: Venue, patch: VenueUpdate): VenueWrite {
+  const mergedCountry = hasOwn(patch, 'country')
+    ? patch.country === null
+      ? undefined
+      : patch.country ?? existing.country ?? undefined
+    : existing.country ?? undefined;
+
+  const mergedState = hasOwn(patch, 'state')
+    ? patch.state === null
+      ? undefined
+      : patch.state ?? existing.state ?? undefined
+    : existing.state ?? undefined;
+
+  const mergedZipCode = hasOwn(patch, 'zipCode')
+    ? patch.zipCode === null
+      ? undefined
+      : patch.zipCode ?? existing.zipCode ?? undefined
+    : existing.zipCode ?? undefined;
+
+  const mergedCapacity = (() => {
+    if (!hasOwn(patch, 'capacity')) return existing.capacity ?? undefined;
+    if (patch.capacity === null) return undefined;
+    if (typeof patch.capacity === 'number' && Number.isFinite(patch.capacity) && patch.capacity >= 0) {
+      return patch.capacity;
+    }
+    return existing.capacity ?? undefined;
+  })();
+
+  const mergedImageUrl = hasOwn(patch, 'imageUrl')
+    ? patch.imageUrl === null
+      ? undefined
+      : patch.imageUrl ?? existing.imageUrl ?? undefined
+    : existing.imageUrl ?? undefined;
+
+  const mergedPhoneNumber = hasOwn(patch, 'phoneNumber')
+    ? patch.phoneNumber === null
+      ? undefined
+      : patch.phoneNumber ?? existing.phoneNumber ?? undefined
+    : existing.phoneNumber ?? undefined;
+
+  const mergedWebsite = hasOwn(patch, 'website')
+    ? patch.website === null
+      ? undefined
+      : patch.website ?? existing.website ?? undefined
+    : existing.website ?? undefined;
+
   return {
     name: patch.name ?? existing.name,
     address: patch.address ?? existing.address,
     city: patch.city ?? existing.city,
-    country: patch.country ?? existing.country ?? undefined,
-    state: patch.state ?? existing.state ?? undefined,
-    zipCode: patch.zipCode ?? existing.zipCode ?? undefined,
+    country: mergedCountry,
+    state: mergedState,
+    zipCode: mergedZipCode,
     latitude: patch.latitude ?? existing.latitude,
     longitude: patch.longitude ?? existing.longitude,
-    capacity: patch.capacity ?? existing.capacity ?? undefined,
-    imageUrl: patch.imageUrl ?? existing.imageUrl ?? undefined,
-    phoneNumber: patch.phoneNumber ?? existing.phoneNumber ?? undefined,
-    website: patch.website ?? existing.website ?? undefined,
+    capacity: mergedCapacity,
+    imageUrl: mergedImageUrl,
+    phoneNumber: mergedPhoneNumber,
+    website: mergedWebsite,
   };
 }
 

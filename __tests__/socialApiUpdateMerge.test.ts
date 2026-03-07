@@ -120,6 +120,51 @@ describe('Social API update merge behavior', () => {
     );
   });
 
+  it('Events.update clears nullable fields when patch uses null', async () => {
+    get.mockResolvedValueOnce({
+      eventId: 9,
+      eventTitle: 'Original title',
+      eventDescription: 'Original desc',
+      eventStart: '2026-04-01T10:00:00.000Z',
+      eventEnd: '2026-04-01T12:00:00.000Z',
+      eventVenueId: '12',
+      eventPriceCents: 3500,
+      eventTicketUrl: 'https://tickets.example.com/original',
+      eventImageUrl: 'https://images.example.com/original.jpg',
+      eventIsPublic: true,
+      eventArtists: [],
+    });
+
+    put.mockResolvedValueOnce({
+      eventId: 9,
+      eventTitle: 'Original title',
+      eventDescription: null,
+      eventStart: '2026-04-01T10:00:00.000Z',
+      eventEnd: '2026-04-01T12:00:00.000Z',
+      eventVenueId: null,
+      eventPriceCents: null,
+      eventTicketUrl: null,
+      eventImageUrl: null,
+      eventIsPublic: true,
+      eventArtists: [],
+    });
+
+    await Events.update(9, {
+      description: null,
+      venueId: null,
+      ticketPrice: null,
+      ticketUrl: null,
+      imageUrl: null,
+    });
+
+    const payload = put.mock.calls[0]?.[1];
+    expect(payload.eventDescription).toBeUndefined();
+    expect(payload.eventVenueId).toBeNull();
+    expect(payload.eventPriceCents).toBeNull();
+    expect(payload.eventTicketUrl).toBeNull();
+    expect(payload.eventImageUrl).toBeNull();
+  });
+
   it('Events.create serializes missing venue sentinels as null', async () => {
     post.mockResolvedValueOnce({
       eventId: 21,
@@ -453,6 +498,48 @@ describe('Social API update merge behavior', () => {
     }));
   });
 
+  it('Artists.update clears nullable profile fields without dropping untouched links', async () => {
+    get.mockResolvedValueOnce({
+      artistId: 2,
+      artistPartyId: 5,
+      artistName: 'Artist Uno',
+      artistGenres: ['Rock'],
+      artistBio: 'Old bio',
+      artistAvatarUrl: 'https://images.example.com/artist.jpg',
+      artistSocialLinks: {
+        instagram: '@artistuno',
+        spotify: 'https://open.spotify.com/artist/uno',
+        twitter: 'https://x.com/artistuno',
+      },
+    });
+
+    put.mockResolvedValueOnce({
+      artistId: 2,
+      artistPartyId: 5,
+      artistName: 'Artist Uno',
+      artistGenres: ['Rock'],
+      artistBio: null,
+      artistAvatarUrl: null,
+      artistSocialLinks: {
+        spotify: 'https://open.spotify.com/artist/uno',
+      },
+    });
+
+    await Artists.update(2, {
+      bio: null,
+      imageUrl: null,
+      instagramHandle: null,
+      socialLinks: { twitter: null },
+    });
+
+    const payload = put.mock.calls[0]?.[1];
+    expect(payload.artistBio).toBeUndefined();
+    expect(payload.artistAvatarUrl).toBeUndefined();
+    expect(payload.artistSocialLinks).toEqual({
+      spotify: 'https://open.spotify.com/artist/uno',
+    });
+  });
+
   it('Venues.update preserves existing country instead of forcing US', async () => {
     get.mockResolvedValueOnce({
       venueId: 3,
@@ -482,6 +569,59 @@ describe('Social API update merge behavior', () => {
       venueName: 'Sala Uno Renovada',
       venueCountry: 'EC',
     }));
+  });
+
+  it('Venues.update clears nullable metadata fields when patch uses null', async () => {
+    get.mockResolvedValueOnce({
+      venueId: 3,
+      venueName: 'Sala Uno',
+      venueAddress: 'Calle 1',
+      venueCity: 'Guayaquil',
+      venueCountry: 'EC',
+      venueLat: -2.17,
+      venueLng: -79.92,
+      venueCapacity: 120,
+      venuePhone: '+593999999999',
+      venueWebsite: 'https://venue.example.com',
+      venueState: 'Guayas',
+      venueZipCode: '090101',
+      venueImageUrl: 'https://images.example.com/venue.jpg',
+    });
+
+    put.mockResolvedValueOnce({
+      venueId: 3,
+      venueName: 'Sala Uno',
+      venueAddress: 'Calle 1',
+      venueCity: 'Guayaquil',
+      venueCountry: null,
+      venueLat: -2.17,
+      venueLng: -79.92,
+      venueCapacity: null,
+      venuePhone: null,
+      venueWebsite: null,
+      venueState: null,
+      venueZipCode: null,
+      venueImageUrl: null,
+    });
+
+    await Venues.update(3, {
+      country: null,
+      capacity: null,
+      phoneNumber: null,
+      website: null,
+      state: null,
+      zipCode: null,
+      imageUrl: null,
+    });
+
+    const payload = put.mock.calls[0]?.[1];
+    expect(payload.venueCountry).toBeNull();
+    expect(payload.venueCapacity).toBeUndefined();
+    expect(payload.venuePhone).toBeNull();
+    expect(payload.venueWebsite).toBeNull();
+    expect(payload.venueState).toBeNull();
+    expect(payload.venueZipCode).toBeNull();
+    expect(payload.venueImageUrl).toBeNull();
   });
 
   it('Venues.create defaults country to US when not provided', async () => {

@@ -65,6 +65,17 @@ type BackendInvitationDTO = {
   invitationUpdatedAt?: string;
 };
 
+type SocialEventWrite = Omit<SocialEventCreate, 'description' | 'venueId' | 'ticketPrice' | 'ticketUrl' | 'imageUrl'> & {
+  description?: string | null;
+  venueId: ID | null;
+  ticketPrice?: number | null;
+  ticketUrl?: string | null;
+  imageUrl?: string | null;
+};
+
+const hasOwn = (value: object, key: PropertyKey): boolean =>
+  Object.prototype.hasOwnProperty.call(value, key);
+
 const parseSafeInteger = (value: string): number | null => {
   if (!/^-?\d+$/.test(value)) return null;
   const parsed = Number.parseInt(value, 10);
@@ -372,7 +383,7 @@ function toBackendTicketPriceCents(value: unknown): number | null {
   return Math.round(normalized * 100);
 }
 
-function mapFrontendEventToBackend(body: SocialEventCreate) {
+function mapFrontendEventToBackend(body: SocialEventWrite) {
   return {
     eventTitle: body.title,
     eventDescription: body.description,
@@ -388,19 +399,50 @@ function mapFrontendEventToBackend(body: SocialEventCreate) {
   };
 }
 
-function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): SocialEventCreate {
-  const patchTicketPrice = normalizeTicketPriceInput(patch.ticketPrice);
+function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): SocialEventWrite {
   const existingTicketPrice = normalizeTicketPriceInput(existing.ticketPrice);
+
+  const mergedDescription = hasOwn(patch, 'description')
+    ? patch.description === null
+      ? undefined
+      : patch.description ?? existing.description ?? undefined
+    : existing.description ?? undefined;
+
+  const mergedVenueId = hasOwn(patch, 'venueId')
+    ? patch.venueId === null
+      ? null
+      : patch.venueId ?? existing.venueId
+    : existing.venueId;
+
+  const mergedTicketPrice = (() => {
+    if (!hasOwn(patch, 'ticketPrice')) return existingTicketPrice;
+    if (patch.ticketPrice === null) return undefined;
+    const patchTicketPrice = normalizeTicketPriceInput(patch.ticketPrice);
+    return patchTicketPrice ?? existingTicketPrice;
+  })();
+
+  const mergedTicketUrl = hasOwn(patch, 'ticketUrl')
+    ? patch.ticketUrl === null
+      ? undefined
+      : patch.ticketUrl ?? existing.ticketUrl ?? undefined
+    : existing.ticketUrl ?? undefined;
+
+  const mergedImageUrl = hasOwn(patch, 'imageUrl')
+    ? patch.imageUrl === null
+      ? undefined
+      : patch.imageUrl ?? existing.imageUrl ?? undefined
+    : existing.imageUrl ?? undefined;
+
   return {
     title: patch.title ?? existing.title,
-    description: patch.description ?? existing.description ?? undefined,
+    description: mergedDescription,
     startTime: patch.startTime ?? existing.startTime,
     endTime: patch.endTime ?? existing.endTime,
-    venueId: patch.venueId ?? existing.venueId,
+    venueId: mergedVenueId,
     artistIds: patch.artistIds ?? existing.artistIds,
-    ticketPrice: patchTicketPrice ?? existingTicketPrice,
-    ticketUrl: patch.ticketUrl ?? existing.ticketUrl ?? undefined,
-    imageUrl: patch.imageUrl ?? existing.imageUrl ?? undefined,
+    ticketPrice: mergedTicketPrice,
+    ticketUrl: mergedTicketUrl,
+    imageUrl: mergedImageUrl,
     isPublic: patch.isPublic ?? existing.isPublic,
   };
 }

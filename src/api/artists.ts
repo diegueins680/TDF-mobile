@@ -1,5 +1,5 @@
 import { get, post, put, del } from './client';
-import type { ArtistProfile, ArtistProfileCreate, ArtistSocialLinks, ID } from '../types';
+import type { ArtistProfile, ArtistProfileCreate, ArtistProfileUpdate, ArtistSocialLinks, ID } from '../types';
 import { normalizeOptionalTimestamp } from '../lib/isoDate';
 
 type BackendArtistDTO = {
@@ -24,6 +24,21 @@ export type ArtistFollower = {
 
 const ARTIST_LOOKUP_PAGE_SIZE = 100;
 const ARTIST_LOOKUP_MAX_PAGES = 20;
+const SOCIAL_LINK_KEYS = ['spotify', 'instagram', 'twitter', 'youtube', 'soundcloud'] as const;
+
+type ArtistWrite = {
+  partyId?: ID;
+  name?: string;
+  bio?: string | null;
+  imageUrl?: string | null;
+  genres?: string[];
+  instagramHandle?: string | null;
+  spotifyUrl?: string | null;
+  socialLinks?: ArtistSocialLinks;
+};
+
+const hasOwn = (value: object, key: PropertyKey): boolean =>
+  Object.prototype.hasOwnProperty.call(value, key);
 
 /**
  * Artist Profiles API - Wired to backend endpoints
@@ -87,7 +102,7 @@ export const Artists = {
     return mapBackendArtistToFrontend(artist);
   },
 
-  update: async (artistId: ID, body: Partial<ArtistProfileCreate>): Promise<ArtistProfile> => {
+  update: async (artistId: ID, body: ArtistProfileUpdate): Promise<ArtistProfile> => {
     const existing = await Artists.getById(artistId);
     const backendBody = mapFrontendArtistToBackend(mergeArtistUpdate(existing, body));
     const artist = await put<BackendArtistDTO>(`/social-events/artists/${artistId}`, backendBody);
@@ -145,7 +160,7 @@ export function mapBackendArtistToFrontend(a: BackendArtistDTO): ArtistProfile {
   };
 }
 
-function mapFrontendArtistToBackend(body: Partial<ArtistProfileCreate>) {
+function mapFrontendArtistToBackend(body: ArtistWrite) {
   const socialLinks = buildSocialLinksPayload(body);
   return {
     artistPartyId: body.partyId != null ? String(body.partyId) : undefined,
@@ -206,14 +221,14 @@ function normalizeSocialLinks(raw?: ArtistSocialLinks | null): ArtistSocialLinks
   return hasAny ? clean : undefined;
 }
 
-function buildSocialLinksPayload(body: Partial<ArtistProfileCreate>): ArtistSocialLinks | undefined {
-  const candidate: ArtistSocialLinks = {
-    instagram: body.instagramHandle ?? body.socialLinks?.instagram ?? undefined,
-    spotify: body.spotifyUrl ?? body.socialLinks?.spotify ?? undefined,
-    twitter: body.socialLinks?.twitter ?? undefined,
-    youtube: body.socialLinks?.youtube ?? undefined,
-    soundcloud: body.socialLinks?.soundcloud ?? undefined
-  };
+function buildSocialLinksPayload(body: ArtistWrite): ArtistSocialLinks | undefined {
+  const candidate: ArtistSocialLinks = body.socialLinks ? { ...body.socialLinks } : {};
+  if (body.instagramHandle !== undefined) {
+    candidate.instagram = body.instagramHandle ?? null;
+  }
+  if (body.spotifyUrl !== undefined) {
+    candidate.spotify = body.spotifyUrl ?? null;
+  }
   const cleaned: ArtistSocialLinks = Object.fromEntries(
     Object.entries(candidate)
       .map(([key, value]) => [key, normalizeOptionalText(value)])
@@ -223,15 +238,54 @@ function buildSocialLinksPayload(body: Partial<ArtistProfileCreate>): ArtistSoci
   return hasAny ? cleaned : undefined;
 }
 
-function mergeArtistUpdate(existing: ArtistProfile, patch: Partial<ArtistProfileCreate>): ArtistProfileCreate {
+function mergeArtistSocialLinks(existing: ArtistSocialLinks | undefined, patch: ArtistProfileUpdate): ArtistSocialLinks | undefined {
+  let merged: ArtistSocialLinks = existing ? { ...existing } : {};
+
+  if (hasOwn(patch, 'socialLinks')) {
+    if (patch.socialLinks === null) {
+      merged = {};
+    } else if (patch.socialLinks) {
+      for (const key of SOCIAL_LINK_KEYS) {
+        if (hasOwn(patch.socialLinks, key)) {
+          const value = patch.socialLinks[key];
+          if (value !== undefined) {
+            merged[key] = value;
+          }
+        }
+      }
+    }
+  }
+
+  if (patch.instagramHandle !== undefined) {
+    merged.instagram = patch.instagramHandle ?? null;
+  }
+
+  if (patch.spotifyUrl !== undefined) {
+    merged.spotify = patch.spotifyUrl ?? null;
+  }
+
+  return normalizeSocialLinks(merged);
+}
+
+function mergeArtistUpdate(existing: ArtistProfile, patch: ArtistProfileUpdate): ArtistWrite {
+  const mergedBio = hasOwn(patch, 'bio')
+    ? patch.bio === null
+      ? undefined
+      : patch.bio ?? existing.bio ?? undefined
+    : existing.bio ?? undefined;
+
+  const mergedImageUrl = hasOwn(patch, 'imageUrl')
+    ? patch.imageUrl === null
+      ? undefined
+      : patch.imageUrl ?? existing.imageUrl ?? undefined
+    : existing.imageUrl ?? undefined;
+
   return {
     partyId: patch.partyId ?? existing.partyId,
     name: patch.name ?? existing.name,
-    bio: patch.bio ?? existing.bio ?? undefined,
-    imageUrl: patch.imageUrl ?? existing.imageUrl ?? undefined,
+    bio: mergedBio,
+    imageUrl: mergedImageUrl,
     genres: patch.genres ?? existing.genres ?? [],
-    instagramHandle: patch.instagramHandle ?? existing.instagramHandle ?? undefined,
-    spotifyUrl: patch.spotifyUrl ?? existing.spotifyUrl ?? undefined,
-    socialLinks: patch.socialLinks ?? existing.socialLinks ?? undefined,
+    socialLinks: mergeArtistSocialLinks(existing.socialLinks, patch),
   };
 }

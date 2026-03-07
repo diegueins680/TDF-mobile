@@ -112,6 +112,17 @@ export type ArtistProfileCreate = {
   socialLinks?: ArtistSocialLinks;
 };
 
+export type ArtistProfileUpdate = {
+  partyId?: ID;
+  name?: string;
+  bio?: string | null;
+  imageUrl?: string | null;
+  genres?: string[];
+  instagramHandle?: string | null;
+  spotifyUrl?: string | null;
+  socialLinks?: ArtistSocialLinks | null;
+};
+
 export type ArtistSocialLinks = {
   spotify?: string | null;
   instagram?: string | null;
@@ -153,6 +164,21 @@ export type VenueCreate = {
   website?: string;
 };
 
+export type VenueUpdate = {
+  name?: string;
+  address?: string;
+  city?: string;
+  country?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  latitude?: number;
+  longitude?: number;
+  capacity?: number | null;
+  imageUrl?: string | null;
+  phoneNumber?: string | null;
+  website?: string | null;
+};
+
 export type SocialEvent = {
   id: ID;
   title: string;
@@ -188,14 +214,14 @@ export type SocialEventCreate = {
 
 export type SocialEventUpdate = {
   title?: string;
-  description?: string;
+  description?: string | null;
   startTime?: string;
   endTime?: string;
-  venueId?: ID;
+  venueId?: ID | null;
   artistIds?: ID[];
-  ticketPrice?: number;
-  ticketUrl?: string;
-  imageUrl?: string;
+  ticketPrice?: number | null;
+  ticketUrl?: string | null;
+  imageUrl?: string | null;
   isPublic?: boolean;
 };
 

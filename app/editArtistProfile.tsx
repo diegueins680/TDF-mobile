@@ -72,11 +72,11 @@ export default function EditArtistProfileScreen() {
 
     updateMutation.mutate({
       name: name.trim(),
-      bio: bio.trim() || undefined,
-      imageUrl: imageUrl.trim() || undefined,
+      bio: bio.trim() || null,
+      imageUrl: imageUrl.trim() || null,
       genres: selectedGenres,
-      instagramHandle: instagramHandle.trim() || undefined,
-      spotifyUrl: spotifyUrl.trim() || undefined
+      instagramHandle: instagramHandle.trim() || null,
+      spotifyUrl: spotifyUrl.trim() || null
     });
   }, [name, bio, imageUrl, selectedGenres, instagramHandle, spotifyUrl, updateMutation]);
 

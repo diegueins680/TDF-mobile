@@ -20,18 +20,6 @@ const normalizeToken = (value: string | null | undefined): string | null => {
   return normalizeAuthToken(value) ?? null;
 };
 
-const persistStoredToken = async (token: string | null): Promise<void> => {
-  try {
-    if (token) {
-      await AsyncStorage.setItem(STORAGE_KEY, token);
-    } else {
-      await AsyncStorage.removeItem(STORAGE_KEY);
-    }
-  } catch {
-    // Ignore storage failures to avoid unhandled rejections in callers.
-  }
-};
-
 export function AuthProvider({ children }: PropsWithChildren) {
   const [token, setTokenState] = useState<string | null>(normalizeToken(getAuthToken()));
   const [partyId, setPartyIdState] = useState<string | null>(null);
@@ -39,6 +27,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const isMountedRef = useRef(true);
   const profileLookupIdRef = useRef(0);
   const authVersionRef = useRef(0);
+  const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     return () => {
@@ -51,6 +40,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const syncTokenState = useCallback((next: string | null) => {
     setTokenState(next);
     setAuthToken(next);
+  }, []);
+
+  const persistStoredToken = useCallback((next: string | null): Promise<void> => {
+    const queued = persistQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          if (next) {
+            await AsyncStorage.setItem(STORAGE_KEY, next);
+          } else {
+            await AsyncStorage.removeItem(STORAGE_KEY);
+          }
+        } catch {
+          // Ignore storage failures to avoid unhandled rejections in callers.
+        }
+      });
+
+    persistQueueRef.current = queued;
+    return queued;
   }, []);
 
   const refreshPartyId = useCallback(async (forToken: string | null) => {
@@ -85,10 +93,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         const normalized = normalizeToken(stored);
+        const inMemoryToken = normalizeToken(getAuthToken());
+        const bootstrapToken = normalized ?? inMemoryToken;
 
         if (isStaleBootstrap()) return;
 
-        if (!normalized) {
+        if (!bootstrapToken) {
           if (stored) {
             await persistStoredToken(null);
             if (isStaleBootstrap()) return;
@@ -99,18 +109,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
           return;
         }
 
-        if (stored !== normalized) {
-          await persistStoredToken(normalized);
+        if (stored !== bootstrapToken) {
+          await persistStoredToken(bootstrapToken);
           if (isStaleBootstrap()) return;
         }
 
-        syncTokenState(normalized);
-        await refreshPartyId(normalized);
+        syncTokenState(bootstrapToken);
+        await refreshPartyId(bootstrapToken);
       } catch {
         if (isStaleBootstrap()) return;
 
-        syncTokenState(null);
-        await refreshPartyId(null);
+        const inMemoryToken = normalizeToken(getAuthToken());
+        syncTokenState(inMemoryToken);
+        await refreshPartyId(inMemoryToken);
       } finally {
         if (!cancelled && isMountedRef.current) {
           setLoading(false);
@@ -121,7 +132,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return () => {
       cancelled = true;
     };
-  }, [refreshPartyId, syncTokenState]);
+  }, [persistStoredToken, refreshPartyId, syncTokenState]);
 
   const setToken = useCallback((next: string | null) => {
     authVersionRef.current += 1;
@@ -132,7 +143,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void persistStoredToken(normalized);
 
     void refreshPartyId(normalized);
-  }, [refreshPartyId, syncTokenState]);
+  }, [persistStoredToken, refreshPartyId, syncTokenState]);
 
   const clearToken = useCallback(() => setToken(null), [setToken]);
 

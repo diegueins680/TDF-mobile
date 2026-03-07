@@ -202,6 +202,24 @@ describe('AuthProvider', () => {
     expect(latest?.partyId).toBe('42');
   });
 
+  it('preserves an already loaded auth token when storage is empty', async () => {
+    getAuthTokenMock.mockReturnValue('Bearer in-memory-token');
+    getMock.mockResolvedValueOnce({ id: 55 } as never);
+
+    render(
+      <AuthProvider>
+        <ContextProbe onChange={onProbeChange} />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(latest?.loading).toBe(false));
+
+    expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer in-memory-token');
+    expect(setItemMock).toHaveBeenCalledWith('tdf-auth-token', 'Bearer in-memory-token');
+    expect(latest?.token).toBe('Bearer in-memory-token');
+    expect(latest?.partyId).toBe('55');
+  });
+
   it('recovers when token storage bootstrap fails', async () => {
     getItemMock.mockRejectedValueOnce(new Error('storage unavailable'));
 
@@ -216,6 +234,24 @@ describe('AuthProvider', () => {
     expect(setAuthTokenMock).toHaveBeenCalledWith(null);
     expect(latest?.token).toBeNull();
     expect(latest?.partyId).toBeNull();
+  });
+
+  it('keeps an in-memory auth token when storage bootstrap fails', async () => {
+    getAuthTokenMock.mockReturnValue('Bearer cached-token');
+    getItemMock.mockRejectedValueOnce(new Error('storage unavailable'));
+    getMock.mockResolvedValueOnce({ id: 99 } as never);
+
+    render(
+      <AuthProvider>
+        <ContextProbe onChange={onProbeChange} />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(latest?.loading).toBe(false));
+
+    expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer cached-token');
+    expect(latest?.token).toBe('Bearer cached-token');
+    expect(latest?.partyId).toBe('99');
   });
 
   it('keeps auth state updates even when persisting token fails', async () => {

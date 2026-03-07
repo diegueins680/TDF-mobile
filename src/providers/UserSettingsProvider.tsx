@@ -1,4 +1,4 @@
-import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type UserSettings = {
@@ -15,67 +15,100 @@ type UserSettingsContextValue = {
 };
 
 const STORAGE_KEY = 'tdf-user-settings';
+const EMPTY_SETTINGS: UserSettings = { partyId: null, displayName: null };
 
 const UserSettingsContext = createContext<UserSettingsContextValue | undefined>(undefined);
 
-const parseUserSettings = (raw: string): UserSettings | null => {
+const normalizeStoredString = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
+export const parseUserSettings = (raw: string): UserSettings | null => {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== 'object') return null;
     const value = parsed as Record<string, unknown>;
     return {
-      partyId: typeof value.partyId === 'string' ? value.partyId : null,
-      displayName: typeof value.displayName === 'string' ? value.displayName : null,
+      partyId: normalizeStoredString(value.partyId),
+      displayName: normalizeStoredString(value.displayName),
     };
   } catch {
     return null;
   }
 };
 
-const clearStoredSettings = async () => {
-  try {
-    await AsyncStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Ignore storage cleanup failures to avoid unhandled async rejections during bootstrap.
-  }
-};
-
 export function UserSettingsProvider({ children }: PropsWithChildren) {
-  const [settings, setSettings] = useState<UserSettings>({ partyId: null, displayName: null });
+  const [settings, setSettings] = useState<UserSettings>(EMPTY_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const isMountedRef = useRef(true);
+  const settingsVersionRef = useRef(0);
+  const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      settingsVersionRef.current += 1;
+    };
+  }, []);
+
+  const queuePersist = useCallback((next: UserSettings): Promise<void> => {
+    const queued = persistQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          if (!next.partyId && !next.displayName) {
+            await AsyncStorage.removeItem(STORAGE_KEY);
+            return;
+          }
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // Ignore storage failures to avoid unhandled rejections in event handlers.
+        }
+      });
+
+    persistQueueRef.current = queued;
+    return queued;
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const bootstrapVersion = settingsVersionRef.current;
+    const isStaleBootstrap = () =>
+      cancelled || !isMountedRef.current || bootstrapVersion !== settingsVersionRef.current;
+
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = parseUserSettings(raw);
-          if (parsed) {
-            setSettings(parsed);
-          } else {
-            await clearStoredSettings();
-          }
+        if (isStaleBootstrap() || !raw) return;
+
+        const parsed = parseUserSettings(raw);
+        if (parsed) {
+          setSettings(parsed);
+          return;
         }
+
+        await queuePersist(EMPTY_SETTINGS);
       } catch {
-        await clearStoredSettings();
+        // Keep defaults when storage can't be read instead of deleting potentially valid data.
       } finally {
-        setLoading(false);
+        if (!cancelled && isMountedRef.current) {
+          setLoading(false);
+        }
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [queuePersist]);
 
   const persist = useCallback(async (next: UserSettings) => {
+    settingsVersionRef.current += 1;
+    setLoading(false);
     setSettings(next);
-    try {
-      if (!next.partyId && !next.displayName) {
-        await AsyncStorage.removeItem(STORAGE_KEY);
-        return;
-      }
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Ignore storage failures to avoid unhandled rejections in event handlers.
-    }
-  }, []);
+    await queuePersist(next);
+  }, [queuePersist]);
 
   const setIdentity = useCallback((partyId: string | null, displayName?: string | null) => {
     const normalizedId = partyId?.trim() || null;

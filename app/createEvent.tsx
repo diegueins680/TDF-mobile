@@ -4,16 +4,22 @@ import {
   FlatList, Modal, SafeAreaView
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
 import { Venues } from '../src/api/venues';
 import { Artists } from '../src/api/artists';
 import type { ID, ArtistProfile, Venue } from '../src/types';
+import { normalizeRouteParam } from '../src/lib/routeParams';
+
+const hasSameId = (left: ID | null | undefined, right: ID | null | undefined): boolean =>
+  left != null && right != null && String(left) === String(right);
 
 export default function CreateEventScreen() {
+  const { venueId: rawVenueId } = useLocalSearchParams<{ venueId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const routeVenueId = useMemo(() => normalizeRouteParam(rawVenueId), [rawVenueId]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -31,6 +37,8 @@ export default function CreateEventScreen() {
   const [showArtistModal, setShowArtistModal] = useState(false);
   const [venueSearch, setVenueSearch] = useState('');
   const [artistSearch, setArtistSearch] = useState('');
+  const [selectedVenueSnapshot, setSelectedVenueSnapshot] = useState<Venue | null>(null);
+  const [selectedArtistsById, setSelectedArtistsById] = useState<Record<string, ArtistProfile>>({});
 
   const { data: venues, isLoading: venuesLoading } = useQuery({
     queryKey: ['venues', venueSearch],
@@ -40,6 +48,12 @@ export default function CreateEventScreen() {
   const { data: artists, isLoading: artistsLoading } = useQuery({
     queryKey: ['artists', artistSearch],
     queryFn: () => artistSearch ? Artists.searchByName(artistSearch) : Artists.list({ limit: 100 })
+  });
+
+  const routeVenueQuery = useQuery({
+    queryKey: ['venue', routeVenueId],
+    queryFn: () => (routeVenueId ? Venues.getById(routeVenueId) : null),
+    enabled: Boolean(routeVenueId)
   });
 
   const createMutation = useMutation({
@@ -54,12 +68,65 @@ export default function CreateEventScreen() {
     }
   });
 
-  const selectedVenue = useMemo(() => venues?.find(v => v.id === venueId), [venues, venueId]);
+  useEffect(() => {
+    if (routeVenueId && !venueId) {
+      setVenueId(routeVenueId);
+    }
+  }, [routeVenueId, venueId]);
+
+  useEffect(() => {
+    if (!venueId || !venues?.length) return;
+    const matchedVenue = venues.find((venue) => hasSameId(venue.id, venueId));
+    if (matchedVenue) {
+      setSelectedVenueSnapshot((current) => (
+        current && hasSameId(current.id, matchedVenue.id) && current.name === matchedVenue.name
+          ? current
+          : matchedVenue
+      ));
+    }
+  }, [venueId, venues]);
+
+  useEffect(() => {
+    if (!venueId || !routeVenueQuery.data || !hasSameId(routeVenueQuery.data.id, venueId)) return;
+    setSelectedVenueSnapshot((current) => (
+      current && hasSameId(current.id, routeVenueQuery.data.id) && current.name === routeVenueQuery.data.name
+        ? current
+        : routeVenueQuery.data
+    ));
+  }, [routeVenueQuery.data, venueId]);
+
+  useEffect(() => {
+    if (!artists?.length || artistIds.length === 0) return;
+    setSelectedArtistsById((current) => {
+      let changed = false;
+      const next = { ...current };
+      artists.forEach((artist) => {
+        const artistKey = String(artist.id);
+        if (!artistIds.some((id) => String(id) === artistKey)) return;
+        const previous = next[artistKey];
+        if (!previous || previous.name !== artist.name) {
+          next[artistKey] = artist;
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [artistIds, artists]);
+
+  const selectedVenue = useMemo(() => {
+    if (selectedVenueSnapshot && hasSameId(selectedVenueSnapshot.id, venueId)) return selectedVenueSnapshot;
+    if (routeVenueQuery.data && hasSameId(routeVenueQuery.data.id, venueId)) return routeVenueQuery.data;
+    return null;
+  }, [routeVenueQuery.data, selectedVenueSnapshot, venueId]);
+
   const artistById = useMemo(() => {
     const map = new Map<string, ArtistProfile>();
+    Object.entries(selectedArtistsById).forEach(([key, artist]) => {
+      map.set(key, artist);
+    });
     (artists ?? []).forEach((artist) => map.set(String(artist.id), artist));
     return map;
-  }, [artists]);
+  }, [artists, selectedArtistsById]);
   const selectedArtistNames = useMemo(
     () => artistIds.map((id) => artistById.get(String(id))?.name).filter((name): name is string => Boolean(name)),
     [artistById, artistIds]
@@ -83,10 +150,26 @@ export default function CreateEventScreen() {
   }, [endTime]);
 
   const toggleArtist = useCallback((artistId: ID) => {
-    setArtistIds(prev =>
-      prev.includes(artistId) ? prev.filter(id => id !== artistId) : [...prev, artistId]
-    );
-  }, []);
+    const artistKey = String(artistId);
+    const selectedArtist = (artists ?? []).find((artist) => hasSameId(artist.id, artistId));
+
+    setArtistIds((current) => (
+      current.some((id) => String(id) === artistKey)
+        ? current.filter((id) => String(id) !== artistKey)
+        : [...current, artistId]
+    ));
+    setSelectedArtistsById((current) => {
+      const next = { ...current };
+      if (next[artistKey]) {
+        delete next[artistKey];
+        return next;
+      }
+      if (selectedArtist) {
+        next[artistKey] = selectedArtist;
+      }
+      return next;
+    });
+  }, [artists]);
 
   const handleCreateVenue = useCallback(() => {
     setShowVenueModal(false);
@@ -149,6 +232,7 @@ export default function CreateEventScreen() {
       style={styles.modalItem}
       onPress={() => {
         setVenueId(item.id);
+        setSelectedVenueSnapshot(item);
         setShowVenueModal(false);
       }}
     >
@@ -159,7 +243,7 @@ export default function CreateEventScreen() {
 
   const renderArtistItem = useCallback(({ item }: { item: ArtistProfile }) => (
     <TouchableOpacity
-      style={[styles.modalItem, artistIds.includes(item.id) && styles.modalItemSelected]}
+      style={[styles.modalItem, artistIds.some((id) => hasSameId(id, item.id)) && styles.modalItemSelected]}
       onPress={() => toggleArtist(item.id)}
     >
       <Text style={styles.modalItemTitle}>{item.name}</Text>
@@ -286,7 +370,7 @@ export default function CreateEventScreen() {
           <Text style={styles.label}>Venue *</Text>
           <View style={styles.selectedBox}>
             <Text style={selectedVenue ? styles.selectedText : styles.placeholder}>
-              {selectedVenue?.name || 'Select a venue'}
+              {selectedVenue?.name || (routeVenueQuery.isLoading && venueId ? 'Loading venue...' : 'Select a venue')}
             </Text>
           </View>
         </TouchableOpacity>

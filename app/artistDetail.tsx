@@ -6,12 +6,14 @@ import { useAuth } from '../src/providers/AuthProvider';
 
 import { Artists, type ArtistFollower } from '../src/api/artists';
 import { Events } from '../src/api/events';
+import { normalizeRouteParam } from '../src/lib/routeParams';
 
 export default function ArtistDetailScreen() {
-  const { artistId } = useLocalSearchParams<{ artistId: string }>();
+  const { artistId: rawArtistId } = useLocalSearchParams<{ artistId?: string | string[] }>();
   const router = useRouter();
   const { partyId } = useAuth();
   const qc = useQueryClient();
+  const artistId = normalizeRouteParam(rawArtistId);
 
   const artistQuery = useQuery({
     queryKey: ['artist', artistId],
@@ -79,11 +81,37 @@ export default function ArtistDetailScreen() {
     router.push({ pathname: '/eventDetail', params: { eventId } });
   }, [router]);
 
-  if (artistQuery.isLoading || !artist) {
+  if (!artistId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.error}>Missing artist ID</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (artistQuery.isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (artistQuery.isError || !artist) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.error}>Failed to load artist</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -192,6 +220,9 @@ const styles = StyleSheet.create({
   eventDateTime: { fontSize: 12, color: '#999', marginBottom: 4 },
   eventVenue: { fontSize: 12, color: '#666' },
   noEventsText: { fontSize: 14, color: '#999', textAlign: 'center', marginTop: 16 },
+  error: { fontSize: 14, color: '#dc2626', marginBottom: 12 },
+  backButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2563eb' },
+  backButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   followButton: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   following: { backgroundColor: '#e6f0ff' },
   notFollowing: { backgroundColor: '#2563eb' },

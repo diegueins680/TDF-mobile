@@ -13,6 +13,7 @@ import type {
   ArtistSocialLinks
 } from '../types';
 import { normalizeOptionalTimestamp } from '../lib/isoDate';
+import { normalizeRsvpStatus } from '../lib/rsvp';
 import { mapBackendArtistToFrontend } from './artists';
 import { Venues } from './venues';
 
@@ -357,7 +358,9 @@ function mapBackendEventToFrontend(
     ticketUrl: e.eventTicketUrl ?? null,
     imageUrl: e.eventImageUrl ?? null,
     isPublic: typeof e.eventIsPublic === 'boolean' ? e.eventIsPublic : true,
-    rsvpCount: Array.isArray(e.eventRsvps) ? e.eventRsvps.length : 0,
+    rsvpCount: Array.isArray(e.eventRsvps)
+      ? e.eventRsvps.filter((rsvp) => normalizeRsvpStatus(rsvp.rsvpStatus) === 'GOING').length
+      : 0,
     createdAt,
     updatedAt
   };
@@ -457,20 +460,10 @@ function mapRsvpDto(dto: BackendRsvpDTO, fallbackEventId: ID, fallbackPartyId?: 
     id: dto.rsvpId ?? `${dto.rsvpPartyId}-${dto.rsvpEventId ?? fallbackEventId}`,
     eventId: dto.rsvpEventId ?? fallbackEventId,
     userId: dto.rsvpPartyId ?? fallbackPartyId ?? '',
-    status: mapBackendRsvpStatus(dto.rsvpStatus),
+    status: normalizeRsvpStatus(dto.rsvpStatus),
     createdAt,
     updatedAt
   };
-}
-
-function mapBackendRsvpStatus(raw: unknown): RSVPStatus {
-  const normalized = String(raw || '').trim().toLowerCase();
-  if (normalized === 'accepted' || normalized === 'going' || normalized === 'yes') return 'GOING';
-  if (normalized === 'maybe' || normalized === 'interested') return 'INTERESTED';
-  if (normalized === 'declined' || normalized === 'not_going' || normalized === 'not-going' || normalized === 'no') {
-    return 'NOT_GOING';
-  }
-  return 'NONE';
 }
 
 function mapFrontendRsvpStatus(status: RSVPStatus): string | null {

@@ -8,14 +8,16 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
 import type { ID, RSVPStatus, EventInvitationStatus } from '../src/types';
+import { normalizeRouteParam } from '../src/lib/routeParams';
+import { countGoingRsvps } from '../src/lib/rsvp';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 
 export default function EventDetailScreen() {
-  const params = useLocalSearchParams();
+  const { eventId: rawEventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
-  const eventId = params.eventId as string;
+  const eventId = normalizeRouteParam(rawEventId);
   const { partyId, displayName } = useUserSettings();
   const normalizedPartyId = partyId?.trim() || null;
 
@@ -26,7 +28,8 @@ export default function EventDetailScreen() {
 
   const { data: event, isLoading, isError } = useQuery({
     queryKey: ['event', eventId],
-    queryFn: () => Events.getById(eventId as ID)
+    queryFn: () => Events.getById(eventId as ID),
+    enabled: Boolean(eventId)
   });
 
   const rsvpQuery = useQuery({
@@ -54,8 +57,9 @@ export default function EventDetailScreen() {
 
   const rsvpMutation = useMutation({
     mutationFn: (status: RSVPStatus) => {
+      if (!eventId) throw new Error('Event not found');
       if (!normalizedPartyId) throw new Error('Party ID requerido para RSVP');
-      return Events.rsvp({ eventId: eventId as ID, userId: normalizedPartyId, status });
+      return Events.rsvp({ eventId, userId: normalizedPartyId, status });
     },
     onSuccess: (_data, status) => {
       setRsvpStatus(status);
@@ -71,10 +75,11 @@ export default function EventDetailScreen() {
 
   const invitationMutation = useMutation({
     mutationFn: async () => {
+      if (!eventId) throw new Error('Event not found');
       const target = inviteeId.trim();
       if (!target) throw new Error('Ingresa el ID de la persona a invitar');
       return Events.sendInvitation({
-        eventId: eventId as ID,
+        eventId,
         toUserId: target,
         fromUserId: normalizedPartyId ?? undefined,
         message: inviteMessage.trim() || undefined
@@ -95,7 +100,9 @@ export default function EventDetailScreen() {
 
   const respondInvitationMutation = useMutation({
     mutationFn: ({ invitationId, status }: { invitationId: ID; status: EventInvitationStatus }) =>
-      Events.respondToInvitation(eventId as ID, invitationId, status),
+      eventId
+        ? Events.respondToInvitation(eventId, invitationId, status)
+        : Promise.reject(new Error('Event not found')),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['event-invitations', eventId] });
     },
@@ -105,7 +112,10 @@ export default function EventDetailScreen() {
   });
 
   const saveEventMutation = useMutation({
-    mutationFn: () => toggleSavedEvent(eventId as ID),
+    mutationFn: () => {
+      if (!eventId) throw new Error('Event not found');
+      return toggleSavedEvent(eventId);
+    },
     onSuccess: ({ saved }) => {
       qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
       Alert.alert('Listo', saved ? 'Evento guardado en tu perfil.' : 'Evento removido de guardados.');
@@ -135,6 +145,19 @@ export default function EventDetailScreen() {
     saveEventMutation.mutate();
   }, [saveEventMutation]);
 
+  if (!eventId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}>
+          <Text style={styles.error}>Missing event ID</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (isLoading) {
     return (
       <View style={styles.center}>
@@ -156,7 +179,7 @@ export default function EventDetailScreen() {
 
   const startDate = new Date(event.startTime);
   const endDate = new Date(event.endTime);
-  const rsvpCount = rsvpQuery.data?.length ?? event.rsvpCount ?? 0;
+  const rsvpCount = rsvpQuery.data ? countGoingRsvps(rsvpQuery.data) : (event.rsvpCount ?? 0);
   const invitations = invitationsQuery.data ?? [];
   const isSaved = savedEventIdsQuery.data?.includes(String(event.id)) ?? false;
 

@@ -327,6 +327,30 @@ describe('Social API update merge behavior', () => {
     expect(events[0]?.venue?.name).toBe('Main Hall');
   });
 
+  it('Events.list counts only GOING RSVPs in attendee totals', async () => {
+    get.mockResolvedValueOnce([
+      {
+        eventId: 32,
+        eventTitle: 'Attendance Event',
+        eventStart: '2026-05-10T18:00:00.000Z',
+        eventEnd: '2026-05-10T20:00:00.000Z',
+        eventVenueId: null,
+        eventIsPublic: true,
+        eventArtists: [],
+        eventRsvps: [
+          { rsvpPartyId: '1', rsvpStatus: 'Accepted' },
+          { rsvpPartyId: '2', rsvpStatus: 'Going' },
+          { rsvpPartyId: '3', rsvpStatus: 'Maybe' },
+          { rsvpPartyId: '4', rsvpStatus: 'Declined' },
+        ],
+      },
+    ]);
+
+    const events = await Events.list();
+
+    expect(events[0]?.rsvpCount).toBe(2);
+  });
+
   it('Events.sendInvitation preserves explicit fromUserId values like 0', async () => {
     post.mockResolvedValueOnce({
       invitationId: 88,

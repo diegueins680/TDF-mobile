@@ -29,6 +29,9 @@ jest.mock('../src/api/client', () => ({
   setAuthToken: jest.fn(),
 }));
 
+// Cold React Native/Jest startup gets charged to this file's first test.
+jest.setTimeout(10_000);
+
 type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;

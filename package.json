@@ -15,6 +15,7 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "^1.23.1",
     "@tanstack/react-query": "^5.90.5",
+    "@testomatio/reporter": "0.7.6",
     "axios": "^1.12.2",
     "expo": "~54.0.25",
     "expo-barcode-scanner": "^13.0.1",
@@ -51,7 +52,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.12.0",
     "jest": "^29.7.0",
-    "jest-expo": "~54.0.2",
+    "jest-expo": "^47.0.1",
     "react-test-renderer": "^19.1.0",
     "typescript": "~5.9.2"
   },

@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { act, render, waitFor } from '@testing-library/react-native';
+import React, { PropsWithChildren } from 'react';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -48,16 +48,6 @@ const createDeferred = <T,>(): Deferred<T> => {
   return { promise, resolve, reject };
 };
 
-type AuthSnapshot = ReturnType<typeof useAuth>;
-
-function ContextProbe({ onChange }: { onChange: (value: AuthSnapshot) => void }) {
-  const value = useAuth();
-  useEffect(() => {
-    onChange(value);
-  }, [value, onChange]);
-  return null;
-}
-
 const createTestQueryClient = () =>
   new QueryClient({
     defaultOptions: {
@@ -66,16 +56,22 @@ const createTestQueryClient = () =>
     },
   });
 
-function renderAuthProvider(onChange: (value: AuthSnapshot) => void, queryClient = createTestQueryClient()) {
+function createAuthWrapper(queryClient: QueryClient) {
+  return function AuthWrapper({ children }: PropsWithChildren) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>{children}</AuthProvider>
+      </QueryClientProvider>
+    );
+  };
+}
+
+function renderAuthProvider(queryClient = createTestQueryClient()) {
   return {
     queryClient,
-    ...render(
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <ContextProbe onChange={onChange} />
-        </AuthProvider>
-      </QueryClientProvider>,
-    ),
+    ...renderHook(() => useAuth(), {
+      wrapper: createAuthWrapper(queryClient),
+    }),
   };
 }
 
@@ -88,15 +84,8 @@ describe('AuthProvider', () => {
   const getAuthTokenMock = jest.mocked(getAuthToken);
   const setAuthTokenMock = jest.mocked(setAuthToken);
 
-  let latest: AuthSnapshot | null = null;
-
-  const onProbeChange = (value: AuthSnapshot) => {
-    latest = value;
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
-    latest = null;
 
     getAuthTokenMock.mockReturnValue(undefined);
     getItemMock.mockResolvedValue(null);
@@ -106,80 +95,80 @@ describe('AuthProvider', () => {
   });
 
   it('normalizes blank tokens to null and clears persisted storage', async () => {
-    renderAuthProvider(onProbeChange);
+    const { result } = renderAuthProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => {
-      latest?.setToken('   ');
+      result.current.setToken('   ');
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));
 
     expect(setItemMock).not.toHaveBeenCalled();
     expect(removeItemMock).toHaveBeenCalledWith('tdf-auth-token');
-    expect(latest?.token).toBeNull();
-    expect(latest?.partyId).toBeNull();
+    expect(result.current.token).toBeNull();
+    expect(result.current.partyId).toBeNull();
   });
 
   it('normalizes raw tokens into bearer format before persisting them', async () => {
-    renderAuthProvider(onProbeChange);
+    const { result } = renderAuthProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => {
-      latest?.setToken('  demo-token  ');
+      result.current.setToken('  demo-token  ');
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer demo-token'));
 
     expect(setItemMock).toHaveBeenLastCalledWith('tdf-auth-token', 'Bearer demo-token');
-    expect(latest?.token).toBe('Bearer demo-token');
+    expect(result.current.token).toBe('Bearer demo-token');
   });
 
   it('does not let slow storage bootstrap overwrite a newer manual token', async () => {
     const pendingStoredToken = createDeferred<string | null>();
     getItemMock.mockReturnValueOnce(pendingStoredToken.promise);
 
-    renderAuthProvider(onProbeChange);
+    const { result } = renderAuthProvider();
 
-    await waitFor(() => expect(latest?.setToken).toBeDefined());
+    await waitFor(() => expect(result.current.setToken).toBeDefined());
 
     act(() => {
-      latest?.setToken('fresh-token');
+      result.current.setToken('fresh-token');
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer fresh-token'));
-    await waitFor(() => expect(latest?.token).toBe('Bearer fresh-token'));
+    await waitFor(() => expect(result.current.token).toBe('Bearer fresh-token'));
 
     await act(async () => {
       pendingStoredToken.resolve('Bearer stale-token');
       await pendingStoredToken.promise;
     });
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(setAuthTokenMock).not.toHaveBeenCalledWith('Bearer stale-token');
     expect(setItemMock).toHaveBeenLastCalledWith('tdf-auth-token', 'Bearer fresh-token');
-    expect(latest?.token).toBe('Bearer fresh-token');
+    expect(result.current.token).toBe('Bearer fresh-token');
   });
 
   it('ignores stale party profile lookups after token is cleared', async () => {
-    renderAuthProvider(onProbeChange);
+    const { result } = renderAuthProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     const pendingProfile = createDeferred<{ id: number }>();
     getMock.mockReturnValueOnce(pendingProfile.promise as never);
 
     act(() => {
-      latest?.setToken('Bearer abc');
+      result.current.setToken('Bearer abc');
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer abc'));
 
     act(() => {
-      latest?.clearToken();
+      result.current.clearToken();
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));
@@ -189,48 +178,48 @@ describe('AuthProvider', () => {
       await pendingProfile.promise;
     });
 
-    await waitFor(() => expect(latest?.partyId).toBeNull());
-    expect(latest?.token).toBeNull();
+    await waitFor(() => expect(result.current.partyId).toBeNull());
+    expect(result.current.token).toBeNull();
   });
 
   it('loads and trims stored token before resolving current party id', async () => {
     getItemMock.mockResolvedValueOnce('   Bearer saved-token   ');
     getMock.mockResolvedValueOnce({ id: 42 } as never);
 
-    renderAuthProvider(onProbeChange);
+    const { result } = renderAuthProvider();
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer saved-token'));
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(setItemMock).toHaveBeenCalledWith('tdf-auth-token', 'Bearer saved-token');
-    expect(latest?.token).toBe('Bearer saved-token');
-    expect(latest?.partyId).toBe('42');
+    expect(result.current.token).toBe('Bearer saved-token');
+    expect(result.current.partyId).toBe('42');
   });
 
   it('preserves an already loaded auth token when storage is empty', async () => {
     getAuthTokenMock.mockReturnValue('Bearer in-memory-token');
     getMock.mockResolvedValueOnce({ id: 55 } as never);
 
-    renderAuthProvider(onProbeChange);
+    const { result } = renderAuthProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer in-memory-token');
     expect(setItemMock).toHaveBeenCalledWith('tdf-auth-token', 'Bearer in-memory-token');
-    expect(latest?.token).toBe('Bearer in-memory-token');
-    expect(latest?.partyId).toBe('55');
+    expect(result.current.token).toBe('Bearer in-memory-token');
+    expect(result.current.partyId).toBe('55');
   });
 
   it('recovers when token storage bootstrap fails', async () => {
     getItemMock.mockRejectedValueOnce(new Error('storage unavailable'));
 
-    renderAuthProvider(onProbeChange);
+    const { result } = renderAuthProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(setAuthTokenMock).toHaveBeenCalledWith(null);
-    expect(latest?.token).toBeNull();
-    expect(latest?.partyId).toBeNull();
+    expect(result.current.token).toBeNull();
+    expect(result.current.partyId).toBeNull();
   });
 
   it('keeps an in-memory auth token when storage bootstrap fails', async () => {
@@ -238,92 +227,92 @@ describe('AuthProvider', () => {
     getItemMock.mockRejectedValueOnce(new Error('storage unavailable'));
     getMock.mockResolvedValueOnce({ id: 99 } as never);
 
-    renderAuthProvider(onProbeChange);
+    const { result } = renderAuthProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer cached-token');
-    expect(latest?.token).toBe('Bearer cached-token');
-    expect(latest?.partyId).toBe('99');
+    expect(result.current.token).toBe('Bearer cached-token');
+    expect(result.current.partyId).toBe('99');
   });
 
   it('keeps auth state updates even when persisting token fails', async () => {
     setItemMock.mockRejectedValueOnce(new Error('disk full'));
     removeItemMock.mockRejectedValueOnce(new Error('disk full'));
 
-    renderAuthProvider(onProbeChange);
+    const { result } = renderAuthProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => {
-      latest?.setToken('Bearer volatile-token');
+      result.current.setToken('Bearer volatile-token');
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer volatile-token'));
-    await waitFor(() => expect(latest?.token).toBe('Bearer volatile-token'));
+    await waitFor(() => expect(result.current.token).toBe('Bearer volatile-token'));
 
     act(() => {
-      latest?.clearToken();
+      result.current.clearToken();
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));
-    await waitFor(() => expect(latest?.token).toBeNull());
+    await waitFor(() => expect(result.current.token).toBeNull());
   });
 
   it('clears stale party id immediately when switching to a different token', async () => {
-    renderAuthProvider(onProbeChange);
+    const { result } = renderAuthProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     getMock.mockResolvedValueOnce({ id: 11 } as never);
 
     act(() => {
-      latest?.setToken('Bearer first-token');
+      result.current.setToken('Bearer first-token');
     });
 
-    await waitFor(() => expect(latest?.partyId).toBe('11'));
+    await waitFor(() => expect(result.current.partyId).toBe('11'));
 
     const pendingProfile = createDeferred<{ id: number }>();
     getMock.mockReturnValueOnce(pendingProfile.promise as never);
 
     act(() => {
-      latest?.setToken('Bearer second-token');
+      result.current.setToken('Bearer second-token');
     });
 
-    await waitFor(() => expect(latest?.partyId).toBeNull());
+    await waitFor(() => expect(result.current.partyId).toBeNull());
 
     await act(async () => {
       pendingProfile.resolve({ id: 22 });
       await pendingProfile.promise;
     });
 
-    await waitFor(() => expect(latest?.partyId).toBe('22'));
+    await waitFor(() => expect(result.current.partyId).toBe('22'));
   });
 
   it('clears cached queries when the auth token changes', async () => {
     const queryClient = createTestQueryClient();
     const clearSpy = jest.spyOn(queryClient, 'clear');
 
-    renderAuthProvider(onProbeChange, queryClient);
+    const { result } = renderAuthProvider(queryClient);
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => {
-      latest?.setToken('Bearer first-token');
+      result.current.setToken('Bearer first-token');
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer first-token'));
     expect(clearSpy).toHaveBeenCalledTimes(1);
 
     act(() => {
-      latest?.setToken('Bearer first-token');
+      result.current.setToken('Bearer first-token');
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer first-token'));
     expect(clearSpy).toHaveBeenCalledTimes(1);
 
     act(() => {
-      latest?.clearToken();
+      result.current.clearToken();
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));

@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { act, render, waitFor } from '@testing-library/react-native';
+import React, { PropsWithChildren } from 'react';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { UserSettingsProvider, useUserSettings } from '../src/providers/UserSettingsProvider';
@@ -26,16 +26,14 @@ const createDeferred = <T,>(): Deferred<T> => {
   return { promise, resolve, reject };
 };
 
-type UserSettingsSnapshot = ReturnType<typeof useUserSettings>;
+function UserSettingsWrapper({ children }: PropsWithChildren) {
+  return <UserSettingsProvider>{children}</UserSettingsProvider>;
+}
 
-function ContextProbe({ onChange }: { onChange: (value: UserSettingsSnapshot) => void }) {
-  const value = useUserSettings();
-
-  useEffect(() => {
-    onChange(value);
-  }, [onChange, value]);
-
-  return null;
+function renderUserSettingsProvider() {
+  return renderHook(() => useUserSettings(), {
+    wrapper: UserSettingsWrapper,
+  });
 }
 
 describe('UserSettingsProvider', () => {
@@ -43,15 +41,8 @@ describe('UserSettingsProvider', () => {
   const setItemMock = jest.mocked(AsyncStorage.setItem);
   const removeItemMock = jest.mocked(AsyncStorage.removeItem);
 
-  let latest: UserSettingsSnapshot | null = null;
-
-  const onProbeChange = (value: UserSettingsSnapshot) => {
-    latest = value;
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
-    latest = null;
 
     getItemMock.mockResolvedValue(null);
     setItemMock.mockResolvedValue();
@@ -64,36 +55,28 @@ describe('UserSettingsProvider', () => {
       displayName: '   ',
     }));
 
-    render(
-      <UserSettingsProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </UserSettingsProvider>,
-    );
+    const { result } = renderUserSettingsProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(latest?.partyId).toBe('42');
-    expect(latest?.displayName).toBeNull();
+    expect(result.current.partyId).toBe('42');
+    expect(result.current.displayName).toBeNull();
   });
 
   it('does not let slow storage bootstrap overwrite a newer identity', async () => {
     const pendingStoredSettings = createDeferred<string | null>();
     getItemMock.mockReturnValueOnce(pendingStoredSettings.promise);
 
-    render(
-      <UserSettingsProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </UserSettingsProvider>,
-    );
+    const { result } = renderUserSettingsProvider();
 
-    await waitFor(() => expect(latest?.setIdentity).toBeDefined());
+    await waitFor(() => expect(result.current.setIdentity).toBeDefined());
 
     act(() => {
-      latest?.setIdentity(' 123 ', '  New Name  ');
+      result.current.setIdentity(' 123 ', '  New Name  ');
     });
 
-    await waitFor(() => expect(latest?.partyId).toBe('123'));
-    expect(latest?.displayName).toBe('New Name');
+    await waitFor(() => expect(result.current.partyId).toBe('123'));
+    expect(result.current.displayName).toBe('New Name');
 
     await act(async () => {
       pendingStoredSettings.resolve(JSON.stringify({
@@ -103,10 +86,10 @@ describe('UserSettingsProvider', () => {
       await pendingStoredSettings.promise;
     });
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(latest?.partyId).toBe('123');
-    expect(latest?.displayName).toBe('New Name');
+    expect(result.current.partyId).toBe('123');
+    expect(result.current.displayName).toBe('New Name');
     expect(setItemMock).toHaveBeenCalledWith(
       'tdf-user-settings',
       JSON.stringify({ partyId: '123', displayName: 'New Name' }),
@@ -116,16 +99,12 @@ describe('UserSettingsProvider', () => {
   it('keeps in-memory defaults when reading storage fails', async () => {
     getItemMock.mockRejectedValueOnce(new Error('storage unavailable'));
 
-    render(
-      <UserSettingsProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </UserSettingsProvider>,
-    );
+    const { result } = renderUserSettingsProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(latest?.partyId).toBeNull();
-    expect(latest?.displayName).toBeNull();
+    expect(result.current.partyId).toBeNull();
+    expect(result.current.displayName).toBeNull();
     expect(removeItemMock).not.toHaveBeenCalled();
   });
 
@@ -135,16 +114,12 @@ describe('UserSettingsProvider', () => {
       displayName: 'Existing Name',
     }));
 
-    render(
-      <UserSettingsProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </UserSettingsProvider>,
-    );
+    const { result } = renderUserSettingsProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => {
-      latest?.setIdentity('456');
+      result.current.setIdentity('456');
     });
 
     await waitFor(() =>
@@ -154,22 +129,18 @@ describe('UserSettingsProvider', () => {
       )
     );
 
-    expect(latest?.partyId).toBe('456');
-    expect(latest?.displayName).toBe('Existing Name');
+    expect(result.current.partyId).toBe('456');
+    expect(result.current.displayName).toBe('Existing Name');
   });
 
   it('preserves the latest display name across back-to-back identity updates', async () => {
-    render(
-      <UserSettingsProvider>
-        <ContextProbe onChange={onProbeChange} />
-      </UserSettingsProvider>,
-    );
+    const { result } = renderUserSettingsProvider();
 
-    await waitFor(() => expect(latest?.loading).toBe(false));
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => {
-      latest?.setIdentity('123', 'Fresh Name');
-      latest?.setIdentity('456');
+      result.current.setIdentity('123', 'Fresh Name');
+      result.current.setIdentity('456');
     });
 
     await waitFor(() =>
@@ -179,7 +150,7 @@ describe('UserSettingsProvider', () => {
       )
     );
 
-    expect(latest?.partyId).toBe('456');
-    expect(latest?.displayName).toBe('Fresh Name');
+    expect(result.current.partyId).toBe('456');
+    expect(result.current.displayName).toBe('Fresh Name');
   });
 });

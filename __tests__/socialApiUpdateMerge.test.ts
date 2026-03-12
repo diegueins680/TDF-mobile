@@ -193,63 +193,32 @@ describe('Social API update merge behavior', () => {
     );
   });
 
-  it('Events.create sanitizes invalid ticket prices before sending payload', async () => {
-    post
-      .mockResolvedValueOnce({
-        eventId: 24,
-        eventTitle: 'Broken Price Event',
-        eventStart: '2026-05-01T18:00:00.000Z',
-        eventEnd: '2026-05-01T20:00:00.000Z',
-        eventVenueId: null,
-        eventArtists: [],
-        eventPriceCents: null,
-        eventIsPublic: true,
-      })
-      .mockResolvedValueOnce({
-        eventId: 25,
-        eventTitle: 'Negative Price Event',
-        eventStart: '2026-05-01T18:00:00.000Z',
-        eventEnd: '2026-05-01T20:00:00.000Z',
-        eventVenueId: null,
-        eventArtists: [],
-        eventPriceCents: null,
-        eventIsPublic: true,
-      });
-
-    await Events.create({
-      title: 'Broken Price Event',
-      startTime: '2026-05-01T18:00:00.000Z',
-      endTime: '2026-05-01T20:00:00.000Z',
-      venueId: 0,
-      artistIds: [],
-      ticketPrice: Number.NaN,
-      isPublic: true,
-    });
-
-    await Events.create({
-      title: 'Negative Price Event',
-      startTime: '2026-05-01T18:00:00.000Z',
-      endTime: '2026-05-01T20:00:00.000Z',
-      venueId: 0,
-      artistIds: [],
-      ticketPrice: -5,
-      isPublic: true,
-    });
-
-    expect(post).toHaveBeenNthCalledWith(
-      1,
-      '/social-events/events',
-      expect.objectContaining({
-        eventPriceCents: null,
+  it('Events.create rejects invalid ticket prices before sending payload', async () => {
+    await expect(
+      Events.create({
+        title: 'Broken Price Event',
+        startTime: '2026-05-01T18:00:00.000Z',
+        endTime: '2026-05-01T20:00:00.000Z',
+        venueId: 0,
+        artistIds: [],
+        ticketPrice: Number.NaN,
+        isPublic: true,
       }),
-    );
-    expect(post).toHaveBeenNthCalledWith(
-      2,
-      '/social-events/events',
-      expect.objectContaining({
-        eventPriceCents: null,
+    ).rejects.toThrow('Ticket price must be a valid number greater than or equal to zero.');
+
+    await expect(
+      Events.create({
+        title: 'Negative Price Event',
+        startTime: '2026-05-01T18:00:00.000Z',
+        endTime: '2026-05-01T20:00:00.000Z',
+        venueId: 0,
+        artistIds: [],
+        ticketPrice: -5,
+        isPublic: true,
       }),
-    );
+    ).rejects.toThrow('Ticket price must be a valid number greater than or equal to zero.');
+
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('Events.create preserves oversized venue id strings without precision loss', async () => {

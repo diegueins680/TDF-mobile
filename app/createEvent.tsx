@@ -213,6 +213,10 @@ export default function CreateEventScreen() {
       Alert.alert('Validation', 'Ticket price must be a valid number');
       return;
     }
+    if (typeof parsedPrice === 'number' && parsedPrice < 0) {
+      Alert.alert('Validation', 'Ticket price must be zero or greater');
+      return;
+    }
 
     createMutation.mutate({
       title: title.trim(),

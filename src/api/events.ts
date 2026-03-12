@@ -241,6 +241,7 @@ export const Events = {
   },
 
   create: async (body: SocialEventCreate): Promise<SocialEvent> => {
+    assertValidTicketPriceForCreate(body.ticketPrice);
     const backendBody = mapFrontendEventToBackend(body);
     const event = await post<BackendEventDTO>('/social-events/events', backendBody);
     return mapBackendEventToFrontend(event);
@@ -378,6 +379,13 @@ function normalizeTicketPriceInput(value: unknown): number | undefined {
     return undefined;
   }
   return value;
+}
+
+function assertValidTicketPriceForCreate(value: unknown): void {
+  if (value == null) return;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error('Ticket price must be a valid number greater than or equal to zero.');
+  }
 }
 
 function toBackendTicketPriceCents(value: unknown): number | null {

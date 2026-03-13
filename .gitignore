@@ -30,10 +30,13 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env
+.env.*
+!.env.example
 .git-local/
 
 # typescript
 *.tsbuildinfo
+__pycache__/
 
 app-example

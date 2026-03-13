@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
 import { getAuthToken } from './client';
+import { UPLOAD_BASE } from '../lib/api';
 
-const UPLOAD_URL = process.env.EXPO_PUBLIC_UPLOAD_URL;
+const UPLOAD_URL = UPLOAD_BASE;
 
 export type UploadResponse = {
   publicUrl?: string;

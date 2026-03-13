@@ -1,13 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listPipeline, updateStage } from '../../src/api/pipelines';
 import { ScrollView, View, Text, Alert, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
-import type { PipelineCard, PipelineStage } from '../../src/types';
+import { listPipeline, updateStage } from '../../src/api/pipelines';
+import type { PipelineCard, PipelineKind, PipelineStage } from '../../src/types';
 import { StagePill } from '../../src/components/StagePill';
 
-const STAGES: PipelineStage[] = ['Intake','Editing','Mixing','Revisions','Mastering','Approved'];
+const STAGES: PipelineStage[] = ['Intake', 'Editing', 'Mixing', 'Revisions', 'Mastering', 'Approved'];
+
+type MovePayload = { kind: PipelineKind; id: PipelineCard['id']; stage: PipelineStage };
 
 function Column({
-  title, cards, onMove
+  title,
+  cards,
+  onMove,
 }: {
   title: string;
   cards: PipelineCard[];
@@ -22,10 +26,16 @@ function Column({
       {cards.map(c => (
         <Pressable key={String(c.id)} style={styles.card}
           onLongPress={() => {
-            Alert.alert('Move to stage', undefined, STAGES.map(s => ({
-              text: s, onPress: () => onMove(c.id, s)
-            })));
-          }}>
+            Alert.alert(
+              'Move to stage',
+              undefined,
+              STAGES.map((s) => ({
+                text: s,
+                onPress: () => onMove(c.id, s),
+              })),
+            );
+          }}
+        >
           <Text style={styles.cardTitle}>{c.title}</Text>
           {c.artist ? <Text>{c.artist}</Text> : null}
           <StagePill stage={c.stage} />
@@ -37,13 +47,12 @@ function Column({
 
 export default function Pipelines() {
   const qc = useQueryClient();
-  const mixing = useQuery({ queryKey: ['pipeline','mixing'], queryFn: () => listPipeline('mixing') });
-  const mastering = useQuery({ queryKey: ['pipeline','mastering'], queryFn: () => listPipeline('mastering') });
+  const mixing = useQuery<PipelineCard[]>({ queryKey: ['pipeline', 'mixing'], queryFn: () => listPipeline('mixing') });
+  const mastering = useQuery<PipelineCard[]>({ queryKey: ['pipeline', 'mastering'], queryFn: () => listPipeline('mastering') });
 
-  const m = useMutation({
-    mutationFn: ({ kind, id, stage }: { kind: 'mixing'|'mastering'; id: PipelineCard['id']; stage: PipelineStage }) =>
-      updateStage(kind, id, stage),
-    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['pipeline', vars.kind] })
+  const m = useMutation<void, Error, MovePayload>({
+    mutationFn: ({ kind, id, stage }) => updateStage(kind, id, stage),
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['pipeline', vars.kind] }),
   });
 
   if (mixing.isLoading || mastering.isLoading) {

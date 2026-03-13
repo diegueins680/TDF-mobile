@@ -1,49 +1,87 @@
 # TDF Records Mobile
 
-Expo Router app for TDF Records operations. The current product surface covers parties/clients, bookings, production pipelines, events, social connections with QR vCard exchange, venue lookup, and inventory workflows.
+Expo/React Native app for TDF Records operations. The current app covers bookings, venues, events, inventory, pipelines, contact card scanning, and related social workflows against the TDF backend.
 
 ## Environment
 
-Set these before `npm run start`:
+Local development falls back to `http://localhost:8080` and `http://localhost:8080/drive/upload` if these are unset, but you can export them explicitly:
 
-```sh
-export EXPO_PUBLIC_API_BASE=http://<your-api-host>:8080
-export EXPO_PUBLIC_API_TOKEN="Bearer <token>"
-export EXPO_PUBLIC_UPLOAD_URL=http://<your-api-host>:8080/drive/upload
+```bash
+export EXPO_PUBLIC_API_BASE=http://localhost:8080
+export EXPO_PUBLIC_UPLOAD_URL=http://localhost:8080/drive/upload
 export EXPO_PUBLIC_TZ=America/Guayaquil
 ```
 
-The inventory flow uses `EXPO_PUBLIC_UPLOAD_URL` for camera/gallery uploads. The auth screen can also preload `EXPO_PUBLIC_API_TOKEN` for internal QA.
+EAS `preview` and `production` builds inject these release endpoints from `eas.json`:
 
-## Development
-
-```sh
-npm install
-npm run start
+```bash
+EXPO_PUBLIC_API_BASE=https://tdf-hq.fly.dev
+EXPO_PUBLIC_UPLOAD_URL=https://tdf-hq.fly.dev/drive/upload
+EXPO_PUBLIC_TZ=America/Guayaquil
 ```
 
-Additional commands:
+`app.config.ts` also falls back to these release URLs automatically when `EAS_BUILD_PROFILE` is `preview` or `production`, so cloud builds do not depend on Expo injecting the profile envs before config evaluation.
 
-- `npm run android`
-- `npm run ios`
-- `npm run web`
-- `npm run lint`
-- `npm run typecheck`
-- `npm test`
+Optional release-time override:
 
-## Store Release
+```bash
+export EAS_PROJECT_ID=<expo-project-id>
+```
 
-Release hardening for App Store / Play Store lives in `docs/release/README.md`.
+Development-only override:
 
-Key commands:
+```bash
+export EXPO_PUBLIC_API_TOKEN=<temporary-bearer-token>
+```
 
-- `npm run assets:release`
-- `npm run release:validate`
-- `npm run build:android:store`
-- `npm run build:ios:store`
-- `npm run submit:android`
-- `npm run submit:ios`
+Do not embed `EXPO_PUBLIC_API_TOKEN` in `preview` or `production` builds.
+
+You can copy defaults from `.env.example` for local QA and release setup.
+
+## Commands
+
+```bash
+npm run start
+npm run ios
+npm run android
+npm run web
+npm run lint
+npm run typecheck
+npm run test
+npm run release:assets
+npm run release:check
+npm run doctor
+npm run expo:config
+npm run prebuild:check
+npm run build:ios:preview
+npm run build:ios:production
+npm run build:android:preview
+npm run build:android:production
+npm run submit:ios:production
+npm run submit:android:production
+```
+
+## Release Files
+
+- Release process: [docs/release.md](docs/release.md)
+- Store submission handoff: [STORE_SUBMISSION_HANDOFF.md](STORE_SUBMISSION_HANDOFF.md)
+- Source privacy policy: [docs/privacy-policy.md](docs/privacy-policy.md)
+- Source terms of service: [docs/terms-of-service.md](docs/terms-of-service.md)
+- Source support page: [docs/support.md](docs/support.md)
+- Source data deletion page: [docs/data-deletion.md](docs/data-deletion.md)
+- Store checklist and templates: [docs/release/store-submission-checklist.md](docs/release/store-submission-checklist.md)
+
+## Public Release URLs
+
+- Privacy policy: `https://tdf-app.pages.dev/mobile-app/privacy.html`
+- Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
+- Support: `https://tdf-app.pages.dev/mobile-app/support.html`
+- Data deletion: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
 
 ## Notes
 
-The about screen shows the active API base, timezone, and backend health/version when available.
+- Expo config is centralized in `app.config.ts`.
+- Store-ready app identifiers are `com.tdfrecords.app` for both iOS and Android.
+- EAS production builds use remote versioning from `eas.json`; do not set local build numbers for release builds.
+- Release assets are generated from shared TDF branding in the parent workspace by `scripts/generate_release_assets.py`.
+- The `/about` screen shows the resolved API base, health status, and version info.

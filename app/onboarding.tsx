@@ -1,6 +1,5 @@
-import { useEffect, useRef } from 'react';
-import type { ComponentProps, ComponentType } from 'react';
-import { Animated, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, type ComponentType, useRef } from 'react';
+import { Animated, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, type ViewProps } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -35,7 +34,7 @@ const STEPS: Step[] = [
   }
 ] as const;
 
-const AnimatedView = Animated.View as ComponentType<Animated.AnimatedProps<ComponentProps<typeof View>>>;
+const AnimatedView = Animated.createAnimatedComponent(View) as ComponentType<Animated.AnimatedProps<ViewProps>>;
 
 export default function OnboardingScreen() {
   const router = useRouter();

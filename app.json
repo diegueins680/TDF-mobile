@@ -20,6 +20,34 @@
         "projectId": "218aca4d-c096-4892-a353-c1dd7df23448"
       }
     },
-    "owner": "cuco.saa"
+    "owner": "cuco.saa",
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/218aca4d-c096-4892-a353-c1dd7df23448"
+    },
+    "android": {
+      "package": "com.tdfrecords.app",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png",
+        "backgroundColor": "#0f172a"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.tdfrecords.app",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    }
   }
 }

@@ -47,9 +47,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   version: APP_VERSION,
   description: 'TDF Records mobile app for bookings, events, venues, inventory, pipelines, and social tools.',
   icon: './assets/icon.png',
-  runtimeVersion: {
-    policy: 'appVersion'
-  },
+  runtimeVersion: APP_VERSION,
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',
@@ -79,7 +77,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     [
-      'expo-barcode-scanner',
+      'expo-camera',
       {
         cameraPermission: 'Allow TDF Records to use your camera to scan QR codes and capture inventory images.',
         microphonePermission: false

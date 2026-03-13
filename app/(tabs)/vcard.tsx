@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ComponentType } from 'react';
 import { ScrollView, View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
+import { CameraView, type BarcodeScanningResult, useCameraPermissions } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
 
 import { buildVCardSharePayload, exchangeVCard, parseVCardPayload, type ScannedVCard } from '../../src/api/social';
@@ -8,11 +8,7 @@ import { resolvePartyId } from '../../src/lib/identity';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 
-type ScanEvent = { data: string };
-type ScannerModule = {
-  BarCodeScanner: ComponentType<{ onBarCodeScanned: (event: ScanEvent) => void; style?: unknown }>;
-  requestPermissionsAsync: () => Promise<{ status: string }>;
-};
+type ScanEvent = Pick<BarcodeScanningResult, 'data'>;
 
 const parsePositivePartyId = (value: string): number | undefined => {
   const trimmed = value.trim();
@@ -35,12 +31,10 @@ export default function VCardScreen() {
   );
 
   const [isScanning, setIsScanning] = useState(false);
-  const [cameraStatus, setCameraStatus] = useState<string | null>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState<ScannedVCard | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const [scannerModule, setScannerModule] = useState<ScannerModule | null>(null);
-  const [scannerError, setScannerError] = useState<string | null>(null);
-  const ScannerComponent = scannerModule?.BarCodeScanner;
+  const [isRequestingCamera, setIsRequestingCamera] = useState(false);
 
   useEffect(() => {
     if (!displayName || hydratedDefaultsRef.current.name) return;
@@ -75,30 +69,28 @@ export default function VCardScreen() {
     [name, email, phone, partyId],
   );
 
-  const ensureScannerModule = useCallback(async () => {
-      if (scannerModule || scannerError) return;
-      try {
-      const mod = (await import('expo-barcode-scanner')) as unknown as ScannerModule;
-      setScannerModule(mod);
-    } catch (_err) {
-      setScannerError(
-        'El lector de códigos no está disponible en este build de Expo Go. Instala la versión compatible o usa un dev client.'
-      );
-      setIsScanning(false);
+  const openScanner = useCallback(async () => {
+    if (cameraPermission?.granted) {
+      setIsScanning(true);
+      return;
     }
-  }, [scannerModule, scannerError]);
 
-  const requestPermission = useCallback(
-    async (scanner: ScannerModule) => {
-      const { status } = await scanner.requestPermissionsAsync();
-      setCameraStatus(status);
-      if (status !== 'granted') {
+    try {
+      setIsRequestingCamera(true);
+      const response = await requestCameraPermission();
+      if (!response.granted) {
         Alert.alert('Permiso requerido', 'Activa el acceso a la cámara para escanear códigos QR.');
         setIsScanning(false);
+        return;
       }
-    },
-    []
-  );
+      setIsScanning(true);
+    } catch (_err) {
+      Alert.alert('Cámara no disponible', 'No pudimos habilitar la cámara en este dispositivo.');
+      setIsScanning(false);
+    } finally {
+      setIsRequestingCamera(false);
+    }
+  }, [cameraPermission?.granted, requestCameraPermission]);
 
   const handleScan = (event: ScanEvent) => {
     setIsScanning(false);
@@ -132,15 +124,9 @@ export default function VCardScreen() {
   };
 
   useEffect(() => {
-    if (!isScanning) return;
-    if (!scannerModule && !scannerError) {
-      void ensureScannerModule();
-      return;
-    }
-    if (scannerModule && cameraStatus === null) {
-      void requestPermission(scannerModule);
-    }
-  }, [isScanning, cameraStatus, scannerModule, scannerError, ensureScannerModule, requestPermission]);
+    if (!isScanning || cameraPermission === null || cameraPermission.granted) return;
+    setIsScanning(false);
+  }, [isScanning, cameraPermission]);
 
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
@@ -172,20 +158,23 @@ export default function VCardScreen() {
         <Text style={styles.sectionTitle}>Escanear QR</Text>
         {isScanning ? (
           <View style={styles.scannerBox}>
-            {scannerError ? (
-              <Text style={styles.errorText}>{scannerError}</Text>
-            ) : ScannerComponent ? (
+            {cameraPermission && !cameraPermission.granted ? (
+              <Text style={styles.errorText}>Activa el acceso a la cámara para escanear códigos QR.</Text>
+            ) : (
               <>
-                <ScannerComponent onBarCodeScanned={handleScan} style={StyleSheet.absoluteFillObject} />
+                <CameraView
+                  style={StyleSheet.absoluteFillObject}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                  onBarcodeScanned={handleScan}
+                />
                 <Text style={styles.scannerText}>Alinea el QR dentro del recuadro</Text>
               </>
-            ) : (
-              <Text style={styles.loadingText}>Preparando cámara…</Text>
             )}
             <Button title="Cancelar" onPress={() => setIsScanning(false)} />
           </View>
         ) : (
-          <Button title="Abrir cámara" onPress={() => setIsScanning(true)} />
+          <Button title={isRequestingCamera ? 'Abriendo cámara…' : 'Abrir cámara'} onPress={() => void openScanner()} />
         )}
 
         {scanned && (

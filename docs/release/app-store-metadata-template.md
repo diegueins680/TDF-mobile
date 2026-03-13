@@ -45,7 +45,7 @@ Category:
 
 Support URL: `https://tdf-app.pages.dev/mobile-app/support.html`
 
-Marketing URL: `TODO`
+Marketing URL: `https://tdf-app.pages.dev/mobile-app/`
 
 Privacy policy URL: `https://tdf-app.pages.dev/mobile-app/privacy.html`
 
@@ -61,4 +61,4 @@ Last name: `TODO`
 
 Phone: `TODO`
 
-Email: `TODO`
+Email: `soporte@tdfrecords.com`

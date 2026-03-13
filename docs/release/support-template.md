@@ -6,7 +6,7 @@ Publish this content to the public support URL referenced in the store listings.
 
 Product: `TDF Records`
 
-Support email: `TODO`
+Support email: `soporte@tdfrecords.com`
 
 Support URL: `https://tdf-app.pages.dev/mobile-app/support.html`
 

@@ -40,7 +40,7 @@ Verify the real backend retention and sharing behavior before answering the fina
 
 ## Contact details
 
-Support email: `TODO`
+Support email: `soporte@tdfrecords.com`
 
 Website: `https://tdf-app.pages.dev/mobile-app/support.html`
 

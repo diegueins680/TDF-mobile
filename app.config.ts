@@ -19,7 +19,9 @@ const LOCAL_UPLOAD_URL = `${LOCAL_API_BASE}/drive/upload`;
 const RELEASE_API_BASE = 'https://tdf-hq.fly.dev';
 const RELEASE_UPLOAD_URL = `${RELEASE_API_BASE}/drive/upload`;
 const RELEASE_BUILD_PROFILES = new Set(['preview', 'production']);
-const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+const DEFAULT_EAS_PROJECT_ID = '218aca4d-c096-4892-a353-c1dd7df23448';
+const EAS_PROJECT_ID =
+  process.env.EAS_PROJECT_ID ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? DEFAULT_EAS_PROJECT_ID;
 const EAS_BUILD_PROFILE = process.env.EAS_BUILD_PROFILE?.trim() || 'development';
 const DEFAULT_TZ = process.env.EXPO_PUBLIC_TZ?.trim() || DEFAULT_TIME_ZONE;
 

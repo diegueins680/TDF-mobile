@@ -8,6 +8,12 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "deploy": "npx expo export -p web && npx eas-cli@latest deploy",
+    "assets:release": "node ./scripts/generate-release-assets.mjs",
+    "release:validate": "npm run assets:release && npx expo config --type public > /tmp/tdf-expo-config.json && npm run lint && npm run typecheck && npm test",
+    "build:android:store": "npm run assets:release && npx eas-cli@latest build --platform android --profile production",
+    "build:ios:store": "npm run assets:release && npx eas-cli@latest build --platform ios --profile production",
+    "submit:android": "npx eas-cli@latest submit --platform android --profile production",
+    "submit:ios": "npx eas-cli@latest submit --platform ios --profile production",
     "lint": "eslint . --ext ts,tsx --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "jest --runInBand"

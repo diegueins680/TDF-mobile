@@ -1,41 +1,49 @@
-# Expo Router Example
+# TDF Records Mobile
 
-Use [`expo-router`](https://docs.expo.dev/router/introduction/) to build native navigation using files in the `app/` directory.
+Expo Router app for TDF Records operations. The current product surface covers parties/clients, bookings, production pipelines, events, social connections with QR vCard exchange, venue lookup, and inventory workflows.
 
-## Environment for TDF HQ
+## Environment
 
-Set these before `npm start`:
-
-```
-export EXPO_PUBLIC_API_BASE=http://<your-api-host>:8080
-export EXPO_PUBLIC_API_TOKEN="Bearer <token>"   # e.g., admin-token for dev
-export EXPO_PUBLIC_UPLOAD_URL=http://<your-api-host>:8080/drive/upload
-```
-
-The inventory tab will use `EXPO_PUBLIC_UPLOAD_URL` to upload camera/gallery photos and save the returned URL on assets.
-
-## Launch your own
-
-[![Launch with Expo](https://github.com/expo/examples/blob/master/.gh-assets/launch.svg?raw=true)](https://launch.expo.dev/?github=https://github.com/expo/examples/tree/master/with-router)
-
-## 🚀 How to use
+Set these before `npm run start`:
 
 ```sh
-npx create-expo-app -e with-router
+export EXPO_PUBLIC_API_BASE=http://<your-api-host>:8080
+export EXPO_PUBLIC_API_TOKEN="Bearer <token>"
+export EXPO_PUBLIC_UPLOAD_URL=http://<your-api-host>:8080/drive/upload
+export EXPO_PUBLIC_TZ=America/Guayaquil
 ```
 
-## Deploy
+The inventory flow uses `EXPO_PUBLIC_UPLOAD_URL` for camera/gallery uploads. The auth screen can also preload `EXPO_PUBLIC_API_TOKEN` for internal QA.
 
-Deploy on all platforms with Expo Application Services (EAS).
+## Development
 
-- Deploy the website: `npx eas-cli deploy` — [Learn more](https://docs.expo.dev/eas/hosting/get-started/)
-- Deploy on iOS and Android using: `npx eas-cli build` — [Learn more](https://expo.dev/eas)
+```sh
+npm install
+npm run start
+```
 
-## 📝 Notes
+Additional commands:
 
-- [Expo Router: Docs](https://docs.expo.dev/router/introduction/)
+- `npm run android`
+- `npm run ios`
+- `npm run web`
+- `npm run lint`
+- `npm run typecheck`
+- `npm test`
 
-## About screen
+## Store Release
 
-Set `EXPO_PUBLIC_API_BASE=http://localhost:8080` in your shell (or EAS env).
-Navigate to `/about` in the app to see API base, health, and version.
+Release hardening for App Store / Play Store lives in `docs/release/README.md`.
+
+Key commands:
+
+- `npm run assets:release`
+- `npm run release:validate`
+- `npm run build:android:store`
+- `npm run build:ios:store`
+- `npm run submit:android`
+- `npm run submit:ios`
+
+## Notes
+
+The about screen shows the active API base, timezone, and backend health/version when available.

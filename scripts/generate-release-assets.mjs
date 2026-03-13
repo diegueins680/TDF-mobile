@@ -50,13 +50,35 @@ function withAlpha(color, amount) {
 }
 
 function blend(base, over) {
-  const alpha = over[3] / 255;
-  const inv = 1 - alpha;
+  const aB = base[3] / 255;
+  const aO = over[3] / 255;
+  const outA = aO + (aB * (1 - aO));
+
+  if (outA === 0) {
+    return [0, 0, 0, 0];
+  }
+
+  const rB = base[0] / 255;
+  const gB = base[1] / 255;
+  const bB = base[2] / 255;
+
+  const rO = over[0] / 255;
+  const gO = over[1] / 255;
+  const bO = over[2] / 255;
+
+  const premulR = (rO * aO) + (rB * aB * (1 - aO));
+  const premulG = (gO * aO) + (gB * aB * (1 - aO));
+  const premulB = (bO * aO) + (bB * aB * (1 - aO));
+
+  const outR = premulR / outA;
+  const outG = premulG / outA;
+  const outB = premulB / outA;
+
   return [
-    Math.round((over[0] * alpha) + (base[0] * inv)),
-    Math.round((over[1] * alpha) + (base[1] * inv)),
-    Math.round((over[2] * alpha) + (base[2] * inv)),
-    Math.round(over[3] + (base[3] * inv))
+    Math.round(clamp(outR, 0, 1) * 255),
+    Math.round(clamp(outG, 0, 1) * 255),
+    Math.round(clamp(outB, 0, 1) * 255),
+    Math.round(clamp(outA, 0, 1) * 255)
   ];
 }
 

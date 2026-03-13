@@ -1,6 +1,15 @@
 {
   "name": "tdf-mobile",
   "version": "1.0.0",
+  "description": "TDF Records mobile app for bookings, inventory, events, venues, pipelines, and social tools.",
+  "homepage": "https://tdf-app.pages.dev/mobile-app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/diegueins680/TDF-mobile.git"
+  },
+  "bugs": {
+    "url": "https://github.com/diegueins680/TDF-mobile/issues"
+  },
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -8,6 +17,13 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "deploy": "npx expo export -p web && npx eas-cli@latest deploy",
+    "release:assets": "python3 scripts/generate_release_assets.py",
+    "release:check": "npm run lint && npm run typecheck && npx expo config --type public",
+    "release:prepare": "npm run release:assets && npm run release:check",
+    "eas:build:ios": "npx eas-cli@latest build --platform ios --profile production",
+    "eas:build:android": "npx eas-cli@latest build --platform android --profile production",
+    "eas:submit:ios": "npx eas-cli@latest submit --platform ios --profile production --latest",
+    "eas:submit:android": "npx eas-cli@latest submit --platform android --profile production --latest",
     "lint": "eslint . --ext ts,tsx --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "jest --runInBand"

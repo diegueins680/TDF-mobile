@@ -1,10 +1,7 @@
 {
   "expo": {
-    "scheme": "acme",
-    "plugins": [
-      "expo-router"
-    ],
-    "name": "tdf-mobile",
-    "slug": "tdf-mobile"
+    "name": "TDF Records",
+    "slug": "tdf-mobile",
+    "scheme": "tdf"
   }
 }

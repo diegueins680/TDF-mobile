@@ -1,41 +1,62 @@
-# Expo Router Example
+# TDF Records Mobile
 
-Use [`expo-router`](https://docs.expo.dev/router/introduction/) to build native navigation using files in the `app/` directory.
+Expo/React Native app for TDF Records operations. The current app covers bookings, venues, events, inventory, pipelines, contact card scanning, and related social workflows against the TDF backend.
 
-## Environment for TDF HQ
+## Environment
 
-Set these before `npm start`:
+Local development falls back to `http://localhost:8080` and `http://localhost:8080/drive/upload` if these are unset, but you can export them explicitly:
 
-```
-export EXPO_PUBLIC_API_BASE=http://<your-api-host>:8080
-export EXPO_PUBLIC_API_TOKEN="Bearer <token>"   # e.g., admin-token for dev
-export EXPO_PUBLIC_UPLOAD_URL=http://<your-api-host>:8080/drive/upload
-```
-
-The inventory tab will use `EXPO_PUBLIC_UPLOAD_URL` to upload camera/gallery photos and save the returned URL on assets.
-
-## Launch your own
-
-[![Launch with Expo](https://github.com/expo/examples/blob/master/.gh-assets/launch.svg?raw=true)](https://launch.expo.dev/?github=https://github.com/expo/examples/tree/master/with-router)
-
-## 🚀 How to use
-
-```sh
-npx create-expo-app -e with-router
+```bash
+export EXPO_PUBLIC_API_BASE=http://localhost:8080
+export EXPO_PUBLIC_UPLOAD_URL=http://localhost:8080/drive/upload
+export EXPO_PUBLIC_TZ=America/Guayaquil
 ```
 
-## Deploy
+EAS `preview` and `production` builds inject these release endpoints from `eas.json`:
 
-Deploy on all platforms with Expo Application Services (EAS).
+```bash
+EXPO_PUBLIC_API_BASE=https://the-dream-factory.koyeb.app
+EXPO_PUBLIC_UPLOAD_URL=https://the-dream-factory.koyeb.app/drive/upload
+```
 
-- Deploy the website: `npx eas-cli deploy` — [Learn more](https://docs.expo.dev/eas/hosting/get-started/)
-- Deploy on iOS and Android using: `npx eas-cli build` — [Learn more](https://expo.dev/eas)
+Optional release-time override:
 
-## 📝 Notes
+```bash
+export EAS_PROJECT_ID=<expo-project-id>
+```
 
-- [Expo Router: Docs](https://docs.expo.dev/router/introduction/)
+## Commands
 
-## About screen
+```bash
+npm run start
+npm run ios
+npm run android
+npm run web
+npm run lint
+npm run typecheck
+npm run test
+npm run release:assets
+npm run release:check
+```
 
-Set `EXPO_PUBLIC_API_BASE=http://localhost:8080` in your shell (or EAS env).
-Navigate to `/about` in the app to see API base, health, and version.
+## Release Files
+
+- Release process: [docs/release.md](docs/release.md)
+- Source privacy policy: [docs/privacy-policy.md](docs/privacy-policy.md)
+- Source terms of service: [docs/terms-of-service.md](docs/terms-of-service.md)
+- Source support page: [docs/support.md](docs/support.md)
+- Source data deletion page: [docs/data-deletion.md](docs/data-deletion.md)
+
+## Public Release URLs
+
+- Privacy policy: `https://tdf-app.pages.dev/mobile-app/privacy.html`
+- Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
+- Support: `https://tdf-app.pages.dev/mobile-app/support.html`
+- Data deletion: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
+
+## Notes
+
+- Expo config is centralized in `app.config.ts`.
+- Store-ready app identifiers are `com.tdfrecords.app` for both iOS and Android.
+- EAS production builds use remote versioning from `eas.json`; do not set local build numbers for release builds.
+- Release assets are generated from shared TDF branding in the parent workspace by `scripts/generate_release_assets.py`.

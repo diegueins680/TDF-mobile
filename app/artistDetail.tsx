@@ -1,14 +1,24 @@
 import React, { useCallback, useMemo } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../src/providers/AuthProvider';
+import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
-import { Artists } from '../src/api/artists';
+import { Artists, type ArtistFollower } from '../src/api/artists';
 import { Events } from '../src/api/events';
+import { resolvePartyId } from '../src/lib/identity';
+import { normalizeRouteParam } from '../src/lib/routeParams';
 
 export default function ArtistDetailScreen() {
-  const { artistId } = useLocalSearchParams<{ artistId: string }>();
+  const { artistId: rawArtistId } = useLocalSearchParams<{ artistId?: string | string[] }>();
   const router = useRouter();
+  const { partyId: authPartyId } = useAuth();
+  const { partyId: settingsPartyId } = useUserSettings();
+  const qc = useQueryClient();
+  const artistId = normalizeRouteParam(rawArtistId);
+  const partyId = resolvePartyId(authPartyId, settingsPartyId);
 
   const artistQuery = useQuery({
     queryKey: ['artist', artistId],
@@ -23,27 +33,90 @@ export default function ArtistDetailScreen() {
   });
 
   const artist = artistQuery.data;
+  const socialRows = useMemo(() => {
+    if (!artist) return [];
+    const links = artist.socialLinks || {};
+    const rows = [
+      { label: 'Instagram', value: artist.instagramHandle ?? links.instagram },
+      { label: 'Spotify', value: artist.spotifyUrl ?? links.spotify },
+      { label: 'Twitter', value: links.twitter },
+      { label: 'YouTube', value: links.youtube },
+      { label: 'SoundCloud', value: links.soundcloud }
+    ];
+    return rows.filter((row) => row.value && `${row.value}`.trim().length > 0);
+  }, [artist]);
   const upcomingEvents = useMemo(() => {
     if (!eventsQuery.data) return [];
     const now = new Date();
     return eventsQuery.data
-      .filter(e => new Date(e.startDateTime) > now)
-      .sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
+      .filter(e => new Date(e.startTime) > now)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   }, [eventsQuery.data]);
 
   const handleEditProfile = useCallback(() => {
     router.push({ pathname: '/editArtistProfile', params: { artistId } });
   }, [artistId, router]);
 
+  const followersQuery = useQuery<ArtistFollower[]>({
+    queryKey: ['artist-followers', artistId],
+    queryFn: () => (artistId ? Artists.listFollowers(artistId) : Promise.resolve([])),
+    enabled: !!artistId
+  });
+
+  const isFollowing = useMemo(() => {
+    if (!followersQuery.data || !partyId) return false;
+    return followersQuery.data.some((r) => String(r.followerPartyId) === String(partyId));
+  }, [followersQuery.data, partyId]);
+
+  const handleToggleFollow = useCallback(async () => {
+    if (!artistId || !partyId) return;
+    try {
+      if (isFollowing) {
+        await Artists.unfollow(artistId, partyId);
+      } else {
+        await Artists.follow(artistId, partyId);
+      }
+      void qc.invalidateQueries({ queryKey: ['artist-followers', artistId] });
+    } catch (err) {
+      console.warn('follow action failed', err);
+    }
+  }, [artistId, partyId, isFollowing, qc]);
+
   const handleEventPress = useCallback((eventId: string) => {
     router.push({ pathname: '/eventDetail', params: { eventId } });
   }, [router]);
 
-  if (artistQuery.isLoading || !artist) {
+  if (!artistId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.error}>Missing artist ID</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (artistQuery.isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (artistQuery.isError || !artist) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.error}>Failed to load artist</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -72,18 +145,27 @@ export default function ArtistDetailScreen() {
           </View>
         )}
 
-        <View style={styles.socialContainer}>
-          {artist.instagramHandle && (
-            <Text style={styles.socialLink}>Instagram: {artist.instagramHandle}</Text>
-          )}
-          {artist.spotifyUrl && (
-            <Text style={styles.socialLink}>Spotify: {artist.spotifyUrl}</Text>
-          )}
-        </View>
+        {socialRows.length > 0 && (
+          <View style={styles.socialContainer}>
+            {socialRows.map((row) => (
+              <Text key={row.label} style={styles.socialLink}>{row.label}: {row.value}</Text>
+            ))}
+          </View>
+        )}
 
-        <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
-          <Text style={styles.editButtonText}>Edit Profile</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+          <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
+            <Text style={styles.editButtonText}>Edit Profile</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.followButton, isFollowing ? styles.following : styles.notFollowing]}
+            onPress={handleToggleFollow}
+            disabled={!partyId}
+          >
+            <Text style={styles.followButtonText}>{partyId ? (isFollowing ? 'Following' : 'Follow') : 'Sign in to follow'}</Text>
+          </TouchableOpacity>
+        </View>
 
         {upcomingEvents.length > 0 && (
           <View style={styles.eventsSection}>
@@ -97,12 +179,12 @@ export default function ArtistDetailScreen() {
                 <View style={styles.eventHeader}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
                   {event.ticketPrice && (
-                    <Text style={styles.eventPrice}>${(event.ticketPrice / 100).toFixed(2)}</Text>
+                    <Text style={styles.eventPrice}>${event.ticketPrice.toFixed(2)}</Text>
                   )}
                 </View>
                 <Text style={styles.eventDateTime}>
-                  {new Date(event.startDateTime).toLocaleDateString()} at{' '}
-                  {new Date(event.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(event.startTime).toLocaleDateString()} at{' '}
+                  {new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
                 {event.venue && (
                   <Text style={styles.eventVenue}>{event.venue.name}</Text>
@@ -142,5 +224,12 @@ const styles = StyleSheet.create({
   eventPrice: { fontSize: 13, fontWeight: '700', color: '#2563eb', marginLeft: 8 },
   eventDateTime: { fontSize: 12, color: '#999', marginBottom: 4 },
   eventVenue: { fontSize: 12, color: '#666' },
-  noEventsText: { fontSize: 14, color: '#999', textAlign: 'center', marginTop: 16 }
+  noEventsText: { fontSize: 14, color: '#999', textAlign: 'center', marginTop: 16 },
+  error: { fontSize: 14, color: '#dc2626', marginBottom: 12 },
+  backButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2563eb' },
+  backButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  followButton: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  following: { backgroundColor: '#e6f0ff' },
+  notFollowing: { backgroundColor: '#2563eb' },
+  followButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' }
 });

@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Artists } from '../src/api/artists';
+import { normalizeRouteParam } from '../src/lib/routeParams';
 
 const GENRE_OPTIONS = [
   'Rock', 'Pop', 'Hip-Hop', 'Jazz', 'Blues', 'Classical',
@@ -15,9 +16,10 @@ const GENRE_OPTIONS = [
 ];
 
 export default function EditArtistProfileScreen() {
-  const { artistId } = useLocalSearchParams<{ artistId: string }>();
+  const { artistId: rawArtistId } = useLocalSearchParams<{ artistId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const artistId = normalizeRouteParam(rawArtistId);
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -34,14 +36,17 @@ export default function EditArtistProfileScreen() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (body: Parameters<typeof Artists.update>[1]) => (artistId ? Artists.update(artistId, body) : Promise.reject()),
+    mutationFn: (body: Parameters<typeof Artists.update>[1]) => {
+      if (!artistId) throw new Error('Artist not found');
+      return Artists.update(artistId, body);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['artist', artistId] });
       Alert.alert('Success', 'Profile updated!');
       router.back();
     },
-    onError: () => {
-      Alert.alert('Error', 'Failed to update profile');
+    onError: (err) => {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update profile');
     }
   });
 
@@ -72,19 +77,45 @@ export default function EditArtistProfileScreen() {
 
     updateMutation.mutate({
       name: name.trim(),
-      bio: bio.trim() || undefined,
-      imageUrl: imageUrl.trim() || undefined,
+      bio: bio.trim() || null,
+      imageUrl: imageUrl.trim() || null,
       genres: selectedGenres,
-      instagramHandle: instagramHandle.trim() || undefined,
-      spotifyUrl: spotifyUrl.trim() || undefined
+      instagramHandle: instagramHandle.trim() || null,
+      spotifyUrl: spotifyUrl.trim() || null
     });
   }, [name, bio, imageUrl, selectedGenres, instagramHandle, spotifyUrl, updateMutation]);
+
+  if (!artistId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.error}>Missing artist ID</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (artistQuery.isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (artistQuery.isError || !artistQuery.data) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.error}>Failed to load artist</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -217,6 +248,9 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 24 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', marginBottom: 20 },
+  error: { fontSize: 14, color: '#dc2626', marginBottom: 12 },
+  backButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2563eb' },
+  backButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   field: { marginBottom: 16 },
   label: { fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 6, textTransform: 'uppercase' },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a1a1a' },

@@ -14,17 +14,19 @@ export type Booking = {
   title: string;
   start: string; // ISO
   end: string;   // ISO
+  status?: string | null;
   room?: string | null;
   teacherId?: ID | null;
 };
 
 export type PipelineStage = 'Intake' | 'Editing' | 'Mixing' | 'Revisions' | 'Mastering' | 'Approved';
+export type PipelineKind = 'mixing' | 'mastering';
 export type PipelineCard = {
   id: ID;
   title: string;
   artist?: string | null;
   stage: PipelineStage;
-  kind: 'mixing' | 'mastering';
+  kind: PipelineKind;
 };
 
 export type Asset = {
@@ -98,6 +100,7 @@ export type ArtistProfile = {
   spotifyUrl?: string | null;
   createdAt: string;
   updatedAt: string;
+  socialLinks?: ArtistSocialLinks;
 };
 
 export type ArtistProfileCreate = {
@@ -108,6 +111,26 @@ export type ArtistProfileCreate = {
   genres?: string[];
   instagramHandle?: string;
   spotifyUrl?: string;
+  socialLinks?: ArtistSocialLinks;
+};
+
+export type ArtistProfileUpdate = {
+  partyId?: ID;
+  name?: string;
+  bio?: string | null;
+  imageUrl?: string | null;
+  genres?: string[];
+  instagramHandle?: string | null;
+  spotifyUrl?: string | null;
+  socialLinks?: ArtistSocialLinks | null;
+};
+
+export type ArtistSocialLinks = {
+  spotify?: string | null;
+  instagram?: string | null;
+  twitter?: string | null;
+  youtube?: string | null;
+  soundcloud?: string | null;
 };
 
 export type Venue = {
@@ -115,6 +138,7 @@ export type Venue = {
   name: string;
   address: string;
   city: string;
+  country?: string | null;
   state?: string | null;
   zipCode?: string | null;
   latitude: number;
@@ -131,6 +155,7 @@ export type VenueCreate = {
   name: string;
   address: string;
   city: string;
+  country?: string;
   state?: string;
   zipCode?: string;
   latitude: number;
@@ -139,6 +164,21 @@ export type VenueCreate = {
   imageUrl?: string;
   phoneNumber?: string;
   website?: string;
+};
+
+export type VenueUpdate = {
+  name?: string;
+  address?: string;
+  city?: string;
+  country?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  latitude?: number;
+  longitude?: number;
+  capacity?: number | null;
+  imageUrl?: string | null;
+  phoneNumber?: string | null;
+  website?: string | null;
 };
 
 export type SocialEvent = {
@@ -176,14 +216,14 @@ export type SocialEventCreate = {
 
 export type SocialEventUpdate = {
   title?: string;
-  description?: string;
+  description?: string | null;
   startTime?: string;
   endTime?: string;
-  venueId?: ID;
+  venueId?: ID | null;
   artistIds?: ID[];
-  ticketPrice?: number;
-  ticketUrl?: string;
-  imageUrl?: string;
+  ticketPrice?: number | null;
+  ticketUrl?: string | null;
+  imageUrl?: string | null;
   isPublic?: boolean;
 };
 
@@ -204,18 +244,35 @@ export type EventRSVPCreate = {
   status: RSVPStatus;
 };
 
+export type EventInvitationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED';
+
 export type EventInvitation = {
   id: ID;
   eventId: ID;
-  fromUserId: ID;
+  fromUserId?: ID | null;
   toUserId: ID;
-  status: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  status: EventInvitationStatus;
+  message?: string | null;
   createdAt: string;
-  respondedAt?: string | null;
+  updatedAt?: string | null;
 };
 
 export type EventInvitationCreate = {
   eventId: ID;
   toUserId: ID;
+  fromUserId?: ID | null;
+  status?: EventInvitationStatus;
+  message?: string | null;
 };
 
+export type PartyFollow = {
+  pfFollowerId: number;
+  pfFollowingId: number;
+  pfViaNfc: boolean;
+  pfStartedAt: string; // ISO date
+};
+
+export type SuggestedFriend = {
+  sfPartyId: number;
+  sfMutualCount: number;
+};

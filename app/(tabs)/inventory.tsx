@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 
 import { Inventory, normalizeAssets } from '../../src/api/inventory';
@@ -20,12 +19,19 @@ import type {
   Asset,
   AssetCheckoutRequest,
   AssetCheckinRequest,
-  AssetCreate
+  AssetCreate,
+  AssetUpdate
 } from '../../src/types';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { uploadImage } from '../../src/api/upload';
 
 const TARGET_KINDS: AssetCheckoutRequest['coTargetKind'][] = ['party', 'room', 'session'];
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'Active', label: 'Disponible' },
+  { value: 'Booked', label: 'En uso' },
+  { value: 'OutForMaintenance', label: 'En mantenimiento' },
+  { value: 'Retired', label: 'Retirado' }
+];
 
 function toStringId(value: Asset['assetId']): string {
   return typeof value === 'string' ? value : String(value);
@@ -33,8 +39,7 @@ function toStringId(value: Asset['assetId']): string {
 
 export default function InventoryScreen() {
   const qc = useQueryClient();
-  const router = useRouter();
-  const { token } = useAuth();
+  const { token, loading } = useAuth();
   const [localImage, setLocalImage] = useState<{ uri: string; mime?: string; name?: string } | null>(
     null
   );
@@ -46,6 +51,26 @@ export default function InventoryScreen() {
     category: '',
     photoUrl: ''
   });
+  const [editAsset, setEditAsset] = useState<Asset | null>(null);
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    category: string;
+    status: string;
+    location: string;
+    photoUrl: string;
+  }>({
+    name: '',
+    category: '',
+    status: 'Active',
+    location: '',
+    photoUrl: ''
+  });
+  const [editLocalImage, setEditLocalImage] = useState<{
+    uri: string;
+    mime?: string;
+    name?: string;
+  } | null>(null);
+  const [editUploading, setEditUploading] = useState(false);
   const [checkoutAsset, setCheckoutAsset] = useState<Asset | null>(null);
   const [checkinAsset, setCheckinAsset] = useState<Asset | null>(null);
   const [checkoutForm, setCheckoutForm] = useState<AssetCheckoutRequest>({
@@ -61,10 +86,13 @@ export default function InventoryScreen() {
     ciConditionIn: '',
     ciNotes: ''
   });
+  const hasToken = Boolean(token?.trim());
+  const canUseInventory = !loading && hasToken;
 
   const assetsQuery = useQuery({
     queryKey: ['inventory'],
-    queryFn: () => Inventory.list().then(normalizeAssets)
+    queryFn: () => Inventory.list().then(normalizeAssets),
+    enabled: canUseInventory
   });
 
   const createMutation = useMutation({
@@ -76,6 +104,19 @@ export default function InventoryScreen() {
     },
     onError: (err) =>
       setFeedback(err instanceof Error ? err.message : 'No se pudo crear el equipo. Intenta de nuevo.')
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ assetId, payload }: { assetId: string; payload: AssetUpdate }) =>
+      Inventory.update(assetId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory'] });
+      setEditAsset(null);
+      setEditLocalImage(null);
+      setFeedback('Equipo actualizado.');
+    },
+    onError: (err) =>
+      setFeedback(err instanceof Error ? err.message : 'No se pudo actualizar el equipo.')
   });
 
   const checkoutMutation = useMutation({
@@ -122,12 +163,17 @@ export default function InventoryScreen() {
   }, [assets, search]);
 
   const canCreate =
+    canUseInventory &&
     createForm.name.trim().length > 1 &&
     createForm.category.trim().length > 1 &&
     !createMutation.isPending &&
     !uploading;
 
   const openCheckout = useCallback((asset: Asset) => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para administrar el inventario.');
+      return;
+    }
     setCheckoutAsset(asset);
     setCheckoutForm({
       coTargetKind: 'party',
@@ -138,17 +184,46 @@ export default function InventoryScreen() {
       coConditionOut: '',
       coNotes: ''
     });
-  }, []);
+  }, [canUseInventory]);
 
   const openCheckin = useCallback((asset: Asset) => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para administrar el inventario.');
+      return;
+    }
     setCheckinAsset(asset);
     setCheckinForm({ ciConditionIn: '', ciNotes: '' });
-  }, []);
+  }, [canUseInventory]);
+
+  const openEdit = useCallback((asset: Asset) => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para administrar el inventario.');
+      return;
+    }
+    setEditAsset(asset);
+    setEditLocalImage(null);
+    setEditForm({
+      name: asset.name,
+      category: asset.category,
+      status: asset.status || 'Active',
+      location: asset.location ?? '',
+      photoUrl: asset.photoUrl ?? ''
+    });
+  }, [canUseInventory]);
 
   const closeCheckout = useCallback(() => setCheckoutAsset(null), []);
   const closeCheckin = useCallback(() => setCheckinAsset(null), []);
+  const closeEdit = useCallback(() => {
+    setEditAsset(null);
+    setEditLocalImage(null);
+    setEditForm({ name: '', category: '', status: 'Active', location: '', photoUrl: '' });
+  }, []);
 
   const submitCheckout = useCallback(() => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para registrar check-outs.');
+      return;
+    }
     if (!checkoutAsset) return;
     const targetKind = checkoutForm.coTargetKind ?? 'party';
     if (targetKind === 'room' && !checkoutForm.coTargetRoom?.trim()) {
@@ -178,16 +253,71 @@ export default function InventoryScreen() {
       coNotes: checkoutForm.coNotes?.trim() || undefined
     };
     checkoutMutation.mutate({ assetId: toStringId(checkoutAsset.assetId), payload });
-  }, [checkoutAsset, checkoutForm, checkoutMutation]);
+  }, [canUseInventory, checkoutAsset, checkoutForm, checkoutMutation]);
 
   const submitCheckin = useCallback(() => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para registrar check-ins.');
+      return;
+    }
     if (!checkinAsset) return;
     const payload: AssetCheckinRequest = {
       ciConditionIn: checkinForm.ciConditionIn?.trim() || undefined,
       ciNotes: checkinForm.ciNotes?.trim() || undefined
     };
     checkinMutation.mutate({ assetId: toStringId(checkinAsset.assetId), payload });
-  }, [checkinAsset, checkinForm, checkinMutation]);
+  }, [canUseInventory, checkinAsset, checkinForm, checkinMutation]);
+
+  const submitEdit = useCallback(async () => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para actualizar el inventario.');
+      return;
+    }
+    if (!editAsset || updateMutation.isPending || editUploading) return;
+    let photoUrl: string | undefined = editForm.photoUrl.trim() || undefined;
+
+    if (editLocalImage) {
+      try {
+        setEditUploading(true);
+        const uploaded = await uploadImage({
+          uri: editLocalImage.uri,
+          mimeType: editLocalImage.mime,
+          fileName: editLocalImage.name
+        });
+        photoUrl = uploaded;
+        setEditForm((prev) => ({ ...prev, photoUrl: uploaded }));
+      } catch (err) {
+        setFeedback(err instanceof Error ? err.message : 'No se pudo subir la foto.');
+        return;
+      } finally {
+        setEditUploading(false);
+      }
+    }
+
+    const trimmedName = editForm.name.trim();
+    const trimmedCategory = editForm.category.trim();
+    const trimmedStatus = editForm.status?.trim() || undefined;
+    const trimmedLocation = editForm.location.trim();
+
+    const payload: AssetUpdate = {
+      uName: trimmedName && trimmedName !== editAsset.name ? trimmedName : undefined,
+      uCategory:
+        trimmedCategory && trimmedCategory !== editAsset.category ? trimmedCategory : undefined,
+      uStatus: trimmedStatus && trimmedStatus !== editAsset.status ? trimmedStatus : undefined,
+      uLocationId:
+        trimmedLocation && trimmedLocation !== (editAsset.location ?? '')
+          ? trimmedLocation
+          : undefined,
+      uPhotoUrl:
+        photoUrl && photoUrl !== (editAsset.photoUrl ?? undefined) ? photoUrl : undefined
+    };
+    const hasUpdates = Object.values(payload).some((value) => value !== undefined);
+    if (!hasUpdates) {
+      setFeedback('Actualiza un campo antes de guardar.');
+      return;
+    }
+    updateMutation.mutate({ assetId: toStringId(editAsset.assetId), payload });
+  }, [canUseInventory, editAsset, editForm, editLocalImage, editUploading, updateMutation]);
 
   const renderItem = useCallback(
     ({ item }: { item: Asset }) => {
@@ -217,53 +347,91 @@ export default function InventoryScreen() {
 
           <View style={styles.actionsRow}>
             {!isBooked ? (
-              <TouchableOpacity style={styles.primaryBtn} onPress={() => openCheckout(item)}>
+              <TouchableOpacity
+                style={[styles.primaryBtn, !canUseInventory && styles.primaryBtnDisabled]}
+                onPress={() => openCheckout(item)}
+                disabled={!canUseInventory}
+              >
                 <Text style={styles.primaryBtnText}>Check-out</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                style={[styles.primaryBtn, styles.dangerBtn]}
+                style={[styles.primaryBtn, styles.dangerBtn, !canUseInventory && styles.primaryBtnDisabled]}
                 onPress={() => openCheckin(item)}
+                disabled={!canUseInventory}
               >
                 <Text style={styles.primaryBtnText}>Registrar retorno</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={styles.ghostBtn} onPress={() => setSearch(item.name)}>
+          </View>
+          <View style={[styles.actionsRow, styles.secondaryActions]}>
+            <TouchableOpacity
+              style={[styles.ghostBtn, styles.secondaryActionBtn]}
+              onPress={() => setSearch(item.name)}
+            >
               <Text style={styles.ghostBtnText}>Filtrar similares</Text>
             </TouchableOpacity>
+            {canUseInventory ? (
+              <TouchableOpacity
+                style={[styles.ghostBtn, styles.secondaryActionBtn]}
+                onPress={() => openEdit(item)}
+              >
+                <Text style={styles.ghostBtnText}>Editar</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
       );
     },
-    [openCheckout, openCheckin, setSearch]
+    [canUseInventory, openCheckout, openCheckin, openEdit, setSearch]
   );
 
-  const pickImage = useCallback(
-    async (mode: 'camera' | 'library') => {
-      if (mode === 'camera') {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permiso requerido', 'Activa el permiso de cámara para tomar fotos.');
-          return;
-        }
+  const selectImage = useCallback(async (mode: 'camera' | 'library') => {
+    if (mode === 'camera') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso requerido', 'Activa el permiso de cámara para tomar fotos.');
+        return null;
       }
-      const result =
-        mode === 'camera'
-          ? await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 })
-          : await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8
-            });
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      setLocalImage({ uri: asset.uri, mime: asset.mimeType ?? 'image/jpeg', name: asset.fileName });
+    }
+    const result =
+      mode === 'camera'
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.8
+          });
+    if (result.canceled) return null;
+    const asset = result.assets[0];
+    return { uri: asset.uri, mime: asset.mimeType ?? 'image/jpeg', name: asset.fileName };
+  }, []);
+
+  const pickCreateImage = useCallback(
+    async (mode: 'camera' | 'library') => {
+      const selected = await selectImage(mode);
+      if (!selected) return;
+      setLocalImage(selected);
       setCreateForm((prev) => ({ ...prev, photoUrl: '' }));
     },
-    []
+    [selectImage]
+  );
+
+  const pickEditImage = useCallback(
+    async (mode: 'camera' | 'library') => {
+      const selected = await selectImage(mode);
+      if (!selected) return;
+      setEditLocalImage(selected);
+      setEditForm((prev) => ({ ...prev, photoUrl: '' }));
+    },
+    [selectImage]
   );
 
   const submitCreate = useCallback(async () => {
+    if (!canUseInventory) {
+      setFeedback('Conecta tu token para agregar equipo.');
+      return;
+    }
     let photoUrl: string | undefined = createForm.photoUrl.trim() || undefined;
     if (localImage) {
       try {
@@ -289,7 +457,7 @@ export default function InventoryScreen() {
       cPhotoUrl: photoUrl
     };
     createMutation.mutate(payload);
-  }, [createForm, createMutation, localImage]);
+  }, [canUseInventory, createForm, createMutation, localImage]);
 
   return (
     <View style={styles.page}>
@@ -298,19 +466,27 @@ export default function InventoryScreen() {
         keyExtractor={(item) => toStringId(item.assetId)}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
-        refreshing={assetsQuery.isFetching}
-        onRefresh={() => assetsQuery.refetch()}
+        refreshing={canUseInventory && assetsQuery.isFetching}
+        onRefresh={() => {
+          if (canUseInventory) {
+            void assetsQuery.refetch();
+          }
+        }}
         ListHeaderComponent={
           <View style={{ gap: 12 }}>
             <Text style={styles.header}>Inventario</Text>
             <Text style={styles.subheader}>
               Mantén el inventario al día, asigna equipo con check-out y agrega fotos para identificarlo rápido.
             </Text>
-            {!token && (
-              <TouchableOpacity style={styles.authHint} onPress={() => router.push('/auth')}>
-                <Text style={styles.authHintText}>Configura tu token para cargar inventario</Text>
-              </TouchableOpacity>
-            )}
+            {loading ? (
+              <View style={styles.authHint}>
+                <Text style={styles.authHintText}>Cargando acceso…</Text>
+              </View>
+            ) : !hasToken ? (
+              <View style={styles.authHint}>
+                <Text style={styles.authHintText}>Acceso restringido para cargar inventario.</Text>
+              </View>
+            ) : null}
 
             {feedback ? (
               <View style={styles.feedback}>
@@ -319,15 +495,17 @@ export default function InventoryScreen() {
             ) : null}
             {assetsQuery.isError ? (
               <View style={styles.errorBox}>
-                <Text style={styles.errorText}>No pudimos cargar el inventario.</Text>
-                <TouchableOpacity onPress={() => router.push('/auth')}>
-                  <Text style={styles.errorLink}>Configura tu token en Auth</Text>
-                </TouchableOpacity>
+                <Text style={styles.errorText}>
+                  {canUseInventory ? 'No pudimos cargar el inventario.' : 'Acceso restringido para cargar inventario.'}
+                </Text>
               </View>
             ) : null}
 
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Agregar equipo</Text>
+              {!canUseInventory && !loading ? (
+                <Text style={styles.helperText}>Conecta tu token antes de crear o editar equipos.</Text>
+              ) : null}
               <TextInput
                 placeholder="Nombre del equipo"
                 value={createForm.name}
@@ -341,13 +519,13 @@ export default function InventoryScreen() {
                 onChangeText={(text) => setCreateForm((prev) => ({ ...prev, category: text }))}
                 style={styles.input}
               />
-            <TextInput
-              placeholder="URL de foto (opcional)"
-              value={createForm.photoUrl}
-              onChangeText={(text) => setCreateForm((prev) => ({ ...prev, photoUrl: text }))}
-              style={styles.input}
-              autoCapitalize="none"
-            />
+              <TextInput
+                placeholder="URL de foto (opcional)"
+                value={createForm.photoUrl}
+                onChangeText={(text) => setCreateForm((prev) => ({ ...prev, photoUrl: text }))}
+                style={styles.input}
+                autoCapitalize="none"
+              />
               {createForm.photoUrl.trim() || localImage ? (
                 <View style={styles.previewBox}>
                   <Image
@@ -371,10 +549,18 @@ export default function InventoryScreen() {
                 </View>
               ) : null}
               <View style={styles.metaRow}>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => pickImage('camera')}>
+                <TouchableOpacity
+                  style={[styles.ghostBtn, !canUseInventory && styles.primaryBtnDisabled]}
+                  onPress={() => pickCreateImage('camera')}
+                  disabled={!canUseInventory}
+                >
                   <Text style={styles.ghostBtnText}>Tomar foto</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => pickImage('library')}>
+                <TouchableOpacity
+                  style={[styles.ghostBtn, !canUseInventory && styles.primaryBtnDisabled]}
+                  onPress={() => pickCreateImage('library')}
+                  disabled={!canUseInventory}
+                >
                   <Text style={styles.ghostBtnText}>Desde galería</Text>
                 </TouchableOpacity>
               </View>
@@ -404,7 +590,14 @@ export default function InventoryScreen() {
               />
               <View style={styles.metaRow}>
                 <Text style={styles.muted}>{filtered.length} resultados</Text>
-                <TouchableOpacity onPress={() => assetsQuery.refetch()}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (canUseInventory) {
+                      void assetsQuery.refetch();
+                    }
+                  }}
+                  disabled={!canUseInventory}
+                >
                   <Text style={[styles.muted, { fontWeight: '700' }]}>Actualizar</Text>
                 </TouchableOpacity>
               </View>
@@ -412,10 +605,19 @@ export default function InventoryScreen() {
           </View>
         }
         ListEmptyComponent={
-          assetsQuery.isLoading ? (
+          loading ? (
+            <View style={styles.empty}>
+              <ActivityIndicator />
+              <Text style={styles.muted}>Cargando acceso…</Text>
+            </View>
+          ) : assetsQuery.isLoading ? (
             <View style={styles.empty}>
               <ActivityIndicator />
               <Text style={styles.muted}>Cargando inventario…</Text>
+            </View>
+          ) : !canUseInventory ? (
+            <View style={styles.empty}>
+              <Text style={styles.muted}>Conecta tu token para consultar y administrar inventario.</Text>
             </View>
           ) : (
             <View style={styles.empty}>
@@ -424,6 +626,110 @@ export default function InventoryScreen() {
           )
         }
       />
+
+      <Modal visible={!!editAsset} animationType="slide" transparent onRequestClose={closeEdit}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.sectionTitle}>Editar equipo</Text>
+            <Text style={styles.subheader}>
+              {editAsset ? editAsset.name : ''} · {editAsset?.category}
+            </Text>
+            <Text style={styles.helperText}>
+              Solo los usuarios con permisos de inventario pueden guardar cambios.
+            </Text>
+
+            <TextInput
+              placeholder="Nombre"
+              value={editForm.name}
+              onChangeText={(text) => setEditForm((prev) => ({ ...prev, name: text }))}
+              style={styles.input}
+              autoCapitalize="sentences"
+            />
+            <TextInput
+              placeholder="Categoría"
+              value={editForm.category}
+              onChangeText={(text) => setEditForm((prev) => ({ ...prev, category: text }))}
+              style={styles.input}
+            />
+            <Text style={styles.label}>Estado</Text>
+            <View style={[styles.segmentRow, styles.segmentWrap]}>
+              {STATUS_OPTIONS.map((opt) => {
+                const active = editForm.status === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[styles.segment, styles.segmentTight, active && styles.segmentActive]}
+                    onPress={() => setEditForm((prev) => ({ ...prev, status: opt.value }))}
+                  >
+                    <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TextInput
+              placeholder="Ubicación (ID de sala opcional)"
+              value={editForm.location}
+              onChangeText={(text) => setEditForm((prev) => ({ ...prev, location: text }))}
+              style={styles.input}
+              autoCapitalize="none"
+            />
+            <TextInput
+              placeholder="URL de foto (opcional)"
+              value={editForm.photoUrl}
+              onChangeText={(text) => setEditForm((prev) => ({ ...prev, photoUrl: text }))}
+              style={styles.input}
+              autoCapitalize="none"
+            />
+            {editForm.photoUrl.trim() || editLocalImage ? (
+              <View style={styles.previewBox}>
+                <Image
+                  source={{ uri: editLocalImage?.uri ?? editForm.photoUrl.trim() }}
+                  style={styles.previewImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.previewActions}>
+                  {editLocalImage ? (
+                    <TouchableOpacity
+                      style={styles.ghostBtn}
+                      onPress={() => setEditLocalImage(null)}
+                    >
+                      <Text style={styles.ghostBtnText}>Quitar foto</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.metaRow}>
+              <TouchableOpacity style={styles.ghostBtn} onPress={() => pickEditImage('camera')}>
+                <Text style={styles.ghostBtnText}>Tomar foto</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.ghostBtn} onPress={() => pickEditImage('library')}>
+                <Text style={styles.ghostBtnText}>Desde galería</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.ghostBtn} onPress={closeEdit}>
+                <Text style={styles.ghostBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryBtn, styles.primaryBtnCompact]}
+                onPress={() => {
+                  void submitEdit();
+                }}
+                disabled={updateMutation.isPending || editUploading}
+              >
+                <Text style={styles.primaryBtnText}>
+                  {updateMutation.isPending || editUploading ? 'Guardando…' : 'Actualizar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={!!checkoutAsset}
@@ -590,6 +896,7 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, gap: 12, paddingBottom: 32 },
   header: { fontSize: 26, fontWeight: '800', color: '#0f172a' },
   subheader: { color: '#475569', lineHeight: 20 },
+  helperText: { color: '#475569', lineHeight: 18 },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -599,6 +906,7 @@ const styles = StyleSheet.create({
     gap: 10
   },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  label: { color: '#0f172a', fontWeight: '700' },
   input: {
     borderWidth: 1,
     borderColor: '#cbd5e1',
@@ -620,6 +928,8 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   meta: { color: '#475569', fontSize: 13 },
   actionsRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  secondaryActions: { justifyContent: 'flex-start' },
+  secondaryActionBtn: { flex: 1 },
   primaryBtn: {
     backgroundColor: '#2563eb',
     paddingVertical: 12,
@@ -669,7 +979,6 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   errorText: { color: '#b91c1c', fontWeight: '600' },
-  errorLink: { color: '#b91c1c', fontWeight: '700', marginTop: 4 },
   authHint: {
     marginTop: 6,
     alignSelf: 'flex-start',
@@ -701,6 +1010,8 @@ const styles = StyleSheet.create({
     borderColor: '#cbd5e1',
     alignItems: 'center'
   },
+  segmentWrap: { flexWrap: 'wrap' },
+  segmentTight: { minWidth: '45%' },
   segmentActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   segmentText: { color: '#0f172a', fontWeight: '600' },
   segmentTextActive: { color: '#fff' },

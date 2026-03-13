@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 
@@ -8,13 +8,28 @@ import { Events } from '../../src/api/events';
 import { EventCard } from '../../src/components/EventCard';
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import type { SocialEvent } from '../../src/types';
+import { listSavedEventIds, toggleSavedEvent } from '../../src/lib/savedEvents';
 
 type ViewMode = 'calendar' | 'list';
+type EventScope = 'all' | 'saved';
+
+const toLocalDateKey = (value: string | Date): string => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return typeof value === 'string' ? value.split('T')[0] ?? '' : '';
+  }
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export default function EventsScreen() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [eventScope, setEventScope] = useState<EventScope>('all');
+  const [selectedDate, setSelectedDate] = useState<string>(toLocalDateKey(new Date()));
   const [cityFilter, setCityFilter] = useState('');
   const debouncedCity = useDebouncedValue(cityFilter, 300);
 
@@ -23,17 +38,50 @@ export default function EventsScreen() {
     queryFn: () => Events.list({ city: debouncedCity || undefined, upcomingOnly: true })
   });
 
+  const savedEventIdsQuery = useQuery({
+    queryKey: ['saved-event-ids'],
+    queryFn: listSavedEventIds
+  });
+
+  const savedEventIds = useMemo(() => savedEventIdsQuery.data ?? [], [savedEventIdsQuery.data]);
+
+  const savedEventsQuery = useQuery({
+    queryKey: ['saved-events', 'browse', savedEventIds],
+    enabled: savedEventIds.length > 0,
+    queryFn: async () => {
+      const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
+      const resolved = settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+      const cityNeedle = debouncedCity.trim().toLowerCase();
+      if (!cityNeedle) return resolved;
+      return resolved.filter((event) => event.venue?.city?.toLowerCase().includes(cityNeedle));
+    }
+  });
+
+  const saveToggleMutation = useMutation({
+    mutationFn: (eventId: string) => toggleSavedEvent(eventId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
+      qc.invalidateQueries({ queryKey: ['saved-events'] });
+    }
+  });
+
+  const effectiveEvents = useMemo(() => {
+    if (eventScope === 'saved') return savedEventsQuery.data ?? [];
+    return events ?? [];
+  }, [eventScope, events, savedEventsQuery.data]);
+
   const eventsByDate = useMemo(() => {
-    if (!events) return {};
+    if (!effectiveEvents.length) return {};
     
-    const grouped: Record<string, typeof events> = {};
-    events.forEach(event => {
-      const date = event.startTime.split('T')[0];
+    const grouped: Record<string, SocialEvent[]> = {};
+    effectiveEvents.forEach(event => {
+      const date = toLocalDateKey(event.startTime);
+      if (!date) return;
       if (!grouped[date]) grouped[date] = [];
       grouped[date].push(event);
     });
     return grouped;
-  }, [events]);
+  }, [effectiveEvents]);
 
   const selectedDateEvents = useMemo(() => {
     return eventsByDate[selectedDate] || [];
@@ -55,16 +103,35 @@ export default function EventsScreen() {
   }, [eventsByDate, selectedDate]);
 
   const handleCreateEvent = useCallback(() => {
-    router.push('createEvent');
+    router.push('/createEvent');
   }, [router]);
 
+  const handleToggleSaved = useCallback((eventId: string) => {
+    saveToggleMutation.mutate(eventId);
+  }, [saveToggleMutation]);
+
+  const isCardUpdating = useCallback((eventId: string) => (
+    saveToggleMutation.isPending && String(saveToggleMutation.variables) === eventId
+  ), [saveToggleMutation.isPending, saveToggleMutation.variables]);
+
   const renderEventItem = useCallback(({ item }: { item: SocialEvent }) => (
-    <EventCard event={item} />
-  ), []);
+    <EventCard
+      event={item}
+      saved={savedEventIds.includes(String(item.id))}
+      onToggleSaved={() => handleToggleSaved(String(item.id))}
+      saveDisabled={isCardUpdating(String(item.id))}
+    />
+  ), [handleToggleSaved, isCardUpdating, savedEventIds]);
 
   const keyExtractor = useCallback((item: SocialEvent) => String(item.id), []);
 
-  if (isLoading) {
+  const listLoading = eventScope === 'saved'
+    ? (savedEventIdsQuery.isLoading || (savedEventIds.length > 0 && savedEventsQuery.isLoading))
+    : isLoading;
+
+  const listError = eventScope === 'saved' ? savedEventsQuery.isError : isError;
+
+  if (listLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#2563eb" />
@@ -72,7 +139,7 @@ export default function EventsScreen() {
     );
   }
 
-  if (isError) {
+  if (listError) {
     return (
       <View style={styles.center}>
         <Text style={styles.error}>Failed to load events</Text>
@@ -103,6 +170,25 @@ export default function EventsScreen() {
       </View>
 
       {/* View Mode Toggle */}
+      <View style={styles.toggleContainer}>
+        <TouchableOpacity
+          style={[styles.toggleBtn, eventScope === 'all' && styles.toggleBtnActive]}
+          onPress={() => setEventScope('all')}
+        >
+          <Text style={[styles.toggleBtnText, eventScope === 'all' && styles.toggleBtnTextActive]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleBtn, eventScope === 'saved' && styles.toggleBtnActive]}
+          onPress={() => setEventScope('saved')}
+        >
+          <Text style={[styles.toggleBtnText, eventScope === 'saved' && styles.toggleBtnTextActive]}>
+            Saved ({savedEventIds.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.toggleContainer}>
         <TouchableOpacity
           style={[styles.toggleBtn, viewMode === 'list' && styles.toggleBtnActive]}
@@ -153,19 +239,23 @@ export default function EventsScreen() {
             />
           ) : (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>No events on this date</Text>
+              <Text style={styles.emptyText}>
+                {eventScope === 'saved' ? 'No saved events on this date' : 'No events on this date'}
+              </Text>
             </View>
           )}
         </View>
       ) : (
         <FlatList
-          data={events || []}
+          data={effectiveEvents}
           renderItem={renderEventItem}
           keyExtractor={keyExtractor}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>No events found</Text>
+              <Text style={styles.emptyText}>
+                {eventScope === 'saved' ? 'No saved events found' : 'No events found'}
+              </Text>
             </View>
           }
         />

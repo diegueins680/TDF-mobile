@@ -1,37 +1,44 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator,
   FlatList, Modal, SafeAreaView
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
 import { Venues } from '../src/api/venues';
 import { Artists } from '../src/api/artists';
-import type { ID, ArtistProfile, Venue } from '../types';
+import type { ID, ArtistProfile, Venue } from '../src/types';
+import { normalizeRouteParam } from '../src/lib/routeParams';
+
+const hasSameId = (left: ID | null | undefined, right: ID | null | undefined): boolean =>
+  left != null && right != null && String(left) === String(right);
 
 export default function CreateEventScreen() {
+  const { venueId: rawVenueId } = useLocalSearchParams<{ venueId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const routeVenueId = useMemo(() => normalizeRouteParam(rawVenueId), [rawVenueId]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date(new Date().getTime() + 2 * 60 * 60 * 1000));
+  const [startInput, setStartInput] = useState(startTime.toISOString());
+  const [endInput, setEndInput] = useState(endTime.toISOString());
   const [venueId, setVenueId] = useState<ID | null>(null);
   const [artistIds, setArtistIds] = useState<ID[]>([]);
   const [ticketPrice, setTicketPrice] = useState('');
   const [ticketUrl, setTicketUrl] = useState('');
   const [isPublic, setIsPublic] = useState(true);
 
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
   const [showVenueModal, setShowVenueModal] = useState(false);
   const [showArtistModal, setShowArtistModal] = useState(false);
   const [venueSearch, setVenueSearch] = useState('');
   const [artistSearch, setArtistSearch] = useState('');
+  const [selectedVenueSnapshot, setSelectedVenueSnapshot] = useState<Venue | null>(null);
+  const [selectedArtistsById, setSelectedArtistsById] = useState<Record<string, ArtistProfile>>({});
 
   const { data: venues, isLoading: venuesLoading } = useQuery({
     queryKey: ['venues', venueSearch],
@@ -40,7 +47,13 @@ export default function CreateEventScreen() {
 
   const { data: artists, isLoading: artistsLoading } = useQuery({
     queryKey: ['artists', artistSearch],
-    queryFn: () => artistSearch ? Artists.searchByName(artistSearch) : Promise.resolve([])
+    queryFn: () => artistSearch ? Artists.searchByName(artistSearch) : Artists.list({ limit: 100 })
+  });
+
+  const routeVenueQuery = useQuery({
+    queryKey: ['venue', routeVenueId],
+    queryFn: () => (routeVenueId ? Venues.getById(routeVenueId) : null),
+    enabled: Boolean(routeVenueId)
   });
 
   const createMutation = useMutation({
@@ -50,29 +63,113 @@ export default function CreateEventScreen() {
       Alert.alert('Success', 'Event created!');
       router.back();
     },
-    onError: () => {
-      Alert.alert('Error', 'Failed to create event');
+    onError: (err: Error) => {
+      Alert.alert('Error', err.message || 'Failed to create event');
     }
   });
 
-  const selectedVenue = useMemo(() => venues?.find(v => v.id === venueId), [venues, venueId]);
-  const selectedArtists = useMemo(() => artists?.filter(a => artistIds.includes(a.id)) || [], [artists, artistIds]);
+  useEffect(() => {
+    if (routeVenueId && !venueId) {
+      setVenueId(routeVenueId);
+    }
+  }, [routeVenueId, venueId]);
 
-  const handleStartTimeChange = useCallback((_event: unknown, date?: Date) => {
-    setShowStartPicker(false);
-    if (date) setStartTime(date);
+  useEffect(() => {
+    if (!venueId || !venues?.length) return;
+    const matchedVenue = venues.find((venue) => hasSameId(venue.id, venueId));
+    if (matchedVenue) {
+      setSelectedVenueSnapshot((current) => (
+        current && hasSameId(current.id, matchedVenue.id) && current.name === matchedVenue.name
+          ? current
+          : matchedVenue
+      ));
+    }
+  }, [venueId, venues]);
+
+  useEffect(() => {
+    if (!venueId || !routeVenueQuery.data || !hasSameId(routeVenueQuery.data.id, venueId)) return;
+    setSelectedVenueSnapshot((current) => (
+      current && hasSameId(current.id, routeVenueQuery.data.id) && current.name === routeVenueQuery.data.name
+        ? current
+        : routeVenueQuery.data
+    ));
+  }, [routeVenueQuery.data, venueId]);
+
+  useEffect(() => {
+    if (!artists?.length || artistIds.length === 0) return;
+    setSelectedArtistsById((current) => {
+      let changed = false;
+      const next = { ...current };
+      artists.forEach((artist) => {
+        const artistKey = String(artist.id);
+        if (!artistIds.some((id) => String(id) === artistKey)) return;
+        const previous = next[artistKey];
+        if (!previous || previous.name !== artist.name) {
+          next[artistKey] = artist;
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [artistIds, artists]);
+
+  const selectedVenue = useMemo(() => {
+    if (selectedVenueSnapshot && hasSameId(selectedVenueSnapshot.id, venueId)) return selectedVenueSnapshot;
+    if (routeVenueQuery.data && hasSameId(routeVenueQuery.data.id, venueId)) return routeVenueQuery.data;
+    return null;
+  }, [routeVenueQuery.data, selectedVenueSnapshot, venueId]);
+
+  const artistById = useMemo(() => {
+    const map = new Map<string, ArtistProfile>();
+    Object.keys(selectedArtistsById).forEach((key) => {
+      map.set(key, selectedArtistsById[key]);
+    });
+    (artists ?? []).forEach((artist) => map.set(String(artist.id), artist));
+    return map;
+  }, [artists, selectedArtistsById]);
+  const selectedArtistNames = useMemo(
+    () => artistIds.map((id) => artistById.get(String(id))?.name).filter((name): name is string => Boolean(name)),
+    [artistById, artistIds]
+  );
+
+  const parseDateInput = useCallback((text: string) => {
+    const parsed = new Date(text);
+    if (isNaN(parsed.getTime())) {
+      Alert.alert('Formato de fecha', 'Usa un formato válido, por ejemplo 2025-12-15T15:00:00Z');
+      return null;
+    }
+    return parsed;
   }, []);
 
-  const handleEndTimeChange = useCallback((_event: unknown, date?: Date) => {
-    setShowEndPicker(false);
-    if (date) setEndTime(date);
-  }, []);
+  useEffect(() => {
+    setStartInput(startTime.toISOString());
+  }, [startTime]);
+
+  useEffect(() => {
+    setEndInput(endTime.toISOString());
+  }, [endTime]);
 
   const toggleArtist = useCallback((artistId: ID) => {
-    setArtistIds(prev =>
-      prev.includes(artistId) ? prev.filter(id => id !== artistId) : [...prev, artistId]
-    );
-  }, []);
+    const artistKey = String(artistId);
+    const selectedArtist = (artists ?? []).find((artist) => hasSameId(artist.id, artistId));
+
+    setArtistIds((current) => (
+      current.some((id) => String(id) === artistKey)
+        ? current.filter((id) => String(id) !== artistKey)
+        : [...current, artistId]
+    ));
+    setSelectedArtistsById((current) => {
+      const next = { ...current };
+      if (next[artistKey]) {
+        delete next[artistKey];
+        return next;
+      }
+      if (selectedArtist) {
+        next[artistKey] = selectedArtist;
+      }
+      return next;
+    });
+  }, [artists]);
 
   const handleCreateVenue = useCallback(() => {
     setShowVenueModal(false);
@@ -85,6 +182,14 @@ export default function CreateEventScreen() {
   }, [router]);
 
   const handleCreateEvent = useCallback(async () => {
+    const parsedStart = parseDateInput(startInput);
+    const parsedEnd = parseDateInput(endInput);
+
+    if (!parsedStart || !parsedEnd) return;
+
+    setStartTime(parsedStart);
+    setEndTime(parsedEnd);
+
     if (!title.trim()) {
       Alert.alert('Validation', 'Event title is required');
       return;
@@ -97,31 +202,41 @@ export default function CreateEventScreen() {
       Alert.alert('Validation', 'Please select at least one artist');
       return;
     }
-    if (startTime >= endTime) {
+    if (parsedStart >= parsedEnd) {
       Alert.alert('Validation', 'End time must be after start time');
       return;
     }
 
-    // Convert price from dollars to cents for backend
-    const priceCents = ticketPrice ? Math.round(parseFloat(ticketPrice) * 100) : 0;
+    const trimmedPrice = ticketPrice.trim();
+    const parsedPrice = trimmedPrice ? Number(trimmedPrice) : undefined;
+    if (trimmedPrice && !Number.isFinite(parsedPrice)) {
+      Alert.alert('Validation', 'Ticket price must be a valid number');
+      return;
+    }
+    if (typeof parsedPrice === 'number' && parsedPrice < 0) {
+      Alert.alert('Validation', 'Ticket price must be zero or greater');
+      return;
+    }
 
     createMutation.mutate({
       title: title.trim(),
       description: description.trim(),
-      startTime: startTime.toISOString(),
-      endTime: endTime.toISOString(),
+      startTime: parsedStart.toISOString(),
+      endTime: parsedEnd.toISOString(),
       venueId,
       artistIds,
-      ticketPrice: priceCents,  // Backend expects cents as integer
+      ticketPrice: parsedPrice,
+      ticketUrl: ticketUrl.trim() || undefined,
       isPublic
     });
-  }, [title, description, venueId, artistIds, startTime, endTime, ticketPrice, isPublic, createMutation]);
+  }, [title, description, venueId, artistIds, startInput, endInput, ticketPrice, ticketUrl, isPublic, createMutation, parseDateInput]);
 
   const renderVenueItem = useCallback(({ item }: { item: Venue }) => (
     <TouchableOpacity
       style={styles.modalItem}
       onPress={() => {
         setVenueId(item.id);
+        setSelectedVenueSnapshot(item);
         setShowVenueModal(false);
       }}
     >
@@ -132,7 +247,7 @@ export default function CreateEventScreen() {
 
   const renderArtistItem = useCallback(({ item }: { item: ArtistProfile }) => (
     <TouchableOpacity
-      style={[styles.modalItem, artistIds.includes(item.id) && styles.modalItemSelected]}
+      style={[styles.modalItem, artistIds.some((id) => hasSameId(id, item.id)) && styles.modalItemSelected]}
       onPress={() => toggleArtist(item.id)}
     >
       <Text style={styles.modalItemTitle}>{item.name}</Text>
@@ -171,25 +286,87 @@ export default function CreateEventScreen() {
 
         <Text style={styles.sectionTitle}>Date & Time</Text>
 
-        <TouchableOpacity style={styles.field} onPress={() => setShowStartPicker(true)}>
+        <View style={styles.field}>
           <Text style={styles.label}>Start Time *</Text>
-          <View style={styles.input}>
-            <Text>{startTime.toLocaleString()}</Text>
+          <TextInput
+            placeholder="YYYY-MM-DDTHH:mm:ssZ"
+            value={startInput}
+            onChangeText={setStartInput}
+            onBlur={() => {
+              const parsed = parseDateInput(startInput);
+              if (parsed) {
+                setStartTime(parsed);
+              } else {
+                setStartInput(startTime.toISOString());
+              }
+            }}
+            style={styles.input}
+            placeholderTextColor="#999"
+          />
+          <View style={styles.row}>
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() => {
+                const now = new Date();
+                setStartTime(now);
+                setStartInput(now.toISOString());
+              }}
+            >
+              <Text style={styles.smallButtonText}>Now</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() => {
+                const nextHour = new Date(Date.now() + 60 * 60 * 1000);
+                setStartTime(nextHour);
+                setStartInput(nextHour.toISOString());
+              }}
+            >
+              <Text style={styles.smallButtonText}>+1h</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-        {showStartPicker && (
-          <DateTimePicker value={startTime} mode="datetime" onChange={handleStartTimeChange} />
-        )}
+        </View>
 
-        <TouchableOpacity style={styles.field} onPress={() => setShowEndPicker(true)}>
+        <View style={styles.field}>
           <Text style={styles.label}>End Time *</Text>
-          <View style={styles.input}>
-            <Text>{endTime.toLocaleString()}</Text>
+          <TextInput
+            placeholder="YYYY-MM-DDTHH:mm:ssZ"
+            value={endInput}
+            onChangeText={setEndInput}
+            onBlur={() => {
+              const parsed = parseDateInput(endInput);
+              if (parsed) {
+                setEndTime(parsed);
+              } else {
+                setEndInput(endTime.toISOString());
+              }
+            }}
+            style={styles.input}
+            placeholderTextColor="#999"
+          />
+          <View style={styles.row}>
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() => {
+                const plusTwo = new Date(Date.now() + 2 * 60 * 60 * 1000);
+                setEndTime(plusTwo);
+                setEndInput(plusTwo.toISOString());
+              }}
+            >
+              <Text style={styles.smallButtonText}>+2h</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() => {
+                const plusOne = new Date(endTime.getTime() + 60 * 60 * 1000);
+                setEndTime(plusOne);
+                setEndInput(plusOne.toISOString());
+              }}
+            >
+              <Text style={styles.smallButtonText}>+1h from current</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-        {showEndPicker && (
-          <DateTimePicker value={endTime} mode="datetime" onChange={handleEndTimeChange} />
-        )}
+        </View>
 
         <Text style={styles.sectionTitle}>Location & Artists</Text>
 
@@ -197,7 +374,7 @@ export default function CreateEventScreen() {
           <Text style={styles.label}>Venue *</Text>
           <View style={styles.selectedBox}>
             <Text style={selectedVenue ? styles.selectedText : styles.placeholder}>
-              {selectedVenue?.name || 'Select a venue'}
+              {selectedVenue?.name || (routeVenueQuery.isLoading && venueId ? 'Loading venue...' : 'Select a venue')}
             </Text>
           </View>
         </TouchableOpacity>
@@ -207,8 +384,14 @@ export default function CreateEventScreen() {
           {artistIds.length > 0 ? (
             <View style={styles.selectedBox}>
               <Text style={styles.selectedText}>
-                {selectedArtists.length} artist{selectedArtists.length !== 1 ? 's' : ''} selected
+                {artistIds.length} artist{artistIds.length !== 1 ? 's' : ''} selected
               </Text>
+              {selectedArtistNames.length > 0 && (
+                <Text style={styles.selectedSubtext}>
+                  {selectedArtistNames.slice(0, 3).join(', ')}
+                  {selectedArtistNames.length > 3 ? ` +${selectedArtistNames.length - 3}` : ''}
+                </Text>
+              )}
             </View>
           ) : (
             <View style={styles.selectedBox}>
@@ -345,11 +528,13 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 24 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginTop: 16, marginBottom: 12, textTransform: 'uppercase' },
   field: { marginBottom: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   label: { fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 6 },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a1a1a' },
   inputMultiline: { height: 80, textAlignVertical: 'top', paddingVertical: 10 },
   selectedBox: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' },
   selectedText: { fontSize: 14, color: '#1a1a1a', fontWeight: '500' },
+  selectedSubtext: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   placeholder: { fontSize: 14, color: '#999' },
   checkbox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   checkboxBox: { width: 20, height: 20, borderWidth: 1, borderColor: '#ddd', borderRadius: 4, backgroundColor: '#fff' },
@@ -368,5 +553,7 @@ const styles = StyleSheet.create({
   modalItemSelected: { backgroundColor: '#f0f8ff', borderColor: '#2563eb' },
   modalItemTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
   modalItemSubtitle: { fontSize: 12, color: '#999', marginTop: 4 },
-  modalLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+  modalLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  smallButton: { backgroundColor: '#111827', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
+  smallButtonText: { color: '#fff', fontWeight: '700' }
 });

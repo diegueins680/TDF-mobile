@@ -5,10 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Venues } from '../src/api/venues';
 import { Events } from '../src/api/events';
+import type { ID } from '../src/types';
+import { normalizeRouteParam } from '../src/lib/routeParams';
 
 export default function VenueDetailScreen() {
-  const { venueId } = useLocalSearchParams<{ venueId: string }>();
+  const { venueId: rawVenueId } = useLocalSearchParams<{ venueId?: string | string[] }>();
   const router = useRouter();
+  const venueId = normalizeRouteParam(rawVenueId);
 
   const venueQuery = useQuery({
     queryKey: ['venue', venueId],
@@ -18,26 +21,52 @@ export default function VenueDetailScreen() {
 
   const eventsQuery = useQuery({
     queryKey: ['venue-events', venueId],
-    queryFn: () => (venueId ? Events.list({ venueId }) : Promise.resolve([])),
+    queryFn: () => (venueId ? Events.list({ venueId, upcomingOnly: true }) : Promise.resolve([])),
     enabled: !!venueId
   });
 
   const venue = venueQuery.data;
   const venueEvents = eventsQuery.data || [];
 
-  const handleEventPress = useCallback((eventId: string) => {
-    router.push({ pathname: '/eventDetail', params: { eventId } });
+  const handleEventPress = useCallback((eventId: ID) => {
+    router.push({ pathname: '/eventDetail', params: { eventId: String(eventId) } });
   }, [router]);
 
   const handleCreateEvent = useCallback(() => {
     router.push({ pathname: '/createEvent', params: { venueId } });
   }, [router, venueId]);
 
-  if (venueQuery.isLoading || !venue) {
+  if (!venueId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.error}>Missing venue ID</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (venueQuery.isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (venueQuery.isError || !venue) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.error}>Failed to load venue</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -96,13 +125,13 @@ export default function VenueDetailScreen() {
               >
                 <View style={styles.eventHeader}>
                   <Text style={styles.eventTitle}>{event.title}</Text>
-                  {event.ticketPrice && (
-                    <Text style={styles.eventPrice}>${(event.ticketPrice / 100).toFixed(2)}</Text>
+                  {typeof event.ticketPrice === 'number' && (
+                    <Text style={styles.eventPrice}>${event.ticketPrice.toFixed(2)}</Text>
                   )}
                 </View>
                 <Text style={styles.eventDateTime}>
-                  {new Date(event.startDateTime).toLocaleDateString()} at{' '}
-                  {new Date(event.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(event.startTime).toLocaleDateString()} at{' '}
+                  {new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -131,6 +160,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginBottom: 8, textTransform: 'uppercase' },
   infoText: { fontSize: 13, color: '#666', marginBottom: 4 },
   coordinates: { fontSize: 11, color: '#999', marginTop: 4, fontFamily: 'monospace' },
+  error: { fontSize: 14, color: '#dc2626', marginBottom: 12 },
+  backButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2563eb' },
+  backButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   eventItem: { backgroundColor: '#f9f9f9', borderRadius: 6, padding: 10, marginBottom: 8 },
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
   eventTitle: { fontSize: 13, fontWeight: '600', color: '#1a1a1a', flex: 1 },

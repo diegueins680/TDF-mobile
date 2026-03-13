@@ -22,6 +22,8 @@ export default function CreateVenueScreen() {
   const [longitude, setLongitude] = useState('');
   const [capacity, setCapacity] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [website, setWebsite] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
 
   const createMutation = useMutation({
     mutationFn: (body: VenueCreate) => Venues.create(body),
@@ -59,8 +61,12 @@ export default function CreateVenueScreen() {
       Alert.alert('Validation', 'Latitude and longitude must be valid numbers');
       return;
     }
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      Alert.alert('Validation', 'Latitude must be between -90 and 90, and longitude between -180 and 180');
+      return;
+    }
 
-    const venuData: VenueCreate = {
+    const venueData: VenueCreate = {
       name: name.trim(),
       address: address.trim(),
       city: city.trim(),
@@ -69,16 +75,27 @@ export default function CreateVenueScreen() {
     };
 
     // Add optional fields
-    if (state.trim()) venuData.state = state.trim();
-    if (zipCode.trim()) venuData.zipCode = zipCode.trim();
-    if (capacity) {
-      const cap = parseInt(capacity);
-      if (!isNaN(cap)) venuData.capacity = cap;
+    if (state.trim()) venueData.state = state.trim();
+    if (zipCode.trim()) venueData.zipCode = zipCode.trim();
+    if (capacity.trim()) {
+      const trimmedCapacity = capacity.trim();
+      if (!/^\d+$/.test(trimmedCapacity)) {
+        Alert.alert('Validation', 'Capacity must be a positive whole number');
+        return;
+      }
+      const parsedCapacity = Number.parseInt(trimmedCapacity, 10);
+      if (!Number.isSafeInteger(parsedCapacity) || parsedCapacity <= 0) {
+        Alert.alert('Validation', 'Capacity must be greater than 0');
+        return;
+      }
+      venueData.capacity = parsedCapacity;
     }
-    if (phoneNumber.trim()) venuData.phoneNumber = phoneNumber.trim();
+    if (phoneNumber.trim()) venueData.phoneNumber = phoneNumber.trim();
+    if (website.trim()) venueData.website = website.trim();
+    if (imageUrl.trim()) venueData.imageUrl = imageUrl.trim();
 
-    createMutation.mutate(venuData);
-  }, [name, address, city, state, zipCode, latitude, longitude, capacity, phoneNumber, createMutation]);
+    createMutation.mutate(venueData);
+  }, [name, address, city, state, zipCode, latitude, longitude, capacity, phoneNumber, website, imageUrl, createMutation]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -188,6 +205,32 @@ export default function CreateVenueScreen() {
             style={styles.input}
             placeholderTextColor="#999"
             keyboardType="phone-pad"
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Website</Text>
+          <TextInput
+            placeholder="https://example.com"
+            value={website}
+            onChangeText={setWebsite}
+            style={styles.input}
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            keyboardType="url"
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Image URL</Text>
+          <TextInput
+            placeholder="https://..."
+            value={imageUrl}
+            onChangeText={setImageUrl}
+            style={styles.input}
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            keyboardType="url"
           />
         </View>
 

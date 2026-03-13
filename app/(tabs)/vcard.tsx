@@ -1,26 +1,68 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { BarCodeScannedEvent, PermissionStatus } from 'expo-barcode-scanner';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ComponentType } from 'react';
 import { ScrollView, View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { buildVCardSharePayload, exchangeVCard, parseVCardPayload, type ScannedVCard } from '../../src/api/social';
+import { resolvePartyId } from '../../src/lib/identity';
+import { useAuth } from '../../src/providers/AuthProvider';
+import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 
-type BarCodeScannerModule = typeof import('expo-barcode-scanner');
-type BarCodeScannerComponent = BarCodeScannerModule['BarCodeScanner'];
+type ScanEvent = { data: string };
+type ScannerModule = {
+  BarCodeScanner: ComponentType<{ onBarCodeScanned: (event: ScanEvent) => void; style?: unknown }>;
+  requestPermissionsAsync: () => Promise<{ status: string }>;
+};
+
+const parsePositivePartyId = (value: string): number | undefined => {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+};
 
 export default function VCardScreen() {
+  const { token, partyId: authPartyId } = useAuth();
+  const { partyId: settingsPartyId, displayName } = useUserSettings();
+  const hydratedDefaultsRef = useRef({ name: false, partyId: false });
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [partyId, setPartyId] = useState('');
-  const [apiToken, setApiToken] = useState('');
+  const effectivePartyId = useMemo(
+    () => resolvePartyId(authPartyId, settingsPartyId),
+    [authPartyId, settingsPartyId],
+  );
 
   const [isScanning, setIsScanning] = useState(false);
-  const [cameraStatus, setCameraStatus] = useState<PermissionStatus | null>(null);
+  const [cameraStatus, setCameraStatus] = useState<string | null>(null);
   const [scanned, setScanned] = useState<ScannedVCard | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const [scannerModule, setScannerModule] = useState<BarCodeScannerComponent | null>(null);
+  const [scannerModule, setScannerModule] = useState<ScannerModule | null>(null);
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const ScannerComponent = scannerModule?.BarCodeScanner;
+
+  useEffect(() => {
+    if (!displayName || hydratedDefaultsRef.current.name) return;
+    hydratedDefaultsRef.current.name = true;
+    setName(displayName);
+  }, [displayName]);
+
+  useEffect(() => {
+    if (!effectivePartyId || hydratedDefaultsRef.current.partyId) return;
+    hydratedDefaultsRef.current.partyId = true;
+    setPartyId(effectivePartyId);
+  }, [effectivePartyId]);
+
+  const handleNameChange = useCallback((value: string) => {
+    hydratedDefaultsRef.current.name = true;
+    setName(value);
+  }, []);
+
+  const handlePartyIdChange = useCallback((value: string) => {
+    hydratedDefaultsRef.current.partyId = true;
+    setPartyId(value);
+  }, []);
 
   const qrValue = useMemo(
     () =>
@@ -28,16 +70,16 @@ export default function VCardScreen() {
         name,
         email,
         phone,
-        partyId: Number(partyId) > 0 ? Number(partyId) : undefined,
+        partyId: parsePositivePartyId(partyId),
       }),
     [name, email, phone, partyId],
   );
 
   const ensureScannerModule = useCallback(async () => {
-    if (scannerModule || scannerError) return;
-    try {
-      const mod = await import('expo-barcode-scanner');
-      setScannerModule(mod.BarCodeScanner);
+      if (scannerModule || scannerError) return;
+      try {
+      const mod = (await import('expo-barcode-scanner')) as unknown as ScannerModule;
+      setScannerModule(mod);
     } catch (_err) {
       setScannerError(
         'El lector de códigos no está disponible en este build de Expo Go. Instala la versión compatible o usa un dev client.'
@@ -47,8 +89,8 @@ export default function VCardScreen() {
   }, [scannerModule, scannerError]);
 
   const requestPermission = useCallback(
-    async (Scanner: BarCodeScannerComponent) => {
-      const { status } = await Scanner.requestPermissionsAsync();
+    async (scanner: ScannerModule) => {
+      const { status } = await scanner.requestPermissionsAsync();
       setCameraStatus(status);
       if (status !== 'granted') {
         Alert.alert('Permiso requerido', 'Activa el acceso a la cámara para escanear códigos QR.');
@@ -58,7 +100,7 @@ export default function VCardScreen() {
     []
   );
 
-  const handleScan = (event: BarCodeScannedEvent) => {
+  const handleScan = (event: ScanEvent) => {
     setIsScanning(false);
     const parsed = parseVCardPayload(event.data);
     if (!parsed) {
@@ -73,13 +115,13 @@ export default function VCardScreen() {
       Alert.alert('Falta ID', 'El QR escaneado no incluye un partyId.');
       return;
     }
-    if (!apiToken.trim()) {
-      Alert.alert('Token requerido', 'Ingresa un token de API para enviar el intercambio.');
+    if (!token) {
+      Alert.alert('Acceso requerido', 'Necesitas permisos para enviar el intercambio al CRM.');
       return;
     }
     try {
       setIsSending(true);
-      await exchangeVCard(scanned.partyId, apiToken);
+      await exchangeVCard(scanned.partyId);
       Alert.alert('Listo', 'Intercambio enviado. Ambas partes verán el contacto en CRM.');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No pudimos enviar el intercambio.';
@@ -104,19 +146,19 @@ export default function VCardScreen() {
     <ScrollView contentContainerStyle={styles.wrap}>
       <Text style={styles.title}>Intercambio de vCard</Text>
       <Text style={styles.subtitle}>
-        Muestra tu QR para compartir tu contacto o escanea el de otra persona. Opcionalmente, envía el intercambio al
-        CRM usando tu token de API.
+        Muestra tu QR para compartir tu contacto o escanea el de otra persona. Si tienes acceso, envía el intercambio al
+        CRM desde aquí.
       </Text>
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Tu tarjeta</Text>
-        <TextInput placeholder="Nombre" value={name} onChangeText={setName} style={styles.input} />
+        <TextInput placeholder="Nombre" value={name} onChangeText={handleNameChange} style={styles.input} />
         <TextInput placeholder="Correo" value={email} onChangeText={setEmail} style={styles.input} autoCapitalize="none" />
         <TextInput placeholder="Teléfono" value={phone} onChangeText={setPhone} style={styles.input} keyboardType="phone-pad" />
         <TextInput
           placeholder="Party ID (opcional)"
           value={partyId}
-          onChangeText={setPartyId}
+          onChangeText={handlePartyIdChange}
           style={styles.input}
           keyboardType="number-pad"
         />
@@ -132,9 +174,9 @@ export default function VCardScreen() {
           <View style={styles.scannerBox}>
             {scannerError ? (
               <Text style={styles.errorText}>{scannerError}</Text>
-            ) : scannerModule ? (
+            ) : ScannerComponent ? (
               <>
-                <scannerModule onBarCodeScanned={handleScan} style={StyleSheet.absoluteFillObject} />
+                <ScannerComponent onBarCodeScanned={handleScan} style={StyleSheet.absoluteFillObject} />
                 <Text style={styles.scannerText}>Alinea el QR dentro del recuadro</Text>
               </>
             ) : (
@@ -153,13 +195,6 @@ export default function VCardScreen() {
             {scanned.email && <Text style={styles.rowText}>{scanned.email}</Text>}
             {scanned.phone && <Text style={styles.rowText}>{scanned.phone}</Text>}
             {scanned.partyId && <Text style={styles.rowText}>Party ID: {scanned.partyId}</Text>}
-            <TextInput
-              placeholder="Token API (Bearer)"
-              value={apiToken}
-              onChangeText={setApiToken}
-              style={styles.input}
-              autoCapitalize="none"
-            />
             <Button
               title={isSending ? 'Enviando…' : 'Enviar intercambio al CRM'}
               onPress={() => void handleExchange()}

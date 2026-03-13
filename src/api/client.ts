@@ -1,24 +1,40 @@
 import axios from 'axios';
 import { API_BASE } from '../lib/api';
 
-let currentToken: string | undefined =
-  process.env.EXPO_PUBLIC_API_TOKEN?.trim() || undefined;
+const BEARER_PREFIX = /^bearer\b/i;
+
+export const normalizeAuthToken = (token?: string | null) => {
+  const trimmed = token?.trim();
+  if (!trimmed) return undefined;
+
+  if (BEARER_PREFIX.test(trimmed)) {
+    const credentials = trimmed.replace(BEARER_PREFIX, '').trim();
+    return credentials ? `Bearer ${credentials}` : undefined;
+  }
+
+  return `Bearer ${trimmed}`;
+};
+
+let currentToken: string | undefined = normalizeAuthToken(process.env.EXPO_PUBLIC_API_TOKEN);
 
 export const http = axios.create({
   baseURL: API_BASE,
-  headers: {
-    'Content-Type': 'application/json',
-    ...(currentToken ? { Authorization: currentToken } : {})
-  }
+  headers: { 'Content-Type': 'application/json' }
 });
 
-export function setAuthToken(token: string | null | undefined) {
-  currentToken = token?.trim() || undefined;
-  if (currentToken) {
-    http.defaults.headers.common.Authorization = currentToken;
+const applyAuthHeader = (token?: string) => {
+  if (token) {
+    http.defaults.headers.common.Authorization = token;
   } else {
     delete http.defaults.headers.common.Authorization;
   }
+};
+
+applyAuthHeader(currentToken);
+
+export function setAuthToken(token: string | null | undefined) {
+  currentToken = normalizeAuthToken(token);
+  applyAuthHeader(currentToken);
 }
 
 export function getAuthToken(): string | undefined {
@@ -37,6 +53,11 @@ export async function post<T>(path: string, body: unknown): Promise<T> {
 
 export async function put<T>(path: string, body: unknown): Promise<T> {
   const res = await http.put<T>(path, body);
+  return res.data;
+}
+
+export async function del<T>(path: string): Promise<T> {
+  const res = await http.delete<T>(path);
   return res.data;
 }
 

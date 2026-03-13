@@ -10,13 +10,9 @@ type LegacyConstants = {
 type ExpoExtra = {
   apiBase?: string | null;
   uploadUrl?: string | null;
-  appEnvironment?: string | null;
 };
 
-const normalizeEnv = (value: string | null | undefined) => {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-};
+const readConfigValue = (value?: string | null) => value?.trim() || undefined;
 
 const deriveDevHost = () => {
   const legacy = Constants as LegacyConstants;
@@ -32,23 +28,17 @@ const deriveDevHost = () => {
   return Platform.select({ android: '10.0.2.2', ios: 'localhost', default: 'localhost' }) ?? 'localhost';
 };
 
-const expoExtra = (Constants.expoConfig?.extra ?? {}) as ExpoExtra;
-const configuredApiBase = normalizeEnv(process.env.EXPO_PUBLIC_API_BASE) ?? normalizeEnv(expoExtra.apiBase);
-const configuredUploadBase =
-  normalizeEnv(process.env.EXPO_PUBLIC_UPLOAD_URL) ?? normalizeEnv(expoExtra.uploadUrl);
-const isDevelopmentBuild = process.env.NODE_ENV !== 'production';
-const appEnvironment = normalizeEnv(expoExtra.appEnvironment) ?? (isDevelopmentBuild ? 'development' : 'production');
+const expoExtra = Constants.expoConfig?.extra as ExpoExtra | undefined;
 
-export const API_BASE = (
-  configuredApiBase ?? (appEnvironment === 'development' ? `http://${deriveDevHost()}:8080` : '')
-).replace(/\/+$/, '');
-
-if (!API_BASE && appEnvironment !== 'development') {
-  console.error('EXPO_PUBLIC_API_BASE is missing for a non-development build.');
-}
-
-const API_TOKEN = normalizeEnv(process.env.EXPO_PUBLIC_API_TOKEN);
-export const UPLOAD_BASE = configuredUploadBase;
+export const API_BASE =
+  (readConfigValue(process.env.EXPO_PUBLIC_API_BASE) ||
+    readConfigValue(expoExtra?.apiBase) ||
+    `http://${deriveDevHost()}:8080`).replace(/\/+$/, '');
+const API_TOKEN = process.env.EXPO_PUBLIC_API_TOKEN?.trim();
+export const UPLOAD_BASE =
+  readConfigValue(process.env.EXPO_PUBLIC_UPLOAD_URL) ||
+  readConfigValue(expoExtra?.uploadUrl) ||
+  `${API_BASE}/drive/upload`;
 
 export const api = axios.create({
   baseURL: API_BASE,

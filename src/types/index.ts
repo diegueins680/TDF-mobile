@@ -14,17 +14,19 @@ export type Booking = {
   title: string;
   start: string; // ISO
   end: string;   // ISO
+  status?: string | null;
   room?: string | null;
   teacherId?: ID | null;
 };
 
 export type PipelineStage = 'Intake' | 'Editing' | 'Mixing' | 'Revisions' | 'Mastering' | 'Approved';
+export type PipelineKind = 'mixing' | 'mastering';
 export type PipelineCard = {
   id: ID;
   title: string;
   artist?: string | null;
   stage: PipelineStage;
-  kind: 'mixing' | 'mastering';
+  kind: PipelineKind;
 };
 
 export type Asset = {

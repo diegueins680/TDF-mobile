@@ -1,16 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity } from 'react-native';
-
-import { Bookings as BookingsApi } from '../../src/api/bookings';
-import type { Booking } from '../../src/api/bookings';
+import { createBooking, listBookings } from '../../src/api/bookings';
+import type { Booking } from '../../src/types';
 
 export default function Bookings() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['bookings'], queryFn: BookingsApi.list });
+  const q = useQuery<Booking[]>({ queryKey: ['bookings'], queryFn: listBookings });
 
   const m = useMutation({
-    mutationFn: BookingsApi.create,
+    mutationFn: createBooking,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bookings'] })
   });
 
@@ -29,7 +28,7 @@ export default function Bookings() {
       <Text style={{ fontWeight: '700' }}>{item.title}</Text>
       <Text style={{ color: '#475569' }}>{item.start}</Text>
       <Text style={{ color: '#475569' }}>{item.end}</Text>
-      <Text style={{ color: '#22c55e', marginTop: 4 }}>{item.status}</Text>
+      {item.status ? <Text style={{ color: '#22c55e', marginTop: 4 }}>{item.status}</Text> : null}
     </View>
   ), []);
 

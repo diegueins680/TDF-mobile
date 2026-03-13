@@ -2,12 +2,12 @@
 
 ## What was added
 
-- Consolidated Expo configuration into `app.config.ts` and removed the placeholder `app.json`.
-- Added iOS bundle identifier `com.tdf.records` and confirmed Android application ID `com.tdf.records`.
-- Added release asset generation and generated `assets/app-icon.png`, `assets/adaptive-icon.png`, `assets/splash-icon.png`, and `assets/favicon.png`.
-- Added `eas.json` build profiles for `development`, `preview`, `production`, and `ios-simulator`.
+- Consolidated Expo configuration into `app.config.ts` while keeping `app.json` only for linked Expo project metadata.
+- Added the store-ready iOS bundle identifier `com.tdfrecords.app` and Android application ID `com.tdfrecords.app`.
+- Added release asset generation and generated `assets/icon.png`, `assets/adaptive-icon.png`, `assets/adaptive-icon-monochrome.png`, `assets/splash.png`, and `assets/favicon.png`.
+- Added `eas.json` build profiles for `development`, `preview`, `production`, and `ios-simulator`, with release URLs pinned for cloud builds.
 - Added release helper scripts in `package.json` plus `scripts/release-check.mjs`.
-- Hardened release env handling so preview/production builds require backend URLs and reject embedded API tokens.
+- Hardened release env handling so preview/production builds resolve the release backend even if Expo evaluates `app.config.ts` before EAS injects profile env vars, while still rejecting embedded API tokens.
 - Added store metadata, privacy, support, and checklist templates under `docs/release/`.
 - Updated the in-app About experience to expose version/build/environment details plus public support and legal links.
 
@@ -15,13 +15,11 @@
 
 App version: `1.0.0`
 
-iOS bundle identifier: `com.tdf.records`
+iOS bundle identifier: `com.tdfrecords.app`
 
-Android application ID: `com.tdf.records`
+Android application ID: `com.tdfrecords.app`
 
-Default iOS build number: `1`
-
-Default Android version code: `1`
+Release build numbers: managed by EAS remote versioning
 
 Deep link scheme: `tdf`
 
@@ -34,7 +32,7 @@ Deep link scheme: `tdf`
 
 ## How to build and submit
 
-1. Set production env vars from `.env.example`.
+1. Copy release defaults from `.env.example` if you need local QA overrides, but rely on `eas.json` + `app.config.ts` fallbacks for cloud `preview` and `production` builds.
 2. Run `npm run release:check`.
 3. Run `npm run expo:config` and `npm run doctor`.
 4. Build with `npm run build:ios:production` and `npm run build:android:production`.
@@ -42,15 +40,14 @@ Deep link scheme: `tdf`
 
 ## Validation status
 
-- `python3 scripts/generate-release-assets.py`: passed
-- `python3 -m py_compile scripts/generate-release-assets.py`: passed
+- `python3 scripts/generate_release_assets.py`: passed
+- `python3 -m py_compile scripts/generate_release_assets.py`: passed
 - `node --check scripts/release-check.mjs`: passed
-- `node scripts/release-check.mjs`: expected failure without release env vars (`EXPO_PUBLIC_API_BASE`, `EXPO_PUBLIC_UPLOAD_URL`)
+- `node scripts/release-check.mjs`: resolves release URLs automatically for `preview` and `production` profiles
 - `npm install --offline --no-audit --progress=false`: failed in this sandbox with `ENOTCACHED`, so `lint`, `typecheck`, `test`, `expo config`, `expo-doctor`, and `prebuild` could not be executed here
 
 ## Non-repo blockers
 
-- Real production values for `EXPO_PUBLIC_API_BASE` and `EXPO_PUBLIC_UPLOAD_URL`.
 - Apple signing setup and App Store Connect app record.
 - Google Play signing / service account setup and Play Console app record.
 - Reviewer credentials or a demo bearer token for the authenticated portions of the app.

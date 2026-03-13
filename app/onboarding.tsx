@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Animated, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, type ComponentType, useRef } from 'react';
+import { Animated, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, type ViewProps } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -34,6 +34,8 @@ const STEPS: Step[] = [
   }
 ] as const;
 
+const AnimatedView = Animated.createAnimatedComponent(View) as ComponentType<Animated.AnimatedProps<ViewProps>>;
+
 export default function OnboardingScreen() {
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -61,7 +63,7 @@ export default function OnboardingScreen() {
           <TouchableOpacity style={styles.skip} onPress={() => complete('/(tabs)/parties')}>
             <Text style={styles.skipText}>Saltar</Text>
           </TouchableOpacity>
-          <Animated.View
+          <AnimatedView
             style={[
               styles.heroContent,
               {
@@ -90,7 +92,7 @@ export default function OnboardingScreen() {
                 <Text style={styles.metaText}>Acceso inmediato</Text>
               </View>
             </View>
-          </Animated.View>
+          </AnimatedView>
         </View>
 
         <View style={styles.steps}>

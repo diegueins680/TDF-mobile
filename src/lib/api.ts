@@ -8,8 +8,8 @@ type LegacyConstants = {
 };
 
 type ExpoExtra = {
-  apiBase?: string;
-  uploadUrl?: string;
+  apiBase?: string | null;
+  uploadUrl?: string | null;
 };
 
 const readConfigValue = (value?: string | null) => value?.trim() || undefined;
@@ -35,7 +35,10 @@ export const API_BASE =
     readConfigValue(expoExtra?.apiBase) ||
     `http://${deriveDevHost()}:8080`).replace(/\/+$/, '');
 const API_TOKEN = process.env.EXPO_PUBLIC_API_TOKEN?.trim();
-export const UPLOAD_BASE = readConfigValue(process.env.EXPO_PUBLIC_UPLOAD_URL) || readConfigValue(expoExtra?.uploadUrl);
+export const UPLOAD_BASE =
+  readConfigValue(process.env.EXPO_PUBLIC_UPLOAD_URL) ||
+  readConfigValue(expoExtra?.uploadUrl) ||
+  `${API_BASE}/drive/upload`;
 
 export const api = axios.create({
   baseURL: API_BASE,

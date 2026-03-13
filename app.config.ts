@@ -6,6 +6,7 @@ const APP_SLUG = 'tdf-mobile';
 const APP_SCHEME = 'tdf';
 const APP_VERSION = process.env.APP_VERSION?.trim() || '1.0.0';
 const BUNDLE_ID = 'com.tdfrecords.app';
+const DEFAULT_TIME_ZONE = 'America/Guayaquil';
 const PUBLIC_SITE_URL = 'https://tdf-app.pages.dev/mobile-app';
 const PUBLIC_SUPPORT_URL = `${PUBLIC_SITE_URL}/support.html`;
 const PUBLIC_PRIVACY_POLICY_URL = `${PUBLIC_SITE_URL}/privacy.html`;
@@ -19,7 +20,8 @@ const RELEASE_API_BASE = 'https://tdf-hq.fly.dev';
 const RELEASE_UPLOAD_URL = `${RELEASE_API_BASE}/drive/upload`;
 const RELEASE_BUILD_PROFILES = new Set(['preview', 'production']);
 const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
-const EAS_BUILD_PROFILE = process.env.EAS_BUILD_PROFILE?.trim();
+const EAS_BUILD_PROFILE = process.env.EAS_BUILD_PROFILE?.trim() || 'development';
+const DEFAULT_TZ = process.env.EXPO_PUBLIC_TZ?.trim() || DEFAULT_TIME_ZONE;
 
 const resolveReleaseAwareEnv = (name: 'EXPO_PUBLIC_API_BASE' | 'EXPO_PUBLIC_UPLOAD_URL', releaseValue: string, localValue: string) => {
   const explicitValue = process.env[name]?.trim();
@@ -27,7 +29,7 @@ const resolveReleaseAwareEnv = (name: 'EXPO_PUBLIC_API_BASE' | 'EXPO_PUBLIC_UPLO
     return explicitValue;
   }
 
-  return EAS_BUILD_PROFILE && RELEASE_BUILD_PROFILES.has(EAS_BUILD_PROFILE) ? releaseValue : localValue;
+  return RELEASE_BUILD_PROFILES.has(EAS_BUILD_PROFILE) ? releaseValue : localValue;
 };
 
 // EAS profile envs should normally populate these values, but keep release config
@@ -105,6 +107,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...(config.extra ?? {}),
     apiBase: API_BASE,
     uploadUrl: UPLOAD_URL,
+    appEnvironment: EAS_BUILD_PROFILE,
+    defaultTimeZone: DEFAULT_TZ,
     supportEmail: SUPPORT_EMAIL,
     urls: {
       support: PUBLIC_SUPPORT_URL,

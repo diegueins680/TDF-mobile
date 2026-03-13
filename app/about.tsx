@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import { API_BASE } from '../src/lib/api';
+import { PublicLinksSection } from '../src/components/PublicLinksSection';
 
 type VersionInfo = {
   name: string;
@@ -56,6 +57,7 @@ export default function About() {
           )}
         </View>
       )}
+      <PublicLinksSection />
     </ScrollView>
   );
 }

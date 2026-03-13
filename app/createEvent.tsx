@@ -121,8 +121,8 @@ export default function CreateEventScreen() {
 
   const artistById = useMemo(() => {
     const map = new Map<string, ArtistProfile>();
-    Object.entries(selectedArtistsById).forEach(([key, artist]) => {
-      map.set(key, artist);
+    Object.keys(selectedArtistsById).forEach((key) => {
+      map.set(key, selectedArtistsById[key]);
     });
     (artists ?? []).forEach((artist) => map.set(String(artist.id), artist));
     return map;

@@ -2,6 +2,7 @@ import { Link, useLocalSearchParams } from 'expo-router';
 import * as React from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { normalizeRouteParam } from '../../src/lib/routeParams';
+import { API_BASE } from '../../src/lib/api';
 
 type Row = {
   id: number;
@@ -26,8 +27,7 @@ export default function InputListScreen() {
       return;
     }
 
-    const API = process.env.EXPO_PUBLIC_API_BASE || 'http://localhost:8080';
-    fetch(`${API}/sessions/${id}/input-list`)
+    fetch(`${API_BASE}/sessions/${id}/input-list`)
       .then((r) => r.json())
       .then(setData)
       .catch(() => setData([]));

@@ -28,6 +28,14 @@ Optional release-time override:
 export EAS_PROJECT_ID=<expo-project-id>
 ```
 
+Development-only override:
+
+```bash
+export EXPO_PUBLIC_API_TOKEN=<temporary-bearer-token>
+```
+
+Do not embed `EXPO_PUBLIC_API_TOKEN` in `preview` or `production` builds.
+
 You can copy defaults from `.env.example` for local QA and release setup.
 
 ## Commands
@@ -42,15 +50,26 @@ npm run typecheck
 npm run test
 npm run release:assets
 npm run release:check
+npm run doctor
+npm run expo:config
+npm run prebuild:check
+npm run build:ios:preview
+npm run build:ios:production
+npm run build:android:preview
+npm run build:android:production
+npm run submit:ios:production
+npm run submit:android:production
 ```
 
 ## Release Files
 
 - Release process: [docs/release.md](docs/release.md)
+- Store submission handoff: [STORE_SUBMISSION_HANDOFF.md](STORE_SUBMISSION_HANDOFF.md)
 - Source privacy policy: [docs/privacy-policy.md](docs/privacy-policy.md)
 - Source terms of service: [docs/terms-of-service.md](docs/terms-of-service.md)
 - Source support page: [docs/support.md](docs/support.md)
 - Source data deletion page: [docs/data-deletion.md](docs/data-deletion.md)
+- Store checklist and templates: [docs/release/store-submission-checklist.md](docs/release/store-submission-checklist.md)
 
 ## Public Release URLs
 

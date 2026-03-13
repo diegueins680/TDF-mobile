@@ -62,7 +62,7 @@ export default function UserProfileScreen() {
 
   const savedEvents = useMemo(() => {
     if (!savedEventsQuery.data) return [];
-    const order = new Map(savedEventIds.map((id, index) => [id, index]));
+    const order = new Map<string, number>(savedEventIds.map((id, index) => [String(id), index] as const));
     return [...savedEventsQuery.data].sort((a, b) => {
       const aOrder = order.get(String(a.id)) ?? Number.MAX_SAFE_INTEGER;
       const bOrder = order.get(String(b.id)) ?? Number.MAX_SAFE_INTEGER;

@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "types": ["jest"]
+    "types": ["jest"],
+    "resolveJsonModule": true
   },
   "extends": "expo/tsconfig.base",
   "include": [

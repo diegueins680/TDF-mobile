@@ -1,9 +1,26 @@
 import { get, post } from './client';
-import type { BookingDTO } from './types';
-import { fromBookingDTO } from './types';
 import type { Booking } from '../types';
 
+export type BookingDTO = {
+  bookingId: number;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  status: string;
+};
+
 export type CreateBookingReq = {
+  title: string;
+  start: string;
+  end: string;
+  status?: string;
+  partyId?: number | null;
+  serviceType?: string | null;
+  resourceIds?: string[];
+  notes?: string | null;
+};
+
+type CreateBookingPayload = {
   cbTitle: string;
   cbStartsAt: string;
   cbEndsAt: string;
@@ -14,23 +31,35 @@ export type CreateBookingReq = {
   cbResourceIds?: string[];
 };
 
-export type CreateBookingInput = {
-  title: string;
-  start: string;
-  end: string;
-  status?: string;
-  notes?: string | null;
-  partyId?: number | null;
-  serviceType?: string | null;
-  resourceIds?: string[];
-};
+const toBooking = (dto: BookingDTO): Booking => ({
+  id: dto.bookingId,
+  title: dto.title,
+  start: dto.startsAt,
+  end: dto.endsAt,
+  status: dto.status
+});
+
+const toCreatePayload = (body: CreateBookingReq): CreateBookingPayload => ({
+  cbTitle: body.title,
+  cbStartsAt: body.start,
+  cbEndsAt: body.end,
+  cbStatus: body.status ?? 'Confirmed',
+  cbNotes: body.notes ?? null,
+  cbPartyId: body.partyId ?? null,
+  cbServiceType: body.serviceType ?? null,
+  cbResourceIds: body.resourceIds
+});
 
 export const Bookings = {
-  list: () => get<BookingDTO[]>('/bookings'),
-  listByParty: async (partyId: number) => {
+  list: async (): Promise<Booking[]> => {
+    const raw = await get<BookingDTO[]>('/bookings');
+    return raw.map(toBooking);
+  },
+  listByParty: async (partyId: number): Promise<Booking[]> => {
     const params = new URLSearchParams({ partyId: String(partyId) });
     try {
-      return await get<BookingDTO[]>(`/bookings?${params.toString()}`);
+      const raw = await get<BookingDTO[]>(`/bookings?${params.toString()}`);
+      return raw.map(toBooking);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error ?? '');
       if (message.includes('404')) {
@@ -39,25 +68,16 @@ export const Bookings = {
       throw error;
     }
   },
-  create: (body: CreateBookingReq) => post<BookingDTO>('/bookings', body),
+  create: async (body: CreateBookingReq): Promise<Booking> => {
+    const res = await post<BookingDTO>('/bookings', toCreatePayload(body));
+    return toBooking(res);
+  }
 };
 
 export async function listBookings(): Promise<Booking[]> {
-  const data = await Bookings.list();
-  return data.map(fromBookingDTO);
+  return Bookings.list();
 }
 
-export async function createBooking(input: CreateBookingInput): Promise<Booking> {
-  const payload: CreateBookingReq = {
-    cbTitle: input.title,
-    cbStartsAt: input.start,
-    cbEndsAt: input.end,
-    cbStatus: input.status ?? 'scheduled',
-    cbNotes: input.notes,
-    cbPartyId: input.partyId ?? null,
-    cbServiceType: input.serviceType ?? null,
-    cbResourceIds: input.resourceIds,
-  };
-  const data = await Bookings.create(payload);
-  return fromBookingDTO(data);
+export async function createBooking(input: CreateBookingReq): Promise<Booking> {
+  return Bookings.create(input);
 }

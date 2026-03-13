@@ -1,7 +1,6 @@
-import { useMemo } from 'react';
-import { View, Text } from 'react-native';
-import { Agenda, AgendaSchedule } from 'react-native-calendars';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
+import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { createBooking, listBookings } from '../../src/api/bookings';
 import type { Booking } from '../../src/types';
 
@@ -11,35 +10,77 @@ export default function Bookings() {
 
   const m = useMutation({
     mutationFn: createBooking,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookings'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookings'] })
   });
 
-  const items: AgendaSchedule = useMemo(() => {
-    const acc: AgendaSchedule = {};
-    for (const b of q.data ?? []) {
-      const day = (b.start ?? '').slice(0, 10);
-      acc[day] ||= [];
-      acc[day].push({ name: b.title, height: 64, day });
-    }
-    return acc;
-  }, [q.data]);
+  const items = useMemo(() => q.data ?? [], [q.data]);
+  const sorted = useMemo(() => [...items].sort((a, b) => a.start.localeCompare(b.start)), [items]);
+
+  const createQuickSession = useCallback(() => {
+    const now = new Date();
+    const start = now.toISOString();
+    const end = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+    m.mutate({ title: 'Session', start, end });
+  }, [m]);
+
+  const renderItem = useCallback(({ item }: { item: Booking }) => (
+    <View style={{ backgroundColor: 'white', borderRadius: 8, padding: 12, elevation: 2 }}>
+      <Text style={{ fontWeight: '700' }}>{item.title}</Text>
+      <Text style={{ color: '#475569' }}>{item.start}</Text>
+      <Text style={{ color: '#475569' }}>{item.end}</Text>
+      {item.status ? <Text style={{ color: '#22c55e', marginTop: 4 }}>{item.status}</Text> : null}
+    </View>
+  ), []);
+
+  const keyExtractor = useCallback((item: Booking) => String(item.id), []);
+
+  const renderEmpty = useCallback(() => (
+    <View style={{ padding: 20 }}>
+      <Text>No bookings</Text>
+    </View>
+  ), []);
+
+  const Separator = useCallback(() => <View style={{ height: 8 }} />, []);
+
+  if (q.isError) {
+    const message = q.error instanceof Error ? q.error.message : 'No se pudieron cargar las reservas.';
+    return (
+      <View style={{ padding: 20 }}>
+        <Text style={{ color: 'red' }}>{message}</Text>
+      </View>
+    );
+  }
+
+  if (q.isLoading) {
+    return (
+      <View style={{ padding: 20 }}>
+        <Text>Cargando reservas…</Text>
+      </View>
+    );
+  }
 
   return (
-    <Agenda
-      items={items}
-      renderItem={(item) => (
-        <View style={{ padding: 10, backgroundColor: 'white', borderRadius: 8, marginRight: 10 }}>
-          <Text>{item.name}</Text>
-        </View>
-      )}
-      renderEmptyData={() => (
-        <View style={{ padding: 20 }}><Text>No bookings</Text></View>
-      )}
-      onDayPress={(d) => {
-        const start = `${d.dateString}T10:00:00`;
-        const end = `${d.dateString}T12:00:00`;
-        m.mutate({ title: 'Session', start, end });
-      }}
-    />
+    <View style={{ flex: 1, padding: 16 }}>
+      <TouchableOpacity
+        onPress={createQuickSession}
+        style={{ backgroundColor: '#2563eb', padding: 12, borderRadius: 8, marginBottom: 12 }}
+      >
+        <Text style={{ color: 'white', fontWeight: '700', textAlign: 'center' }}>
+          Crear sesión rápida
+        </Text>
+      </TouchableOpacity>
+
+      <FlatList
+        data={sorted}
+        keyExtractor={keyExtractor}
+        ItemSeparatorComponent={Separator}
+        renderItem={renderItem}
+        ListEmptyComponent={renderEmpty}
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={12}
+        windowSize={8}
+        removeClippedSubviews
+      />
+    </View>
   );
 }

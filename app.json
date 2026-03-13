@@ -7,7 +7,19 @@
       "expo-router"
     ],
     "extra": {
-      "eas": { "projectId": "placeholder" }
-    }
+      "apiBase": "http://localhost:8080",
+      "supportEmail": "soporte@tdfrecords.com",
+      "urls": {
+        "support": "https://tdf-app.pages.dev/mobile-app/support.html",
+        "privacyPolicy": "https://tdf-app.pages.dev/mobile-app/privacy.html",
+        "termsOfService": "https://tdf-app.pages.dev/mobile-app/terms.html",
+        "dataDeletion": "https://tdf-app.pages.dev/mobile-app/data-deletion.html"
+      },
+      "router": {},
+      "eas": {
+        "projectId": "218aca4d-c096-4892-a353-c1dd7df23448"
+      }
+    },
+    "owner": "cuco.saa"
   }
 }

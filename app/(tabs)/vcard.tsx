@@ -21,6 +21,7 @@ export default function VCardScreen() {
   const { token, partyId: authPartyId } = useAuth();
   const { partyId: settingsPartyId, displayName } = useUserSettings();
   const hydratedDefaultsRef = useRef({ name: false, partyId: false });
+  const scanLockRef = useRef(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -92,7 +93,9 @@ export default function VCardScreen() {
     }
   }, [cameraPermission?.granted, requestCameraPermission]);
 
-  const handleScan = (event: ScanEvent) => {
+  const handleScan = useCallback((event: ScanEvent) => {
+    if (scanLockRef.current) return;
+    scanLockRef.current = true;
     setIsScanning(false);
     const parsed = parseVCardPayload(event.data);
     if (!parsed) {
@@ -100,7 +103,7 @@ export default function VCardScreen() {
       return;
     }
     setScanned(parsed);
-  };
+  }, []);
 
   const handleExchange = async () => {
     if (!scanned?.partyId) {
@@ -127,6 +130,12 @@ export default function VCardScreen() {
     if (!isScanning || cameraPermission === null || cameraPermission.granted) return;
     setIsScanning(false);
   }, [isScanning, cameraPermission]);
+
+  useEffect(() => {
+    if (!isScanning) {
+      scanLockRef.current = false;
+    }
+  }, [isScanning]);
 
   return (
     <ScrollView contentContainerStyle={styles.wrap}>

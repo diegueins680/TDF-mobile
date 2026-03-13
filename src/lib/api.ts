@@ -36,7 +36,8 @@ const expoExtra = (Constants.expoConfig?.extra ?? {}) as ExpoExtra;
 const configuredApiBase = normalizeEnv(process.env.EXPO_PUBLIC_API_BASE) ?? normalizeEnv(expoExtra.apiBase);
 const configuredUploadBase =
   normalizeEnv(process.env.EXPO_PUBLIC_UPLOAD_URL) ?? normalizeEnv(expoExtra.uploadUrl);
-const appEnvironment = normalizeEnv(expoExtra.appEnvironment) ?? (__DEV__ ? 'development' : 'production');
+const isDevelopmentBuild = process.env.NODE_ENV !== 'production';
+const appEnvironment = normalizeEnv(expoExtra.appEnvironment) ?? (isDevelopmentBuild ? 'development' : 'production');
 
 export const API_BASE = (
   configuredApiBase ?? (appEnvironment === 'development' ? `http://${deriveDevHost()}:8080` : '')

@@ -1,6 +1,5 @@
 import type { ExpoConfig } from 'expo/config';
-
-const pkg = require('./package.json') as { version: string };
+import pkg from './package.json';
 
 const APP_NAME = 'TDF Records';
 const APP_DESCRIPTION =

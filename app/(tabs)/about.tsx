@@ -6,12 +6,17 @@ import { ScrollView, View, Text, StyleSheet } from 'react-native';
 
 import { PublicLinksSection } from '../../src/components/PublicLinksSection';
 
+type ExpoExtra = {
+  appEnvironment?: string;
+  supportEmail?: string;
+};
+
 export default function About() {
   const q = useQuery({ queryKey: ['health'], queryFn: fetchHealth });
+  const extra = Constants.expoConfig?.extra as ExpoExtra | undefined;
   const appEnvironment =
-    typeof Constants.expoConfig?.extra?.appEnvironment === 'string'
-      ? Constants.expoConfig.extra.appEnvironment
-      : 'development';
+    typeof extra?.appEnvironment === 'string' ? extra.appEnvironment : 'development';
+  const supportEmail = extra?.supportEmail ?? 'soporte@tdfrecords.com';
   const appVersion = Constants.expoConfig?.version ?? 'unknown';
   const iosBuild = Constants.expoConfig?.ios?.buildNumber;
   const androidVersionCode = Constants.expoConfig?.android?.versionCode;
@@ -28,6 +33,7 @@ export default function About() {
         <Text>API: {API_BASE}</Text>
         <Text>Uploads: {UPLOAD_BASE ?? 'Not configured'}</Text>
         <Text>TZ: {DEFAULT_TZ}</Text>
+        <Text>Support: {supportEmail}</Text>
         <Text>Status: {q.isLoading ? '…' : q.data?.status || 'unknown'}</Text>
         {q.data?.version ? <Text>Version: {q.data.version}</Text> : null}
       </View>

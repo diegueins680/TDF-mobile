@@ -1,58 +1,87 @@
 # TDF Records Mobile
 
-Expo Router mobile app for TDF Records operations. The app exposes parties, bookings, pipelines, events, social/vCard flows, venue discovery, and inventory management against the TDF backend APIs.
+Expo/React Native app for TDF Records operations. The current app covers bookings, venues, events, inventory, pipelines, contact card scanning, and related social workflows against the TDF backend.
 
-## Local development
+## Environment
 
-1. Install dependencies with `npm install`.
-2. Copy `.env.example` to `.env.local` or export the variables in your shell.
-3. Run `npm run start`, `npm run ios`, or `npm run android`.
+Local development falls back to `http://localhost:8080` and `http://localhost:8080/drive/upload` if these are unset, but you can export them explicitly:
 
-Development builds can use a temporary bearer token through `EXPO_PUBLIC_API_TOKEN`, but store builds must not embed one.
+```bash
+export EXPO_PUBLIC_API_BASE=http://localhost:8080
+export EXPO_PUBLIC_UPLOAD_URL=http://localhost:8080/drive/upload
+export EXPO_PUBLIC_TZ=America/Guayaquil
+```
 
-## Required environment variables
+EAS `preview` and `production` builds inject these release endpoints from `eas.json`:
 
-`EXPO_PUBLIC_API_BASE`
-Backend base URL. Required for preview and production builds.
+```bash
+EXPO_PUBLIC_API_BASE=https://tdf-hq.fly.dev
+EXPO_PUBLIC_UPLOAD_URL=https://tdf-hq.fly.dev/drive/upload
+EXPO_PUBLIC_TZ=America/Guayaquil
+```
 
-`EXPO_PUBLIC_UPLOAD_URL`
-Upload endpoint used by the inventory flow. Required for preview and production builds.
+`app.config.ts` also falls back to these release URLs automatically when `EAS_BUILD_PROFILE` is `preview` or `production`, so cloud builds do not depend on Expo injecting the profile envs before config evaluation.
 
-`EXPO_PUBLIC_TZ`
-Optional timezone override. Defaults to `America/Guayaquil`.
+Optional release-time override:
 
-`IOS_BUILD_NUMBER`
-Optional iOS build number override. Defaults to `1`.
+```bash
+export EAS_PROJECT_ID=<expo-project-id>
+```
 
-`ANDROID_VERSION_CODE`
-Optional Android version code override. Defaults to `1`.
+Development-only override:
 
-## Release scripts
+```bash
+export EXPO_PUBLIC_API_TOKEN=<temporary-bearer-token>
+```
 
-`npm run release:check`
-Validate release environment variables and build numbering before running EAS.
+Do not embed `EXPO_PUBLIC_API_TOKEN` in `preview` or `production` builds.
 
-`npm run expo:config`
-Print the resolved Expo config.
+You can copy defaults from `.env.example` for local QA and release setup.
 
-`npm run doctor`
-Run Expo Doctor.
+## Commands
 
-`npm run prebuild:check`
-Generate native projects temporarily to validate config plugins. Clean up generated `ios/` and `android/` folders afterward if they are not meant to be committed.
+```bash
+npm run start
+npm run ios
+npm run android
+npm run web
+npm run lint
+npm run typecheck
+npm run test
+npm run release:assets
+npm run release:check
+npm run doctor
+npm run expo:config
+npm run prebuild:check
+npm run build:ios:preview
+npm run build:ios:production
+npm run build:android:preview
+npm run build:android:production
+npm run submit:ios:production
+npm run submit:android:production
+```
 
-`npm run build:ios:production`
-Start an App Store build with EAS.
+## Release Files
 
-`npm run build:android:production`
-Start a Google Play build with EAS.
+- Release process: [docs/release.md](docs/release.md)
+- Store submission handoff: [STORE_SUBMISSION_HANDOFF.md](STORE_SUBMISSION_HANDOFF.md)
+- Source privacy policy: [docs/privacy-policy.md](docs/privacy-policy.md)
+- Source terms of service: [docs/terms-of-service.md](docs/terms-of-service.md)
+- Source support page: [docs/support.md](docs/support.md)
+- Source data deletion page: [docs/data-deletion.md](docs/data-deletion.md)
+- Store checklist and templates: [docs/release/store-submission-checklist.md](docs/release/store-submission-checklist.md)
 
-`npm run submit:ios:production`
-Submit the latest iOS build through EAS Submit.
+## Public Release URLs
 
-`npm run submit:android:production`
-Submit the latest Android build through EAS Submit.
+- Privacy policy: `https://tdf-app.pages.dev/mobile-app/privacy.html`
+- Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
+- Support: `https://tdf-app.pages.dev/mobile-app/support.html`
+- Data deletion: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
 
-## Release documentation
+## Notes
 
-Store submission, metadata, privacy, and handoff documents live under `docs/release/` and `STORE_SUBMISSION_HANDOFF.md`.
+- Expo config is centralized in `app.config.ts`.
+- Store-ready app identifiers are `com.tdfrecords.app` for both iOS and Android.
+- EAS production builds use remote versioning from `eas.json`; do not set local build numbers for release builds.
+- Release assets are generated from shared TDF branding in the parent workspace by `scripts/generate_release_assets.py`.
+- The `/about` screen shows the resolved API base, health status, and version info.

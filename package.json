@@ -1,6 +1,15 @@
 {
   "name": "tdf-mobile",
   "version": "1.0.0",
+  "description": "TDF Records mobile app for bookings, inventory, events, venues, pipelines, and social tools.",
+  "homepage": "https://tdf-app.pages.dev/mobile-app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/diegueins680/TDF-mobile.git"
+  },
+  "bugs": {
+    "url": "https://github.com/diegueins680/TDF-mobile/issues"
+  },
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -8,19 +17,26 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "deploy": "npx expo export -p web && npx eas-cli@latest deploy",
+    "release:assets": "python3 scripts/generate_release_assets.py",
     "doctor": "npx expo-doctor",
     "expo:config": "npx expo config --type public",
     "lint": "eslint . --ext ts,tsx --max-warnings=0",
     "prebuild:check": "npx expo prebuild --no-install --clean",
-    "release:check": "node ./scripts/release-check.mjs",
+    "release:check": "npm run lint && npm run typecheck && node ./scripts/release-check.mjs && npm run expo:config",
+    "release:prepare": "npm run release:assets && npm run release:check",
     "typecheck": "tsc --noEmit",
     "test": "jest --runInBand",
+    "eas:whoami": "npx eas-cli@latest whoami",
     "build:ios:preview": "npx eas-cli@latest build --profile preview --platform ios",
     "build:ios:production": "npx eas-cli@latest build --profile production --platform ios",
     "build:android:preview": "npx eas-cli@latest build --profile preview --platform android",
     "build:android:production": "npx eas-cli@latest build --profile production --platform android",
+    "eas:build:ios": "npx eas-cli@latest build --platform ios --profile production",
+    "eas:build:android": "npx eas-cli@latest build --platform android --profile production",
     "submit:ios:production": "npx eas-cli@latest submit --profile production --platform ios",
-    "submit:android:production": "npx eas-cli@latest submit --profile production --platform android"
+    "submit:android:production": "npx eas-cli@latest submit --profile production --platform android",
+    "eas:submit:ios": "npx eas-cli@latest submit --platform ios --profile production --latest",
+    "eas:submit:android": "npx eas-cli@latest submit --platform android --profile production --latest"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

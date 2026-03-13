@@ -1,21 +1,52 @@
 {
   "cli": {
-    "version": ">= 16.17.0",
-    "appVersionSource": "local"
+    "version": ">= 16.20.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "http://localhost:8080",
+        "EXPO_PUBLIC_UPLOAD_URL": "http://localhost:8080/drive/upload",
+        "EXPO_PUBLIC_TZ": "America/Guayaquil"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "https://tdf-hq.fly.dev",
+        "EXPO_PUBLIC_UPLOAD_URL": "https://tdf-hq.fly.dev/drive/upload",
+        "EXPO_PUBLIC_TZ": "America/Guayaquil"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
-    "production": {},
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "https://tdf-hq.fly.dev",
+        "EXPO_PUBLIC_UPLOAD_URL": "https://tdf-hq.fly.dev/drive/upload",
+        "EXPO_PUBLIC_TZ": "America/Guayaquil"
+      }
+    },
     "ios-simulator": {
       "extends": "development",
       "ios": {
         "simulator": true
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
       }
     }
   }

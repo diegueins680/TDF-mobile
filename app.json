@@ -3,6 +3,9 @@
     "name": "TDF Records",
     "slug": "tdf-mobile",
     "scheme": "tdf",
+    "plugins": [
+      "expo-router"
+    ],
     "extra": {
       "apiBase": "http://localhost:8080",
       "supportEmail": "soporte@tdfrecords.com",

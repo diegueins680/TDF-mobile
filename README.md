@@ -65,3 +65,4 @@ npm run release:check
 - Store-ready app identifiers are `com.tdfrecords.app` for both iOS and Android.
 - EAS production builds use remote versioning from `eas.json`; do not set local build numbers for release builds.
 - Release assets are generated from shared TDF branding in the parent workspace by `scripts/generate_release_assets.py`.
+- The `/about` screen shows the resolved API base, health status, and version info.

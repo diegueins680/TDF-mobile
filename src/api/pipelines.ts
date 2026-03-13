@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { get, patch } from './client';
-import type { PipelineCard, PipelineStage } from '../types';
+import type { PipelineCard, PipelineKind, PipelineStage } from '../types';
 import type { PipelineCardDTO } from './types';
 
 const rawFlag = (process.env.EXPO_PUBLIC_PIPELINES_API_ENABLED ?? '').toString().trim().toLowerCase();
@@ -10,7 +10,6 @@ const PIPELINES_API_ENABLED = ['1', 'true', 'yes', 'on'].includes(rawFlag);
 let warnedDisabled = false;
 let warnedUnavailable = false;
 
-type PipelineKind = 'mixing' | 'mastering';
 type StageOverrides = Record<string, PipelineStage>;
 
 const FALLBACK_STAGE_OVERRIDES_KEY = 'tdf-mobile-pipeline-stage-overrides-v1';
@@ -169,7 +168,7 @@ export async function updateStage(
   }
 
   try {
-    await patch<PipelineCardDTO>(`/pipelines/${kind}/${id}`, { stage });
+    await patch<void>(`/pipelines/${kind}/${id}`, { stage });
   } catch (_error) {
     if (!warnedUnavailable) {
       console.warn('Pipeline API no disponible; se guarda el cambio de etapa localmente.');

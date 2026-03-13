@@ -109,7 +109,6 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
-    ['expo-barcode-scanner', { cameraPermission: CAMERA_PERMISSION }],
     [
       'expo-image-picker',
       {
@@ -131,7 +130,10 @@ const config: ExpoConfig = {
     apiBase: apiBase ?? null,
     uploadUrl: uploadUrl ?? null,
     appEnvironment: currentProfile,
-    defaultTimeZone
+    defaultTimeZone,
+    eas: {
+      projectId: '218aca4d-c096-4892-a353-c1dd7df23448'
+    }
   }
 };
 

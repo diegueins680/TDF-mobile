@@ -19,6 +19,8 @@ EXPO_PUBLIC_API_BASE=https://the-dream-factory.koyeb.app
 EXPO_PUBLIC_UPLOAD_URL=https://the-dream-factory.koyeb.app/drive/upload
 ```
 
+`app.config.ts` also falls back to these release URLs automatically when `EAS_BUILD_PROFILE` is `preview` or `production`, so cloud builds do not depend on Expo injecting the profile envs before config evaluation.
+
 Optional release-time override:
 
 ```bash

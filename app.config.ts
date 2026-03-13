@@ -17,7 +17,27 @@ const PUBLIC_TERMS_OF_SERVICE_URL = `${PUBLIC_SITE_URL}/terms.html`;
 const PUBLIC_DATA_DELETION_URL = `${PUBLIC_SITE_URL}/data-deletion.html`;
 const SUPPORT_EMAIL = 'soporte@tdfrecords.com';
 const BRAND_BACKGROUND = '#0f172a';
+const LOCAL_API_BASE = 'http://localhost:8080';
+const LOCAL_UPLOAD_URL = `${LOCAL_API_BASE}/drive/upload`;
+const RELEASE_API_BASE = 'https://the-dream-factory.koyeb.app';
+const RELEASE_UPLOAD_URL = `${RELEASE_API_BASE}/drive/upload`;
+const RELEASE_BUILD_PROFILES = new Set(['preview', 'production']);
 const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+const EAS_BUILD_PROFILE = process.env.EAS_BUILD_PROFILE?.trim();
+
+const resolveReleaseAwareEnv = (name: 'EXPO_PUBLIC_API_BASE' | 'EXPO_PUBLIC_UPLOAD_URL', releaseValue: string, localValue: string) => {
+  const explicitValue = process.env[name]?.trim();
+  if (explicitValue) {
+    return explicitValue;
+  }
+
+  return EAS_BUILD_PROFILE && RELEASE_BUILD_PROFILES.has(EAS_BUILD_PROFILE) ? releaseValue : localValue;
+};
+
+// EAS profile envs should normally populate these values, but keep release config
+// resolvable even when app.config is evaluated before profile env injection.
+const API_BASE = resolveReleaseAwareEnv('EXPO_PUBLIC_API_BASE', RELEASE_API_BASE, LOCAL_API_BASE);
+const UPLOAD_URL = resolveReleaseAwareEnv('EXPO_PUBLIC_UPLOAD_URL', RELEASE_UPLOAD_URL, LOCAL_UPLOAD_URL);
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -87,7 +107,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   extra: {
     ...(config.extra ?? {}),
-    apiBase: process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8080',
+    apiBase: API_BASE,
+    uploadUrl: UPLOAD_URL,
     supportEmail: SUPPORT_EMAIL,
     urls: {
       support: PUBLIC_SUPPORT_URL,

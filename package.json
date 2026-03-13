@@ -8,9 +8,19 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "deploy": "npx expo export -p web && npx eas-cli@latest deploy",
+    "doctor": "npx expo-doctor",
+    "expo:config": "npx expo config --type public",
     "lint": "eslint . --ext ts,tsx --max-warnings=0",
+    "prebuild:check": "npx expo prebuild --no-install --clean",
+    "release:check": "node ./scripts/release-check.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "build:ios:preview": "npx eas-cli@latest build --profile preview --platform ios",
+    "build:ios:production": "npx eas-cli@latest build --profile production --platform ios",
+    "build:android:preview": "npx eas-cli@latest build --profile preview --platform android",
+    "build:android:production": "npx eas-cli@latest build --profile production --platform android",
+    "submit:ios:production": "npx eas-cli@latest submit --profile production --platform ios",
+    "submit:android:production": "npx eas-cli@latest submit --profile production --platform android"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^1.23.1",

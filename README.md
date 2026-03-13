@@ -1,41 +1,58 @@
-# Expo Router Example
+# TDF Records Mobile
 
-Use [`expo-router`](https://docs.expo.dev/router/introduction/) to build native navigation using files in the `app/` directory.
+Expo Router mobile app for TDF Records operations. The app exposes parties, bookings, pipelines, events, social/vCard flows, venue discovery, and inventory management against the TDF backend APIs.
 
-## Environment for TDF HQ
+## Local development
 
-Set these before `npm start`:
+1. Install dependencies with `npm install`.
+2. Copy `.env.example` to `.env.local` or export the variables in your shell.
+3. Run `npm run start`, `npm run ios`, or `npm run android`.
 
-```
-export EXPO_PUBLIC_API_BASE=http://<your-api-host>:8080
-export EXPO_PUBLIC_API_TOKEN="Bearer <token>"   # e.g., admin-token for dev
-export EXPO_PUBLIC_UPLOAD_URL=http://<your-api-host>:8080/drive/upload
-```
+Development builds can use a temporary bearer token through `EXPO_PUBLIC_API_TOKEN`, but store builds must not embed one.
 
-The inventory tab will use `EXPO_PUBLIC_UPLOAD_URL` to upload camera/gallery photos and save the returned URL on assets.
+## Required environment variables
 
-## Launch your own
+`EXPO_PUBLIC_API_BASE`
+Backend base URL. Required for preview and production builds.
 
-[![Launch with Expo](https://github.com/expo/examples/blob/master/.gh-assets/launch.svg?raw=true)](https://launch.expo.dev/?github=https://github.com/expo/examples/tree/master/with-router)
+`EXPO_PUBLIC_UPLOAD_URL`
+Upload endpoint used by the inventory flow. Required for preview and production builds.
 
-## 🚀 How to use
+`EXPO_PUBLIC_TZ`
+Optional timezone override. Defaults to `America/Guayaquil`.
 
-```sh
-npx create-expo-app -e with-router
-```
+`IOS_BUILD_NUMBER`
+Optional iOS build number override. Defaults to `1`.
 
-## Deploy
+`ANDROID_VERSION_CODE`
+Optional Android version code override. Defaults to `1`.
 
-Deploy on all platforms with Expo Application Services (EAS).
+## Release scripts
 
-- Deploy the website: `npx eas-cli deploy` — [Learn more](https://docs.expo.dev/eas/hosting/get-started/)
-- Deploy on iOS and Android using: `npx eas-cli build` — [Learn more](https://expo.dev/eas)
+`npm run release:check`
+Validate release environment variables and build numbering before running EAS.
 
-## 📝 Notes
+`npm run expo:config`
+Print the resolved Expo config.
 
-- [Expo Router: Docs](https://docs.expo.dev/router/introduction/)
+`npm run doctor`
+Run Expo Doctor.
 
-## About screen
+`npm run prebuild:check`
+Generate native projects temporarily to validate config plugins. Clean up generated `ios/` and `android/` folders afterward if they are not meant to be committed.
 
-Set `EXPO_PUBLIC_API_BASE=http://localhost:8080` in your shell (or EAS env).
-Navigate to `/about` in the app to see API base, health, and version.
+`npm run build:ios:production`
+Start an App Store build with EAS.
+
+`npm run build:android:production`
+Start a Google Play build with EAS.
+
+`npm run submit:ios:production`
+Submit the latest iOS build through EAS Submit.
+
+`npm run submit:android:production`
+Submit the latest Android build through EAS Submit.
+
+## Release documentation
+
+Store submission, metadata, privacy, and handoff documents live under `docs/release/` and `STORE_SUBMISSION_HANDOFF.md`.

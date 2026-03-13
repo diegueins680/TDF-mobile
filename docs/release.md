@@ -31,8 +31,9 @@ export EXPO_PUBLIC_TZ=America/Guayaquil
 EAS `preview` and `production` profiles set the release backend automatically via `eas.json`:
 
 ```bash
-EXPO_PUBLIC_API_BASE=https://the-dream-factory.koyeb.app
-EXPO_PUBLIC_UPLOAD_URL=https://the-dream-factory.koyeb.app/drive/upload
+EXPO_PUBLIC_API_BASE=https://tdf-hq.fly.dev
+EXPO_PUBLIC_UPLOAD_URL=https://tdf-hq.fly.dev/drive/upload
+EXPO_PUBLIC_TZ=America/Guayaquil
 ```
 
 `app.config.ts` also falls back to these same release URLs whenever `EAS_BUILD_PROFILE` is `preview` or `production`. That keeps cloud builds from failing or defaulting to `localhost` if Expo evaluates the config before profile env injection completes.

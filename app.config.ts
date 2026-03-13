@@ -1,14 +1,10 @@
 import 'dotenv/config';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
-
-const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8')) as { version: string };
 
 const APP_NAME = 'TDF Records';
 const APP_SLUG = 'tdf-mobile';
 const APP_SCHEME = 'tdf';
-const APP_VERSION = packageJson.version;
+const APP_VERSION = process.env.APP_VERSION?.trim() || '1.0.0';
 const BUNDLE_ID = 'com.tdfrecords.app';
 const PUBLIC_SITE_URL = 'https://tdf-app.pages.dev/mobile-app';
 const PUBLIC_SUPPORT_URL = `${PUBLIC_SITE_URL}/support.html`;
@@ -19,7 +15,7 @@ const SUPPORT_EMAIL = 'soporte@tdfrecords.com';
 const BRAND_BACKGROUND = '#0f172a';
 const LOCAL_API_BASE = 'http://localhost:8080';
 const LOCAL_UPLOAD_URL = `${LOCAL_API_BASE}/drive/upload`;
-const RELEASE_API_BASE = 'https://the-dream-factory.koyeb.app';
+const RELEASE_API_BASE = 'https://tdf-hq.fly.dev';
 const RELEASE_UPLOAD_URL = `${RELEASE_API_BASE}/drive/upload`;
 const RELEASE_BUILD_PROFILES = new Set(['preview', 'production']);
 const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID;

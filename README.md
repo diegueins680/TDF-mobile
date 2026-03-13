@@ -15,8 +15,9 @@ export EXPO_PUBLIC_TZ=America/Guayaquil
 EAS `preview` and `production` builds inject these release endpoints from `eas.json`:
 
 ```bash
-EXPO_PUBLIC_API_BASE=https://the-dream-factory.koyeb.app
-EXPO_PUBLIC_UPLOAD_URL=https://the-dream-factory.koyeb.app/drive/upload
+EXPO_PUBLIC_API_BASE=https://tdf-hq.fly.dev
+EXPO_PUBLIC_UPLOAD_URL=https://tdf-hq.fly.dev/drive/upload
+EXPO_PUBLIC_TZ=America/Guayaquil
 ```
 
 `app.config.ts` also falls back to these release URLs automatically when `EAS_BUILD_PROFILE` is `preview` or `production`, so cloud builds do not depend on Expo injecting the profile envs before config evaluation.
@@ -26,6 +27,8 @@ Optional release-time override:
 ```bash
 export EAS_PROJECT_ID=<expo-project-id>
 ```
+
+You can copy defaults from `.env.example` for local QA and release setup.
 
 ## Commands
 

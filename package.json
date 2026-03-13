@@ -20,6 +20,7 @@
     "release:assets": "python3 scripts/generate_release_assets.py",
     "release:check": "npm run lint && npm run typecheck && npx expo config --type public",
     "release:prepare": "npm run release:assets && npm run release:check",
+    "eas:whoami": "npx eas-cli@latest whoami",
     "eas:build:ios": "npx eas-cli@latest build --platform ios --profile production",
     "eas:build:android": "npx eas-cli@latest build --platform android --profile production",
     "eas:submit:ios": "npx eas-cli@latest submit --platform ios --profile production --latest",

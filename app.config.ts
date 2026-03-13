@@ -55,7 +55,7 @@ export default ({ config }: { config: ExpoConfig }) => ({
   },
   plugins: [
     'expo-router',
-    'expo-barcode-scanner'
+    'expo-camera'
   ],
   experiments: { ...(config.experiments ?? {}), typedRoutes: true },
   extra: {

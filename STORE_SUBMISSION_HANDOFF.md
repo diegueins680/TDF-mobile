@@ -9,7 +9,7 @@
 - Added release helper scripts in `package.json` plus `scripts/release-check.mjs`.
 - Hardened release env handling so preview/production builds require backend URLs and reject embedded API tokens.
 - Added store metadata, privacy, support, and checklist templates under `docs/release/`.
-- Updated the in-app About tab to expose version/build/environment details for support.
+- Updated the in-app About experience to expose version/build/environment details plus public support and legal links.
 
 ## Current release identifiers
 
@@ -24,6 +24,13 @@ Default iOS build number: `1`
 Default Android version code: `1`
 
 Deep link scheme: `tdf`
+
+## Published public pages
+
+- Support: `https://tdf-app.pages.dev/mobile-app/support.html`
+- Privacy policy: `https://tdf-app.pages.dev/mobile-app/privacy.html`
+- Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
+- Data deletion: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
 
 ## How to build and submit
 
@@ -46,5 +53,4 @@ Deep link scheme: `tdf`
 - Real production values for `EXPO_PUBLIC_API_BASE` and `EXPO_PUBLIC_UPLOAD_URL`.
 - Apple signing setup and App Store Connect app record.
 - Google Play signing / service account setup and Play Console app record.
-- Public privacy policy URL and public support URL/email page.
 - Reviewer credentials or a demo bearer token for the authenticated portions of the app.

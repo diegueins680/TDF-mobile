@@ -43,11 +43,15 @@ Category:
 
 ## Required links
 
-Support URL: `TODO`
+Support URL: `https://tdf-app.pages.dev/mobile-app/support.html`
 
 Marketing URL: `TODO`
 
-Privacy policy URL: `TODO`
+Privacy policy URL: `https://tdf-app.pages.dev/mobile-app/privacy.html`
+
+Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
+
+Data deletion URL: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
 
 ## Contact
 

@@ -8,7 +8,7 @@ Product: `TDF Records`
 
 Support email: `TODO`
 
-Support URL: `TODO`
+Support URL: `https://tdf-app.pages.dev/mobile-app/support.html`
 
 Response target: `TODO business SLA`
 
@@ -23,8 +23,9 @@ Response target: `TODO business SLA`
 
 ## Legal links
 
-- Privacy policy: `TODO`
-- Terms of service: `TODO if applicable`
+- Privacy policy: `https://tdf-app.pages.dev/mobile-app/privacy.html`
+- Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
+- Data deletion: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
 - Security contact: `TODO`
 
 ## App review notes landing page

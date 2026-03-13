@@ -42,6 +42,10 @@ Verify the real backend retention and sharing behavior before answering the fina
 
 Support email: `TODO`
 
-Website: `TODO`
+Website: `https://tdf-app.pages.dev/mobile-app/support.html`
 
-Privacy policy URL: `TODO`
+Privacy policy URL: `https://tdf-app.pages.dev/mobile-app/privacy.html`
+
+Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
+
+Data deletion URL: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`

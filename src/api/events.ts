@@ -12,6 +12,7 @@ import type {
   EventInvitationStatus,
   ArtistSocialLinks
 } from '../types';
+import { normalizePartyId as normalizeIdentityPartyId } from '../lib/identity';
 import { normalizeOptionalTimestamp } from '../lib/isoDate';
 import { normalizeRsvpStatus } from '../lib/rsvp';
 import { mapBackendArtistToFrontend } from './artists';
@@ -269,14 +270,18 @@ export const Events = {
     if (!backendStatus) {
       throw new Error('RSVP status NONE cannot be submitted.');
     }
+    const normalizedPartyId = normalizeIdentityPartyId(body.userId);
+    if (!normalizedPartyId) {
+      throw new Error('Party ID inválido para RSVP.');
+    }
 
     const payload = {
       rsvpEventId: String(body.eventId),
-      rsvpPartyId: String(body.userId),
+      rsvpPartyId: normalizedPartyId,
       rsvpStatus: backendStatus
     };
     const result = await post<BackendRsvpDTO>(`/social-events/events/${body.eventId}/rsvps`, payload);
-    return mapRsvpDto(result, body.eventId, body.userId);
+    return mapRsvpDto(result, body.eventId, normalizedPartyId);
   },
 
   updateRSVP: async (body: EventRSVPCreate): Promise<EventRSVP> => {

@@ -1,5 +1,6 @@
 import { get, post, put, del } from './client';
 import type { ArtistProfile, ArtistProfileCreate, ArtistProfileUpdate, ArtistSocialLinks, ID } from '../types';
+import { normalizePartyId as normalizeIdentityPartyId } from '../lib/identity';
 import { normalizeOptionalTimestamp } from '../lib/isoDate';
 
 type BackendArtistDTO = {
@@ -120,13 +121,21 @@ export const Artists = {
   }
 
   , follow: async (artistId: ID, followerPartyId: string) => {
-    const body = { followerPartyId };
+    const normalizedFollowerPartyId = normalizeIdentityPartyId(followerPartyId);
+    if (!normalizedFollowerPartyId) {
+      throw new Error('Party ID inválido para seguir artistas.');
+    }
+    const body = { followerPartyId: normalizedFollowerPartyId };
     const res = await post<ArtistFollower>(`/social-events/artists/${artistId}/follow`, body);
     return res;
   },
 
   unfollow: async (artistId: ID, followerPartyId: string) => {
-    await del<void>(`/social-events/artists/${artistId}/follow?follower=${encodeURIComponent(String(followerPartyId))}`);
+    const normalizedFollowerPartyId = normalizeIdentityPartyId(followerPartyId);
+    if (!normalizedFollowerPartyId) {
+      throw new Error('Party ID inválido para dejar de seguir artistas.');
+    }
+    await del<void>(`/social-events/artists/${artistId}/follow?follower=${encodeURIComponent(normalizedFollowerPartyId)}`);
     return true;
   },
 

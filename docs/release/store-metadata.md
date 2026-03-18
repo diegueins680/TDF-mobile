@@ -6,9 +6,11 @@
 - Category: `Business`
 - Secondary category suggestion: `Productivity`
 - Content rating suggestion: `Everyone` / `4+`
-- Support URL placeholder: `https://www.tdfrecords.example/support`
-- Privacy policy URL placeholder: `https://www.tdfrecords.example/privacy`
-- Marketing site placeholder: `https://www.tdfrecords.example`
+- Support URL: `https://tdf-app.pages.dev/mobile-app/support.html`
+- Privacy policy URL: `https://tdf-app.pages.dev/mobile-app/privacy.html`
+- Marketing site: `https://tdf-app.pages.dev/mobile-app/`
+- Public data deletion URL: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
+- Contact email: `soporte@tdfrecords.com`
 
 ## Google Play
 
@@ -26,7 +28,7 @@ The app connects to the TDF Records backend and is intended for authorized users
 
 - Application type: `App`
 - Category: `Business`
-- Contact email placeholder: `support@tdfrecords.example`
+- Contact email: `soporte@tdfrecords.com`
 - Release track suggestion for first rollout: `Internal testing`
 
 ## Apple App Store
@@ -49,9 +51,9 @@ A valid backend token is required for protected CRM and inventory features.`
 
 - Keywords: `bookings,events,crm,inventory,venues,contacts,artists,parties`
 - Primary category: `Business`
-- Support URL placeholder: `https://www.tdfrecords.example/support`
-- Marketing URL placeholder: `https://www.tdfrecords.example`
-- Privacy policy URL placeholder: `https://www.tdfrecords.example/privacy`
+- Support URL: `https://tdf-app.pages.dev/mobile-app/support.html`
+- Marketing URL: `https://tdf-app.pages.dev/mobile-app/`
+- Privacy policy URL: `https://tdf-app.pages.dev/mobile-app/privacy.html`
 
 ## Screenshot Plan
 
@@ -60,3 +62,9 @@ A valid backend token is required for protected CRM and inventory features.`
 - Android phone: parties, bookings, events, inventory, venue explorer.
 
 Capture screenshots against a production-like backend with non-sensitive demo data.
+
+## Manual inputs that still require humans
+
+- Real reviewer/demo bearer token or equivalent review account
+- Final Apple privacy nutrition label answers and Google Play Data safety answers
+- Final screenshots from the release-candidate builds

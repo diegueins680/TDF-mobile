@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
 import type { ID, SocialEvent } from '../src/types';
+import { normalizePartyId } from '../src/lib/identity';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, unsaveEvent } from '../src/lib/savedEvents';
 
@@ -112,7 +113,12 @@ export default function UserProfileScreen() {
       Alert.alert('Party ID requerido', 'Ingresa tu Party ID para conectar RSVP e invitaciones.');
       return;
     }
-    setIdentity(draftPartyId.trim(), draftName.trim());
+    const normalizedPartyId = normalizePartyId(draftPartyId);
+    if (!normalizedPartyId) {
+      Alert.alert('Party ID inválido', 'Ingresa un Party ID numérico positivo.');
+      return;
+    }
+    setIdentity(normalizedPartyId, draftName.trim());
     Alert.alert('Guardado', 'Actualizamos tu Party ID.');
   }, [draftPartyId, draftName, setIdentity]);
 

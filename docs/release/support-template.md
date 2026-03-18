@@ -10,7 +10,7 @@ Support email: `soporte@tdfrecords.com`
 
 Support URL: `https://tdf-app.pages.dev/mobile-app/support.html`
 
-Response target: `TODO business SLA`
+Response target: publish a real SLA only if the support team has agreed one; otherwise omit it from the public page and keep store-facing promises qualitative.
 
 ## Troubleshooting topics
 
@@ -26,7 +26,7 @@ Response target: `TODO business SLA`
 - Privacy policy: `https://tdf-app.pages.dev/mobile-app/privacy.html`
 - Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
 - Data deletion: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
-- Security contact: `TODO`
+- Security contact: `security@tdfrecords.com`
 
 ## App review notes landing page
 

@@ -1,5 +1,6 @@
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { normalizePartyId } from '../lib/identity';
 
 type UserSettings = {
   partyId: string | null;
@@ -33,7 +34,9 @@ export const parseUserSettings = (raw: string): UserSettings | null => {
     if (!parsed || typeof parsed !== 'object') return null;
     const value = parsed as Record<string, unknown>;
     return {
-      partyId: normalizeStoredString(value.partyId),
+      partyId: normalizePartyId(
+        typeof value.partyId === 'number' || typeof value.partyId === 'string' ? value.partyId : null,
+      ),
       displayName: normalizeStoredString(value.displayName),
     };
   } catch {
@@ -124,7 +127,7 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
 
   const setIdentity = useCallback((partyId: string | null, displayName?: string | null) => {
     void persist((current) => ({
-      partyId: partyId?.trim() || null,
+      partyId: normalizePartyId(partyId),
       displayName:
         displayName === undefined ? current.displayName : displayName?.trim() || null,
     }));

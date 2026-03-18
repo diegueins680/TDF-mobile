@@ -21,13 +21,15 @@
 3. Capture fresh App Store and Google Play screenshots from the release candidate build.
 4. Verify the published support and legal pages are reachable and match the store listing URLs.
 5. Prepare App Review and Play Console test credentials or token-based reviewer instructions.
-6. Run `npm run release:check`, `npm run doctor`, and `npm test`.
-7. Run `npm run build:ios:production` and `npm run build:android:production`.
-8. Submit through EAS or the store consoles after build verification.
+6. Enter the recorded App Store Connect review contact card: `Diego Saa` / `0984755301` / `cuco.saa@gmail.com`.
+7. Run `npm run release:check`, `npm run doctor`, and `npm test`.
+8. Run `npm run build:ios:production` and `npm run build:android:production`.
+9. Submit through EAS or the store consoles after build verification.
 
 ## External blockers that still require humans
 
-- Apple Developer team assignment and signing credentials.
-- Google Play Console service account / upload credentials.
-- Expo project linking if `EAS_PROJECT_ID` is not already available via `app.json` or environment.
+- Google Play Console service account / upload credentials if Android submission should happen through EAS.
 - Reviewer credentials or token-based instructions for authenticated app flows.
+- Final privacy/data-safety sign-off.
+- Final screenshots from the release-candidate builds.
+- Store-console account access / credential handoff for the chosen Android and iOS submission path.

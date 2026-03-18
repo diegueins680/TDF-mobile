@@ -59,7 +59,12 @@ npm run submit:ios
 
 ## Remaining Manual Inputs
 
-- Replace the placeholder privacy/support URLs in `docs/release/store-metadata.md`.
-- Provide a real reviewer/demo bearer token before App Store review.
-- Link or create the Expo project with `npx eas-cli@latest init` if `EAS_PROJECT_ID` is not set yet.
-- Provide App Store Connect identifiers and Google Play service-account credentials during your first submit.
+- Provide a real reviewer/demo bearer token or deterministic review path before App Store / Play review.
+- Provide the App Store Connect / Google Play credential handoff for the submission path you will use.
+- Enter the recorded App Store review contact card details in App Store Connect, provide the final privacy/data-safety answers, and attach the final screenshots before submission.
+
+## Release Truths Already Fixed In Repo
+
+- Store metadata now points at the live Pages-hosted support, privacy, terms, and data-deletion URLs.
+- The canonical mobile app identifier in the current repo is `com.tdfrecords.app` for both iOS and Android.
+- `app.json` already carries the Expo project ID `218aca4d-c096-4892-a353-c1dd7df23448`, so do not re-run `eas init` unless that linkage is intentionally changed.

@@ -51,7 +51,7 @@ describe('UserSettingsProvider', () => {
 
   it('trims stored identity values and drops blank entries', async () => {
     getItemMock.mockResolvedValueOnce(JSON.stringify({
-      partyId: '  42  ',
+      partyId: '  0042  ',
       displayName: '   ',
     }));
 
@@ -61,6 +61,20 @@ describe('UserSettingsProvider', () => {
 
     expect(result.current.partyId).toBe('42');
     expect(result.current.displayName).toBeNull();
+  });
+
+  it('drops invalid stored party ids instead of persisting arbitrary text', async () => {
+    getItemMock.mockResolvedValueOnce(JSON.stringify({
+      partyId: 'abc',
+      displayName: 'Valid Name',
+    }));
+
+    const { result } = renderUserSettingsProvider();
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.partyId).toBeNull();
+    expect(result.current.displayName).toBe('Valid Name');
   });
 
   it('does not let slow storage bootstrap overwrite a newer identity', async () => {

@@ -130,10 +130,7 @@ export const Venues = {
   },
 
   create: async (body: VenueCreate): Promise<Venue> => {
-    const backendBody = mapFrontendVenueToBackend({
-      ...body,
-      country: body.country ?? 'US'
-    });
+    const backendBody = mapFrontendVenueToBackend(body);
     const venue = await post<BackendVenueDTO>('/social-events/venues', backendBody);
     return mapBackendVenueToFrontend(venue);
   },

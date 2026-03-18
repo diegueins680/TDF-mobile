@@ -465,6 +465,17 @@ describe('Social API update merge behavior', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
+  it('Events.rsvp rejects invalid party ids before posting', async () => {
+    await expect(
+      Events.rsvp({
+        eventId: 9,
+        userId: 'abc',
+        status: 'GOING',
+      }),
+    ).rejects.toThrow('Party ID inválido para RSVP.');
+    expect(post).not.toHaveBeenCalled();
+  });
+
   it('Artists.update preserves name and genres when omitted in patch', async () => {
     get.mockResolvedValueOnce({
       artistId: 2,
@@ -531,6 +542,11 @@ describe('Social API update merge behavior', () => {
     expect(payload.artistSocialLinks).toEqual({
       spotify: 'https://open.spotify.com/artist/uno',
     });
+  });
+
+  it('Artists.follow rejects invalid party ids before posting', async () => {
+    await expect(Artists.follow(5, 'abc')).rejects.toThrow('Party ID inválido para seguir artistas.');
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('Venues.update preserves existing country instead of forcing US', async () => {
@@ -617,13 +633,13 @@ describe('Social API update merge behavior', () => {
     expect(payload.venueImageUrl).toBeNull();
   });
 
-  it('Venues.create defaults country to US when not provided', async () => {
+  it('Venues.create leaves country empty when the caller does not provide one', async () => {
     post.mockResolvedValueOnce({
       venueId: 4,
       venueName: 'Venue New',
       venueAddress: 'Addr',
       venueCity: 'Miami',
-      venueCountry: 'US',
+      venueCountry: null,
       venueLat: 25.76,
       venueLng: -80.19,
     });
@@ -637,7 +653,7 @@ describe('Social API update merge behavior', () => {
     });
 
     expect(post).toHaveBeenCalledWith('/social-events/venues', expect.objectContaining({
-      venueCountry: 'US',
+      venueCountry: null,
     }));
   });
 });

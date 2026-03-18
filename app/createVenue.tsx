@@ -16,6 +16,7 @@ export default function CreateVenueScreen() {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
+  const [country, setCountry] = useState('');
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [latitude, setLatitude] = useState('');
@@ -50,6 +51,11 @@ export default function CreateVenueScreen() {
       Alert.alert('Validation', 'City is required');
       return;
     }
+    const normalizedCountry = country.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(normalizedCountry)) {
+      Alert.alert('Validation', 'Country must be a 2-letter code like EC or US');
+      return;
+    }
     if (!latitude.trim() || !longitude.trim()) {
       Alert.alert('Validation', 'Latitude and longitude are required');
       return;
@@ -70,6 +76,7 @@ export default function CreateVenueScreen() {
       name: name.trim(),
       address: address.trim(),
       city: city.trim(),
+      country: normalizedCountry,
       latitude: lat,
       longitude: lng,
     };
@@ -95,7 +102,7 @@ export default function CreateVenueScreen() {
     if (imageUrl.trim()) venueData.imageUrl = imageUrl.trim();
 
     createMutation.mutate(venueData);
-  }, [name, address, city, state, zipCode, latitude, longitude, capacity, phoneNumber, website, imageUrl, createMutation]);
+  }, [name, address, city, country, state, zipCode, latitude, longitude, capacity, phoneNumber, website, imageUrl, createMutation]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -146,6 +153,19 @@ export default function CreateVenueScreen() {
               maxLength={2}
             />
           </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Country Code *</Text>
+          <TextInput
+            placeholder="EC"
+            value={country}
+            onChangeText={setCountry}
+            style={styles.input}
+            placeholderTextColor="#999"
+            autoCapitalize="characters"
+            maxLength={2}
+          />
         </View>
 
         <View style={styles.field}>

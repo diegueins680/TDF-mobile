@@ -55,10 +55,10 @@ Data deletion URL: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
 
 ## Contact
 
-First name: `TODO`
+First name: `Diego`
 
-Last name: `TODO`
+Last name: `Saa`
 
-Phone: `TODO`
+Phone: `0984755301`
 
-Email: `soporte@tdfrecords.com`
+Email: `cuco.saa@gmail.com`

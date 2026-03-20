@@ -79,7 +79,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-camera',
       {
-        cameraPermission: 'Allow TDF Records to use your camera to scan QR codes and capture inventory images.',
+        cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes and capture inventory images.',
         microphonePermission: false
       }
     ],
@@ -87,7 +87,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-image-picker',
       {
         photosPermission: 'Allow TDF Records to access your photos so you can attach inventory images.',
-        cameraPermission: 'Allow TDF Records to use your camera to scan QR codes and capture inventory images.'
+        cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes and capture inventory images.'
       }
     ],
     [

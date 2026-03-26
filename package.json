@@ -21,7 +21,7 @@
     "release:assets": "python3 scripts/generate_release_assets.py",
     "doctor": "npx expo-doctor",
     "expo:config": "npx expo config --type public",
-    "lint": "eslint . --ext ts,tsx --max-warnings=0",
+    "lint": "eslint . --max-warnings=0",
     "prebuild:check": "npx expo prebuild --no-install --clean",
     "release:validate": "npm run release:check",
     "release:check": "npm run lint && npm run typecheck && node ./scripts/release-check.mjs && npm run expo:config",

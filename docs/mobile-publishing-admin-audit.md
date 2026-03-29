@@ -65,6 +65,13 @@ Interpretation:
 - Browser storage signals only show that local Chrome/Brave profiles appear to hold relevant session databases. The script does **not** inspect secret contents.
 - Live console audit being blocked is normal until someone attaches signed-in App Store Connect and Google Play Console tabs through the browser relay.
 
+`EAS whoami` quick triage:
+
+- A successful `EAS whoami` result proves this Mac has an active local Expo session and can identify the currently logged-in Expo account.
+- Treat it as healthy only when the reported account is the expected Expo operator/account for TDF mobile.
+- Do **not** treat it as proof that the operator can access App Store Connect, Google Play Console, or any store submission credential path.
+- Submission readiness still depends on project linkage, store-side permissions, and/or relay-backed console verification.
+
 ### Credentials / signing prerequisites
 
 Healthy:
@@ -110,6 +117,45 @@ Interpretation:
 - `draft` means the submitted release is intended to stay as a draft for human review/promotion, not auto-roll out.
 - This is **configuration evidence**, not proof that any Android build has already been submitted to Play Console.
 - To confirm a real submission exists, operators still need EAS submission output or a relay-backed Play Console check.
+
+### Build / submit scripts and EAS profile wiring
+
+Healthy / expected:
+
+- `package.json` includes the expected `build:*` / `submit:*` scripts for the intended Android and iOS handoff paths
+- `eas.json` contains matching `build` and `submit` profile entries for those commands
+
+Risky only if the operator handoff assumes a script/profile exists but the audit evidence shows it is missing or pointed at the wrong platform/profile:
+
+- a needed `build:*` or `submit:*` script is absent
+- the referenced EAS profile is missing or clearly wired for a different target than the planned release step
+
+Interpretation:
+
+- These lines show that the repo exposes named release commands and default EAS workflow wiring for future builds/submissions.
+- Treat them as **workflow-availability evidence**, not proof that local/store credentials are configured, cloud credentials are valid, or a build/submission has already run.
+- A present `build:ios:production`, `build:android:production`, or `submit:*` script only means operators have a documented command path to invoke.
+- Real execution evidence still has to come from the command output, EAS build/submit records, or relay-backed App Store Connect / Play Console checks.
+
+### Expo project linkage in app config
+
+Healthy / expected:
+
+- the audit evidence shows an Expo `owner`
+- `updates.url` points at the expected Expo Updates project
+- the EAS project ID in app config matches the expected TDF mobile project
+
+Risky only if the values are missing or clearly point at the wrong Expo account/project:
+
+- `owner` is absent or unexpected
+- `updates.url` / project ID do not match the intended Expo project for TDF mobile
+
+Interpretation:
+
+- These values show that the app config is wired to a specific Expo account/project for EAS Updates and related Expo services.
+- Treat them as **project-linkage evidence**, not proof that an iOS or Android store listing exists, that a binary has been submitted, or that store review metadata is complete.
+- A correct `owner`, `updates.url`, and EAS project ID help confirm the repo is pointing at the intended Expo backend, which is useful for operator sanity checks and handoff validation.
+- Store publication state still requires separate evidence from EAS build/submit output or relay-backed App Store Connect / Play Console inspection.
 
 ### Host / operator toolchain
 

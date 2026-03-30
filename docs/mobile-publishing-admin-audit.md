@@ -54,6 +54,7 @@ Healthy enough:
 
 - `EAS auth/project visibility: OK`
 - browser session storage signals are non-zero
+- `Chrome relay raw probe (http://127.0.0.1:18792/json/version): RESPONSIVE` or `UNAUTHORIZED`
 
 Still expected to remain blocked unless a human provides relay tabs:
 
@@ -63,7 +64,15 @@ Interpretation:
 
 - `EAS auth/project visibility: OK` means the machine can read the logged-in Expo identity/project metadata.
 - Browser storage signals only show that local Chrome/Brave profiles appear to hold relevant session databases. The script does **not** inspect secret contents.
+- The Chrome relay raw probe isolates whether the local relay endpoint at `127.0.0.1:18792` answers at all before anyone blames App Store Connect or Google Play access.
 - Live console audit being blocked is normal until someone attaches signed-in App Store Connect and Google Play Console tabs through the browser relay.
+
+`Chrome relay raw probe` quick triage:
+
+- `RESPONSIVE` means the local relay endpoint answered with JSON. This is healthy transport evidence only; it still does **not** prove attached auth or live store-console access.
+- `UNAUTHORIZED` means the port is reachable, but a bare raw HTTP probe is rejected. Treat this as `relay reachable but unauthenticated from this probe`, not as proof that the relay is down.
+- `UNREACHABLE` or `NO_RESPONSE` means the local relay lane itself is not answering and should be treated as a real operator blocker before store-console work.
+- `Chrome relay raw probe detail` is there so release can carry forward the exact blocker quote instead of generic “browser control broken” language.
 
 `EAS whoami` quick triage:
 

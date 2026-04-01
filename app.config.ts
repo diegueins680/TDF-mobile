@@ -4,7 +4,7 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 const APP_NAME = 'TDF Records';
 const APP_SLUG = 'tdf-mobile';
 const APP_SCHEME = 'tdf';
-const APP_VERSION = process.env.APP_VERSION?.trim() || '1.0.0';
+const APP_VERSION = process.env.APP_VERSION?.trim() || '1.0.1';
 const BUNDLE_ID = 'com.tdfrecords.app';
 const DEFAULT_TIME_ZONE = 'America/Guayaquil';
 const PUBLIC_SITE_URL = 'https://tdf-app.pages.dev/mobile-app';
@@ -24,6 +24,9 @@ const EAS_PROJECT_ID =
   process.env.EAS_PROJECT_ID ?? process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? DEFAULT_EAS_PROJECT_ID;
 const EAS_BUILD_PROFILE = process.env.EAS_BUILD_PROFILE?.trim() || 'development';
 const DEFAULT_TZ = process.env.EXPO_PUBLIC_TZ?.trim() || DEFAULT_TIME_ZONE;
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim();
+const GOOGLE_IOS_URL_SCHEME = process.env.GOOGLE_IOS_URL_SCHEME?.trim();
 
 const resolveReleaseAwareEnv = (name: 'EXPO_PUBLIC_API_BASE' | 'EXPO_PUBLIC_UPLOAD_URL', releaseValue: string, localValue: string) => {
   const explicitValue = process.env[name]?.trim();
@@ -38,6 +41,48 @@ const resolveReleaseAwareEnv = (name: 'EXPO_PUBLIC_API_BASE' | 'EXPO_PUBLIC_UPLO
 // resolvable even when app.config is evaluated before profile env injection.
 const API_BASE = resolveReleaseAwareEnv('EXPO_PUBLIC_API_BASE', RELEASE_API_BASE, LOCAL_API_BASE);
 const UPLOAD_URL = resolveReleaseAwareEnv('EXPO_PUBLIC_UPLOAD_URL', RELEASE_UPLOAD_URL, LOCAL_UPLOAD_URL);
+
+const plugins: NonNullable<ExpoConfig['plugins']> = [
+  'expo-router',
+  'expo-secure-store',
+  [
+    'expo-camera',
+    {
+      cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes and capture inventory images.',
+      microphonePermission: false
+    }
+  ],
+  [
+    'expo-image-picker',
+    {
+      photosPermission: 'Allow TDF Records to access your photos so you can attach inventory images.',
+      cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes and capture inventory images.'
+    }
+  ],
+  [
+    'expo-location',
+    {
+      locationAlwaysAndWhenInUsePermission: false,
+      locationAlwaysPermission: false,
+      locationWhenInUsePermission: 'Allow TDF Records to use your location to show nearby venues.'
+    }
+  ]
+];
+
+if (GOOGLE_IOS_URL_SCHEME) {
+  plugins.push([
+    '@react-native-google-signin/google-signin',
+    {
+      iosUrlScheme: GOOGLE_IOS_URL_SCHEME
+    }
+  ]);
+}
+
+const googleAuthExtra = {
+  ...(GOOGLE_WEB_CLIENT_ID ? { webClientId: GOOGLE_WEB_CLIENT_ID } : {}),
+  ...(GOOGLE_IOS_CLIENT_ID ? { iosClientId: GOOGLE_IOS_CLIENT_ID } : {}),
+  ...(GOOGLE_IOS_URL_SCHEME ? { iosUrlScheme: GOOGLE_IOS_URL_SCHEME } : {})
+};
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -74,31 +119,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     output: 'static',
     favicon: './assets/favicon.png'
   },
-  plugins: [
-    'expo-router',
-    [
-      'expo-camera',
-      {
-        cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes and capture inventory images.',
-        microphonePermission: false
-      }
-    ],
-    [
-      'expo-image-picker',
-      {
-        photosPermission: 'Allow TDF Records to access your photos so you can attach inventory images.',
-        cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes and capture inventory images.'
-      }
-    ],
-    [
-      'expo-location',
-      {
-        locationAlwaysAndWhenInUsePermission: false,
-        locationAlwaysPermission: false,
-        locationWhenInUsePermission: 'Allow TDF Records to use your location to show nearby venues.'
-      }
-    ]
-  ],
+  plugins,
   experiments: {
     ...(config.experiments ?? {}),
     typedRoutes: true
@@ -110,6 +131,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     appEnvironment: EAS_BUILD_PROFILE,
     defaultTimeZone: DEFAULT_TZ,
     supportEmail: SUPPORT_EMAIL,
+    ...(Object.keys(googleAuthExtra).length > 0 ? { googleAuth: googleAuthExtra } : {}),
     urls: {
       support: PUBLIC_SUPPORT_URL,
       privacyPolicy: PUBLIC_PRIVACY_POLICY_URL,

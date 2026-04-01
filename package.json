@@ -1,6 +1,6 @@
 {
   "name": "tdf-mobile",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "TDF Records mobile app for bookings, inventory, events, venues, pipelines, and social tools.",
   "homepage": "https://tdf-app.pages.dev/mobile-app",
   "repository": {
@@ -46,6 +46,7 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-google-signin/google-signin": "^16.1.2",
     "@tanstack/react-query": "^5.90.5",
     "@testomatio/reporter": "0.7.6",
     "axios": "^1.12.2",
@@ -56,6 +57,7 @@
     "expo-linking": "~8.0.11",
     "expo-location": "~19.0.8",
     "expo-router": "~6.0.23",
+    "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
     "expo-updates": "~29.0.16",
     "react": "19.1.0",

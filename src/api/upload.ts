@@ -11,23 +11,25 @@ export type UploadResponse = {
   fileId?: string;
 };
 
-export async function uploadImage({
+export async function uploadMedia({
   uri,
   mimeType,
-  fileName
+  fileName,
+  uploadLabel = 'archivo',
 }: {
   uri: string;
   mimeType?: string;
   fileName?: string;
+  uploadLabel?: string;
 }): Promise<string> {
   if (!UPLOAD_URL) {
-    throw new Error('No se ha configurado EXPO_PUBLIC_UPLOAD_URL para subir imágenes.');
+    throw new Error(`No se ha configurado EXPO_PUBLIC_UPLOAD_URL para subir ${uploadLabel}s.`);
   }
   const token = getAuthToken();
   const data = new FormData();
 
-  const name = fileName ?? uri.split('/').pop() ?? 'photo.jpg';
-  const type = mimeType || 'image/jpeg';
+  const name = fileName ?? uri.split('/').pop() ?? 'upload.bin';
+  const type = mimeType || 'application/octet-stream';
   const uploadUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
 
   data.append('file', {
@@ -46,11 +48,19 @@ export async function uploadImage({
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || 'No se pudo subir la imagen');
+    throw new Error(text || `No se pudo subir el ${uploadLabel}`);
   }
 
   const json = (await res.json().catch(() => ({}))) as UploadResponse;
   const url = json.publicUrl || json.webViewLink || json.webContentLink;
   if (!url) throw new Error('Subida exitosa pero no se devolvió URL pública');
   return url;
+}
+
+export async function uploadImage(input: {
+  uri: string;
+  mimeType?: string;
+  fileName?: string;
+}): Promise<string> {
+  return uploadMedia({ ...input, uploadLabel: 'imagen' });
 }

@@ -265,6 +265,60 @@ export type EventInvitationCreate = {
   message?: string | null;
 };
 
+export type EventMomentMediaKind = 'image' | 'video';
+export type EventMomentReactionKind = 'fire' | 'love' | 'applause';
+
+export type EventMomentMedia = {
+  kind: EventMomentMediaKind;
+  uri: string;
+  mimeType: string;
+  width?: number | null;
+  height?: number | null;
+  durationMs?: number | null;
+};
+
+export type EventMomentComment = {
+  id: string;
+  authorName: string;
+  authorPartyId?: string | null;
+  body: string;
+  createdAt: string;
+};
+
+export type EventMoment = {
+  id: string;
+  eventId: string;
+  authorName: string;
+  authorPartyId?: string | null;
+  caption?: string | null;
+  media: EventMomentMedia;
+  createdAt: string;
+  reactions: Record<EventMomentReactionKind, string[]>;
+  comments: EventMomentComment[];
+};
+
+export type EventMomentCreateInput = {
+  eventId: ID;
+  authorName: string;
+  authorPartyId?: ID | null;
+  caption?: string | null;
+  media: EventMomentMedia;
+};
+
+export type EventMomentCommentInput = {
+  eventId: ID;
+  momentId: string;
+  authorName: string;
+  authorPartyId?: ID | null;
+  body: string;
+};
+
+export type EventMomentActor = {
+  actorKey: string;
+  displayName: string;
+  partyId?: string | null;
+};
+
 export type PartyFollow = {
   pfFollowerId: number;
   pfFollowingId: number;

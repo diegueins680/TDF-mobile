@@ -8,6 +8,11 @@ import type {
   EventRSVPCreate,
   EventInvitation,
   EventInvitationCreate,
+  EventMoment,
+  EventMomentComment,
+  EventMomentCommentInput,
+  EventMomentCreateInput,
+  EventMomentReactionKind,
   RSVPStatus,
   EventInvitationStatus,
   ArtistSocialLinks
@@ -65,6 +70,39 @@ type BackendInvitationDTO = {
   invitationMessage?: string | null;
   invitationCreatedAt?: string;
   invitationUpdatedAt?: string;
+};
+
+type BackendMomentReactionDTO = {
+  emrReaction?: string | null;
+  emrPartyId?: ID | null;
+  emrCreatedAt?: string | null;
+};
+
+type BackendMomentCommentDTO = {
+  emcId?: ID | null;
+  emcMomentId?: ID | null;
+  emcAuthorPartyId?: ID | null;
+  emcAuthorName?: string | null;
+  emcBody?: string | null;
+  emcCreatedAt?: string | null;
+  emcUpdatedAt?: string | null;
+};
+
+type BackendMomentDTO = {
+  emId?: ID | null;
+  emEventId?: ID | null;
+  emAuthorPartyId?: ID | null;
+  emAuthorName?: string | null;
+  emCaption?: string | null;
+  emMediaUrl?: string | null;
+  emMediaType?: string | null;
+  emMediaWidth?: number | null;
+  emMediaHeight?: number | null;
+  emMediaDurationMs?: number | null;
+  emCreatedAt?: string | null;
+  emUpdatedAt?: string | null;
+  emReactions?: BackendMomentReactionDTO[];
+  emComments?: BackendMomentCommentDTO[];
 };
 
 type SocialEventWrite = Omit<SocialEventCreate, 'description' | 'venueId' | 'ticketPrice' | 'ticketUrl' | 'imageUrl'> & {
@@ -148,6 +186,24 @@ const normalizeOptionalPositiveIdParam = (value: ID | null | undefined): string 
   const parsed = parseSafeInteger(trimmed);
   if (parsed !== null) return parsed > 0 ? String(parsed) : null;
   return trimmed;
+};
+
+const normalizeOptionalText = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+};
+
+const normalizeMomentMediaKind = (value: string | null | undefined): 'image' | 'video' => {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === 'video' ? 'video' : 'image';
+};
+
+const normalizeMomentReactionKind = (value: string | null | undefined): EventMomentReactionKind | null => {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === 'fire' || normalized === 'love' || normalized === 'applause') {
+    return normalized;
+  }
+  return null;
 };
 
 const normalizeBackendVenueId = (value: ID | null | undefined): string | null => {
@@ -337,6 +393,49 @@ export const Events = {
       payload
     );
     return mapInvitationDto(dto, eventId);
+  },
+
+  // Event moments
+  listMoments: async (eventId: ID): Promise<EventMoment[]> => {
+    const list = await get<BackendMomentDTO[]>(`/social-events/events/${eventId}/moments`);
+    return list.map((dto, index) => mapMomentDto(dto, eventId, index));
+  },
+
+  createMoment: async (input: EventMomentCreateInput): Promise<EventMoment> => {
+    const payload = {
+      emCreateAuthorName: input.authorName,
+      emCreateCaption: input.caption ?? null,
+      emCreateMediaUrl: input.media.uri,
+      emCreateMediaType: input.media.kind,
+      emCreateMediaWidth: input.media.width ?? null,
+      emCreateMediaHeight: input.media.height ?? null,
+      emCreateMediaDurationMs: input.media.durationMs ?? null,
+    };
+    const dto = await post<BackendMomentDTO>(`/social-events/events/${input.eventId}/moments`, payload);
+    return mapMomentDto(dto, input.eventId);
+  },
+
+  reactToMoment: async (
+    eventId: ID,
+    momentId: string,
+    reaction: EventMomentReactionKind,
+  ): Promise<EventMoment> => {
+    const dto = await post<BackendMomentDTO>(
+      `/social-events/events/${eventId}/moments/${encodeURIComponent(momentId)}/reactions`,
+      { emrrReaction: reaction },
+    );
+    return mapMomentDto(dto, eventId);
+  },
+
+  commentOnMoment: async (input: EventMomentCommentInput): Promise<EventMomentComment> => {
+    const dto = await post<BackendMomentCommentDTO>(
+      `/social-events/events/${input.eventId}/moments/${encodeURIComponent(input.momentId)}/comments`,
+      {
+        emccAuthorName: input.authorName,
+        emccBody: input.body,
+      },
+    );
+    return mapMomentCommentDto(dto, input.momentId);
   }
 };
 
@@ -516,5 +615,78 @@ function mapInvitationDto(dto: BackendInvitationDTO, fallbackEventId: ID): Event
     message: dto.invitationMessage ?? null,
     createdAt,
     updatedAt
+  };
+}
+
+function mapMomentCommentDto(dto: BackendMomentCommentDTO, fallbackMomentId: ID, index = 0): EventMomentComment {
+  const createdAt = normalizeOptionalTimestamp(dto.emcCreatedAt) ?? new Date().toISOString();
+  const normalizedCommentId = normalizeComparableId(dto.emcId ?? null);
+  return {
+    id: normalizedCommentId ?? `moment-comment:${String(fallbackMomentId)}:${index}`,
+    authorName: normalizeOptionalText(dto.emcAuthorName) ?? 'Invitado',
+    authorPartyId: normalizeIdentityPartyId(dto.emcAuthorPartyId),
+    body: normalizeOptionalText(dto.emcBody) ?? '',
+    createdAt,
+  };
+}
+
+function mapMomentReactions(dto: BackendMomentDTO): EventMoment['reactions'] {
+  const reactions: EventMoment['reactions'] = { fire: [], love: [], applause: [] };
+
+  (dto.emReactions ?? []).forEach((reactionDto, index) => {
+    const reaction = normalizeMomentReactionKind(reactionDto.emrReaction);
+    if (!reaction) return;
+
+    const partyId = normalizeIdentityPartyId(reactionDto.emrPartyId);
+    const actorKey = partyId ? `party:${partyId}` : `guest:${reaction}:${index}`;
+    if (!reactions[reaction].includes(actorKey)) {
+      reactions[reaction].push(actorKey);
+    }
+  });
+
+  return reactions;
+}
+
+function inferMomentMimeType(kind: EventMoment['media']['kind'], mediaUrl: string): string {
+  const normalizedUrl = mediaUrl.toLowerCase();
+  if (kind === 'video') {
+    if (normalizedUrl.endsWith('.mov')) return 'video/quicktime';
+    if (normalizedUrl.endsWith('.webm')) return 'video/webm';
+    return 'video/mp4';
+  }
+
+  if (normalizedUrl.endsWith('.png')) return 'image/png';
+  if (normalizedUrl.endsWith('.webp')) return 'image/webp';
+  if (normalizedUrl.endsWith('.gif')) return 'image/gif';
+  return 'image/jpeg';
+}
+
+function mapMomentDto(dto: BackendMomentDTO, fallbackEventId: ID, index = 0): EventMoment {
+  const createdAt = normalizeOptionalTimestamp(dto.emCreatedAt) ?? new Date().toISOString();
+  const mediaUrl = normalizeOptionalText(dto.emMediaUrl) ?? '';
+  const mediaKind = normalizeMomentMediaKind(dto.emMediaType);
+  const normalizedMomentId = normalizeComparableId(dto.emId ?? null);
+  const comments = (dto.emComments ?? [])
+    .map((commentDto, commentIndex) => mapMomentCommentDto(commentDto, dto.emId ?? `remote:${index}`, commentIndex))
+    .filter((comment) => comment.body.trim().length > 0)
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+
+  return {
+    id: normalizedMomentId ?? `remote-moment:${String(fallbackEventId)}:${index}`,
+    eventId: normalizeComparableId(dto.emEventId ?? fallbackEventId) ?? String(fallbackEventId),
+    authorName: normalizeOptionalText(dto.emAuthorName) ?? 'Invitado',
+    authorPartyId: normalizeIdentityPartyId(dto.emAuthorPartyId),
+    caption: normalizeOptionalText(dto.emCaption),
+    media: {
+      kind: mediaKind,
+      uri: mediaUrl,
+      mimeType: inferMomentMimeType(mediaKind, mediaUrl),
+      width: typeof dto.emMediaWidth === 'number' ? dto.emMediaWidth : null,
+      height: typeof dto.emMediaHeight === 'number' ? dto.emMediaHeight : null,
+      durationMs: typeof dto.emMediaDurationMs === 'number' ? dto.emMediaDurationMs : null,
+    },
+    createdAt,
+    reactions: mapMomentReactions(dto),
+    comments,
   };
 }

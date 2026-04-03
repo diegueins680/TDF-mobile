@@ -66,7 +66,7 @@ export default function SocialScreen() {
 
   const addMutation = useMutation<void, Error, number | undefined>({
     mutationFn: async (targetId) => {
-      if (!canUseSocial) throw new Error('Conecta tu token para actualizar tu red.');
+      if (!canUseSocial) throw new Error('Inicia sesión para actualizar tu red.');
       const numeric = parsePositivePartyId(targetId) ?? parsePositivePartyId(addId);
       if (numeric === null) throw new Error('Ingresa un ID válido.');
       await Social.addFriend(numeric);
@@ -85,7 +85,7 @@ export default function SocialScreen() {
   const removeMutation = useMutation({
     mutationFn: (targetId: number) => {
       if (!canUseSocial) {
-        throw new Error('Conecta tu token para actualizar tu red.');
+        throw new Error('Inicia sesión para actualizar tu red.');
       }
       return Social.removeFriend(targetId);
     },
@@ -159,7 +159,7 @@ export default function SocialScreen() {
           </TouchableOpacity>
         </View>
         {!canUseSocial && !loading && (
-          <Text style={styles.helper}>Conecta tu token para agregar o editar conexiones.</Text>
+          <Text style={styles.helper}>Inicia sesión para agregar o editar conexiones.</Text>
         )}
         {addMutation.error && (
           <Text style={styles.errorText}>{addMutation.error.message}</Text>

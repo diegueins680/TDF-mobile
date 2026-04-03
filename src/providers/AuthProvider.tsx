@@ -1,5 +1,6 @@
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { setAuthToken, getAuthToken, get, normalizeAuthToken } from '../api/client';
@@ -13,12 +14,51 @@ type AuthContextValue = {
   clearToken: () => void;
 };
 
-const STORAGE_KEY = 'tdf-auth-token';
+const SECURE_STORAGE_KEY = 'tdf-auth-token';
+const LEGACY_STORAGE_KEY = 'tdf-auth-token';
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const normalizeToken = (value: string | null | undefined): string | null => {
   return normalizeAuthToken(value) ?? null;
+};
+
+const readSecureToken = async (): Promise<string | null> => {
+  try {
+    return await SecureStore.getItemAsync(SECURE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const persistSecureToken = async (next: string | null): Promise<boolean> => {
+  try {
+    if (next) {
+      await SecureStore.setItemAsync(SECURE_STORAGE_KEY, next);
+    } else {
+      await SecureStore.deleteItemAsync(SECURE_STORAGE_KEY);
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const readLegacyToken = async (): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const clearLegacyToken = async () => {
+  try {
+    await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures to avoid unhandled rejections in callers.
+  }
 };
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -55,18 +95,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
     queryClient.clear();
   }, [queryClient, syncTokenState]);
 
-  const persistStoredToken = useCallback((next: string | null): Promise<void> => {
+  const persistStoredToken = useCallback((
+    next: string | null,
+    options?: { preserveLegacyOnFailure?: boolean }
+  ): Promise<void> => {
     const queued = persistQueueRef.current
       .catch(() => undefined)
       .then(async () => {
-        try {
-          if (next) {
-            await AsyncStorage.setItem(STORAGE_KEY, next);
-          } else {
-            await AsyncStorage.removeItem(STORAGE_KEY);
-          }
-        } catch {
-          // Ignore storage failures to avoid unhandled rejections in callers.
+        const securePersisted = await persistSecureToken(next);
+
+        if (!options?.preserveLegacyOnFailure || securePersisted || next === null) {
+          await clearLegacyToken();
         }
       });
 
@@ -104,15 +143,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        const normalized = normalizeToken(stored);
+        const secureStored = await readSecureToken();
+        const legacyStored = await readLegacyToken();
+        const secureToken = normalizeToken(secureStored);
+        const legacyToken = normalizeToken(legacyStored);
         const inMemoryToken = normalizeToken(getAuthToken());
-        const bootstrapToken = normalized ?? inMemoryToken;
+        const bootstrapToken = secureToken ?? legacyToken ?? inMemoryToken;
 
         if (isStaleBootstrap()) return;
 
         if (!bootstrapToken) {
-          if (stored) {
+          if (secureStored || legacyStored) {
             await persistStoredToken(null);
             if (isStaleBootstrap()) return;
           }
@@ -122,8 +163,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
           return;
         }
 
-        if (stored !== bootstrapToken) {
-          await persistStoredToken(bootstrapToken);
+        if (
+          secureStored !== bootstrapToken ||
+          legacyStored !== null ||
+          (secureStored === null && legacyStored === null)
+        ) {
+          await persistStoredToken(bootstrapToken, {
+            preserveLegacyOnFailure: Boolean(legacyToken) && !secureToken
+          });
           if (isStaleBootstrap()) return;
         }
 

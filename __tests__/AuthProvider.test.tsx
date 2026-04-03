@@ -1,6 +1,7 @@
 import React, { PropsWithChildren } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider, useAuth } from '../src/providers/AuthProvider';
@@ -10,6 +11,12 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
   setItem: jest.fn(),
   removeItem: jest.fn(),
+}));
+
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(),
+  setItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
 }));
 
 jest.mock('../src/api/client', () => ({
@@ -29,7 +36,6 @@ jest.mock('../src/api/client', () => ({
   setAuthToken: jest.fn(),
 }));
 
-// Cold React Native/Jest startup gets charged to this file's first test.
 jest.setTimeout(10_000);
 
 type Deferred<T> = {
@@ -76,9 +82,12 @@ function renderAuthProvider(queryClient = createTestQueryClient()) {
 }
 
 describe('AuthProvider', () => {
-  const getItemMock = jest.mocked(AsyncStorage.getItem);
-  const setItemMock = jest.mocked(AsyncStorage.setItem);
-  const removeItemMock = jest.mocked(AsyncStorage.removeItem);
+  const getLegacyItemMock = jest.mocked(AsyncStorage.getItem);
+  const removeLegacyItemMock = jest.mocked(AsyncStorage.removeItem);
+
+  const getSecureItemMock = jest.mocked(SecureStore.getItemAsync);
+  const setSecureItemMock = jest.mocked(SecureStore.setItemAsync);
+  const deleteSecureItemMock = jest.mocked(SecureStore.deleteItemAsync);
 
   const getMock = jest.mocked(get);
   const getAuthTokenMock = jest.mocked(getAuthToken);
@@ -88,9 +97,11 @@ describe('AuthProvider', () => {
     jest.clearAllMocks();
 
     getAuthTokenMock.mockReturnValue(undefined);
-    getItemMock.mockResolvedValue(null);
-    setItemMock.mockResolvedValue();
-    removeItemMock.mockResolvedValue();
+    getSecureItemMock.mockResolvedValue(null);
+    setSecureItemMock.mockResolvedValue();
+    deleteSecureItemMock.mockResolvedValue();
+    getLegacyItemMock.mockResolvedValue(null);
+    removeLegacyItemMock.mockResolvedValue();
     getMock.mockResolvedValue({ id: 10 } as never);
   });
 
@@ -105,8 +116,9 @@ describe('AuthProvider', () => {
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));
 
-    expect(setItemMock).not.toHaveBeenCalled();
-    expect(removeItemMock).toHaveBeenCalledWith('tdf-auth-token');
+    expect(setSecureItemMock).not.toHaveBeenCalled();
+    expect(deleteSecureItemMock).toHaveBeenCalledWith('tdf-auth-token');
+    expect(removeLegacyItemMock).toHaveBeenCalledWith('tdf-auth-token');
     expect(result.current.token).toBeNull();
     expect(result.current.partyId).toBeNull();
   });
@@ -122,13 +134,14 @@ describe('AuthProvider', () => {
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer demo-token'));
 
-    expect(setItemMock).toHaveBeenLastCalledWith('tdf-auth-token', 'Bearer demo-token');
+    expect(setSecureItemMock).toHaveBeenLastCalledWith('tdf-auth-token', 'Bearer demo-token');
+    expect(removeLegacyItemMock).toHaveBeenCalledWith('tdf-auth-token');
     expect(result.current.token).toBe('Bearer demo-token');
   });
 
-  it('does not let slow storage bootstrap overwrite a newer manual token', async () => {
+  it('does not let slow secure-store bootstrap overwrite a newer manual token', async () => {
     const pendingStoredToken = createDeferred<string | null>();
-    getItemMock.mockReturnValueOnce(pendingStoredToken.promise);
+    getSecureItemMock.mockReturnValueOnce(pendingStoredToken.promise);
 
     const { result } = renderAuthProvider();
 
@@ -149,7 +162,7 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(setAuthTokenMock).not.toHaveBeenCalledWith('Bearer stale-token');
-    expect(setItemMock).toHaveBeenLastCalledWith('tdf-auth-token', 'Bearer fresh-token');
+    expect(setSecureItemMock).toHaveBeenLastCalledWith('tdf-auth-token', 'Bearer fresh-token');
     expect(result.current.token).toBe('Bearer fresh-token');
   });
 
@@ -182,8 +195,8 @@ describe('AuthProvider', () => {
     expect(result.current.token).toBeNull();
   });
 
-  it('loads and trims stored token before resolving current party id', async () => {
-    getItemMock.mockResolvedValueOnce('   Bearer saved-token   ');
+  it('loads and trims the secure token before resolving current party id', async () => {
+    getSecureItemMock.mockResolvedValueOnce('   Bearer saved-token   ');
     getMock.mockResolvedValueOnce({ id: 42 } as never);
 
     const { result } = renderAuthProvider();
@@ -191,12 +204,26 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer saved-token'));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(setItemMock).toHaveBeenCalledWith('tdf-auth-token', 'Bearer saved-token');
+    expect(setSecureItemMock).toHaveBeenCalledWith('tdf-auth-token', 'Bearer saved-token');
     expect(result.current.token).toBe('Bearer saved-token');
     expect(result.current.partyId).toBe('42');
   });
 
-  it('preserves an already loaded auth token when storage is empty', async () => {
+  it('migrates a legacy async-storage token into secure storage', async () => {
+    getLegacyItemMock.mockResolvedValueOnce('legacy-token');
+    getMock.mockResolvedValueOnce({ id: 88 } as never);
+
+    const { result } = renderAuthProvider();
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer legacy-token');
+    expect(setSecureItemMock).toHaveBeenCalledWith('tdf-auth-token', 'Bearer legacy-token');
+    expect(removeLegacyItemMock).toHaveBeenCalledWith('tdf-auth-token');
+    expect(result.current.partyId).toBe('88');
+  });
+
+  it('preserves an already loaded auth token when persisted storage is empty', async () => {
     getAuthTokenMock.mockReturnValue('Bearer in-memory-token');
     getMock.mockResolvedValueOnce({ id: 55 } as never);
 
@@ -205,13 +232,13 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(setAuthTokenMock).toHaveBeenCalledWith('Bearer in-memory-token');
-    expect(setItemMock).toHaveBeenCalledWith('tdf-auth-token', 'Bearer in-memory-token');
+    expect(setSecureItemMock).toHaveBeenCalledWith('tdf-auth-token', 'Bearer in-memory-token');
     expect(result.current.token).toBe('Bearer in-memory-token');
     expect(result.current.partyId).toBe('55');
   });
 
-  it('recovers when token storage bootstrap fails', async () => {
-    getItemMock.mockRejectedValueOnce(new Error('storage unavailable'));
+  it('falls back to a null session when secure storage is unavailable', async () => {
+    getSecureItemMock.mockRejectedValueOnce(new Error('secure store unavailable'));
 
     const { result } = renderAuthProvider();
 
@@ -222,9 +249,9 @@ describe('AuthProvider', () => {
     expect(result.current.partyId).toBeNull();
   });
 
-  it('keeps an in-memory auth token when storage bootstrap fails', async () => {
+  it('keeps an in-memory auth token when secure storage is unavailable', async () => {
     getAuthTokenMock.mockReturnValue('Bearer cached-token');
-    getItemMock.mockRejectedValueOnce(new Error('storage unavailable'));
+    getSecureItemMock.mockRejectedValueOnce(new Error('secure store unavailable'));
     getMock.mockResolvedValueOnce({ id: 99 } as never);
 
     const { result } = renderAuthProvider();
@@ -236,9 +263,10 @@ describe('AuthProvider', () => {
     expect(result.current.partyId).toBe('99');
   });
 
-  it('keeps auth state updates even when persisting token fails', async () => {
-    setItemMock.mockRejectedValueOnce(new Error('disk full'));
-    removeItemMock.mockRejectedValueOnce(new Error('disk full'));
+  it('keeps auth state updates even when secure persistence fails', async () => {
+    setSecureItemMock.mockRejectedValueOnce(new Error('secure store full'));
+    deleteSecureItemMock.mockRejectedValueOnce(new Error('secure store full'));
+    removeLegacyItemMock.mockRejectedValueOnce(new Error('legacy cleanup failed'));
 
     const { result } = renderAuthProvider();
 

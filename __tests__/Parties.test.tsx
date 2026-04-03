@@ -70,8 +70,8 @@ describe('Parties tab', () => {
 
     render(<Parties />);
 
-    expect(screen.getByText(/Connect your API token/i)).toBeTruthy();
-    const [authBtn] = screen.getAllByText(/Open Auth/i);
+    expect(screen.getByText(/Inicia sesión para cargar y crear clientes/i)).toBeTruthy();
+    const [authBtn] = screen.getAllByText(/Abrir login/i);
     fireEvent.press(authBtn);
     expect(mockPush).toHaveBeenCalledWith('/auth');
   });

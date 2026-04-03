@@ -15,8 +15,8 @@ type Step = {
 
 const STEPS: Step[] = [
   {
-    title: 'Conecta tu token',
-    description: 'Pega tu Bearer token para desbloquear inventario, bookings y pipelines.',
+    title: 'Inicia sesión',
+    description: 'Usa tu password o Google login para desbloquear inventario, bookings y pipelines.',
     icon: 'key-variant',
     color: '#38bdf8'
   },
@@ -82,7 +82,7 @@ export default function OnboardingScreen() {
             <Text style={styles.kicker}>TDF HQ Mobile</Text>
             <Text style={styles.title}>Bienvenido a tu panel en movimiento</Text>
             <Text style={styles.subtitle}>
-              Configura tu token, personaliza tu identidad y empieza a navegar las herramientas clave.
+              Inicia sesión, personaliza tu identidad y empieza a navegar las herramientas clave.
             </Text>
             <View style={styles.heroMeta}>
               <View style={styles.metaPill}>
@@ -111,7 +111,7 @@ export default function OnboardingScreen() {
 
         <View style={styles.actionStack}>
           <TouchableOpacity style={styles.primaryButton} onPress={() => complete('/auth')}>
-            <Text style={styles.primaryText}>Conectar token</Text>
+            <Text style={styles.primaryText}>Ir a login</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryButton} onPress={() => complete('/userProfile')}>
             <Text style={styles.secondaryText}>Configurar perfil</Text>

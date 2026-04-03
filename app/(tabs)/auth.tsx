@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,124 +10,288 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes
+} from '@react-native-google-signin/google-signin';
 
+import { loginRequest, googleLoginRequest } from '../../src/api/auth';
 import { API_BASE } from '../../src/lib/api';
+import {
+  GOOGLE_IOS_CLIENT_ID,
+  GOOGLE_IOS_URL_SCHEME,
+  GOOGLE_WEB_CLIENT_ID
+} from '../../src/lib/authConfig';
 import { useAuth } from '../../src/providers/AuthProvider';
 
-const readEnvToken = () => {
-  const raw = process.env.EXPO_PUBLIC_API_TOKEN;
-  const trimmed = raw?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : null;
+const readErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return fallback;
 };
 
 export default function AuthScreen() {
   const { token, partyId, loading, setToken, clearToken } = useAuth();
-  const [draftToken, setDraftToken] = useState(token ?? '');
-  const [justSaved, setJustSaved] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   const hasToken = Boolean(token?.trim());
-  const envToken = useMemo(readEnvToken, []);
+  const canSubmitPassword = username.trim().length > 0 && password.length > 0 && !isPasswordSubmitting;
+  const googleDisabledReason =
+    Platform.OS === 'web'
+      ? 'Google login está disponible sólo en builds nativas de iOS o Android.'
+      : !GOOGLE_WEB_CLIENT_ID
+        ? 'Falta configurar EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID para habilitar Google login.'
+        : Platform.OS === 'ios' && !GOOGLE_IOS_URL_SCHEME
+          ? 'Falta configurar GOOGLE_IOS_URL_SCHEME para completar Google login en iOS.'
+          : null;
 
   useEffect(() => {
-    setDraftToken(token ?? '');
-  }, [token]);
+    if (Platform.OS === 'web' || !GOOGLE_WEB_CLIENT_ID) return;
 
-  const handleSaveToken = () => {
-    setToken(draftToken);
-    setJustSaved(true);
+    GoogleSignin.configure({
+      webClientId: GOOGLE_WEB_CLIENT_ID,
+      ...(GOOGLE_IOS_CLIENT_ID ? { iosClientId: GOOGLE_IOS_CLIENT_ID } : {})
+    });
+  }, []);
+
+  const handlePasswordLogin = async () => {
+    if (!canSubmitPassword) return;
+
+    setErrorMessage(null);
+    setFeedbackMessage(null);
+    setIsPasswordSubmitting(true);
+
+    try {
+      const session = await loginRequest({
+        username: username.trim(),
+        password
+      });
+
+      setToken(session.token);
+      setPassword('');
+      setFeedbackMessage(
+        session.partyId
+          ? `Sesión iniciada. Party activa: ${session.partyId}.`
+          : 'Sesión iniciada.'
+      );
+    } catch (error) {
+      setErrorMessage(readErrorMessage(error, 'No pudimos iniciar sesión.'));
+    } finally {
+      setIsPasswordSubmitting(false);
+    }
   };
 
-  const handleUseEnvToken = () => {
-    if (!envToken) return;
-    setToken(envToken);
-    setJustSaved(true);
+  const handleGoogleLogin = async () => {
+    setErrorMessage(null);
+    setFeedbackMessage(null);
+
+    if (googleDisabledReason) {
+      setErrorMessage(googleDisabledReason);
+      return;
+    }
+
+    setIsGoogleSubmitting(true);
+
+    try {
+      if (Platform.OS === 'android') {
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      }
+
+      const response = await GoogleSignin.signIn();
+
+      if (!isSuccessResponse(response)) {
+        setFeedbackMessage('Inicio con Google cancelado.');
+        return;
+      }
+
+      if (!response.data.idToken) {
+        throw new Error('Google no devolvió un idToken válido.');
+      }
+
+      const session = await googleLoginRequest({ idToken: response.data.idToken });
+      setToken(session.token);
+      setPassword('');
+      setFeedbackMessage(
+        session.partyId
+          ? `Sesión con Google iniciada. Party activa: ${session.partyId}.`
+          : 'Sesión con Google iniciada.'
+      );
+    } catch (error) {
+      if (isErrorWithCode(error)) {
+        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+          setFeedbackMessage('Inicio con Google cancelado.');
+          return;
+        }
+
+        if (error.code === statusCodes.IN_PROGRESS) {
+          setFeedbackMessage('Google login ya está en progreso.');
+          return;
+        }
+
+        if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+          setErrorMessage('Google Play Services no está disponible en este dispositivo.');
+          return;
+        }
+      }
+
+      setErrorMessage(readErrorMessage(error, 'No pudimos iniciar sesión con Google.'));
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
   };
 
-  const handleClearToken = () => {
+  const handleClearSession = async () => {
+    setErrorMessage(null);
+    setFeedbackMessage('Sesión cerrada.');
+
+    if (Platform.OS !== 'web') {
+      try {
+        await GoogleSignin.signOut();
+      } catch {
+        // Ignore sign out failures so local session can still be cleared.
+      }
+    }
+
     clearToken();
-    setDraftToken('');
-    setJustSaved(false);
+    setPassword('');
   };
 
   return (
     <SafeAreaView style={styles.page}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Access Token</Text>
-          <Text style={styles.subtitle}>
-            Configure your Bearer token to unlock protected APIs in mobile screens.
-          </Text>
-          <Text style={styles.meta}>
-            API base: {API_BASE}
-          </Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.label}>Bearer token</Text>
-          <TextInput
-            value={draftToken}
-            onChangeText={(value) => {
-              setDraftToken(value);
-              setJustSaved(false);
-            }}
-            placeholder="Paste token or Bearer token"
-            autoCapitalize="none"
-            autoCorrect={false}
-            multiline
-            style={styles.input}
-          />
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={[styles.primaryButton, !draftToken.trim() && styles.buttonDisabled]}
-              onPress={handleSaveToken}
-              disabled={!draftToken.trim()}
-            >
-              <Text style={styles.primaryButtonText}>Save token</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.secondaryButton, !hasToken && styles.buttonDisabled]}
-              onPress={handleClearToken}
-              disabled={!hasToken}
-            >
-              <Text style={styles.secondaryButtonText}>Clear</Text>
-            </TouchableOpacity>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.card}>
+            <Text style={styles.title}>Inicia sesión</Text>
+            <Text style={styles.subtitle}>
+              Usa tu cuenta de TDF Records para desbloquear inventario, bookings, parties y social desde mobile.
+            </Text>
+            <Text style={styles.meta}>API base: {API_BASE}</Text>
           </View>
-          {!!envToken && (
-            <TouchableOpacity style={styles.ghostButton} onPress={handleUseEnvToken}>
-              <Text style={styles.ghostButtonText}>Use EXPO_PUBLIC_API_TOKEN</Text>
-            </TouchableOpacity>
-          )}
-        </View>
 
-        <View style={styles.card}>
-          <Text style={styles.label}>Session status</Text>
-          {loading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator color="#2563eb" />
-              <Text style={styles.statusText}>Loading saved token…</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.statusText}>
-                Token: {hasToken ? 'Configured' : 'Not configured'}
-              </Text>
-              <Text style={styles.statusText}>
-                Party ID: {partyId ?? 'Not linked yet'}
-              </Text>
-              {justSaved && (
-                <Text style={styles.successText}>
-                  Token saved. If Party ID remains empty, verify `/parties/me` access for this token.
-                </Text>
+          <View style={styles.card}>
+            <Text style={styles.label}>Usuario o correo</Text>
+            <TextInput
+              value={username}
+              onChangeText={(value) => {
+                setUsername(value);
+                setErrorMessage(null);
+              }}
+              placeholder="usuario o correo"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="username"
+              textContentType="username"
+              style={styles.input}
+            />
+
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              value={password}
+              onChangeText={(value) => {
+                setPassword(value);
+                setErrorMessage(null);
+              }}
+              placeholder="Tu password"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="password"
+              textContentType="password"
+              secureTextEntry
+              style={styles.input}
+              onSubmitEditing={() => {
+                void handlePasswordLogin();
+              }}
+            />
+
+            <TouchableOpacity
+              style={[styles.primaryButton, !canSubmitPassword && styles.buttonDisabled]}
+              onPress={() => {
+                void handlePasswordLogin();
+              }}
+              disabled={!canSubmitPassword}
+            >
+              {isPasswordSubmitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Entrar con password</Text>
               )}
-            </>
-          )}
-        </View>
-      </ScrollView>
+            </TouchableOpacity>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>o</Text>
+              <View style={styles.divider} />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.secondaryButton, (Boolean(googleDisabledReason) || isGoogleSubmitting) && styles.buttonDisabled]}
+              onPress={() => {
+                void handleGoogleLogin();
+              }}
+              disabled={Boolean(googleDisabledReason) || isGoogleSubmitting}
+            >
+              {isGoogleSubmitting ? (
+                <ActivityIndicator color="#111827" />
+              ) : (
+                <Text style={styles.secondaryButtonText}>Continuar con Google</Text>
+              )}
+            </TouchableOpacity>
+
+            <Text style={styles.helperText}>
+              {googleDisabledReason ?? 'Google login usa el mismo backend /login/google que ya existe en web.'}
+            </Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.label}>Estado de sesión</Text>
+            {loading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color="#2563eb" />
+                <Text style={styles.statusText}>Cargando sesión guardada…</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.statusText}>
+                  Sesión: {hasToken ? 'Activa' : 'No iniciada'}
+                </Text>
+                <Text style={styles.statusText}>
+                  Party ID: {partyId ?? 'Pendiente'}
+                </Text>
+                {feedbackMessage ? <Text style={styles.successText}>{feedbackMessage}</Text> : null}
+                {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+                <TouchableOpacity
+                  style={[styles.ghostButton, !hasToken && styles.buttonDisabled]}
+                  onPress={() => {
+                    void handleClearSession();
+                  }}
+                  disabled={!hasToken}
+                >
+                  <Text style={styles.ghostButtonText}>Cerrar sesión</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   page: { flex: 1, backgroundColor: '#f8fafc' },
   content: { padding: 16, gap: 12 },
   card: {
@@ -135,7 +300,7 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
     borderRadius: 12,
     padding: 14,
-    gap: 8
+    gap: 10
   },
   title: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
   subtitle: { color: '#475569', lineHeight: 20 },
@@ -145,13 +310,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 10,
-    minHeight: 90,
-    padding: 10,
-    textAlignVertical: 'top'
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    backgroundColor: '#fff'
   },
-  actions: { flexDirection: 'row', gap: 8 },
   primaryButton: {
-    flex: 1,
     backgroundColor: '#2563eb',
     paddingVertical: 12,
     borderRadius: 10,
@@ -159,20 +322,26 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#fff', fontWeight: '700' },
   secondaryButton: {
-    paddingHorizontal: 16,
+    backgroundColor: '#f8fafc',
+    paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#d1d5db',
-    justifyContent: 'center'
+    alignItems: 'center'
   },
   secondaryButtonText: { color: '#111827', fontWeight: '700' },
   ghostButton: {
     alignItems: 'center',
-    paddingVertical: 6
+    paddingVertical: 8
   },
-  ghostButtonText: { color: '#1d4ed8', fontWeight: '700', fontSize: 12 },
+  ghostButtonText: { color: '#1d4ed8', fontWeight: '700' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statusText: { color: '#334155' },
   successText: { color: '#166534', fontSize: 12, lineHeight: 18 },
+  errorText: { color: '#b91c1c', fontSize: 12, lineHeight: 18 },
+  helperText: { color: '#475569', fontSize: 12, lineHeight: 18 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  divider: { flex: 1, height: 1, backgroundColor: '#e2e8f0' },
+  dividerText: { color: '#64748b', fontSize: 12, fontWeight: '700' },
   buttonDisabled: { opacity: 0.5 }
 });

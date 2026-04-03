@@ -77,9 +77,9 @@ export default function Parties() {
       {!loading && !hasToken && (
         <View style={styles.notice}>
           <Text style={styles.noticeTitle}>Acceso restringido para cargar y crear clientes.</Text>
-          <Text style={styles.noticeBody}>Connect your API token to load and create clients.</Text>
+          <Text style={styles.noticeBody}>Inicia sesión para cargar y crear clientes.</Text>
           <View style={styles.row}>
-            <Button title="Open Auth" onPress={() => router.push('/auth')} />
+            <Button title="Abrir login" onPress={() => router.push('/auth')} />
           </View>
         </View>
       )}

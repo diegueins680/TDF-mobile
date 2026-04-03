@@ -1,0 +1,141 @@
+import React from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+
+import AuthScreen from '../app/(tabs)/auth';
+
+const mockSetToken = jest.fn();
+const mockClearToken = jest.fn();
+const mockLoginRequest = jest.fn();
+const mockGoogleLoginRequest = jest.fn();
+const mockGoogleHasPlayServices = jest.fn();
+const mockGoogleSignIn = jest.fn();
+const mockGoogleSignOut = jest.fn();
+
+jest.mock('../src/providers/AuthProvider', () => ({
+  useAuth: jest.fn(() => ({
+    token: null,
+    partyId: null,
+    loading: false,
+    setToken: mockSetToken,
+    clearToken: mockClearToken,
+  })),
+}));
+
+jest.mock('../src/api/auth', () => ({
+  loginRequest: (...args: unknown[]) => mockLoginRequest(...args),
+  googleLoginRequest: (...args: unknown[]) => mockGoogleLoginRequest(...args),
+}));
+
+jest.mock('../src/lib/authConfig', () => ({
+  GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
+  GOOGLE_IOS_CLIENT_ID: 'ios-client-id.apps.googleusercontent.com',
+  GOOGLE_IOS_URL_SCHEME: 'com.googleusercontent.apps.123456',
+}));
+
+jest.mock('@react-native-google-signin/google-signin', () => ({
+  GoogleSignin: {
+    configure: jest.fn(),
+    hasPlayServices: (...args: unknown[]) => mockGoogleHasPlayServices(...args),
+    signIn: (...args: unknown[]) => mockGoogleSignIn(...args),
+    signOut: (...args: unknown[]) => mockGoogleSignOut(...args),
+  },
+  isErrorWithCode: (error: unknown) => typeof error === 'object' && error !== null && 'code' in error,
+  isSuccessResponse: (response: { type?: string }) => response.type === 'success',
+  statusCodes: {
+    SIGN_IN_CANCELLED: 'SIGN_IN_CANCELLED',
+    IN_PROGRESS: 'IN_PROGRESS',
+    PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
+  },
+}));
+
+describe('Auth screen', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGoogleHasPlayServices.mockResolvedValue(true);
+    mockGoogleSignOut.mockResolvedValue(null);
+  });
+
+  it('submits username/password login and stores the returned token', async () => {
+    mockLoginRequest.mockResolvedValue({
+      token: 'Bearer mobile-token',
+      partyId: 42,
+      roles: [],
+      modules: [],
+    });
+
+    render(<AuthScreen />);
+
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'demo-user');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu password/i), 'demo-pass');
+    const passwordButton = screen.getByText(/Entrar con password/i).parent;
+    if (!passwordButton) throw new Error('Password button not found');
+    fireEvent.press(passwordButton);
+
+    await waitFor(() =>
+      expect(mockLoginRequest).toHaveBeenCalledWith({
+        username: 'demo-user',
+        password: 'demo-pass',
+      })
+    );
+    await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token'));
+    expect(screen.getByText(/Party activa: 42/i)).toBeTruthy();
+  });
+
+  it('submits Google login and stores the returned token', async () => {
+    mockGoogleSignIn.mockResolvedValue({
+      type: 'success',
+      data: {
+        user: {
+          id: 'user-1',
+          name: 'Demo User',
+          email: 'demo@example.com',
+          photo: null,
+          familyName: 'User',
+          givenName: 'Demo',
+        },
+        scopes: [],
+        idToken: 'google-id-token',
+        serverAuthCode: null,
+      },
+    });
+    mockGoogleLoginRequest.mockResolvedValue({
+      token: 'Bearer google-mobile-token',
+      partyId: 77,
+      roles: [],
+      modules: [],
+    });
+
+    render(<AuthScreen />);
+
+    const googleButton = screen.getByText(/Continuar con Google/i).parent;
+    if (!googleButton) throw new Error('Google button not found');
+    fireEvent.press(googleButton);
+
+    await waitFor(() => expect(mockGoogleSignIn).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mockGoogleLoginRequest).toHaveBeenCalledWith({ idToken: 'google-id-token' })
+    );
+    await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token'));
+    expect(screen.getByText(/Party activa: 77/i)).toBeTruthy();
+  });
+
+  it('clears the current session', async () => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({
+      token: 'Bearer existing-token',
+      partyId: '99',
+      loading: false,
+      setToken: mockSetToken,
+      clearToken: mockClearToken,
+    });
+
+    render(<AuthScreen />);
+
+    const clearSessionButton = screen.getByText(/Cerrar sesión/i).parent;
+    if (!clearSessionButton) throw new Error('Clear session button not found');
+    fireEvent.press(clearSessionButton);
+
+    await waitFor(() => expect(mockGoogleSignOut).toHaveBeenCalled());
+    await waitFor(() => expect(mockClearToken).toHaveBeenCalled());
+    expect(screen.getByText(/Sesión cerrada/i)).toBeTruthy();
+  });
+});

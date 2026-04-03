@@ -20,6 +20,20 @@ EXPO_PUBLIC_UPLOAD_URL=https://tdf-hq.fly.dev/drive/upload
 EXPO_PUBLIC_TZ=America/Guayaquil
 ```
 
+Google Sign-In in native builds also needs mobile-specific env values:
+
+```bash
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=<google-web-client-id>
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<google-ios-client-id>
+GOOGLE_IOS_URL_SCHEME=<reversed-ios-client-id>
+```
+
+Notes:
+
+- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is required for Android and iOS Google login.
+- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `GOOGLE_IOS_URL_SCHEME` are required to prove Google login on iOS native builds.
+- `app.config.ts` only registers the Google native plugin when `GOOGLE_IOS_URL_SCHEME` is present, so changing these values requires a native rebuild.
+
 `app.config.ts` also falls back to these release URLs automatically when `EAS_BUILD_PROFILE` is `preview` or `production`, so cloud builds do not depend on Expo injecting the profile envs before config evaluation.
 
 Optional release-time override:
@@ -85,3 +99,4 @@ npm run submit:android:production
 - EAS production builds use remote versioning from `eas.json`; do not set local build numbers for release builds.
 - Release assets are generated from shared TDF branding in the parent workspace by `scripts/generate_release_assets.py`.
 - The `/about` screen shows the resolved API base, health status, and version info.
+- Auth now uses username/password and Google login in-app; the old bearer-token flow is no longer the primary path.

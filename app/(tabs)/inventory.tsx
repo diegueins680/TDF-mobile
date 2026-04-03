@@ -171,7 +171,7 @@ export default function InventoryScreen() {
 
   const openCheckout = useCallback((asset: Asset) => {
     if (!canUseInventory) {
-      setFeedback('Conecta tu token para administrar el inventario.');
+      setFeedback('Inicia sesión para administrar el inventario.');
       return;
     }
     setCheckoutAsset(asset);
@@ -188,7 +188,7 @@ export default function InventoryScreen() {
 
   const openCheckin = useCallback((asset: Asset) => {
     if (!canUseInventory) {
-      setFeedback('Conecta tu token para administrar el inventario.');
+      setFeedback('Inicia sesión para administrar el inventario.');
       return;
     }
     setCheckinAsset(asset);
@@ -197,7 +197,7 @@ export default function InventoryScreen() {
 
   const openEdit = useCallback((asset: Asset) => {
     if (!canUseInventory) {
-      setFeedback('Conecta tu token para administrar el inventario.');
+      setFeedback('Inicia sesión para administrar el inventario.');
       return;
     }
     setEditAsset(asset);
@@ -221,7 +221,7 @@ export default function InventoryScreen() {
 
   const submitCheckout = useCallback(() => {
     if (!canUseInventory) {
-      setFeedback('Conecta tu token para registrar check-outs.');
+      setFeedback('Inicia sesión para registrar check-outs.');
       return;
     }
     if (!checkoutAsset) return;
@@ -257,7 +257,7 @@ export default function InventoryScreen() {
 
   const submitCheckin = useCallback(() => {
     if (!canUseInventory) {
-      setFeedback('Conecta tu token para registrar check-ins.');
+      setFeedback('Inicia sesión para registrar check-ins.');
       return;
     }
     if (!checkinAsset) return;
@@ -270,7 +270,7 @@ export default function InventoryScreen() {
 
   const submitEdit = useCallback(async () => {
     if (!canUseInventory) {
-      setFeedback('Conecta tu token para actualizar el inventario.');
+      setFeedback('Inicia sesión para actualizar el inventario.');
       return;
     }
     if (!editAsset || updateMutation.isPending || editUploading) return;
@@ -429,7 +429,7 @@ export default function InventoryScreen() {
 
   const submitCreate = useCallback(async () => {
     if (!canUseInventory) {
-      setFeedback('Conecta tu token para agregar equipo.');
+      setFeedback('Inicia sesión para agregar equipo.');
       return;
     }
     let photoUrl: string | undefined = createForm.photoUrl.trim() || undefined;
@@ -504,7 +504,7 @@ export default function InventoryScreen() {
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Agregar equipo</Text>
               {!canUseInventory && !loading ? (
-                <Text style={styles.helperText}>Conecta tu token antes de crear o editar equipos.</Text>
+                <Text style={styles.helperText}>Inicia sesión antes de crear o editar equipos.</Text>
               ) : null}
               <TextInput
                 placeholder="Nombre del equipo"
@@ -617,7 +617,7 @@ export default function InventoryScreen() {
             </View>
           ) : !canUseInventory ? (
             <View style={styles.empty}>
-              <Text style={styles.muted}>Conecta tu token para consultar y administrar inventario.</Text>
+              <Text style={styles.muted}>Inicia sesión para consultar y administrar inventario.</Text>
             </View>
           ) : (
             <View style={styles.empty}>

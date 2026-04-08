@@ -54,6 +54,7 @@ export default function AuthScreen() {
         : Platform.OS === 'ios' && !GOOGLE_IOS_URL_SCHEME
           ? 'Falta configurar GOOGLE_IOS_URL_SCHEME para completar Google login en iOS.'
           : null;
+  const googleLoginAvailable = !googleDisabledReason;
 
   useEffect(() => {
     if (Platform.OS === 'web' || !GOOGLE_WEB_CLIENT_ID) return;
@@ -230,29 +231,33 @@ export default function AuthScreen() {
               )}
             </TouchableOpacity>
 
-            <View style={styles.dividerRow}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>o</Text>
-              <View style={styles.divider} />
-            </View>
+            {googleLoginAvailable ? (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.divider} />
+                  <Text style={styles.dividerText}>o</Text>
+                  <View style={styles.divider} />
+                </View>
 
-            <TouchableOpacity
-              style={[styles.secondaryButton, (Boolean(googleDisabledReason) || isGoogleSubmitting) && styles.buttonDisabled]}
-              onPress={() => {
-                void handleGoogleLogin();
-              }}
-              disabled={Boolean(googleDisabledReason) || isGoogleSubmitting}
-            >
-              {isGoogleSubmitting ? (
-                <ActivityIndicator color="#111827" />
-              ) : (
-                <Text style={styles.secondaryButtonText}>Continuar con Google</Text>
-              )}
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, isGoogleSubmitting && styles.buttonDisabled]}
+                  onPress={() => {
+                    void handleGoogleLogin();
+                  }}
+                  disabled={isGoogleSubmitting}
+                >
+                  {isGoogleSubmitting ? (
+                    <ActivityIndicator color="#111827" />
+                  ) : (
+                    <Text style={styles.secondaryButtonText}>Continuar con Google</Text>
+                  )}
+                </TouchableOpacity>
 
-            <Text style={styles.helperText}>
-              {googleDisabledReason ?? 'Google login usa el mismo backend /login/google que ya existe en web.'}
-            </Text>
+                <Text style={styles.helperText}>
+                  Google login usa el mismo backend /login/google que ya existe en web.
+                </Text>
+              </>
+            ) : null}
           </View>
 
           <View style={styles.card}>

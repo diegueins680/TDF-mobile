@@ -26,7 +26,7 @@
     "lint": "eslint . --max-warnings=0",
     "prebuild:check": "npx expo prebuild --no-install --clean",
     "release:validate": "npm run release:check",
-    "release:check": "npm run lint && npm run typecheck && node ./scripts/release-check.mjs && npm run expo:config",
+    "release:check": "npm run google-auth:check && npm run lint && npm run typecheck && node ./scripts/release-check.mjs && npm run expo:config",
     "release:prepare": "npm run release:assets && npm run release:check",
     "typecheck": "tsc --noEmit",
     "test": "jest --runInBand",

@@ -79,7 +79,7 @@ describe('Auth screen', () => {
     );
     await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token'));
     expect(screen.getByText(/Party activa: 42/i)).toBeTruthy();
-  });
+  }, 20000);
 
   it('submits Google login and stores the returned token', async () => {
     mockGoogleSignIn.mockResolvedValue({

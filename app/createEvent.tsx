@@ -258,6 +258,17 @@ export default function CreateEventScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => router.back()}
+            style={styles.topBarButton}
+          >
+            <Text style={styles.topBarButtonText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.sectionTitle}>Event Details</Text>
 
         <View style={styles.field}>
@@ -526,6 +537,9 @@ export default function CreateEventScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fafafa' },
   content: { paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 24 },
+  topBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  topBarButton: { backgroundColor: '#e2e8f0', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 999 },
+  topBarButtonText: { color: '#0f172a', fontWeight: '700' },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginTop: 16, marginBottom: 12, textTransform: 'uppercase' },
   field: { marginBottom: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },

@@ -10,7 +10,14 @@ const requiredEnv = [
 
 // Load base env first, then let local overrides win (matching common Expo/.env expectations).
 const candidateEnvFiles = ['.env', '.env.local'];
-const searchedSources = ['process.env', ...candidateEnvFiles.slice().reverse()];
+const sourceLabels = {
+  '.env': 'tdf-mobile/.env',
+  '.env.local': 'tdf-mobile/.env.local',
+};
+const searchedSources = [
+  'process.env',
+  ...candidateEnvFiles.slice().reverse().map((file) => sourceLabels[file] ?? file),
+];
 
 const readEnvFile = (relativePath) => {
   if (!existsSync(new URL(`../${relativePath}`, import.meta.url))) {
@@ -62,7 +69,7 @@ const resolveEntry = (name) => {
   for (const file of candidateEnvFiles.slice().reverse()) {
     const fileValue = envByFile[file]?.[name]?.trim();
     if (fileValue) {
-      return { name, value: fileValue, source: file };
+      return { name, value: fileValue, source: sourceLabels[file] ?? file };
     }
   }
 
@@ -135,16 +142,58 @@ const misleadingAliases = misleadingAliasPairs
   })
   .filter(Boolean);
 
+const preferredWinningSource = sourceLabels['.env.local'];
+const localPacketCoverage = requiredEnv.map((name) => {
+  const value = envByFile['.env.local']?.[name]?.trim() || '';
+  return {
+    name,
+    present: Boolean(value),
+  };
+});
+const provingPathSources = [...new Set(resolvedEntries.filter(({ value }) => value).map(({ source }) => source))];
+const provingPathSummary = (() => {
+  if (missing.length > 0) {
+    return `unresolved (need all three values in one winning source: ${searchedSources.join(', ')})`;
+  }
+
+  if (provingPathSources.length === 1) {
+    return provingPathSources[0];
+  }
+
+  return `mixed (${provingPathSources.join(', ')})`;
+})();
+
+const packetVerdict = (() => {
+  if (
+    missing.length === 0 &&
+    invalid.length === 0 &&
+    misleadingAliases.length === 0 &&
+    provingPathSources.length === 1 &&
+    provingPathSources[0] === preferredWinningSource
+  ) {
+    return `Google env packet = ready from ${preferredWinningSource}`;
+  }
+
+  return 'Google env packet = blocked by unresolved winning source for EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID, GOOGLE_IOS_URL_SCHEME';
+})();
+
 const printResolvedStatus = (writeLine) => {
   writeLine('Resolved native Google proof input status:');
   resolvedEntries.forEach(({ name, value, source }) => {
     if (value) {
-      writeLine(`- ${name}=available (source=${source}, value=${JSON.stringify(value)})`);
+      writeLine(`- ${name}=available (source=${source})`);
       return;
     }
 
     writeLine(`- ${name}=missing (checked ${searchedSources.join(', ')})`);
   });
+
+  writeLine(`- Target winning source: ${preferredWinningSource}`);
+  localPacketCoverage.forEach(({ name, present }) => {
+    writeLine(`- ${name} in ${preferredWinningSource}=${present ? 'present' : 'missing'}`);
+  });
+  writeLine(`- Exact proving-path source: ${provingPathSummary}`);
+  writeLine(`- Packet verdict: ${packetVerdict}`);
 
   if (derivedGoogleIosUrlScheme) {
     writeLine(`- expected GOOGLE_IOS_URL_SCHEME=${derivedGoogleIosUrlScheme} (derived from EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID)`);

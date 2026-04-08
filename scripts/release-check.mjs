@@ -65,7 +65,11 @@ const releaseIdentityChecks = [
   },
   {
     path: 'ios/TDFRecords.xcodeproj/project.pbxproj',
-    requiredSnippets: [`PRODUCT_BUNDLE_IDENTIFIER = "${canonicalBundleId}";`],
+    requiredSnippets: [
+      `PRODUCT_BUNDLE_IDENTIFIER = "${canonicalBundleId}";`,
+      `PRODUCT_BUNDLE_IDENTIFIER = ${canonicalBundleId};`,
+    ],
+    requireAnySnippet: true,
     forbiddenSnippets: [staleBundleId],
   },
   {
@@ -112,9 +116,18 @@ for (const check of releaseIdentityChecks) {
     continue;
   }
 
-  for (const snippet of check.requiredSnippets) {
-    if (!contents.includes(snippet)) {
-      errors.push(`${check.path} is missing canonical release identity evidence: ${snippet}`);
+  const requiredSnippets = check.requiredSnippets ?? [];
+  if (check.requireAnySnippet) {
+    if (!requiredSnippets.some((snippet) => contents.includes(snippet))) {
+      errors.push(
+        `${check.path} is missing canonical release identity evidence: one of ${requiredSnippets.join(' OR ')}`,
+      );
+    }
+  } else {
+    for (const snippet of requiredSnippets) {
+      if (!contents.includes(snippet)) {
+        errors.push(`${check.path} is missing canonical release identity evidence: ${snippet}`);
+      }
     }
   }
 

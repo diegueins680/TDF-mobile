@@ -10,6 +10,11 @@ const mockGoogleLoginRequest = jest.fn();
 const mockGoogleHasPlayServices = jest.fn();
 const mockGoogleSignIn = jest.fn();
 const mockGoogleSignOut = jest.fn();
+const mockAuthConfig = {
+  GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
+  GOOGLE_IOS_CLIENT_ID: 'ios-client-id.apps.googleusercontent.com',
+  GOOGLE_IOS_URL_SCHEME: 'com.googleusercontent.apps.123456',
+};
 
 jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: jest.fn(() => ({
@@ -26,11 +31,7 @@ jest.mock('../src/api/auth', () => ({
   googleLoginRequest: (...args: unknown[]) => mockGoogleLoginRequest(...args),
 }));
 
-jest.mock('../src/lib/authConfig', () => ({
-  GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
-  GOOGLE_IOS_CLIENT_ID: 'ios-client-id.apps.googleusercontent.com',
-  GOOGLE_IOS_URL_SCHEME: 'com.googleusercontent.apps.123456',
-}));
+jest.mock('../src/lib/authConfig', () => mockAuthConfig);
 
 jest.mock('@react-native-google-signin/google-signin', () => ({
   GoogleSignin: {
@@ -51,6 +52,9 @@ jest.mock('@react-native-google-signin/google-signin', () => ({
 describe('Auth screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAuthConfig.GOOGLE_WEB_CLIENT_ID = 'web-client-id.apps.googleusercontent.com';
+    mockAuthConfig.GOOGLE_IOS_CLIENT_ID = 'ios-client-id.apps.googleusercontent.com';
+    mockAuthConfig.GOOGLE_IOS_URL_SCHEME = 'com.googleusercontent.apps.123456';
     mockGoogleHasPlayServices.mockResolvedValue(true);
     mockGoogleSignOut.mockResolvedValue(null);
   });
@@ -119,6 +123,15 @@ describe('Auth screen', () => {
     expect(screen.getByText(/Party activa: 77/i)).toBeTruthy();
   });
 
+  it('hides Google login when this build has no Google client id configured', () => {
+    mockAuthConfig.GOOGLE_WEB_CLIENT_ID = undefined;
+
+    render(<AuthScreen />);
+
+    expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
+    expect(screen.queryByText(/^o$/i)).toBeNull();
+  });
+
   it('clears the current session', async () => {
     jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({
       token: 'Bearer existing-token',
@@ -137,5 +150,7 @@ describe('Auth screen', () => {
     await waitFor(() => expect(mockGoogleSignOut).toHaveBeenCalled());
     await waitFor(() => expect(mockClearToken).toHaveBeenCalled());
     expect(screen.getByText(/Sesión cerrada/i)).toBeTruthy();
+    expect(screen.queryByText(/Entrar con password/i)).toBeNull();
+    expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
   });
 });

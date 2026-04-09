@@ -8,6 +8,19 @@ type ExpoExtra = {
   };
 };
 
+type LegacyConstants = {
+  manifest?: {
+    extra?: ExpoExtra;
+  };
+  manifest2?: {
+    extra?: ExpoExtra & {
+      expoClient?: {
+        extra?: ExpoExtra;
+      };
+    };
+  };
+};
+
 const readConfigValue = (value?: unknown) => {
   if (typeof value !== 'string') return undefined;
 
@@ -15,7 +28,18 @@ const readConfigValue = (value?: unknown) => {
   return trimmed || undefined;
 };
 
-const expoExtra = Constants.expoConfig?.extra as ExpoExtra | undefined;
+const readExpoExtra = (): ExpoExtra | undefined => {
+  const legacy = Constants as LegacyConstants;
+
+  return (
+    (Constants.expoConfig?.extra as ExpoExtra | undefined) ||
+    legacy.manifest?.extra ||
+    legacy.manifest2?.extra?.expoClient?.extra ||
+    legacy.manifest2?.extra
+  );
+};
+
+const expoExtra = readExpoExtra();
 
 export const GOOGLE_WEB_CLIENT_ID =
   readConfigValue(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) ||

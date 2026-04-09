@@ -46,23 +46,21 @@ export default function AuthScreen() {
 
   const hasToken = Boolean(token?.trim());
   const canSubmitPassword = username.trim().length > 0 && password.length > 0 && !isPasswordSubmitting;
-  const googleDisabledReason =
-    Platform.OS === 'web'
-      ? 'Google login está disponible sólo en builds nativas de iOS o Android.'
-      : !GOOGLE_WEB_CLIENT_ID
-        ? 'Falta configurar EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID para habilitar Google login.'
-        : Platform.OS === 'ios' && !GOOGLE_IOS_URL_SCHEME
-          ? 'Falta configurar GOOGLE_IOS_URL_SCHEME para completar Google login en iOS.'
-          : null;
+  const isGoogleLoginAvailable =
+    Platform.OS !== 'web' &&
+    Boolean(GOOGLE_WEB_CLIENT_ID) &&
+    (Platform.OS !== 'ios' || Boolean(GOOGLE_IOS_URL_SCHEME));
+  const showLoginActions = !hasToken;
+  const showGoogleLogin = showLoginActions && isGoogleLoginAvailable;
 
   useEffect(() => {
-    if (Platform.OS === 'web' || !GOOGLE_WEB_CLIENT_ID) return;
+    if (!isGoogleLoginAvailable || !GOOGLE_WEB_CLIENT_ID) return;
 
     GoogleSignin.configure({
       webClientId: GOOGLE_WEB_CLIENT_ID,
       ...(GOOGLE_IOS_CLIENT_ID ? { iosClientId: GOOGLE_IOS_CLIENT_ID } : {})
     });
-  }, []);
+  }, [isGoogleLoginAvailable]);
 
   const handlePasswordLogin = async () => {
     if (!canSubmitPassword) return;
@@ -95,8 +93,8 @@ export default function AuthScreen() {
     setErrorMessage(null);
     setFeedbackMessage(null);
 
-    if (googleDisabledReason) {
-      setErrorMessage(googleDisabledReason);
+    if (!isGoogleLoginAvailable) {
+      setErrorMessage('Google login no está disponible en esta build.');
       return;
     }
 
@@ -181,79 +179,85 @@ export default function AuthScreen() {
             <Text style={styles.meta}>API base: {API_BASE}</Text>
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.label}>Usuario o correo</Text>
-            <TextInput
-              value={username}
-              onChangeText={(value) => {
-                setUsername(value);
-                setErrorMessage(null);
-              }}
-              placeholder="usuario o correo"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="username"
-              textContentType="username"
-              style={styles.input}
-            />
+          {showLoginActions ? (
+            <View style={styles.card}>
+              <Text style={styles.label}>Usuario o correo</Text>
+              <TextInput
+                value={username}
+                onChangeText={(value) => {
+                  setUsername(value);
+                  setErrorMessage(null);
+                }}
+                placeholder="usuario o correo"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="username"
+                textContentType="username"
+                style={styles.input}
+              />
 
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              value={password}
-              onChangeText={(value) => {
-                setPassword(value);
-                setErrorMessage(null);
-              }}
-              placeholder="Tu password"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="password"
-              textContentType="password"
-              secureTextEntry
-              style={styles.input}
-              onSubmitEditing={() => {
-                void handlePasswordLogin();
-              }}
-            />
+              <Text style={styles.label}>Password</Text>
+              <TextInput
+                value={password}
+                onChangeText={(value) => {
+                  setPassword(value);
+                  setErrorMessage(null);
+                }}
+                placeholder="Tu password"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="password"
+                textContentType="password"
+                secureTextEntry
+                style={styles.input}
+                onSubmitEditing={() => {
+                  void handlePasswordLogin();
+                }}
+              />
 
-            <TouchableOpacity
-              style={[styles.primaryButton, !canSubmitPassword && styles.buttonDisabled]}
-              onPress={() => {
-                void handlePasswordLogin();
-              }}
-              disabled={!canSubmitPassword}
-            >
-              {isPasswordSubmitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.primaryButtonText}>Entrar con password</Text>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryButton, !canSubmitPassword && styles.buttonDisabled]}
+                onPress={() => {
+                  void handlePasswordLogin();
+                }}
+                disabled={!canSubmitPassword}
+              >
+                {isPasswordSubmitting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Entrar con password</Text>
+                )}
+              </TouchableOpacity>
 
-            <View style={styles.dividerRow}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>o</Text>
-              <View style={styles.divider} />
+              {showGoogleLogin ? (
+                <>
+                  <View style={styles.dividerRow}>
+                    <View style={styles.divider} />
+                    <Text style={styles.dividerText}>o</Text>
+                    <View style={styles.divider} />
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.secondaryButton, isGoogleSubmitting && styles.buttonDisabled]}
+                    onPress={() => {
+                      void handleGoogleLogin();
+                    }}
+                    disabled={isGoogleSubmitting}
+                  >
+                    {isGoogleSubmitting ? (
+                      <ActivityIndicator color="#111827" />
+                    ) : (
+                      <Text style={styles.secondaryButtonText}>Continuar con Google</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <Text style={styles.helperText}>
+                    Google login usa el mismo backend /login/google que ya existe en web.
+                  </Text>
+                </>
+              ) : null}
             </View>
-
-            <TouchableOpacity
-              style={[styles.secondaryButton, (Boolean(googleDisabledReason) || isGoogleSubmitting) && styles.buttonDisabled]}
-              onPress={() => {
-                void handleGoogleLogin();
-              }}
-              disabled={Boolean(googleDisabledReason) || isGoogleSubmitting}
-            >
-              {isGoogleSubmitting ? (
-                <ActivityIndicator color="#111827" />
-              ) : (
-                <Text style={styles.secondaryButtonText}>Continuar con Google</Text>
-              )}
-            </TouchableOpacity>
-
-            <Text style={styles.helperText}>
-              {googleDisabledReason ?? 'Google login usa el mismo backend /login/google que ya existe en web.'}
-            </Text>
-          </View>
+          ) : null}
 
           <View style={styles.card}>
             <Text style={styles.label}>Estado de sesión</Text>

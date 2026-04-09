@@ -75,7 +75,7 @@ export default function AuthScreen() {
         password
       });
 
-      setToken(session.token);
+      setToken(session.token, session.partyId ?? null);
       setPassword('');
       setFeedbackMessage(
         session.partyId
@@ -117,7 +117,7 @@ export default function AuthScreen() {
       }
 
       const session = await googleLoginRequest({ idToken: response.data.idToken });
-      setToken(session.token);
+      setToken(session.token, session.partyId ?? null);
       setPassword('');
       setFeedbackMessage(
         session.partyId

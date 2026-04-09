@@ -1,8 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
-import AuthScreen from '../app/(tabs)/auth';
-
 const mockSetToken = jest.fn();
 const mockClearToken = jest.fn();
 const mockLoginRequest = jest.fn();
@@ -48,6 +46,8 @@ jest.mock('@react-native-google-signin/google-signin', () => ({
     PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
   },
 }));
+
+const AuthScreen = require('../app/(tabs)/auth').default;
 
 describe('Auth screen', () => {
   beforeEach(() => {

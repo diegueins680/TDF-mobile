@@ -65,7 +65,9 @@ const releaseIdentityChecks = [
   },
   {
     path: 'ios/TDFRecords.xcodeproj/project.pbxproj',
-    requiredSnippets: [`PRODUCT_BUNDLE_IDENTIFIER = "${canonicalBundleId}";`],
+    requiredPatterns: [
+      new RegExp(`PRODUCT_BUNDLE_IDENTIFIER = "?${canonicalBundleId.replaceAll('.', '\\.')}"?;`),
+    ],
     forbiddenSnippets: [staleBundleId],
   },
   {
@@ -112,9 +114,15 @@ for (const check of releaseIdentityChecks) {
     continue;
   }
 
-  for (const snippet of check.requiredSnippets) {
+  for (const snippet of check.requiredSnippets ?? []) {
     if (!contents.includes(snippet)) {
       errors.push(`${check.path} is missing canonical release identity evidence: ${snippet}`);
+    }
+  }
+
+  for (const pattern of check.requiredPatterns ?? []) {
+    if (!pattern.test(contents)) {
+      errors.push(`${check.path} is missing canonical release identity evidence: ${pattern}`);
     }
   }
 

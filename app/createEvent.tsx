@@ -40,6 +40,15 @@ export default function CreateEventScreen() {
   const [selectedVenueSnapshot, setSelectedVenueSnapshot] = useState<Venue | null>(null);
   const [selectedArtistsById, setSelectedArtistsById] = useState<Record<string, ArtistProfile>>({});
 
+  const handleExit = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/(tabs)/events');
+  }, [router]);
+
   const { data: venues, isLoading: venuesLoading } = useQuery({
     queryKey: ['venues', venueSearch],
     queryFn: () => venueSearch ? Venues.search(venueSearch) : Venues.list()
@@ -61,7 +70,7 @@ export default function CreateEventScreen() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['events'] });
       Alert.alert('Success', 'Event created!');
-      router.back();
+      handleExit();
     },
     onError: (err: Error) => {
       Alert.alert('Error', err.message || 'Failed to create event');
@@ -257,6 +266,14 @@ export default function CreateEventScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleExit} style={styles.headerButton}>
+          <Text style={styles.headerButtonText}>{router.canGoBack() ? 'Back' : 'Close'}</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Create Event</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.sectionTitle}>Event Details</Text>
 
@@ -525,6 +542,34 @@ export default function CreateEventScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fafafa' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#fafafa'
+  },
+  headerButton: {
+    minWidth: 72
+  },
+  headerButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2563eb'
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827'
+  },
+  headerSpacer: {
+    minWidth: 72
+  },
   content: { paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 24 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginTop: 16, marginBottom: 12, textTransform: 'uppercase' },
   field: { marginBottom: 12 },

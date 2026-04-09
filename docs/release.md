@@ -7,7 +7,7 @@ Last updated: 2026-03-13
 - App name: `TDF Records`
 - Expo slug: `tdf-mobile`
 - iOS bundle identifier: `com.tdfrecords.app`
-- Android package: `com.tdfrecords.app`
+- Android package: `com.tdf.records`
 - Marketing version: `1.0.0`
 - Build numbers: managed by EAS remote versioning with `autoIncrement` in `eas.json`
 

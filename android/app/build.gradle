@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.tdfrecords.app'
+    namespace 'com.tdf.records'
     defaultConfig {
-        applicationId 'com.tdfrecords.app'
+        applicationId 'com.tdf.records'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 2

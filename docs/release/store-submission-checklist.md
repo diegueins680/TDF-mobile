@@ -4,7 +4,7 @@
 
 - Stable Expo config lives in `app.config.ts`.
 - iOS bundle identifier: `com.tdfrecords.app`.
-- Android application ID: `com.tdfrecords.app`.
+- Android application ID: `com.tdf.records`.
 - Store assets are generated under `assets/`.
 - EAS build profiles live in `eas.json`.
 - Release environment validation lives in `scripts/release-check.mjs`.

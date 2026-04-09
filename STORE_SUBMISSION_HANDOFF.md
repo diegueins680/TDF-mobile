@@ -3,7 +3,7 @@
 ## What was added
 
 - Consolidated Expo configuration into `app.config.ts` while keeping `app.json` only for linked Expo project metadata.
-- Added the store-ready iOS bundle identifier `com.tdfrecords.app` and Android application ID `com.tdfrecords.app`.
+- Added the store-ready iOS bundle identifier `com.tdfrecords.app` and Android application ID `com.tdf.records`.
 - Added release asset generation and generated `assets/icon.png`, `assets/adaptive-icon.png`, `assets/adaptive-icon-monochrome.png`, `assets/splash.png`, and `assets/favicon.png`.
 - Added `eas.json` build profiles for `development`, `preview`, `production`, and `ios-simulator`, with release URLs pinned for cloud builds.
 - Added release helper scripts in `package.json` plus `scripts/release-check.mjs`.
@@ -19,7 +19,7 @@ App version: `1.0.0`
 
 iOS bundle identifier: `com.tdfrecords.app`
 
-Android application ID: `com.tdfrecords.app`
+Android application ID: `com.tdf.records`
 
 Release build numbers: managed by EAS remote versioning
 

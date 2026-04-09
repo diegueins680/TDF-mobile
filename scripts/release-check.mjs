@@ -9,8 +9,8 @@ const localApiBase = 'http://localhost:8080';
 const localUploadUrl = `${localApiBase}/drive/upload`;
 const releaseApiBase = 'https://tdf-hq.fly.dev';
 const releaseUploadUrl = `${releaseApiBase}/drive/upload`;
-const canonicalBundleId = 'com.tdfrecords.app';
-const staleBundleId = 'com.tdf.records';
+const canonicalIosBundleId = 'com.tdfrecords.app';
+const canonicalAndroidPackageId = 'com.tdf.records';
 const canonicalSlug = 'tdf-mobile';
 const canonicalOwner = 'cuco.saa';
 const canonicalEasProjectId = '218aca4d-c096-4892-a353-c1dd7df23448';
@@ -43,14 +43,15 @@ const releaseIdentityChecks = [
     path: 'app.config.ts',
     requiredSnippets: [
       `const APP_SLUG = '${canonicalSlug}';`,
-      `const BUNDLE_ID = '${canonicalBundleId}';`,
+      `const IOS_BUNDLE_ID = '${canonicalIosBundleId}';`,
+      `const ANDROID_PACKAGE_ID = '${canonicalAndroidPackageId}';`,
       `const DEFAULT_EAS_PROJECT_ID = '${canonicalEasProjectId}';`,
       'runtimeVersion: APP_VERSION,',
-      'bundleIdentifier: BUNDLE_ID,',
-      'package: BUNDLE_ID,',
+      'bundleIdentifier: IOS_BUNDLE_ID,',
+      'package: ANDROID_PACKAGE_ID,',
       'projectId: EAS_PROJECT_ID',
     ],
-    forbiddenSnippets: [staleBundleId],
+    forbiddenSnippets: [],
   },
   {
     path: 'app.json',
@@ -58,38 +59,38 @@ const releaseIdentityChecks = [
       `"slug": "${canonicalSlug}"`,
       `"owner": "${canonicalOwner}"`,
       `"projectId": "${canonicalEasProjectId}"`,
-      `"package": "${canonicalBundleId}"`,
-      `"bundleIdentifier": "${canonicalBundleId}"`,
+      `"package": "${canonicalAndroidPackageId}"`,
+      `"bundleIdentifier": "${canonicalIosBundleId}"`,
     ],
-    forbiddenSnippets: [staleBundleId],
+    forbiddenSnippets: [],
   },
   {
     path: 'ios/TDFRecords.xcodeproj/project.pbxproj',
-    requiredSnippets: [`PRODUCT_BUNDLE_IDENTIFIER = "${canonicalBundleId}";`],
-    forbiddenSnippets: [staleBundleId],
+    requiredSnippets: [`PRODUCT_BUNDLE_IDENTIFIER = ${canonicalIosBundleId};`],
+    forbiddenSnippets: [canonicalAndroidPackageId],
   },
   {
     path: 'ios/TDFRecords/Info.plist',
-    requiredSnippets: [canonicalBundleId],
-    forbiddenSnippets: [staleBundleId],
+    requiredSnippets: [canonicalIosBundleId],
+    forbiddenSnippets: [canonicalAndroidPackageId],
   },
   {
     path: 'android/app/build.gradle',
     requiredSnippets: [
-      `namespace '${canonicalBundleId}'`,
-      `applicationId '${canonicalBundleId}'`,
+      `namespace '${canonicalAndroidPackageId}'`,
+      `applicationId '${canonicalAndroidPackageId}'`,
     ],
-    forbiddenSnippets: [staleBundleId],
+    forbiddenSnippets: [canonicalIosBundleId],
   },
   {
-    path: 'android/app/src/main/java/com/tdfrecords/app/MainActivity.kt',
-    requiredSnippets: [`package ${canonicalBundleId}`],
-    forbiddenSnippets: [staleBundleId],
+    path: 'android/app/src/main/java/com/tdf/records/MainActivity.kt',
+    requiredSnippets: [`package ${canonicalAndroidPackageId}`],
+    forbiddenSnippets: [canonicalIosBundleId],
   },
   {
-    path: 'android/app/src/main/java/com/tdfrecords/app/MainApplication.kt',
-    requiredSnippets: [`package ${canonicalBundleId}`],
-    forbiddenSnippets: [staleBundleId],
+    path: 'android/app/src/main/java/com/tdf/records/MainApplication.kt',
+    requiredSnippets: [`package ${canonicalAndroidPackageId}`],
+    forbiddenSnippets: [canonicalIosBundleId],
   },
 ];
 
@@ -150,7 +151,8 @@ if (errors.length > 0) {
 console.log(`Release validation passed for profile "${profile}".`);
 console.log(`App version: ${pkg.version}`);
 console.log('Release versioning: EAS remote auto-increment');
-console.log(`Canonical bundle/application ID: ${canonicalBundleId}`);
+console.log(`Canonical iOS bundle ID: ${canonicalIosBundleId}`);
+console.log(`Canonical Android application ID: ${canonicalAndroidPackageId}`);
 console.log(`Canonical Expo owner/slug: @${canonicalOwner}/${canonicalSlug}`);
 console.log(`Canonical EAS project ID: ${canonicalEasProjectId}`);
 console.log(`API base: ${apiBase}`);

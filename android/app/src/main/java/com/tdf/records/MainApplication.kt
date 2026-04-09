@@ -1,4 +1,4 @@
-package com.tdfrecords.app
+package com.tdf.records
 
 import android.app.Application
 import android.content.res.Configuration

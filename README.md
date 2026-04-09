@@ -95,7 +95,7 @@ npm run submit:android:production
 ## Notes
 
 - Expo config is centralized in `app.config.ts`.
-- Store-ready app identifiers are `com.tdfrecords.app` for both iOS and Android.
+- Store-ready app identifiers are `com.tdfrecords.app` for iOS and `com.tdf.records` for Android.
 - EAS production builds use remote versioning from `eas.json`; do not set local build numbers for release builds.
 - Release assets are generated from shared TDF branding in the parent workspace by `scripts/generate_release_assets.py`.
 - The `/about` screen shows the resolved API base, health status, and version info.

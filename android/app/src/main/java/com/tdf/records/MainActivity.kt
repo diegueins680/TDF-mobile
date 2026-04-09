@@ -1,4 +1,4 @@
-package com.tdfrecords.app
+package com.tdf.records
 
 import android.os.Build
 import android.os.Bundle

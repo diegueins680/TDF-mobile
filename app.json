@@ -26,7 +26,7 @@
       "url": "https://u.expo.dev/218aca4d-c096-4892-a353-c1dd7df23448"
     },
     "android": {
-      "package": "com.tdfrecords.app",
+      "package": "com.tdf.records",
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ],

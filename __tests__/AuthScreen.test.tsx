@@ -31,7 +31,17 @@ jest.mock('../src/api/auth', () => ({
   googleLoginRequest: (...args: unknown[]) => mockGoogleLoginRequest(...args),
 }));
 
-jest.mock('../src/lib/authConfig', () => mockAuthConfig);
+jest.mock('../src/lib/authConfig', () => ({
+  get GOOGLE_WEB_CLIENT_ID() {
+    return mockAuthConfig.GOOGLE_WEB_CLIENT_ID;
+  },
+  get GOOGLE_IOS_CLIENT_ID() {
+    return mockAuthConfig.GOOGLE_IOS_CLIENT_ID;
+  },
+  get GOOGLE_IOS_URL_SCHEME() {
+    return mockAuthConfig.GOOGLE_IOS_URL_SCHEME;
+  },
+}));
 
 jest.mock('@react-native-google-signin/google-signin', () => ({
   GoogleSignin: {

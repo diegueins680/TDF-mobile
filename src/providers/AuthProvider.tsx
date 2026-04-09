@@ -4,13 +4,12 @@ import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { setAuthToken, getAuthToken, get, normalizeAuthToken } from '../api/client';
-import type { Party } from '../types';
 
 type AuthContextValue = {
   token: string | null;
   partyId: string | null;
   loading: boolean;
-  setToken: (next: string | null) => void;
+  setToken: (next: string | null, nextPartyId?: string | number | null) => void;
   clearToken: () => void;
 };
 
@@ -21,6 +20,28 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const normalizeToken = (value: string | null | undefined): string | null => {
   return normalizeAuthToken(value) ?? null;
+};
+
+type SessionSnapshot = {
+  partyId?: string | number | null;
+  id?: string | number | null;
+};
+
+const normalizePartyId = (value: string | number | null | undefined): string | null => {
+  if (typeof value === 'number') {
+    return Number.isInteger(value) && value > 0 ? String(value) : null;
+  }
+
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  return /^[1-9]\d*$/.test(trimmed) ? trimmed : null;
+};
+
+const readPartyId = (value: SessionSnapshot | null | undefined): string | null => {
+  return normalizePartyId(value?.partyId ?? value?.id ?? null);
 };
 
 const readSecureToken = async (): Promise<string | null> => {
@@ -113,7 +134,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return queued;
   }, []);
 
-  const refreshPartyId = useCallback(async (forToken: string | null) => {
+  const refreshPartyId = useCallback(async (
+    forToken: string | null,
+    fallbackPartyId?: string | null
+  ) => {
     const lookupId = ++profileLookupIdRef.current;
 
     if (!forToken) {
@@ -124,13 +148,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     try {
-      const profile = await get<Party>('/parties/me');
+      const session = await get<SessionSnapshot>('/session');
       if (isMountedRef.current && lookupId === profileLookupIdRef.current) {
-        setPartyIdState(String(profile.id));
+        setPartyIdState(readPartyId(session) ?? fallbackPartyId ?? null);
       }
     } catch (_) {
       if (isMountedRef.current && lookupId === profileLookupIdRef.current) {
-        setPartyIdState(null);
+        setPartyIdState(fallbackPartyId ?? null);
       }
     }
   }, []);
@@ -194,15 +218,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, [applyAuthState, persistStoredToken, refreshPartyId]);
 
-  const setToken = useCallback((next: string | null) => {
+  const setToken = useCallback((next: string | null, nextPartyId?: string | number | null) => {
     authVersionRef.current += 1;
+    profileLookupIdRef.current += 1;
     const normalized = normalizeToken(next);
+    const normalizedPartyId = normalized ? normalizePartyId(nextPartyId) : null;
     setLoading(false);
     applyAuthState(normalized);
 
+    if (normalized === null || normalizedPartyId !== null) {
+      setPartyIdState(normalizedPartyId);
+    }
+
     void persistStoredToken(normalized);
 
-    void refreshPartyId(normalized);
+    if (normalized && normalizedPartyId === null) {
+      void refreshPartyId(normalized);
+    }
   }, [applyAuthState, persistStoredToken, refreshPartyId]);
 
   const clearToken = useCallback(() => setToken(null), [setToken]);

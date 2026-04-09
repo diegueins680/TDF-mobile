@@ -1,8 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
-import AuthScreen from '../app/(tabs)/auth';
-
 const mockSetToken = jest.fn();
 const mockClearToken = jest.fn();
 const mockLoginRequest = jest.fn();
@@ -10,7 +8,7 @@ const mockGoogleLoginRequest = jest.fn();
 const mockGoogleHasPlayServices = jest.fn();
 const mockGoogleSignIn = jest.fn();
 const mockGoogleSignOut = jest.fn();
-const mockAuthConfig = {
+let mockAuthConfig = {
   GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
   GOOGLE_IOS_CLIENT_ID: 'ios-client-id.apps.googleusercontent.com',
   GOOGLE_IOS_URL_SCHEME: 'com.googleusercontent.apps.123456',
@@ -31,7 +29,18 @@ jest.mock('../src/api/auth', () => ({
   googleLoginRequest: (...args: unknown[]) => mockGoogleLoginRequest(...args),
 }));
 
-jest.mock('../src/lib/authConfig', () => mockAuthConfig);
+jest.mock('../src/lib/authConfig', () => ({
+  __esModule: true,
+  get GOOGLE_WEB_CLIENT_ID() {
+    return mockAuthConfig?.GOOGLE_WEB_CLIENT_ID;
+  },
+  get GOOGLE_IOS_CLIENT_ID() {
+    return mockAuthConfig?.GOOGLE_IOS_CLIENT_ID;
+  },
+  get GOOGLE_IOS_URL_SCHEME() {
+    return mockAuthConfig?.GOOGLE_IOS_URL_SCHEME;
+  },
+}));
 
 jest.mock('@react-native-google-signin/google-signin', () => ({
   GoogleSignin: {
@@ -48,6 +57,8 @@ jest.mock('@react-native-google-signin/google-signin', () => ({
     PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
   },
 }));
+
+const AuthScreen = require('../app/(tabs)/auth').default;
 
 describe('Auth screen', () => {
   beforeEach(() => {
@@ -81,7 +92,7 @@ describe('Auth screen', () => {
         password: 'demo-pass',
       })
     );
-    await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token'));
+    await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42));
     expect(screen.getByText(/Party activa: 42/i)).toBeTruthy();
   });
 
@@ -119,7 +130,7 @@ describe('Auth screen', () => {
     await waitFor(() =>
       expect(mockGoogleLoginRequest).toHaveBeenCalledWith({ idToken: 'google-id-token' })
     );
-    await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token'));
+    await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token', 77));
     expect(screen.getByText(/Party activa: 77/i)).toBeTruthy();
   });
 

@@ -102,7 +102,7 @@ describe('AuthProvider', () => {
     deleteSecureItemMock.mockResolvedValue();
     getLegacyItemMock.mockResolvedValue(null);
     removeLegacyItemMock.mockResolvedValue();
-    getMock.mockResolvedValue({ id: 10 } as never);
+    getMock.mockResolvedValue({ partyId: 10 } as never);
   });
 
   it('normalizes blank tokens to null and clears persisted storage', async () => {
@@ -171,7 +171,7 @@ describe('AuthProvider', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    const pendingProfile = createDeferred<{ id: number }>();
+    const pendingProfile = createDeferred<{ partyId: number }>();
     getMock.mockReturnValueOnce(pendingProfile.promise as never);
 
     act(() => {
@@ -187,7 +187,7 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));
 
     await act(async () => {
-      pendingProfile.resolve({ id: 77 });
+      pendingProfile.resolve({ partyId: 77 });
       await pendingProfile.promise;
     });
 
@@ -197,7 +197,7 @@ describe('AuthProvider', () => {
 
   it('loads and trims the secure token before resolving current party id', async () => {
     getSecureItemMock.mockResolvedValueOnce('   Bearer saved-token   ');
-    getMock.mockResolvedValueOnce({ id: 42 } as never);
+    getMock.mockResolvedValueOnce({ partyId: 42 } as never);
 
     const { result } = renderAuthProvider();
 
@@ -211,7 +211,7 @@ describe('AuthProvider', () => {
 
   it('migrates a legacy async-storage token into secure storage', async () => {
     getLegacyItemMock.mockResolvedValueOnce('legacy-token');
-    getMock.mockResolvedValueOnce({ id: 88 } as never);
+    getMock.mockResolvedValueOnce({ partyId: 88 } as never);
 
     const { result } = renderAuthProvider();
 
@@ -225,7 +225,7 @@ describe('AuthProvider', () => {
 
   it('preserves an already loaded auth token when persisted storage is empty', async () => {
     getAuthTokenMock.mockReturnValue('Bearer in-memory-token');
-    getMock.mockResolvedValueOnce({ id: 55 } as never);
+    getMock.mockResolvedValueOnce({ partyId: 55 } as never);
 
     const { result } = renderAuthProvider();
 
@@ -252,7 +252,7 @@ describe('AuthProvider', () => {
   it('keeps an in-memory auth token when secure storage is unavailable', async () => {
     getAuthTokenMock.mockReturnValue('Bearer cached-token');
     getSecureItemMock.mockRejectedValueOnce(new Error('secure store unavailable'));
-    getMock.mockResolvedValueOnce({ id: 99 } as never);
+    getMock.mockResolvedValueOnce({ partyId: 99 } as never);
 
     const { result } = renderAuthProvider();
 
@@ -292,7 +292,7 @@ describe('AuthProvider', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    getMock.mockResolvedValueOnce({ id: 11 } as never);
+    getMock.mockResolvedValueOnce({ partyId: 11 } as never);
 
     act(() => {
       result.current.setToken('Bearer first-token');
@@ -300,7 +300,7 @@ describe('AuthProvider', () => {
 
     await waitFor(() => expect(result.current.partyId).toBe('11'));
 
-    const pendingProfile = createDeferred<{ id: number }>();
+    const pendingProfile = createDeferred<{ partyId: number }>();
     getMock.mockReturnValueOnce(pendingProfile.promise as never);
 
     act(() => {
@@ -310,7 +310,7 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(result.current.partyId).toBeNull());
 
     await act(async () => {
-      pendingProfile.resolve({ id: 22 });
+      pendingProfile.resolve({ partyId: 22 });
       await pendingProfile.promise;
     });
 
@@ -345,5 +345,20 @@ describe('AuthProvider', () => {
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));
     expect(clearSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves a known party id passed with a fresh token without waiting for hydration', async () => {
+    const { result } = renderAuthProvider();
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      result.current.setToken('Bearer seeded-token', 33);
+    });
+
+    await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer seeded-token'));
+
+    expect(result.current.partyId).toBe('33');
+    expect(getMock).not.toHaveBeenCalled();
   });
 });

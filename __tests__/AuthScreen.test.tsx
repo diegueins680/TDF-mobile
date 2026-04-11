@@ -87,9 +87,7 @@ describe('Auth screen', () => {
       expect(screen.getByDisplayValue('demo-pass')).toBeTruthy();
     });
 
-    const passwordButton = screen.getByText(/Entrar con password/i).parent?.parent;
-    if (!passwordButton) throw new Error('Password button not found');
-    fireEvent.press(passwordButton);
+    fireEvent.press(screen.getByText(/Entrar con password/i));
 
     await waitFor(() =>
       expect(mockLoginRequest).toHaveBeenCalledWith({

@@ -82,7 +82,12 @@ describe('Auth screen', () => {
 
     fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'demo-user');
     fireEvent.changeText(screen.getByPlaceholderText(/tu password/i), 'demo-pass');
-    const passwordButton = screen.getByText(/Entrar con password/i).parent;
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('demo-user')).toBeTruthy();
+      expect(screen.getByDisplayValue('demo-pass')).toBeTruthy();
+    });
+
+    const passwordButton = screen.getByText(/Entrar con password/i).parent?.parent;
     if (!passwordButton) throw new Error('Password button not found');
     fireEvent.press(passwordButton);
 

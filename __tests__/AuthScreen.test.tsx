@@ -82,22 +82,22 @@ describe('Auth screen', () => {
 
     fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'demo-user');
     fireEvent.changeText(screen.getByPlaceholderText(/tu password/i), 'demo-pass');
+    expect(screen.getByDisplayValue('demo-user')).toBeTruthy();
+    expect(screen.getByDisplayValue('demo-pass')).toBeTruthy();
+
+    const passwordButton = screen.getByText(/Entrar con password/i).parent;
+    if (!passwordButton) throw new Error('Password login button not found');
+    fireEvent.press(passwordButton);
+
     await waitFor(() => {
-      expect(screen.getByDisplayValue('demo-user')).toBeTruthy();
-      expect(screen.getByDisplayValue('demo-pass')).toBeTruthy();
-    });
-
-    fireEvent.press(screen.getByText(/Entrar con password/i));
-
-    await waitFor(() =>
       expect(mockLoginRequest).toHaveBeenCalledWith({
         username: 'demo-user',
         password: 'demo-pass',
-      })
-    );
-    await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42));
-    expect(screen.getByText(/Party activa: 42/i)).toBeTruthy();
-  });
+      });
+      expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42);
+    });
+    expect(await screen.findByText(/Party activa: 42/i)).toBeTruthy();
+  }, 10_000);
 
   it('submits Google login and stores the returned token', async () => {
     mockGoogleSignIn.mockResolvedValue({

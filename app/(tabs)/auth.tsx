@@ -11,6 +11,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
   GoogleSignin,
   isErrorWithCode,
@@ -36,6 +37,7 @@ const readErrorMessage = (error: unknown, fallback: string) => {
 };
 
 export default function AuthScreen() {
+  const router = useRouter();
   const { token, partyId, loading, setToken, clearToken } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -82,6 +84,7 @@ export default function AuthScreen() {
           ? `Sesión iniciada. Party activa: ${session.partyId}.`
           : 'Sesión iniciada.'
       );
+      router.replace('/(tabs)/parties');
     } catch (error) {
       setErrorMessage(readErrorMessage(error, 'No pudimos iniciar sesión.'));
     } finally {
@@ -124,6 +127,7 @@ export default function AuthScreen() {
           ? `Sesión con Google iniciada. Party activa: ${session.partyId}.`
           : 'Sesión con Google iniciada.'
       );
+      router.replace('/(tabs)/parties');
     } catch (error) {
       if (isErrorWithCode(error)) {
         if (error.code === statusCodes.SIGN_IN_CANCELLED) {

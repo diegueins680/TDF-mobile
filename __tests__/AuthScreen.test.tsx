@@ -146,6 +146,22 @@ describe('Auth screen', () => {
     expect(screen.queryByText(/^o$/i)).toBeNull();
   });
 
+  it('keeps login actions hidden while a saved session is still hydrating', () => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({
+      token: null,
+      partyId: null,
+      loading: true,
+      setToken: mockSetToken,
+      clearToken: mockClearToken,
+    });
+
+    render(<AuthScreen />);
+
+    expect(screen.getByText(/Cargando sesión guardada…/i)).toBeTruthy();
+    expect(screen.queryByText(/Entrar con password/i)).toBeNull();
+    expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
+  });
+
   it('clears the current session', async () => {
     jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({
       token: 'Bearer existing-token',

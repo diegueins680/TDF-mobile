@@ -50,7 +50,7 @@ export default function AuthScreen() {
     Platform.OS !== 'web' &&
     Boolean(GOOGLE_WEB_CLIENT_ID) &&
     (Platform.OS !== 'ios' || Boolean(GOOGLE_IOS_URL_SCHEME));
-  const showLoginActions = !hasToken;
+  const showLoginActions = !loading && !hasToken;
   const showGoogleLogin = showLoginActions && isGoogleLoginAvailable;
 
   useEffect(() => {

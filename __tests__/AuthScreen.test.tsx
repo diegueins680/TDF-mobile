@@ -8,6 +8,7 @@ const mockGoogleLoginRequest = jest.fn();
 const mockGoogleHasPlayServices = jest.fn();
 const mockGoogleSignIn = jest.fn();
 const mockGoogleSignOut = jest.fn();
+const mockReplace = jest.fn();
 let mockAuthConfig = {
   GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
   GOOGLE_IOS_CLIENT_ID: 'ios-client-id.apps.googleusercontent.com',

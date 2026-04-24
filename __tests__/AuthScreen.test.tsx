@@ -59,11 +59,16 @@ jest.mock('@react-native-google-signin/google-signin', () => ({
   },
 }));
 
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ replace: mockReplace }),
+}));
+
 const AuthScreen = require('../app/(tabs)/auth').default;
 
 describe('Auth screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockReplace.mockReset();
     mockAuthConfig.GOOGLE_WEB_CLIENT_ID = 'web-client-id.apps.googleusercontent.com';
     mockAuthConfig.GOOGLE_IOS_CLIENT_ID = 'ios-client-id.apps.googleusercontent.com';
     mockAuthConfig.GOOGLE_IOS_URL_SCHEME = 'com.googleusercontent.apps.123456';
@@ -96,6 +101,7 @@ describe('Auth screen', () => {
         password: 'demo-pass',
       });
       expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42);
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/parties');
     });
     expect(await screen.findByText(/Party activa: 42/i)).toBeTruthy();
   }, 10_000);
@@ -135,6 +141,7 @@ describe('Auth screen', () => {
       expect(mockGoogleLoginRequest).toHaveBeenCalledWith({ idToken: 'google-id-token' })
     );
     await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token', 77));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/parties'));
     expect(screen.getByText(/Party activa: 77/i)).toBeTruthy();
   });
 

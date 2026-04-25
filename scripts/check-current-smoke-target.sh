@@ -30,6 +30,9 @@ source_roots = [
     mobile_dir / "app.config.ts",
     mobile_dir / "package.json",
 ]
+ignored_source_prefixes = [
+    mobile_dir / "ios" / "build",
+]
 
 
 def fmt_ts(ts: float) -> str:

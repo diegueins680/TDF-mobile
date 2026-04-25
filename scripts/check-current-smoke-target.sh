@@ -57,6 +57,16 @@ def installable_paths(root: Path, *, suffixes: set[str], include_app_dirs: bool 
     return sorted(set(found), key=lambda p: p.stat().st_mtime, reverse=True)
 
 
+def is_ignored_source_path(path: Path) -> bool:
+    for prefix in ignored_source_prefixes:
+        try:
+            path.relative_to(prefix)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
 def newer_source_files_since(ts: float) -> list[tuple[float, Path]]:
     stale_files: list[tuple[float, Path]] = []
     for root in source_roots:
@@ -67,6 +77,8 @@ def newer_source_files_since(ts: float) -> list[tuple[float, Path]]:
         else:
             candidates = [p for p in root.rglob("*") if p.is_file()]
         for path in candidates:
+            if is_ignored_source_path(path):
+                continue
             try:
                 mtime = path.stat().st_mtime
             except FileNotFoundError:

@@ -238,17 +238,25 @@ else:
         bundle_id = bundle_id_for_app(ios_artifact)
         if bundle_id:
             print(f"ios_bundle_id={bundle_id}")
-            print(f"ios_exact_install_command=xcrun simctl install booted {shlex_quote(str(ios_artifact))}")
+            generic_install_command = f"xcrun simctl install booted {shlex_quote(str(ios_artifact))}"
+            print(f"ios_exact_install_command={generic_install_command}")
             ios_launch_command = f"xcrun simctl launch booted {bundle_id}"
             print(f"ios_exact_launch_command={ios_launch_command}")
+            simulator_install_command = generic_install_command
+            simulator_launch_command = ios_launch_command
+            if booted_simulator_id:
+                simulator_install_command = f"xcrun simctl install {booted_simulator_id} {shlex_quote(str(ios_artifact))}"
+                simulator_launch_command = f"xcrun simctl launch {booted_simulator_id} {bundle_id}"
+                print(f"ios_exact_install_command_for_simulator={simulator_install_command}")
+                print(f"ios_exact_launch_command_for_simulator={simulator_launch_command}")
             if "Debug-iphonesimulator" in str(ios_artifact):
                 metro_command = f"cd {shlex_quote(str(mobile_dir))} && npx expo start --dev-client --host localhost"
                 print("ios_launch_contract_mode=packager-backed-debug")
                 print(f"ios_required_packager_command={metro_command}")
                 print("ios_required_packager_reason=debug simulator build requires Metro; launching without it can fail with No script URL provided")
                 print(f"ios_smoke_sequence_step_1={metro_command}")
-                print(f"ios_smoke_sequence_step_2=xcrun simctl install booted {shlex_quote(str(ios_artifact))}")
-                print(f"ios_smoke_sequence_step_3={ios_launch_command}")
+                print(f"ios_smoke_sequence_step_2={simulator_install_command}")
+                print(f"ios_smoke_sequence_step_3={simulator_launch_command}")
     if ios_stale_files:
         print("ios_artifact_status=stale")
         print(f"ios_newer_source_count={len(ios_stale_files)}")

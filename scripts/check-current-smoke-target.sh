@@ -141,6 +141,7 @@ else:
 xcrun_path = shutil.which("xcrun")
 print(f"xcrun_available={'true' if xcrun_path else 'false'}")
 booted_simulators: list[str] = []
+booted_simulator_ids: list[str] = []
 if xcrun_path:
     simctl_result = subprocess.run(
         [xcrun_path, "simctl", "list", "devices", "booted", "--json"],
@@ -159,12 +160,16 @@ if xcrun_path:
                     continue
                 name = device.get("name", "unknown")
                 udid = device.get("udid", "unknown")
+                booted_simulator_ids.append(udid)
                 booted_simulators.append(f"{name} ({udid}) runtime={runtime}")
     else:
         print(f"booted_simulator_probe_status=exit-{simctl_result.returncode}")
 print(f"booted_simulator_count={len(booted_simulators)}")
 for entry in booted_simulators[:5]:
     print(f"booted_simulator={entry}")
+booted_simulator_id = booted_simulator_ids[0] if len(booted_simulator_ids) == 1 else None
+if booted_simulator_id:
+    print(f"ios_exact_simulator_id={booted_simulator_id}")
 
 if not all_artifacts:
     expected_output = android_outputs / "apk" / "debug" / "app-debug.apk"

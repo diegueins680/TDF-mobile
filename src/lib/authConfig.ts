@@ -51,4 +51,5 @@ export const GOOGLE_IOS_CLIENT_ID =
 
 export const GOOGLE_IOS_URL_SCHEME =
   readConfigValue(process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME) ||
+  readConfigValue(process.env.GOOGLE_IOS_URL_SCHEME) ||
   readConfigValue(expoExtra?.googleAuth?.iosUrlScheme);

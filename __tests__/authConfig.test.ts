@@ -4,6 +4,7 @@ const resetGoogleEnv = () => {
   delete process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
   delete process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
   delete process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME;
+  delete process.env.GOOGLE_IOS_URL_SCHEME;
 };
 
 const loadAuthConfig = async (constantsMock: unknown, env: Record<string, string> = {}) => {
@@ -74,5 +75,24 @@ describe('authConfig', () => {
     );
 
     expect(authConfig.GOOGLE_WEB_CLIENT_ID).toBe('env-web.apps.googleusercontent.com');
+  });
+
+  it('accepts the non-public GOOGLE_IOS_URL_SCHEME env used by app.config.ts', async () => {
+    const authConfig = await loadAuthConfig(
+      {
+        expoConfig: {
+          extra: {
+            googleAuth: {
+              iosUrlScheme: 'embedded-ios-scheme',
+            },
+          },
+        },
+      },
+      {
+        GOOGLE_IOS_URL_SCHEME: 'com.googleusercontent.apps.env-ios',
+      },
+    );
+
+    expect(authConfig.GOOGLE_IOS_URL_SCHEME).toBe('com.googleusercontent.apps.env-ios');
   });
 });

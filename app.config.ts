@@ -26,7 +26,8 @@ const EAS_BUILD_PROFILE = process.env.EAS_BUILD_PROFILE?.trim() || 'development'
 const DEFAULT_TZ = process.env.EXPO_PUBLIC_TZ?.trim() || DEFAULT_TIME_ZONE;
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim();
-const GOOGLE_IOS_URL_SCHEME = process.env.GOOGLE_IOS_URL_SCHEME?.trim();
+const GOOGLE_IOS_URL_SCHEME =
+  process.env.GOOGLE_IOS_URL_SCHEME?.trim() || process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME?.trim();
 
 const resolveReleaseAwareEnv = (name: 'EXPO_PUBLIC_API_BASE' | 'EXPO_PUBLIC_UPLOAD_URL', releaseValue: string, localValue: string) => {
   const explicitValue = process.env[name]?.trim();

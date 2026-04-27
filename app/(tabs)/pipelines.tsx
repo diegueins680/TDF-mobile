@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ScrollView, View, Text, Alert, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { listPipeline, updateStage } from '../../src/api/pipelines';
 import type { PipelineCard, PipelineKind, PipelineStage } from '../../src/types';
 import { StagePill } from '../../src/components/StagePill';
@@ -57,17 +58,21 @@ export default function Pipelines() {
 
   if (mixing.isLoading || mastering.isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2563eb" />
-      </View>
+      <SafeAreaView style={styles.page} edges={['top']}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (mixing.isError || mastering.isError) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>Could not load pipelines.</Text>
-      </View>
+      <SafeAreaView style={styles.page} edges={['top']}>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>Could not load pipelines.</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -75,20 +80,23 @@ export default function Pipelines() {
   const masteringCards = mastering.data || [];
 
   return (
-    <ScrollView horizontal contentContainerStyle={styles.content}>
-      <Column title="Mixing" cards={mixingCards}
-        onMove={(id, stage) => m.mutate({ kind: 'mixing', id, stage })} />
-      <Column title="Mastering" cards={masteringCards}
-        onMove={(id, stage) => m.mutate({ kind: 'mastering', id, stage })} />
-      <View style={styles.helpCard}>
-        <Text style={styles.helpTitle}>Tip</Text>
-        <Text style={styles.helpText}>Long-press any card to move it to another stage.</Text>
-      </View>
-    </ScrollView>
+    <SafeAreaView style={styles.page} edges={['top']}>
+      <ScrollView horizontal contentContainerStyle={styles.content}>
+        <Column title="Mixing" cards={mixingCards}
+          onMove={(id, stage) => m.mutate({ kind: 'mixing', id, stage })} />
+        <Column title="Mastering" cards={masteringCards}
+          onMove={(id, stage) => m.mutate({ kind: 'mastering', id, stage })} />
+        <View style={styles.helpCard}>
+          <Text style={styles.helpTitle}>Tip</Text>
+          <Text style={styles.helpText}>Long-press any card to move it to another stage.</Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  page: { flex: 1, backgroundColor: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { padding: 12 },
   col: { width: 280, marginRight: 12 },

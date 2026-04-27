@@ -13,6 +13,7 @@ import {
   View
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Inventory, normalizeAssets } from '../../src/api/inventory';
 import type {
@@ -460,7 +461,7 @@ export default function InventoryScreen() {
   }, [canUseInventory, createForm, createMutation, localImage]);
 
   return (
-    <View style={styles.page}>
+    <SafeAreaView style={styles.page} edges={['top']}>
       <FlatList
         data={filtered}
         keyExtractor={(item) => toStringId(item.assetId)}

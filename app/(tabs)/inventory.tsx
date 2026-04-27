@@ -888,7 +888,7 @@ export default function InventoryScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

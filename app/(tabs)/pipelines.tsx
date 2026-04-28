@@ -98,7 +98,11 @@ export default function Pipelines() {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  content: { padding: 12 },
+  content: {
+    paddingHorizontal: 12,
+    paddingTop: 28,
+    paddingBottom: 12,
+  },
   col: { width: 280, marginRight: 12 },
   colTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
   emptyText: { color: '#6b7280', marginBottom: 8 },

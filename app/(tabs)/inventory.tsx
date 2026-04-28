@@ -894,7 +894,12 @@ export default function InventoryScreen() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#f8fafc' },
-  listContent: { padding: 16, gap: 12, paddingBottom: 32 },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 32,
+    paddingBottom: 32,
+    gap: 12,
+  },
   header: { fontSize: 26, fontWeight: '800', color: '#0f172a' },
   subheader: { color: '#475569', lineHeight: 20 },
   helperText: { color: '#475569', lineHeight: 18 },

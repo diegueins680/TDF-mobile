@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
@@ -133,22 +134,22 @@ export default function EventsScreen() {
 
   if (listLoading) {
     return (
-      <View style={styles.center}>
+      <SafeAreaView style={styles.center} edges={['top']}>
         <ActivityIndicator size="large" color="#2563eb" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (listError) {
     return (
-      <View style={styles.center}>
+      <SafeAreaView style={styles.center} edges={['top']}>
         <Text style={styles.error}>Failed to load events</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Events Near You</Text>
@@ -260,7 +261,7 @@ export default function EventsScreen() {
           }
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 

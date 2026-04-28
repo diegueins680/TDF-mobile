@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { createBooking, listBookings } from '../../src/api/bookings';
 import type { Booking } from '../../src/types';
 
@@ -32,7 +33,9 @@ export default function Bookings() {
     </View>
   ), []);
 
-  const keyExtractor = useCallback((item: Booking) => String(item.id), []);
+  const keyExtractor = useCallback((item: Booking, index: number) => (
+    `${item.id}-${item.start}-${index}`
+  ), []);
 
   const renderEmpty = useCallback(() => (
     <View style={{ padding: 20 }}>
@@ -45,22 +48,22 @@ export default function Bookings() {
   if (q.isError) {
     const message = q.error instanceof Error ? q.error.message : 'No se pudieron cargar las reservas.';
     return (
-      <View style={{ padding: 20 }}>
+      <SafeAreaView edges={['top']} style={{ flex: 1, padding: 20 }}>
         <Text style={{ color: 'red' }}>{message}</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (q.isLoading) {
     return (
-      <View style={{ padding: 20 }}>
+      <SafeAreaView edges={['top']} style={{ flex: 1, padding: 20 }}>
         <Text>Cargando reservas…</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={{ flex: 1, padding: 16 }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, padding: 16 }}>
       <TouchableOpacity
         onPress={createQuickSession}
         style={{ backgroundColor: '#2563eb', padding: 12, borderRadius: 8, marginBottom: 12 }}
@@ -81,6 +84,6 @@ export default function Bookings() {
         windowSize={8}
         removeClippedSubviews
       />
-    </View>
+    </SafeAreaView>
   );
 }

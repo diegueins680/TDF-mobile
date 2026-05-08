@@ -24,11 +24,17 @@ export default function Parties() {
     enabled: canUseParties
   });
 
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const mCreate = useMutation({
     mutationFn: (body: Partial<Party>) => createParty(body),
     onSuccess: () => {
       setNewName('');
+      setCreateError(null);
       qc.invalidateQueries({ queryKey: ['parties'] });
+    },
+    onError: (error) => {
+      setCreateError(error instanceof Error ? error.message : 'No se pudo crear el cliente.');
     }
   });
 
@@ -47,7 +53,7 @@ export default function Parties() {
 
   const renderEmpty = useCallback(() => (
     <View style={styles.empty}>
-      <Text>{hasToken ? 'No clients yet' : 'Acceso restringido para cargar clientes.'}</Text>
+      <Text>{hasToken ? 'Aún no tienes clientes' : 'Acceso restringido para cargar clientes.'}</Text>
     </View>
   ), [hasToken]);
 
@@ -73,7 +79,7 @@ export default function Parties() {
 
   return (
     <View style={styles.wrap}>
-      {loading && <Text>Loading session…</Text>}
+      {loading && <Text>Cargando sesión…</Text>}
       {!loading && !hasToken && (
         <View style={styles.notice}>
           <Text style={styles.noticeTitle}>Acceso restringido para cargar y crear clientes.</Text>
@@ -84,29 +90,37 @@ export default function Parties() {
         </View>
       )}
       <TextInput
-        placeholder="Search name or Instagram…"
+        placeholder="Buscar nombre o Instagram…"
         value={q}
         onChangeText={setQ}
         style={styles.input}
         autoCapitalize="none"
         autoCorrect={false}
         clearButtonMode="while-editing"
+        accessibilityLabel="Buscar clientes por nombre o Instagram"
       />
       <View style={styles.row}>
         <TextInput
-          placeholder="New client name…"
+          placeholder="Nombre del nuevo cliente…"
           value={newName}
           onChangeText={setNewName}
           style={[styles.input, { flex: 1 }]}
+          accessibilityLabel="Nombre del nuevo cliente"
         />
         <Button
-          title={mCreate.isPending ? 'Adding…' : 'Add'}
+          title={mCreate.isPending ? 'Agregando…' : 'Agregar'}
           onPress={() => canCreate && mCreate.mutate({ name: newName.trim() })}
           disabled={!canCreate}
+          accessibilityLabel="Agregar cliente"
         />
       </View>
 
-      {canUseParties && isLoading && <Text>Loading…</Text>}
+      {canUseParties && isLoading && <Text>Cargando…</Text>}
+      {createError && (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{createError}</Text>
+        </View>
+      )}
       {renderError()}
 
       <FlatList

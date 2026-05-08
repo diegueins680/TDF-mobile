@@ -27,9 +27,11 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
   const endDate = new Date(event.endTime);
   const isSameDay = startDate.toDateString() === endDate.toDateString();
 
+  const a11yLabel = `${event.title}, ${startDate.toLocaleDateString('es-EC')} ${startDate.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}${event.venue ? ` en ${event.venue.name}` : ''}`;
+
   return (
     <View style={styles.card}>
-      <TouchableOpacity onPress={handlePress}>
+      <TouchableOpacity onPress={handlePress} accessibilityRole="button" accessibilityLabel={a11yLabel}>
         {event.imageUrl && (
           <Image source={{ uri: event.imageUrl }} style={styles.image} />
         )}
@@ -47,7 +49,7 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
 
           {event.artists && event.artists.length > 0 && (
             <View style={styles.artists}>
-              <Text style={styles.artistsLabel}>Artists:</Text>
+              <Text style={styles.artistsLabel}>Artistas:</Text>
               <Text style={styles.artistsList}>
                 {event.artists.map(a => a.name).join(', ')}
               </Text>
@@ -59,7 +61,7 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
               <Text style={styles.price}>${event.ticketPrice.toFixed(2)}</Text>
             )}
             <View style={styles.stats}>
-              <Text style={styles.stat}>{event.rsvpCount} going</Text>
+              <Text style={styles.stat}>{event.rsvpCount} asisten</Text>
             </View>
           </View>
         </View>
@@ -71,9 +73,12 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
             style={[styles.saveButton, saved && styles.saveButtonActive, saveDisabled && styles.saveButtonDisabled]}
             onPress={onToggleSaved}
             disabled={saveDisabled}
+            accessibilityRole="button"
+            accessibilityLabel={saved ? 'Quitar de guardados' : 'Guardar evento'}
+            accessibilityState={{ disabled: saveDisabled }}
           >
             <Text style={[styles.saveButtonText, saved && styles.saveButtonTextActive]}>
-              {saveDisabled ? 'Updating…' : saved ? 'Saved' : 'Save'}
+              {saveDisabled ? 'Actualizando…' : saved ? 'Guardado' : 'Guardar'}
             </Text>
           </TouchableOpacity>
         </View>

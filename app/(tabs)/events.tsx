@@ -143,7 +143,7 @@ export default function EventsScreen() {
   if (listError) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <Text style={styles.error}>Failed to load events</Text>
+        <Text style={styles.error}>No se pudieron cargar los eventos</Text>
       </SafeAreaView>
     );
   }
@@ -152,21 +152,22 @@ export default function EventsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Events Near You</Text>
-        <TouchableOpacity style={styles.createBtn} onPress={handleCreateEvent}>
-          <Text style={styles.createBtnText}>+ Create</Text>
+        <Text style={styles.title}>Eventos cerca de ti</Text>
+        <TouchableOpacity style={styles.createBtn} onPress={handleCreateEvent} accessibilityRole="button" accessibilityLabel="Crear evento">
+          <Text style={styles.createBtnText}>+ Crear</Text>
         </TouchableOpacity>
       </View>
 
       {/* Search */}
       <View style={styles.searchContainer}>
         <TextInput
-          placeholder="Search by city..."
+          placeholder="Buscar por ciudad..."
           value={cityFilter}
           onChangeText={setCityFilter}
           style={styles.searchInput}
           autoCapitalize="none"
           autoCorrect={false}
+          accessibilityLabel="Buscar eventos por ciudad"
         />
       </View>
 
@@ -175,17 +176,23 @@ export default function EventsScreen() {
         <TouchableOpacity
           style={[styles.toggleBtn, eventScope === 'all' && styles.toggleBtnActive]}
           onPress={() => setEventScope('all')}
+          accessibilityRole="button"
+          accessibilityLabel="Mostrar todos los eventos"
+          accessibilityState={{ selected: eventScope === 'all' }}
         >
           <Text style={[styles.toggleBtnText, eventScope === 'all' && styles.toggleBtnTextActive]}>
-            All
+            Todos
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleBtn, eventScope === 'saved' && styles.toggleBtnActive]}
           onPress={() => setEventScope('saved')}
+          accessibilityRole="button"
+          accessibilityLabel="Mostrar eventos guardados"
+          accessibilityState={{ selected: eventScope === 'saved' }}
         >
           <Text style={[styles.toggleBtnText, eventScope === 'saved' && styles.toggleBtnTextActive]}>
-            Saved ({savedEventIds.length})
+            Guardados ({savedEventIds.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -194,17 +201,23 @@ export default function EventsScreen() {
         <TouchableOpacity
           style={[styles.toggleBtn, viewMode === 'list' && styles.toggleBtnActive]}
           onPress={() => setViewMode('list')}
+          accessibilityRole="button"
+          accessibilityLabel="Ver en lista"
+          accessibilityState={{ selected: viewMode === 'list' }}
         >
           <Text style={[styles.toggleBtnText, viewMode === 'list' && styles.toggleBtnTextActive]}>
-            List
+            Lista
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleBtn, viewMode === 'calendar' && styles.toggleBtnActive]}
           onPress={() => setViewMode('calendar')}
+          accessibilityRole="button"
+          accessibilityLabel="Ver en calendario"
+          accessibilityState={{ selected: viewMode === 'calendar' }}
         >
           <Text style={[styles.toggleBtnText, viewMode === 'calendar' && styles.toggleBtnTextActive]}>
-            Calendar
+            Calendario
           </Text>
         </TouchableOpacity>
       </View>
@@ -241,7 +254,7 @@ export default function EventsScreen() {
           ) : (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>
-                {eventScope === 'saved' ? 'No saved events on this date' : 'No events on this date'}
+                {eventScope === 'saved' ? 'No hay eventos guardados en esta fecha' : 'No hay eventos en esta fecha'}
               </Text>
             </View>
           )}
@@ -255,7 +268,7 @@ export default function EventsScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyText}>
-                {eventScope === 'saved' ? 'No saved events found' : 'No events found'}
+                {eventScope === 'saved' ? 'No se encontraron eventos guardados' : 'No se encontraron eventos'}
               </Text>
             </View>
           }

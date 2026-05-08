@@ -63,7 +63,7 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace }),
 }));
 
-const AuthScreen = require('../app/(tabs)/auth').default;
+const AuthScreen = require('../app/auth').default;
 
 describe('Auth screen', () => {
   beforeEach(() => {

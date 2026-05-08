@@ -19,14 +19,14 @@ import {
   statusCodes
 } from '@react-native-google-signin/google-signin';
 
-import { loginRequest, googleLoginRequest } from '../../src/api/auth';
-import { API_BASE } from '../../src/lib/api';
+import { loginRequest, googleLoginRequest } from '../src/api/auth';
+import { API_BASE } from '../src/lib/api';
 import {
   GOOGLE_IOS_CLIENT_ID,
   GOOGLE_IOS_URL_SCHEME,
   GOOGLE_WEB_CLIENT_ID
-} from '../../src/lib/authConfig';
-import { useAuth } from '../../src/providers/AuthProvider';
+} from '../src/lib/authConfig';
+import { useAuth } from '../src/providers/AuthProvider';
 
 const readErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {

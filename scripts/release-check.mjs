@@ -65,7 +65,7 @@ const releaseIdentityChecks = [
   },
   {
     path: 'ios/TDFRecords.xcodeproj/project.pbxproj',
-    requiredSnippets: [`PRODUCT_BUNDLE_IDENTIFIER = "${canonicalBundleId}";`],
+    requiredSnippets: [`PRODUCT_BUNDLE_IDENTIFIER = ${canonicalBundleId};`],
     forbiddenSnippets: [staleBundleId],
   },
   {

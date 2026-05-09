@@ -214,7 +214,7 @@ export default function CreateEventScreen() {
       return;
     }
     if (typeof parsedPrice === 'number' && parsedPrice < 0) {
-      Alert.alert('Validation', 'Ticket price must be zero or greater');
+      Alert.alert('Validación', 'El precio de entrada debe ser cero o mayor');
       return;
     }
 

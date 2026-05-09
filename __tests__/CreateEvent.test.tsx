@@ -88,16 +88,16 @@ describe('CreateEvent screen', () => {
   it('blocks negative ticket prices before submitting the mutation', () => {
     render(<CreateEventScreen />);
 
-    fireEvent.changeText(screen.getByPlaceholderText('Event name'), 'Demo Event');
-    fireEvent.press(screen.getByText('Select a venue'));
+    fireEvent.changeText(screen.getByPlaceholderText('Nombre del evento'), 'Demo Event');
+    fireEvent.press(screen.getByText('Selecciona un lugar'));
     fireEvent.press(screen.getByText('Main Room'));
-    fireEvent.press(screen.getByText('Select artists'));
+    fireEvent.press(screen.getByText('Selecciona artistas'));
     fireEvent.press(screen.getByText('DJ Uno'));
-    fireEvent.press(screen.getByText('Done'));
+    fireEvent.press(screen.getByText('Listo'));
     fireEvent.changeText(screen.getByPlaceholderText('0.00'), '-5');
-    fireEvent.press(screen.getByText('Create Event'));
+    fireEvent.press(screen.getByText('Crear evento'));
 
-    expect(Alert.alert).toHaveBeenCalledWith('Validation', 'Ticket price must be zero or greater');
+    expect(Alert.alert).toHaveBeenCalledWith('Validación', 'El precio de entrada debe ser cero o mayor');
     expect(mockMutate).not.toHaveBeenCalled();
   });
 });

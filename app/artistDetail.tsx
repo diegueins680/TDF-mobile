@@ -90,9 +90,9 @@ export default function ArtistDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.error}>Missing artist ID</Text>
+          <Text style={styles.error}>Falta el ID del artista</Text>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Go Back</Text>
+            <Text style={styles.backButtonText}>Volver</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -113,9 +113,9 @@ export default function ArtistDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.error}>Failed to load artist</Text>
+          <Text style={styles.error}>No se pudo cargar el artista</Text>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Go Back</Text>
+            <Text style={styles.backButtonText}>Volver</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -155,7 +155,7 @@ export default function ArtistDetailScreen() {
 
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
           <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
-            <Text style={styles.editButtonText}>Edit Profile</Text>
+            <Text style={styles.editButtonText}>Editar perfil</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -163,13 +163,13 @@ export default function ArtistDetailScreen() {
             onPress={handleToggleFollow}
             disabled={!partyId}
           >
-            <Text style={styles.followButtonText}>{partyId ? (isFollowing ? 'Following' : 'Follow') : 'Sign in to follow'}</Text>
+            <Text style={styles.followButtonText}>{partyId ? (isFollowing ? 'Siguiendo' : 'Seguir') : 'Inicia sesión para seguir'}</Text>
           </TouchableOpacity>
         </View>
 
         {upcomingEvents.length > 0 && (
           <View style={styles.eventsSection}>
-            <Text style={styles.sectionTitle}>Upcoming Events ({upcomingEvents.length})</Text>
+            <Text style={styles.sectionTitle}>Próximos eventos ({upcomingEvents.length})</Text>
             {upcomingEvents.map(event => (
               <TouchableOpacity
                 key={event.id}
@@ -183,7 +183,7 @@ export default function ArtistDetailScreen() {
                   )}
                 </View>
                 <Text style={styles.eventDateTime}>
-                  {new Date(event.startTime).toLocaleDateString()} at{' '}
+                  {new Date(event.startTime).toLocaleDateString()} a las{' '}
                   {new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
                 {event.venue && (
@@ -195,7 +195,7 @@ export default function ArtistDetailScreen() {
         )}
 
         {upcomingEvents.length === 0 && !eventsQuery.isLoading && (
-          <Text style={styles.noEventsText}>No upcoming events</Text>
+          <Text style={styles.noEventsText}>No hay próximos eventos</Text>
         )}
       </ScrollView>
     </SafeAreaView>

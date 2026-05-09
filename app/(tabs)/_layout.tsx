@@ -12,14 +12,14 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="parties"
         options={{
-          title: 'Parties',
+          title: 'Clientes',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="account-multiple" size={24} color={color} />
         }}
       />
       <Tabs.Screen
         name="bookings"
         options={{
-          title: 'Bookings',
+          title: 'Reservas',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="calendar-check" size={24} color={color} />
         }}
       />
@@ -33,7 +33,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="events"
         options={{
-          title: 'Events',
+          title: 'Eventos',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="calendar-star" size={24} color={color} />
         }}
       />
@@ -54,7 +54,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="about"
         options={{
-          title: 'About',
+          title: 'Acerca de',
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="information" size={24} color={color} />
         }}
       />

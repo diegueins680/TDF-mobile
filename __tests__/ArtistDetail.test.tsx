@@ -81,7 +81,7 @@ describe('ArtistDetail screen', () => {
   it('uses the saved party id fallback for follow actions', async () => {
     render(<ArtistDetailScreen />);
 
-    fireEvent.press(screen.getByText('Follow'));
+    fireEvent.press(screen.getByText('Seguir'));
 
     await waitFor(() => expect(mockFollow).toHaveBeenCalledWith('7', '42'));
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['artist-followers', '7'] });

@@ -154,7 +154,7 @@ export default function UserProfileScreen() {
           )}
         </View>
         <Text style={styles.eventDateTime}>
-          {new Date(item.startTime).toLocaleDateString()} at{' '}
+          {new Date(item.startTime).toLocaleDateString()} a las{' '}
           {new Date(item.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
         {item.venue && (
@@ -169,7 +169,7 @@ export default function UserProfileScreen() {
             disabled={unsaveMutation.isPending}
           >
             <Text style={styles.unsaveButtonText}>
-              {unsaveMutation.isPending ? 'Actualizando…' : 'Remove'}
+              {unsaveMutation.isPending ? 'Actualizando…' : 'Quitar'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -226,7 +226,7 @@ export default function UserProfileScreen() {
             onPress={() => setActiveTab('artist')}
           >
             <Text style={[styles.tabLabel, activeTab === 'artist' && styles.tabLabelActive]}>
-              Artist Profile
+              Perfil de artista
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -242,7 +242,7 @@ export default function UserProfileScreen() {
             onPress={() => setActiveTab('saved')}
           >
             <Text style={[styles.tabLabel, activeTab === 'saved' && styles.tabLabelActive]}>
-              Saved
+              Guardados
             </Text>
           </TouchableOpacity>
         </View>
@@ -269,14 +269,14 @@ export default function UserProfileScreen() {
                   </View>
                 )}
                 <TouchableOpacity style={styles.actionButton} onPress={handleEditArtistProfile}>
-                  <Text style={styles.actionButtonText}>Edit Profile</Text>
+                  <Text style={styles.actionButtonText}>Editar perfil</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
-                <Text style={styles.noDataText}>You haven&apos;t created an artist profile yet</Text>
+                <Text style={styles.noDataText}>Aún no has creado un perfil de artista</Text>
                 <TouchableOpacity style={styles.actionButton} onPress={handleCreateArtistProfile}>
-                  <Text style={styles.actionButtonText}>Create Artist Profile</Text>
+                  <Text style={styles.actionButtonText}>Crear perfil de artista</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -310,7 +310,7 @@ export default function UserProfileScreen() {
             {savedEventIdsQuery.isLoading ? (
               <ActivityIndicator size="large" color="#2563eb" />
             ) : savedEventIds.length === 0 ? (
-              <Text style={styles.noDataText}>No saved events yet. Tap Save Event inside any event.</Text>
+              <Text style={styles.noDataText}>Aún no hay eventos guardados. Toca Guardar evento dentro de cualquier evento.</Text>
             ) : savedEventsQuery.isLoading ? (
               <ActivityIndicator size="large" color="#2563eb" />
             ) : savedEvents.length > 0 ? (

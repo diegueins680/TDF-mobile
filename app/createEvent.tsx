@@ -60,11 +60,11 @@ export default function CreateEventScreen() {
     mutationFn: (body: Parameters<typeof Events.create>[0]) => Events.create(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['events'] });
-      Alert.alert('Success', 'Event created!');
+      Alert.alert('Éxito', '¡Evento creado!');
       router.back();
     },
     onError: (err: Error) => {
-      Alert.alert('Error', err.message || 'Failed to create event');
+      Alert.alert('Error', err.message || 'No se pudo crear el evento');
     }
   });
 
@@ -191,11 +191,11 @@ export default function CreateEventScreen() {
     setEndTime(parsedEnd);
 
     if (!title.trim()) {
-      Alert.alert('Validation', 'Event title is required');
+      Alert.alert('Validación', 'El nombre del evento es obligatorio');
       return;
     }
     if (!venueId) {
-      Alert.alert('Validation', 'Please select a venue');
+      Alert.alert('Validación', 'Selecciona un lugar');
       return;
     }
     if (artistIds.length === 0) {
@@ -263,7 +263,7 @@ export default function CreateEventScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Title *</Text>
           <TextInput
-            placeholder="Event name"
+            placeholder="Nombre del evento"
             value={title}
             onChangeText={setTitle}
             style={styles.input}
@@ -274,7 +274,7 @@ export default function CreateEventScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Description</Text>
           <TextInput
-            placeholder="What's this event about?"
+            placeholder="¿De qué trata este evento?"
             value={description}
             onChangeText={setDescription}
             style={[styles.input, styles.inputMultiline]}
@@ -284,10 +284,10 @@ export default function CreateEventScreen() {
           />
         </View>
 
-        <Text style={styles.sectionTitle}>Date & Time</Text>
+        <Text style={styles.sectionTitle}>Fecha y hora</Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Start Time *</Text>
+          <Text style={styles.label}>Hora de inicio *</Text>
           <TextInput
             placeholder="YYYY-MM-DDTHH:mm:ssZ"
             value={startInput}
@@ -312,7 +312,7 @@ export default function CreateEventScreen() {
                 setStartInput(now.toISOString());
               }}
             >
-              <Text style={styles.smallButtonText}>Now</Text>
+              <Text style={styles.smallButtonText}>Ahora</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.smallButton}
@@ -328,7 +328,7 @@ export default function CreateEventScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>End Time *</Text>
+          <Text style={styles.label}>Hora de fin *</Text>
           <TextInput
             placeholder="YYYY-MM-DDTHH:mm:ssZ"
             value={endInput}
@@ -363,28 +363,28 @@ export default function CreateEventScreen() {
                 setEndInput(plusOne.toISOString());
               }}
             >
-              <Text style={styles.smallButtonText}>+1h from current</Text>
+              <Text style={styles.smallButtonText}>+1h desde la actual</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Location & Artists</Text>
+        <Text style={styles.sectionTitle}>Lugar y artistas</Text>
 
         <TouchableOpacity style={styles.field} onPress={() => setShowVenueModal(true)}>
-          <Text style={styles.label}>Venue *</Text>
+          <Text style={styles.label}>Lugar *</Text>
           <View style={styles.selectedBox}>
             <Text style={selectedVenue ? styles.selectedText : styles.placeholder}>
-              {selectedVenue?.name || (routeVenueQuery.isLoading && venueId ? 'Loading venue...' : 'Select a venue')}
+              {selectedVenue?.name || (routeVenueQuery.isLoading && venueId ? 'Cargando lugar…' : 'Selecciona un lugar')}
             </Text>
           </View>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.field} onPress={() => setShowArtistModal(true)}>
-          <Text style={styles.label}>Artists *</Text>
+          <Text style={styles.label}>Artistas *</Text>
           {artistIds.length > 0 ? (
             <View style={styles.selectedBox}>
               <Text style={styles.selectedText}>
-                {artistIds.length} artist{artistIds.length !== 1 ? 's' : ''} selected
+                {artistIds.length} artista{artistIds.length !== 1 ? 's' : ''} seleccionado{artistIds.length !== 1 ? 's' : ''}
               </Text>
               {selectedArtistNames.length > 0 && (
                 <Text style={styles.selectedSubtext}>
@@ -400,10 +400,10 @@ export default function CreateEventScreen() {
           )}
         </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>Tickets</Text>
+        <Text style={styles.sectionTitle}>Entradas</Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Price (USD)</Text>
+          <Text style={styles.label}>Precio (USD)</Text>
           <TextInput
             placeholder="0.00"
             value={ticketPrice}
@@ -415,7 +415,7 @@ export default function CreateEventScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Ticket URL</Text>
+          <Text style={styles.label}>URL de entradas</Text>
           <TextInput
             placeholder="https://..."
             value={ticketUrl}
@@ -431,7 +431,7 @@ export default function CreateEventScreen() {
             onPress={() => setIsPublic(!isPublic)}
           >
             <View style={[styles.checkboxBox, isPublic && styles.checkboxBoxChecked]} />
-            <Text style={styles.checkboxLabel}>Make event public</Text>
+            <Text style={styles.checkboxLabel}>Hacer evento público</Text>
           </TouchableOpacity>
         </View>
 
@@ -443,7 +443,7 @@ export default function CreateEventScreen() {
           {createMutation.isPending ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.createButtonText}>Create Event</Text>
+            <Text style={styles.createButtonText}>Crear evento</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -453,16 +453,16 @@ export default function CreateEventScreen() {
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowVenueModal(false)}>
-              <Text style={styles.modalClose}>Cancel</Text>
+              <Text style={styles.modalClose}>Cancelar</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Select Venue</Text>
+            <Text style={styles.modalTitle}>Seleccionar lugar</Text>
             <TouchableOpacity onPress={handleCreateVenue}>
-              <Text style={styles.modalCreate}>+ New</Text>
+              <Text style={styles.modalCreate}>+ Nuevo</Text>
             </TouchableOpacity>
           </View>
 
           <TextInput
-            placeholder="Search venues..."
+            placeholder="Buscar lugares…"
             value={venueSearch}
             onChangeText={setVenueSearch}
             style={styles.modalSearchInput}
@@ -489,16 +489,16 @@ export default function CreateEventScreen() {
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowArtistModal(false)}>
-              <Text style={styles.modalClose}>Done</Text>
+              <Text style={styles.modalClose}>Listo</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Select Artists</Text>
+            <Text style={styles.modalTitle}>Seleccionar artistas</Text>
             <TouchableOpacity onPress={handleCreateArtist}>
-              <Text style={styles.modalCreate}>+ New</Text>
+              <Text style={styles.modalCreate}>+ Nuevo</Text>
             </TouchableOpacity>
           </View>
 
           <TextInput
-            placeholder="Search artists..."
+            placeholder="Buscar artistas…"
             value={artistSearch}
             onChangeText={setArtistSearch}
             style={styles.modalSearchInput}

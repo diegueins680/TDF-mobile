@@ -395,7 +395,7 @@ export default function CreateEventScreen() {
             </View>
           ) : (
             <View style={styles.selectedBox}>
-              <Text style={styles.placeholder}>Select artists</Text>
+              <Text style={styles.placeholder}>Selecciona artistas</Text>
             </View>
           )}
         </TouchableOpacity>

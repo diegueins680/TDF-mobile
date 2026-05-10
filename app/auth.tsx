@@ -41,6 +41,13 @@ export default function AuthScreen() {
   const { token, partyId, loading, setToken, clearToken } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+
+  useEffect(() => {
+    if (__DEV__) {
+      setUsername('tdf-owner');
+      setPassword('TDFowner2025!');
+    }
+  }, []);
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

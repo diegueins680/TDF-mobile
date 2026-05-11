@@ -8,6 +8,7 @@
 | Post-login 403 | ✅ FIXED + SEED FIXED | 2026-05-11 | `Manager` role added to test account party 33; `TDF.Seed.hs` now explicitly upserts `Manager` for `tdf-owner` |
 | Lane health | ✅ UP | 2026-05-11 | `check-lane-status.sh` EXIT_CODE=0 |
 | Detox build | ❌ BLOCKED | 2026-05-11 | `DETOX_LAUNCHAPP_TIMEOUT`: `device.launchApp()` exceeds 120s, main queue continuously busy. Owner: tdf-label-platform. |
+| Maestro install | ✅ INSTALLED | 2026-05-11 | Maestro CLI installed to `~/.maestro/bin`. Java runtime required to run. Owner: operator. |
 | Dev auto-fill retirement | ⏳ GATED | — | Gate: Detox proves real text-input automation |
 
 ## Gated Conditions for Shippable Build
@@ -23,6 +24,7 @@
 |---|---|---|
 | `XCODE_CLT_OUTDATED` | operator | `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` |
 | `DETOX_LAUNCHAPP_TIMEOUT` | tdf-label-platform | Investigate Metro bundle speed, pre-bundle JS with `expo export:embed`, or switch to Maestro |
+| `MAESTRO_JAVA_MISSING` | operator | Install Java runtime (e.g. `brew install openjdk@17` or download from java.com). Then `export PATH="$PATH":"$HOME/.maestro/bin" && maestro test tdf-mobile/e2e/auth-flow.yaml` |
 | `SIMULATOR_SYSTEM_DIALOG_BLOCKED` | tdf-label-platform | Detox setup + real device or token test |
 
 ## RC Verdict

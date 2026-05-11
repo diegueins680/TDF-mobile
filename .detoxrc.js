@@ -29,4 +29,16 @@ module.exports = {
       app: 'ios.sim.debug',
     },
   },
+  artifacts: {
+    rootDir: 'artifacts',
+    plugins: {
+      screenshot: {
+        enabled: true,
+        takeWhen: {
+          testStart: false,
+          testDone: true,
+        },
+      },
+    },
+  },
 };

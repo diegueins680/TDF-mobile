@@ -1,0 +1,21 @@
+# Maestro E2E flow for TDF auth screen
+# Run: maestro test tdf-mobile/e2e/auth-flow.yaml
+# Requires: maestro + Java runtime + app installed on booted simulator
+
+appId: com.tdfrecords.app
+---
+- launchApp:
+    clearState: true
+
+- openLink: "tdf://auth"
+
+# On __DEV__ builds, credentials auto-fill from useEffect in app/auth.tsx
+# Tap the password login button
+- tapOn: "Entrar con password"
+
+# Verify main screen loaded (no 403 error banner)
+- assertVisible: "Buscar"
+- assertNotVisible: "Request failed with status code 403"
+
+# Verify parties list loaded
+- assertVisible: "Arkabuz"

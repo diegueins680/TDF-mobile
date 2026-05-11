@@ -1,7 +1,6 @@
 describe('Login Screen', () => {
   beforeAll(async () => {
-    await device.launchApp();
-    await device.disableSynchronization();
+    await device.launchApp({ launchArgs: { detoxDisableSynchronization: true } });
   });
 
   it('should complete username/password login flow', async () => {

@@ -194,6 +194,7 @@ export default function AuthScreen() {
             <View style={styles.card}>
               <Text style={styles.label}>Usuario o correo</Text>
               <TextInput
+                testID="usernameInput"
                 value={username}
                 onChangeText={(value) => {
                   setUsername(value);

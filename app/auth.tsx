@@ -210,6 +210,7 @@ export default function AuthScreen() {
 
               <Text style={styles.label}>Password</Text>
               <TextInput
+                testID="passwordInput"
                 value={password}
                 onChangeText={(value) => {
                   setPassword(value);
@@ -228,6 +229,7 @@ export default function AuthScreen() {
               />
 
               <TouchableOpacity
+                testID="loginButton"
                 style={[styles.primaryButton, !canSubmitPassword && styles.buttonDisabled]}
                 onPress={() => {
                   void handlePasswordLogin();

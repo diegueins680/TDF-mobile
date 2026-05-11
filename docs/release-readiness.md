@@ -7,7 +7,9 @@
 | Google OAuth e2e | ⏳ DEFERRED | 2026-05-11 | Manual test plan created (`docs/google-oauth-manual-test.md`); awaits operator execution on physical device. Detox blocked by `DETOX_LAUNCHAPP_TIMEOUT`. |
 | Post-login 403 | ✅ FIXED + SEED FIXED | 2026-05-11 | `Manager` role added to test account party 33; `TDF.Seed.hs` now explicitly upserts `Manager` for `tdf-owner` |
 | Lane health | ✅ UP | 2026-05-11 | `check-lane-status.sh` EXIT_CODE=0 |
-| Detox build | ❌ BLOCKED | 2026-05-11 | `DETOX_LAUNCHAPP_TIMEOUT`: `device.launchApp()` exceeds 120s, main queue continuously busy. Owner: tdf-label-platform. |
+| Detox launchApp | ✅ RESOLVED | 2026-05-11 | `detoxDisableSynchronization: true` via `launchArgs` fixes timeout. Owner: tdf-label-platform. |
+| iOS app binary | ❌ CORRUPTED | 2026-05-11 | Derived data `/tmp/TDFRecords-derived/.../TDFRecords.app` missing `Info.plist`/`CFBundleIdentifier`. Needs `npx expo run:ios` or `detox build`. Owner: tdf-label-platform. |
+| Backend binary | ❌ STALE | 2026-05-11 | Binary built 2024-11-20; lacks `/login` route. Returns 400 `could not parse: 'login'`. Fix: `cd tdf-hq && stack build` and restart. Owner: tdf-label-platform. |
 | Maestro install | ✅ INSTALLED | 2026-05-11 | Maestro CLI installed to `~/.maestro/bin`. Java runtime required to run. Owner: operator. |
 | Dev auto-fill retirement | ⏳ GATED | — | Gate: Detox proves real text-input automation |
 
@@ -23,13 +25,14 @@
 | Blocker | Owner | Fix |
 |---|---|---|
 | `XCODE_CLT_OUTDATED` | operator | `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` |
-| `DETOX_LAUNCHAPP_TIMEOUT` | tdf-label-platform | Investigate Metro bundle speed, pre-bundle JS with `expo export:embed`, or switch to Maestro |
+| `IOS_APP_BINARY_CORRUPTED` | tdf-label-platform | `cd tdf-mobile && npx expo run:ios` or `detox build` to regenerate `.app` with valid `Info.plist` |
+| `BACKEND_BINARY_STALE` | tdf-label-platform | `cd tdf-hq && stack build` then restart backend process with fresh binary |
 | `MAESTRO_JAVA_MISSING` | operator | Install Java runtime (e.g. `brew install openjdk@17` or download from java.com). Then `export PATH="$PATH":"$HOME/.maestro/bin" && maestro test tdf-mobile/e2e/auth-flow.yaml` |
 | `SIMULATOR_SYSTEM_DIALOG_BLOCKED` | tdf-label-platform | Detox setup + real device or token test |
 
 ## RC Verdict
 
-`CONDITIONAL-GO` — Username/password auth proven + regression passed on fresh install, backend healthy. Google OAuth e2e and Detox automation remain open before shipping.
+`CONDITIONAL-GO` — Username/password auth proven + regression passed on fresh install. Backend and app binary are currently stale/corrupted (new blockers identified 2026-05-11). Google OAuth e2e remains open before shipping.
 
 ---
 

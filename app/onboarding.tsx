@@ -110,7 +110,7 @@ export default function OnboardingScreen() {
         </View>
 
         <View style={styles.actionStack}>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => complete('/auth')}>
+          <TouchableOpacity testID="goToLoginButton" style={styles.primaryButton} onPress={() => complete('/auth')}>
             <Text style={styles.primaryText}>Ir a login</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryButton} onPress={() => complete('/userProfile')}>

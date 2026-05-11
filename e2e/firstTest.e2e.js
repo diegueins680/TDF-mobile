@@ -1,6 +1,6 @@
 describe('Login Screen', () => {
   beforeAll(async () => {
-    await device.launchApp();
+    await device.launchApp({ delete: true });
   });
 
   it('should complete username/password login flow', async () => {

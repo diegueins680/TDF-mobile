@@ -33,17 +33,22 @@
 
 **Status:** ⏳ OPEN — sole remaining blocker for testing version.
 
+**What is the one thing preventing shipping?**
+> Google OAuth full end-to-end proof (web sign-in → token → callback → post-login screen) has not been demonstrated.
+
 **Four parallel paths:**
 1. **Real token + curl** — blocked: no programmatic token source available in environment.
 2. **Detox simulator automation** — `SIMULATOR-REALISTIC PASS` (2026-05-12): test proves button tap triggers ASWebAuthenticationSession system alert. Full web-sign-in completion blocked by system dialog on simulator (expected limitation).
 3. **Maestro simulator automation** — blocked: `MAESTRO_JAVA_MISSING` (Temurin install requires sudo).
 4. **Manual physical device test** — UNBLOCKED. Plan exists at `docs/google-oauth-manual-test.md`. Needs operator assignment and execution.
 
-**Immediate next action:**
-- Operator: install app on physical iPhone → execute `docs/google-oauth-manual-test.md` steps 1-7 → sign off in doc's sign-off table → notify tdf-label-release.
-- Expected execution time: 5-10 minutes.
-- If PASS: update this doc to `TESTING-VERSION-READY`.
-- If FAIL: record exact fail criterion, screenshot, and owner in `google-oauth-manual-test.md`.
+**Immediate next action (operator/CTO):**
+- Option A (fastest, 5-10 min): Install existing `.app` on physical iPhone → execute `docs/google-oauth-manual-test.md` steps 1-7 → sign off in doc's sign-off table → notify tdf-label-release.
+- Option B (10-15 min): Run `brew install --cask temurin`, enter sudo password → `export PATH="$PATH":"$HOME/.maestro/bin" && maestro test tdf-mobile/e2e/auth-flow.yaml`.
+- Option C (20-30 min): Install gcloud SDK → authenticate → obtain real Google ID token → `curl -X POST http://localhost:8080/login/google -d '{"idToken":"<token>"}'` → verify 200 + session.
+
+**If PASS:** Update this doc to `TESTING-VERSION-READY` and proceed to `eas build --profile preview` command.
+**If FAIL:** Record exact fail criterion, screenshot, and owner in `google-oauth-manual-test.md`.
 
 ## RC Verdict
 
@@ -52,6 +57,7 @@
 ---
 
 _Revision history:_
+- 2026-05-12 — Release Director: Token acquisition sweep completed (all automated paths blocked); `Ship Gate` updated with one-sentence blocker statement and three operator options (manual test / Maestro / gcloud); highest-risk failure documented as P0 Google-login production risk. _(tdf-label-release)_
 - 2026-05-12 — Release Director: `Detox login test` marked ✅ PASSED (keychain clear fix verified); `DETOX_ACCESSIBILITY_MATCHER_FAILURE` removed from active blockers; Google OAuth e2e updated to `SIMULATOR-REALISTIC PASS`; `Ship Gate` path 2 updated. _(tdf-label-release)_
 - 2026-05-12 — Release Director: `iOS app binary` marked ✅ RESOLVED; `Detox login test` marked ⚠️ INTERMITTENT; replaced `LOGIN_TESTID_NOT_VISIBLE` with `DETOX_ACCESSIBILITY_MATCHER_FAILURE`; updated `SIMULATOR_SYSTEM_DIALOG_BLOCKED` fix note. _(tdf-label-release)_
 - 2026-05-12 — Release Director: `Detox login test` marked ✅ PASSED; `LOGIN_TESTID_NOT_VISIBLE` moved to resolved; `Google OAuth e2e` updated to reflect new blocker `SIMULATOR_SYSTEM_DIALOG_BLOCKED`; gated condition 2 updated with PASS evidence. _(tdf-label-release)_

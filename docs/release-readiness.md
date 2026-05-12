@@ -8,9 +8,9 @@
 | Post-login 403 | ✅ FIXED + SEED FIXED | 2026-05-11 | `Manager` role added to test account party 33; `TDF.Seed.hs` now explicitly upserts `Manager` for `tdf-owner` |
 | Lane health | ✅ UP | 2026-05-11 | `check-lane-status.sh` EXIT_CODE=0 |
 | Detox launchApp | ✅ RESOLVED | 2026-05-11 | `detoxDisableSynchronization: true` via `launchArgs` fixes timeout. Owner: tdf-label-platform. |
-| iOS app binary | 🔨 REBUILD IN PROGRESS | 2026-05-12 | xcodebuild PID 88382 direct build running since ~05:00 UTC. Binary mtime still May 11 19:50. Owner: tdf-label-platform. |
+| iOS app binary | ✅ RESOLVED | 2026-05-12 | Fresh binary built successfully (mtime 2026-05-12 01:40:35). `CFBundleIdentifier` verified as `com.tdfrecords.app`. Owner: tdf-label-platform. |
 | Backend binary | ✅ READY | 2026-05-12 | Fresh stack-built binary started (PID 95241). Migrations completed. `POST /login/google` returns 401 for fake tokens. Backend fully ready. Owner: tdf-label-release. |
-| Detox login test | ✅ PASSED | 2026-05-12 | Fresh binary (mtime 2026-05-11 19:50) contains testIDs. `npx detox test --configuration ios.sim.debug --reuse e2e/firstTest.e2e.js` PASS in 13.1s. Login flow automated end-to-end. Owner: tdf-label-release. |
+| Detox login test | ⚠️ INTERMITTENT | 2026-05-12 | Fresh binary contains testIDs. `--reuse` PASS in 13.1s (Release Director). Full `detox test` FAILs (Platform 08:01 UTC) because simulator keychain persists auth tokens across uninstalls, leaving app already logged in. `usernameInput` and `Buscar` matchers timeout. Platform committed fix `31dd61b` to detect logged-in state. Owner: tdf-label-platform. |
 | Maestro install | ✅ INSTALLED | 2026-05-11 | Maestro CLI installed to `~/.maestro/bin`. Java runtime required to run. Owner: operator. |
 | Dev auto-fill retirement | ⏳ GATED | — | Gate: Detox proves real text-input automation |
 
@@ -26,10 +26,10 @@
 | Blocker | Owner | Fix |
 |---|---|---|
 | `XCODE_CLT_OUTDATED` | operator | `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` |
-| `LOGIN_TESTID_NOT_VISIBLE` | tdf-label-release | RESOLVED — fresh binary verified; Detox login test passes. |
+| `DETOX_ACCESSIBILITY_MATCHER_FAILURE` | tdf-label-platform | Simulator keychain persists login state across `xcrun simctl uninstall`. Fix: add `device.clearKeychain()` or `NSUserDefaults.resetStandardUserDefaults()` in e2e `beforeAll`, or verify `testID` propagation with `accessible={true}`. Commit `31dd61b` attempts detection. |
 
 | `MAESTRO_JAVA_MISSING` | operator | `brew install --cask temurin` requires sudo password. Alternative: download Eclipse Temurin `.pkg` manually from https://adoptium.net and install, or use `sdkman`/`jabba` user-local install. Then `export PATH="$PATH":"$HOME/.maestro/bin" && maestro test tdf-mobile/e2e/auth-flow.yaml` |
-| `SIMULATOR_SYSTEM_DIALOG_BLOCKED` | tdf-label-platform | Detox setup + real device or token test |
+| `SIMULATOR_SYSTEM_DIALOG_BLOCKED` | tdf-label-platform | ASWebAuthenticationSession "Continue" dialog blocks automated Google OAuth completion on simulator. Fix: real device test, or attempt Maestro/Detox system-dialog handling. |
 
 ## Ship Gate — Google OAuth e2e
 
@@ -49,12 +49,12 @@
 
 ## RC Verdict
 
-`CONDITIONAL-GO` — Username/password auth proven + regression passed on fresh install + Detox login test PASS. Backend configured and restarting (migrations running). iOS rebuild in progress. Google OAuth e2e is the **sole open ship gate**. Manual device test is the only unblocked near-term path.
+`CONDITIONAL-GO` — Username/password auth proven + regression passed on fresh install. Detox login test intermittent due to keychain persistence. Backend fully ready. iOS binary resolved. Google OAuth e2e remains the **sole open ship gate**. Manual device test is the only unblocked near-term path.
 
 ---
 
 _Revision history:_
-- 2026-05-12 — Release Director: `Backend binary` marked 🔨 RESTARTING (migrations running); `iOS app binary` marked 🔨 REBUILD IN PROGRESS; added `Ship Gate — Google OAuth e2e` section with manual test as unblocked path. _(tdf-label-release)_
+- 2026-05-12 — Release Director: `iOS app binary` marked ✅ RESOLVED; `Detox login test` marked ⚠️ INTERMITTENT; replaced `LOGIN_TESTID_NOT_VISIBLE` with `DETOX_ACCESSIBILITY_MATCHER_FAILURE`; updated `SIMULATOR_SYSTEM_DIALOG_BLOCKED` fix note. _(tdf-label-release)_
 - 2026-05-12 — Release Director: `Detox login test` marked ✅ PASSED; `LOGIN_TESTID_NOT_VISIBLE` moved to resolved; `Google OAuth e2e` updated to reflect new blocker `SIMULATOR_SYSTEM_DIALOG_BLOCKED`; gated condition 2 updated with PASS evidence. _(tdf-label-release)_
 - 2026-05-11 — Release Director: iOS app binary marked RESOLVED per Platform fix; `LOGIN_TESTID_NOT_VISIBLE` added as active blocker; `MAESTRO_JAVA_MISSING` updated with sudo note and adoptium.net fallback. _(tdf-label-release)_
 - 2026-05-11 — Release Director: updated username/password to REGRESSION PASSED, post-login 403 to FIXED + SEED FIXED, gated condition 4 with simulator ID. _(tdf-label-release)_

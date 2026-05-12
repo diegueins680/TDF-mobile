@@ -17,6 +17,7 @@ import type {
   EventInvitationStatus,
   ArtistSocialLinks
 } from '../types';
+import { assertNever } from '../lib/assertNever';
 import { normalizePartyId as normalizeIdentityPartyId } from '../lib/identity';
 import { normalizeOptionalTimestamp } from '../lib/isoDate';
 import { normalizeRsvpStatus } from '../lib/rsvp';
@@ -588,9 +589,9 @@ function mapFrontendRsvpStatus(status: RSVPStatus): string | null {
       return 'Declined';
     case 'NONE':
       return null;
-    default:
-      return null;
   }
+
+  return assertNever(status, 'RSVP status');
 }
 
 function mapInvitationStatus(raw: unknown): EventInvitationStatus {

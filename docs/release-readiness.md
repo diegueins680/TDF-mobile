@@ -4,13 +4,13 @@
 |---|---|---|---|
 | Username/password auth | ✅ REGRESSION PASSED | 2026-05-11 | `evidence/release-regression-postclick3-20260511-0139.png` (fresh install, no 403, parties list loaded) |
 | Google OAuth backend | ✅ FIXED | 2026-05-10 | `GOOGLE_CLIENT_ID` set; endpoint returns 401 for bad tokens (alive) |
-| Google OAuth e2e | ⏳ DEFERRED | 2026-05-11 | Manual test plan created (`docs/google-oauth-manual-test.md`); awaits operator execution on physical device. Detox launchApp now works; blocked on `LOGIN_TESTID_NOT_VISIBLE` + stale backend. |
+| Google OAuth e2e | ⏳ DEFERRED | 2026-05-11 | Backend fully ready (`GOOGLE_CLIENT_ID` set, `/login/google` returns 401 for bad tokens). Frontend e2e blocked on `LOGIN_TESTID_NOT_VISIBLE` (pending iOS rebuild) + `MAESTRO_JAVA_MISSING`. Manual test plan (`docs/google-oauth-manual-test.md`) exists as fallback. |
 | Post-login 403 | ✅ FIXED + SEED FIXED | 2026-05-11 | `Manager` role added to test account party 33; `TDF.Seed.hs` now explicitly upserts `Manager` for `tdf-owner` |
 | Lane health | ✅ UP | 2026-05-11 | `check-lane-status.sh` EXIT_CODE=0 |
 | Detox launchApp | ✅ RESOLVED | 2026-05-11 | `detoxDisableSynchronization: true` via `launchArgs` fixes timeout. Owner: tdf-label-platform. |
 | iOS app binary | ✅ RESOLVED | 2026-05-11 | `.detoxrc.js` `binaryPath` corrected to `tdf-mobile/ios/build/Build/Products/Debug-iphonesimulator/TDFRecords.app`. Valid `CFBundleIdentifier` confirmed. Owner: tdf-label-platform. |
-| Backend binary | ❌ STALE | 2026-05-11 | Binary built 2024-11-20; lacks `/login` route. Returns 400 `could not parse: 'login'`. Fix: `cd tdf-hq && stack build` and restart. Owner: tdf-label-platform. |
-| Detox login test | ❌ BLOCKED | 2026-05-11 | `LOGIN_TESTID_NOT_VISIBLE` — `usernameInput` not found within 5s. Likely onboarding still showing or build lacks testIDs. Owner: tdf-label-platform. |
+| Backend binary | ✅ RESOLVED | 2026-05-11 | Platform rebuilt with `stack build` (ghc-9.6.6); restarted. POST /login returns 200 + token. Owner: tdf-label-platform. |
+| Detox login test | 🔨 REBUILD IN PROGRESS | 2026-05-12 | Root cause: STALE_BINARY — iOS binary (mtime 2026-05-10) predates testID additions to auth.tsx/onboarding.tsx. `npx detox build --configuration ios.sim.debug` running (xcodebuild PID 10563). Owner: tdf-label-platform. |
 | Maestro install | ✅ INSTALLED | 2026-05-11 | Maestro CLI installed to `~/.maestro/bin`. Java runtime required to run. Owner: operator. |
 | Dev auto-fill retirement | ⏳ GATED | — | Gate: Detox proves real text-input automation |
 
@@ -26,14 +26,14 @@
 | Blocker | Owner | Fix |
 |---|---|---|
 | `XCODE_CLT_OUTDATED` | operator | `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` |
-| `LOGIN_TESTID_NOT_VISIBLE` | tdf-label-platform | Capture screenshot during Detox run to diagnose onboarding vs missing testIDs; verify `testID="usernameInput"` exists in current `app/auth.tsx` build. |
-| `BACKEND_BINARY_STALE` | tdf-label-platform | `cd tdf-hq && stack build` then restart backend process with fresh binary |
+| `LOGIN_TESTID_NOT_VISIBLE` | tdf-label-platform | Root cause identified: STALE_BINARY. Fix: wait for `npx detox build` (PID 10563) to complete, then re-run `npx detox test --configuration ios.sim.debug --reuse`. |
+
 | `MAESTRO_JAVA_MISSING` | operator | `brew install --cask temurin` requires sudo password. Alternative: download Eclipse Temurin `.pkg` manually from https://adoptium.net and install, or use `sdkman`/`jabba` user-local install. Then `export PATH="$PATH":"$HOME/.maestro/bin" && maestro test tdf-mobile/e2e/auth-flow.yaml` |
 | `SIMULATOR_SYSTEM_DIALOG_BLOCKED` | tdf-label-platform | Detox setup + real device or token test |
 
 ## RC Verdict
 
-`CONDITIONAL-GO` — Username/password auth proven + regression passed on fresh install. iOS app binary path fixed. Backend binary still stale (needs `stack build`). Detox can launch app but login test blocked on `LOGIN_TESTID_NOT_VISIBLE`. Google OAuth e2e remains open before shipping.
+`CONDITIONAL-GO` — Username/password auth proven + regression passed on fresh install. Backend fully ready (`/login` and `/login/google` both alive). iOS binary rebuild in progress to resolve `LOGIN_TESTID_NOT_VISIBLE`. Once rebuild completes, Detox can prove login e2e and Google OAuth e2e. Google OAuth e2e remains the last open gate before shippable testing version.
 
 ---
 

@@ -1,0 +1,31 @@
+# Maestro E2E flow for Google OAuth
+# Run: export JAVA_HOME=$HOME/.local/java/jdk-17.0.12+7-jre/Contents/Home && maestro test tdf-mobile/e2e/google-oauth-flow.yaml
+# Requires: maestro + Java runtime + app installed on booted simulator
+
+appId: com.tdfrecords.app
+---
+- launchApp:
+    clearState: true
+
+- openLink: "tdf://auth"
+
+# Wait for auth screen
+- assertVisible: "Inicia sesión"
+
+# Tap Google login button
+- tapOn: "Continuar con Google"
+
+# Take screenshot for evidence of system dialog
+- takeScreenshot: google-oauth-dialog
+
+# Attempt to handle ASWebAuthenticationSession system alert
+# Maestro may be able to tap "Continue" on system alerts
+- runFlow:
+    when:
+      visible: "Wants to Use.*google.com"
+    commands:
+      - tapOn: "Continue"
+      - takeScreenshot: google-oauth-after-continue
+
+# If dialog did not appear or was dismissed, record post-dialog state
+- takeScreenshot: google-oauth-final-state

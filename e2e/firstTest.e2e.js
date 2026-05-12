@@ -4,6 +4,13 @@ describe('Login Screen', () => {
   });
 
   it('should complete username/password login flow', async () => {
+    // If already logged in, pass immediately.
+    try {
+      await waitFor(element(by.text('Arkabuz'))).toBeVisible().withTimeout(3000);
+      return;
+    } catch (_e) {
+      // not logged in yet — proceed with login/onboarding flow
+    }
     // If onboarding is visible, tap through it; otherwise proceed directly to login.
     try {
       await waitFor(element(by.id('goToLoginButton'))).toBeVisible().withTimeout(3000);

@@ -4,7 +4,7 @@
 |---|---|---|---|
 | Username/password auth | ✅ REGRESSION PASSED | 2026-05-11 | `evidence/release-regression-postclick3-20260511-0139.png` (fresh install, no 403, parties list loaded) |
 | Google OAuth backend | ✅ VERIFIED | 2026-05-12 | `GOOGLE_CLIENT_ID` set; `POST /login/google` with fake token returns 401 `Tu sesión de Google es inválida o expiró.` Backend fully ready. |
-| Google OAuth e2e | ⏳ DEFERRED | 2026-05-12 | Backend fully ready (`GOOGLE_CLIENT_ID` set, `/login/google` returns 401 for bad tokens). `LOGIN_TESTID_NOT_VISIBLE` RESOLVED. `MAESTRO_JAVA_MISSING` RESOLVED. Maestro XCUITest setup timed out (retry with `MAESTRO_DRIVER_STARTUP_TIMEOUT=300000` pending). Frontend e2e blocked on `SIMULATOR_SYSTEM_DIALOG_BLOCKED` (ASWebAuthenticationSession dialog). Manual test plan (`docs/google-oauth-manual-test.md`) exists as fallback. |
+| Google OAuth e2e | ⏳ DEFERRED | 2026-05-12 | Backend fully ready (`GOOGLE_CLIENT_ID` set, `/login/google` returns 401 for bad tokens). `LOGIN_TESTID_NOT_VISIBLE` RESOLVED. `MAESTRO_JAVA_MISSING` RESOLVED. `MAESTRO_XCUITEST_SETUP` RESOLVED. Maestro test failed because installed binary is Debug build requiring Metro bundler (`IOS_DEBUG_BUILD_NEEDS_METRO`). Frontend e2e blocked on `SIMULATOR_SYSTEM_DIALOG_BLOCKED` (ASWebAuthenticationSession dialog). Manual test plan (`docs/google-oauth-manual-test.md`) exists as fallback. |
 | Post-login 403 | ✅ FIXED + SEED FIXED | 2026-05-11 | `Manager` role added to test account party 33; `TDF.Seed.hs` now explicitly upserts `Manager` for `tdf-owner` |
 | Lane health | ✅ UP | 2026-05-11 | `check-lane-status.sh` EXIT_CODE=0 |
 | Detox launchApp | ✅ RESOLVED | 2026-05-11 | `detoxDisableSynchronization: true` via `launchArgs` fixes timeout. Owner: tdf-label-platform. |
@@ -26,7 +26,7 @@
 | Blocker | Owner | Fix |
 |---|---|---|
 | `XCODE_CLT_OUTDATED` | operator | `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` |
-| `MAESTRO_XCUITEST_TIMEOUT` | tdf-label-release | Retry `MAESTRO_DRIVER_STARTUP_TIMEOUT=300000 maestro test tdf-mobile/e2e/google-oauth-flow.yaml`. If timeout persists, declare Maestro simulator path blocked and pivot to manual device test. |
+| `IOS_DEBUG_BUILD_NEEDS_METRO` | tdf-label-platform | Produce `Release-iphonesimulator` binary (embedded JS bundle, no Metro dependency). Workaround: operator keeps `npx expo start` running during simulator tests. |
 | `SIMULATOR_SYSTEM_DIALOG_BLOCKED` | tdf-label-platform | ASWebAuthenticationSession "Continue" dialog blocks automated Google OAuth completion on simulator. Fix: real device test, or attempt Maestro/Detox system-dialog handling. |
 
 ## Ship Gate — Google OAuth e2e
@@ -39,7 +39,7 @@
 **Four parallel paths:**
 1. **Real token + curl** — blocked: no programmatic token source available in environment.
 2. **Detox simulator automation** — `SIMULATOR-REALISTIC PASS` (2026-05-12): test proves button tap triggers ASWebAuthenticationSession system alert. Full web-sign-in completion blocked by system dialog on simulator (expected limitation).
-3. **Maestro simulator automation** — Java resolved, first run timed out during XCUITest driver startup. Retry with `MAESTRO_DRIVER_STARTUP_TIMEOUT=300000` pending. If retry fails, path blocked.
+3. **Maestro simulator automation** — `MAESTRO_XCUITEST_SETUP` RESOLVED (driver installs with 5-min timeout). Test fails because app binary is Debug build; red error screen "No script URL provided" appears when Metro is not running. Blocked on `IOS_DEBUG_BUILD_NEEDS_METRO`. Fix: Platform produces Release simulator build, OR operator runs Metro during test.
 4. **Manual physical device test** — UNBLOCKED. Plan exists at `docs/google-oauth-manual-test.md`. Needs operator assignment and execution.
 
 **Immediate next action (operator/CTO):**
@@ -65,3 +65,4 @@ _Revision history:_
 - 2026-05-11 — Release Director: iOS app binary marked RESOLVED per Platform fix; `LOGIN_TESTID_NOT_VISIBLE` added as active blocker; `MAESTRO_JAVA_MISSING` updated with sudo note and adoptium.net fallback. _(tdf-label-release)_
 - 2026-05-11 — Release Director: updated username/password to REGRESSION PASSED, post-login 403 to FIXED + SEED FIXED, gated condition 4 with simulator ID. _(tdf-label-release)_
 - 2026-05-10 — Release Director: initial go/no-go table created. _(tdf-label-release)_
+- 2026-05-12 — Release Director: Maestro retry with `MAESTRO_DRIVER_STARTUP_TIMEOUT=300000` completed. XCUITest setup RESOLVED. Test failed with red Metro error screen: installed binary is `Debug-iphonesimulator/TDFRecords.app` requiring Metro bundler. New blocker `IOS_DEBUG_BUILD_NEEDS_METRO` added; `MAESTRO_XCUITEST_TIMEOUT` removed. Ship Gate path 3 updated with actual failure mode. Evidence: `simulator-launch.png` (red error screen + deep-link system dialog). _(tdf-label-release)_

@@ -19,7 +19,7 @@ module.exports = {
     simulator: {
       type: 'ios.simulator',
       device: {
-        type: 'iPhone 16',
+        id: '3C3D5759-6E10-480D-B768-2747B9B0D02A',
       },
     },
   },

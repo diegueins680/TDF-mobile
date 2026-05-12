@@ -4,14 +4,14 @@
 |---|---|---|---|
 | Username/password auth | ✅ REGRESSION PASSED | 2026-05-11 | `evidence/release-regression-postclick3-20260511-0139.png` (fresh install, no 403, parties list loaded) |
 | Google OAuth backend | ✅ VERIFIED | 2026-05-12 | `GOOGLE_CLIENT_ID` set; `POST /login/google` with fake token returns 401 `Tu sesión de Google es inválida o expiró.` Backend fully ready. |
-| Google OAuth e2e | ⏳ DEFERRED | 2026-05-12 | Backend fully ready (`GOOGLE_CLIENT_ID` set, `/login/google` returns 401 for bad tokens). `LOGIN_TESTID_NOT_VISIBLE` RESOLVED. Frontend e2e now blocked on `SIMULATOR_SYSTEM_DIALOG_BLOCKED` (ASWebAuthenticationSession dialog not dismissible via AppleScript/Detox) + `MAESTRO_JAVA_MISSING`. Manual test plan (`docs/google-oauth-manual-test.md`) exists as fallback. |
+| Google OAuth e2e | ⏳ DEFERRED | 2026-05-12 | Backend fully ready (`GOOGLE_CLIENT_ID` set, `/login/google` returns 401 for bad tokens). `LOGIN_TESTID_NOT_VISIBLE` RESOLVED. `MAESTRO_JAVA_MISSING` RESOLVED. Maestro XCUITest setup timed out (retry with `MAESTRO_DRIVER_STARTUP_TIMEOUT=300000` pending). Frontend e2e blocked on `SIMULATOR_SYSTEM_DIALOG_BLOCKED` (ASWebAuthenticationSession dialog). Manual test plan (`docs/google-oauth-manual-test.md`) exists as fallback. |
 | Post-login 403 | ✅ FIXED + SEED FIXED | 2026-05-11 | `Manager` role added to test account party 33; `TDF.Seed.hs` now explicitly upserts `Manager` for `tdf-owner` |
 | Lane health | ✅ UP | 2026-05-11 | `check-lane-status.sh` EXIT_CODE=0 |
 | Detox launchApp | ✅ RESOLVED | 2026-05-11 | `detoxDisableSynchronization: true` via `launchArgs` fixes timeout. Owner: tdf-label-platform. |
 | iOS app binary | ✅ RESOLVED | 2026-05-12 | Fresh binary built successfully (mtime 2026-05-12 01:40:35). `CFBundleIdentifier` verified as `com.tdfrecords.app`. Owner: tdf-label-platform. |
 | Backend binary | ✅ READY | 2026-05-12 | Fresh stack-built binary started (PID 95241). Migrations completed. `POST /login/google` returns 401 for fake tokens. Backend fully ready. Owner: tdf-label-release. |
 | Detox login test | ✅ PASSED | 2026-05-12 | `device.clearKeychain()` in `beforeAll` resolves keychain persistence. `firstTest.e2e.js` username/password flow PASS (13.1s). Owner: tdf-label-platform (commit `31dd61b`). |
-| Maestro install | ✅ INSTALLED | 2026-05-11 | Maestro CLI installed to `~/.maestro/bin`. Java runtime required to run. Owner: operator. |
+| Maestro install | ✅ INSTALLED | 2026-05-12 | Maestro CLI `2.5.1` installed to `~/.maestro/bin`. Java runtime `17.0.12+7` installed to `~/.local/java/`. First test failed on XCUITest driver startup timeout. Owner: tdf-label-release. |
 | Dev auto-fill retirement | ⏳ GATED | — | Gate: Detox proves real text-input automation |
 
 ## Gated Conditions for Shippable Build
@@ -26,7 +26,7 @@
 | Blocker | Owner | Fix |
 |---|---|---|
 | `XCODE_CLT_OUTDATED` | operator | `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` |
-| `MAESTRO_JAVA_MISSING` | operator | `brew install --cask temurin` requires sudo password. Alternative: download Eclipse Temurin `.pkg` manually from https://adoptium.net and install, or use `sdkman`/`jabba` user-local install. Then `export PATH="$PATH":"$HOME/.maestro/bin" && maestro test tdf-mobile/e2e/auth-flow.yaml` |
+| `MAESTRO_XCUITEST_TIMEOUT` | tdf-label-release | Retry `MAESTRO_DRIVER_STARTUP_TIMEOUT=300000 maestro test tdf-mobile/e2e/google-oauth-flow.yaml`. If timeout persists, declare Maestro simulator path blocked and pivot to manual device test. |
 | `SIMULATOR_SYSTEM_DIALOG_BLOCKED` | tdf-label-platform | ASWebAuthenticationSession "Continue" dialog blocks automated Google OAuth completion on simulator. Fix: real device test, or attempt Maestro/Detox system-dialog handling. |
 
 ## Ship Gate — Google OAuth e2e
@@ -39,12 +39,12 @@
 **Four parallel paths:**
 1. **Real token + curl** — blocked: no programmatic token source available in environment.
 2. **Detox simulator automation** — `SIMULATOR-REALISTIC PASS` (2026-05-12): test proves button tap triggers ASWebAuthenticationSession system alert. Full web-sign-in completion blocked by system dialog on simulator (expected limitation).
-3. **Maestro simulator automation** — blocked: `MAESTRO_JAVA_MISSING` (Temurin install requires sudo).
+3. **Maestro simulator automation** — Java resolved, first run timed out during XCUITest driver startup. Retry with `MAESTRO_DRIVER_STARTUP_TIMEOUT=300000` pending. If retry fails, path blocked.
 4. **Manual physical device test** — UNBLOCKED. Plan exists at `docs/google-oauth-manual-test.md`. Needs operator assignment and execution.
 
 **Immediate next action (operator/CTO):**
 - Option A (fastest, 5-10 min): Install existing `.app` on physical iPhone → execute `docs/google-oauth-manual-test.md` steps 1-7 → sign off in doc's sign-off table → notify tdf-label-release.
-- Option B (10-15 min): Run `brew install --cask temurin`, enter sudo password → `export PATH="$PATH":"$HOME/.maestro/bin" && maestro test tdf-mobile/e2e/auth-flow.yaml`.
+- Option B (10-15 min): `export JAVA_HOME=$HOME/.local/java/jdk-17.0.12+7-jre/Contents/Home && export PATH="$HOME/.maestro/bin:$JAVA_HOME/bin:$PATH" && MAESTRO_DRIVER_STARTUP_TIMEOUT=300000 maestro test tdf-mobile/e2e/google-oauth-flow.yaml`. If XCUITest setup completes, Maestro may handle the ASWebAuthenticationSession dialog.
 - Option C (20-30 min): Install gcloud SDK → authenticate → obtain real Google ID token → `curl -X POST http://localhost:8080/login/google -d '{"idToken":"<token>"}'` → verify 200 + session.
 
 **If PASS:** Update this doc to `TESTING-VERSION-READY` and proceed to `eas build --profile preview` command.
@@ -57,6 +57,7 @@
 ---
 
 _Revision history:_
+- 2026-05-12 — Release Director: Maestro Java resolved (`~/.local/java/jdk-17.0.12+7-jre`). Maestro test attempted; failed on `IOSDriverTimeoutException` (XCUITest runner build exceeded default timeout). `MAESTRO_JAVA_MISSING` removed from active blockers; `MAESTRO_XCUITEST_TIMEOUT` added. Ship Gate path 3 updated to reflect retry pending. _(tdf-label-release)_
 - 2026-05-12 — Release Director: Token acquisition sweep completed (all automated paths blocked); `Ship Gate` updated with one-sentence blocker statement and three operator options (manual test / Maestro / gcloud); highest-risk failure documented as P0 Google-login production risk. _(tdf-label-release)_
 - 2026-05-12 — Release Director: `Detox login test` marked ✅ PASSED (keychain clear fix verified); `DETOX_ACCESSIBILITY_MATCHER_FAILURE` removed from active blockers; Google OAuth e2e updated to `SIMULATOR-REALISTIC PASS`; `Ship Gate` path 2 updated. _(tdf-label-release)_
 - 2026-05-12 — Release Director: `iOS app binary` marked ✅ RESOLVED; `Detox login test` marked ⚠️ INTERMITTENT; replaced `LOGIN_TESTID_NOT_VISIBLE` with `DETOX_ACCESSIBILITY_MATCHER_FAILURE`; updated `SIMULATOR_SYSTEM_DIALOG_BLOCKED` fix note. _(tdf-label-release)_

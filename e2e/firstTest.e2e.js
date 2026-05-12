@@ -7,7 +7,7 @@ describe('Login Screen', () => {
   it('should complete username/password login flow', async () => {
     // If already logged in, pass immediately.
     try {
-      await waitFor(element(by.text('Buscar'))).toBeVisible().withTimeout(10000);
+      await waitFor(element(by.id('partiesScreen'))).toBeVisible().withTimeout(10000);
       return;
     } catch (_e) {
       // not logged in yet — proceed with login/onboarding flow
@@ -23,7 +23,7 @@ describe('Login Screen', () => {
     await element(by.id('usernameInput')).typeText('tdf-owner');
     await element(by.id('passwordInput')).typeText('TDFowner2025!');
     await element(by.id('loginButton')).tap();
-    await expect(element(by.text('Buscar'))).toBeVisible();
+    await waitFor(element(by.id('partiesScreen'))).toBeVisible().withTimeout(10000);
   }, 60000);
 
   it('should start Google OAuth flow and handle system dialog', async () => {

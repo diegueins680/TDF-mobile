@@ -78,7 +78,7 @@ export default function Parties() {
   }, [errorText, hasToken, isError, isFetching, refetch]);
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} testID="partiesScreen">
       {loading && <Text>Cargando sesión…</Text>}
       {!loading && !hasToken && (
         <View style={styles.notice}>

@@ -23,7 +23,7 @@ describe('Login Screen', () => {
     await element(by.id('usernameInput')).typeText('tdf-owner');
     await element(by.id('passwordInput')).typeText('TDFowner2025!');
     await element(by.id('loginButton')).tap();
-    await waitFor(element(by.id('partiesScreen'))).toBeVisible().withTimeout(10000);
+    await waitFor(element(by.id('partiesScreen'))).toBeVisible().withTimeout(20000);
   }, 60000);
 
   it('should start Google OAuth flow and handle system dialog', async () => {

@@ -30,6 +30,8 @@ describe('Login Screen', () => {
   }, 60000);
 
   it('should start Google OAuth flow and handle system dialog', async () => {
+    // Clear keychain so prior login does not persist
+    await device.clearKeychain();
     // Ensure we start from auth screen
     await device.launchApp({
       newInstance: true,

@@ -121,6 +121,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     favicon: './assets/favicon.png'
   },
   plugins,
+  updates:
+    EAS_BUILD_PROFILE === 'ios-simulator'
+      ? { checkAutomatically: 'ON_ERROR_RECOVERY' as const }
+      : config.updates,
   experiments: {
     ...(config.experiments ?? {}),
     typedRoutes: true

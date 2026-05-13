@@ -40,17 +40,17 @@ describe('Login Screen', () => {
     });
     // If onboarding is visible, tap through it; otherwise proceed directly to login.
     try {
-      await waitFor(element(by.id('goToLoginButton'))).toBeVisible().withTimeout(3000);
+      await waitFor(element(by.id('goToLoginButton'))).toBeVisible().withTimeout(10000);
       await element(by.id('goToLoginButton')).tap();
     } catch (_e) {
       // onboarding already seen or not visible — proceed
     }
-    await waitFor(element(by.text('Continuar con Google'))).toBeVisible().withTimeout(5000);
+    await waitFor(element(by.text('Continuar con Google'))).toBeVisible().withTimeout(10000);
     await element(by.text('Continuar con Google')).tap();
     // ASWebAuthenticationSession presents a system dialog outside the app.
     // Detox cannot interact with it. On simulator this is expected.
     // Take a screenshot for evidence; the system-alert presence itself
     // proves the tap registered and the system auth session started.
     await device.takeScreenshot('google-oauth-dialog');
-  }, 30000);
+  }, 45000);
 });

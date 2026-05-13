@@ -25,34 +25,33 @@
 
 | Blocker | Owner | Fix |
 |---|---|---|
-| `RELEASE_BUILD_IN_PROGRESS` | tdf-label-platform | Local xcodebuild PID 52513 actively compiling Release-iphonesimulator (21+ min elapsed, many modules built, TDFRecords.app bundle present but executable not yet linked). Wait for completion or run `npx expo run:ios --configuration Release` locally. |
-| `EAS_IOS_SIMULATOR_BUILD_PENDING` | tdf-label-release | EAS `ios-simulator` build initiated 2026-05-13 08:23 UTC; output pending. Profile fixed to extend `preview` (no credentials needed). |
+| `GOOGLE_OAUTH_DETOX_TEST_RELIABILITY` | tdf-label-release | `firstTest.e2e.js` second test fails because session from first test persists in keychain. Fix: add `device.clearKeychain()` to second test's `beforeEach` or split into separate test file with independent `beforeAll`. |
+| `EAS_IOS_CREDENTIALS_MISSING` | operator/CTO | No iOS signing credentials configured for EAS `preview` profile (internal/ad-hoc distribution). Fix: run `cd tdf-mobile && npx eas-cli@latest build --profile preview --platform ios` in interactive mode and follow credential setup prompts. |
 | `XCODE_CLT_OUTDATED` | operator (optional) | `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` — not blocking testing version. |
 
 ## Ship Gate — Google OAuth e2e
 
-**Status:** ⏳ OPEN — simulator-realistic proven; full device test pending; testing build in progress.
+**Status:** ⏳ OPEN — simulator-realistic proven; full device test pending; Release build now available.
 
 **What is the one thing preventing shipping?**
-> No completed installable iOS build is available yet. Local Release xcodebuild is 21+ min in progress (PID 52513); EAS ios-simulator build initiated but output pending.
+> Google OAuth full end-to-end proof on physical iOS device has not been completed. EAS `preview` credentials are not configured, so no `.ipa` can be produced for device distribution.
 
 **Progress:**
-- **Detox simulator automation** — ✅ PASS (2026-05-13): `firstTest.e2e.js` proves `Continuar con Google` button is present, tappable, and triggers ASWebAuthenticationSession system dialog.
+- **Detox simulator automation (Debug)** — ✅ PASS (2026-05-13): `firstTest.e2e.js` proves `Continuar con Google` button is present, tappable, and triggers ASWebAuthenticationSession system dialog.
+- **Detox Release build (username/password)** — ✅ PASS (2026-05-13): `firstTest.e2e.js` username/password flow passes on `Release-iphonesimulator` without Metro running (25s). Evidence: `artifacts/ios.sim.release.../after-login.png`.
+- **Detox Release build (Google OAuth)** — ❌ FAIL (2026-05-13): Second test times out waiting for `Continuar con Google`. Root cause: session from first test persists in keychain; app skips auth screen. Fix: clear keychain between tests.
 - **Backend verification** — ✅ `/login/google` returns 401 for invalid tokens (correctly configured and alive).
-- **EAS preview build** — ❌ FAILED (2026-05-13): No iOS credentials for internal distribution. Preview profile still blocked.
-- **EAS ios-simulator build** — 🔨 INITIATED (2026-05-13): `eas.json` `ios-simulator` profile fixed to extend `preview` (no credentials needed). Build started 08:23 UTC; output pending.
-- **Local Release build** — 🔨 IN PROGRESS (2026-05-13): xcodebuild PID 52513 compiling Release-iphonesimulator since ~03:04 UTC. Many modules built; TDFRecords.app bundle exists but executable not yet linked.
+- **EAS preview build** — ❌ BLOCKED: No iOS credentials for internal distribution.
+- **Local Release build** — ✅ COMPLETE (2026-05-13): xcodebuild completed; executable present at `ios/build/Build/Products/Release-iphonesimulator/TDFRecords.app/TDFRecords` (32 MB).
 
-**Immediate next action (tdf-label-platform / operator):**
-1. Wait for local xcodebuild PID 52513 to complete, OR run `npx expo run:ios --configuration Release` to produce fresh Release-iphonesimulator `.app`.
-2. Once Release `.app` is available, install on simulator `3C3D5759-6E10-480D-B768-2747B9B0D02A` and verify it launches without Metro.
-3. Then run Maestro `google-oauth-flow.yaml` or Detox `firstTest.e2e.js` against Release build.
-4. Alternatively, once EAS ios-simulator build completes, download `.app` and test.
+**Immediate next action:**
+1. **tdf-label-release**: Fix Detox test reliability (clear keychain between tests) and re-run `detox test --configuration ios.sim.release` to verify both tests pass.
+2. **operator/CTO**: Configure EAS iOS signing credentials and run `npx eas build --profile preview --platform ios` to produce `.ipa` for physical device manual test.
 5. For physical device test: configure EAS preview credentials and build `.ipa`. |
 
 ## RC Verdict
 
-`CONDITIONAL-GO` — Both required login paths proven in simulator. Username/password auth: Detox automated PASS. Google OAuth: Detox simulator-realistic PASS (button → ASWebAuthenticationSession dialog proven). Backend fully ready (`/login` and `/login/google` both alive). iOS binary fresh. **NEW BLOCKER**: EAS iOS signing credentials missing — preview build cannot be produced.
+`CONDITIONAL-GO` — Username/password auth: Detox automated PASS on both Debug and Release builds. Google OAuth: Detox simulator-realistic PASS on Debug (button → ASWebAuthenticationSession dialog). Release build now available and username/password proven on it. Google OAuth Release build test has a test-reliability issue (session persistence), not a product defect. Backend fully ready. **BLOCKER**: EAS iOS signing credentials missing — preview `.ipa` cannot be produced for physical device test.
 
 `Shipping decision: NOT YET SHIPPABLE`
 
@@ -75,3 +74,4 @@ _Revision history:_
 - 2026-05-13 — Release Director: Google OAuth Detox test PASS (42s). `Continuar con Google` button found → tapped → ASWebAuthenticationSession screenshot captured. Updated `Google OAuth e2e` to ✅ SIMULATOR-REALISTIC PASS. Cleared all active blockers. Changed RC verdict to `GO` / `TESTING VERSION READY`. Added exact `eas build` command. _(tdf-label-release)_
 - 2026-05-13 — Release Director: Maestro test with Metro running FAILED. XCUITest driver installed successfully. App launched + deep-link opened. `"Inicia sesión"` not visible within timeout — suspected onboarding/deep-link race condition. Evidence: `maestro-google-oauth-fail.png`. Updated `Google OAuth e2e`, `IOS_DEBUG_BUILD_NEEDS_METRO`, Ship Gate path 3, and Option B with failure notes. _(tdf-label-release)_
 - 2026-05-12 — Release Director: Maestro retry with `MAESTRO_DRIVER_STARTUP_TIMEOUT=300000` completed. XCUITest setup RESOLVED. Test failed with red Metro error screen: installed binary is `Debug-iphonesimulator/TDFRecords.app` requiring Metro bundler. New blocker `IOS_DEBUG_BUILD_NEEDS_METRO` added; `MAESTRO_XCUITEST_TIMEOUT` removed. Ship Gate path 3 updated with actual failure mode. Evidence: `simulator-launch.png` (red error screen + deep-link system dialog). _(tdf-label-release)_
+- 2026-05-13 — Release Director: Local Release xcodebuild completed (executable 32 MB). Added `ios.sim.release` Detox configuration to `.detoxrc.js`. Ran `detox test --configuration ios.sim.release`: username/password test PASS (25s), Google OAuth test FAIL (session persistence from first test). Updated active blockers, ship gate, and RC verdict. _(tdf-label-release)_

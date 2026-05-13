@@ -14,6 +14,11 @@ module.exports = {
       binaryPath: 'ios/build/Build/Products/Debug-iphonesimulator/TDFRecords.app',
       build: 'xcodebuild -workspace ios/TDFRecords.xcworkspace -scheme TDFRecords -configuration Debug -sdk iphonesimulator -destination "platform=iOS Simulator,name=iPhone 16" -derivedDataPath ios/build',
     },
+    'ios.sim.release': {
+      type: 'ios.app',
+      binaryPath: 'ios/build/Build/Products/Release-iphonesimulator/TDFRecords.app',
+      build: 'xcodebuild -workspace ios/TDFRecords.xcworkspace -scheme TDFRecords -configuration Release -sdk iphonesimulator -destination "platform=iOS Simulator,name=iPhone 16" -derivedDataPath ios/build',
+    },
   },
   devices: {
     simulator: {
@@ -27,6 +32,10 @@ module.exports = {
     'ios.sim.debug': {
       device: 'simulator',
       app: 'ios.sim.debug',
+    },
+    'ios.sim.release': {
+      device: 'simulator',
+      app: 'ios.sim.release',
     },
   },
   artifacts: {

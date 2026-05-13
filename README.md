@@ -100,3 +100,25 @@ npm run submit:android:production
 - Release assets are generated from shared TDF branding in the parent workspace by `scripts/generate_release_assets.py`.
 - The `/about` screen shows the resolved API base, health status, and version info.
 - Auth now uses username/password and Google login in-app; the old bearer-token flow is no longer the primary path.
+
+## E2E Testing
+
+Standard fresh-install run (deterministic, no `--reuse`):
+
+```bash
+# 1. Start Metro
+npx expo start
+
+# 2. In another terminal, run the full Detox suite
+npx detox test --configuration ios.sim.debug
+```
+
+Prerequisites:
+- Backend running on `http://localhost:8080` (`tdf-hq-exe` with `APP_PORT=8080`)
+- iOS simulator booted and app binary built (`npx detox build --configuration ios.sim.debug`)
+- Simulator UUID pinned in `.detoxrc.js` (default: `3C3D5759-6E10-480D-B768-2747B9B0D02A`)
+
+Notes:
+- The e2e test uses `device.clearKeychain()` and `delete: true` to guarantee a fresh login state on every run.
+- Do not use `--reuse`; it skips the fresh install and can leave the app in a logged-in state, causing false positives.
+- The debug build requires Metro to serve the JS bundle. For headless/release testing, a Release-iphonesimulator build with an embedded bundle is required.

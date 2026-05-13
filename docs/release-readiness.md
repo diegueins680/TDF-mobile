@@ -13,6 +13,7 @@
 | Detox login test | ✅ PASSED | 2026-05-12 | `device.clearKeychain()` in `beforeAll` resolves keychain persistence. `firstTest.e2e.js` username/password flow PASS (13.1s). Owner: tdf-label-platform (commit `31dd61b`). |
 | Maestro install | ✅ INSTALLED | 2026-05-12 | Maestro CLI `2.5.1` installed to `~/.maestro/bin`. Java runtime `17.0.12+7` installed to `~/.local/java/`. First test failed on XCUITest driver startup timeout. Owner: tdf-label-release. |
 | Dev auto-fill retirement | ⏳ GATED | — | Gate: Detox proves real text-input automation |
+| EAS ios-simulator build | ⏳ QUEUED | 2026-05-13 | Build ID `54628aea-b5e0-4a2d-a565-a1193ac774ab`; queue pos 26; ~112s wait. No credentials needed. Will produce downloadable `.app` for simulator. |
 
 ## Gated Conditions for Shippable Build
 

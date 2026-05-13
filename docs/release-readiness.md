@@ -23,36 +23,37 @@
 
 ## Active Blockers
 
-None. All automated test paths are green.
-
 | Blocker | Owner | Fix |
 |---|---|---|
+| `EAS_IOS_CREDENTIALS_MISSING` | operator/CTO | Run `cd tdf-mobile && npx eas-cli@latest build --profile preview --platform ios` in interactive mode to generate/upload ad-hoc signing credentials. |
+| `EXPO_DEV_CLIENT_MISSING` | tdf-label-platform | `npx expo install expo-dev-client` OR create standalone `ios-simulator` profile without `developmentClient: true`. |
 | `XCODE_CLT_OUTDATED` | operator (optional) | `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` — not blocking testing version. |
 
 ## Ship Gate — Google OAuth e2e
 
-**Status:** ✅ CLOSED — simulator-realistic proven.
+**Status:** ⏳ OPEN — simulator-realistic proven; full device test pending; testing build blocked on iOS credentials.
 
-**What was the one thing preventing shipping?**
-> Google OAuth full end-to-end proof (web sign-in → token → callback → post-login screen) had not been demonstrated.
+**What is the one thing preventing shipping?**
+> No installable testing build can be produced because EAS lacks iOS signing credentials for internal distribution.
 
-**Resolution:**
-- **Detox simulator automation** — ✅ PASS (2026-05-13): `firstTest.e2e.js` proves `Continuar con Google` button is present, tappable, and triggers ASWebAuthenticationSession system dialog. Screenshot captured as evidence. All app-side integration verified.
+**Progress:**
+- **Detox simulator automation** — ✅ PASS (2026-05-13): `firstTest.e2e.js` proves `Continuar con Google` button is present, tappable, and triggers ASWebAuthenticationSession system dialog.
 - **Backend verification** — ✅ `/login/google` returns 401 for invalid tokens (correctly configured and alive).
-- **Full device web-sign-in** — Recommended before production release, but not required for testing version.
+- **EAS preview build** — ❌ FAILED (2026-05-13): No iOS credentials for internal distribution.
 
 **Immediate next action (operator/CTO):**
-- Produce testing version: `cd tdf-mobile && npx eas build --platform ios --profile preview`
-- Distribute `.ipa` to physical iOS device for manual Google OAuth sign-in verification.
-- Record result in `docs/google-oauth-manual-test.md` sign-off table.
+1. Configure EAS iOS signing credentials: `cd tdf-mobile && npx eas-cli@latest build --profile preview --platform ios` (interactive mode).
+2. Once build succeeds, install `.ipa` on physical iOS device and execute `docs/google-oauth-manual-test.md`.
+3. Record result in sign-off table.
 
 ## RC Verdict
 
-`GO` — Both required login paths proven. Username/password auth: Detox automated PASS x2 consecutive + this-run co-pass. Google OAuth: Detox simulator-realistic PASS (button → ASWebAuthenticationSession dialog proven). Backend fully ready (`/login` and `/login/google` both alive). iOS binary fresh. No active blockers.
+`CONDITIONAL-GO` — Both required login paths proven in simulator. Username/password auth: Detox automated PASS. Google OAuth: Detox simulator-realistic PASS (button → ASWebAuthenticationSession dialog proven). Backend fully ready (`/login` and `/login/google` both alive). iOS binary fresh. **NEW BLOCKER**: EAS iOS signing credentials missing — preview build cannot be produced.
 
-`Shipping decision: TESTING VERSION READY`
+`Shipping decision: NOT YET SHIPPABLE`
 
-**Exact build command:** `cd tdf-mobile && npx eas build --platform ios --profile preview`
+**Exact build command (blocked):** `cd tdf-mobile && npx eas build --platform ios --profile preview`
+**Unblocker:** Run interactively to configure iOS credentials.
 
 **Before production release:** Execute `docs/google-oauth-manual-test.md` on physical iOS device to verify full web-sign-in → callback → post-login flow.
 

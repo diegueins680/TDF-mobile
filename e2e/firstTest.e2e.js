@@ -35,7 +35,7 @@ describe('Login Screen', () => {
     // Ensure we start from auth screen
     await device.launchApp({
       newInstance: true,
-      url: 'tdf://auth',
+      delete: true,
       launchArgs: { detoxDisableSynchronization: true }
     });
     // If onboarding is visible, tap through it; otherwise proceed directly to login.

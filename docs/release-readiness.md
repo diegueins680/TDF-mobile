@@ -25,26 +25,30 @@
 
 | Blocker | Owner | Fix |
 |---|---|---|
-| `EAS_IOS_CREDENTIALS_MISSING` | operator/CTO | Run `cd tdf-mobile && npx eas-cli@latest build --profile preview --platform ios` in interactive mode to generate/upload ad-hoc signing credentials. |
-| `EXPO_DEV_CLIENT_MISSING` | tdf-label-platform | `npx expo install expo-dev-client` OR create standalone `ios-simulator` profile without `developmentClient: true`. |
+| `RELEASE_BUILD_IN_PROGRESS` | tdf-label-platform | Local xcodebuild PID 52513 actively compiling Release-iphonesimulator (21+ min elapsed, many modules built, TDFRecords.app bundle present but executable not yet linked). Wait for completion or run `npx expo run:ios --configuration Release` locally. |
+| `EAS_IOS_SIMULATOR_BUILD_PENDING` | tdf-label-release | EAS `ios-simulator` build initiated 2026-05-13 08:23 UTC; output pending. Profile fixed to extend `preview` (no credentials needed). |
 | `XCODE_CLT_OUTDATED` | operator (optional) | `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` — not blocking testing version. |
 
 ## Ship Gate — Google OAuth e2e
 
-**Status:** ⏳ OPEN — simulator-realistic proven; full device test pending; testing build blocked on iOS credentials.
+**Status:** ⏳ OPEN — simulator-realistic proven; full device test pending; testing build in progress.
 
 **What is the one thing preventing shipping?**
-> No installable testing build can be produced because EAS lacks iOS signing credentials for internal distribution.
+> No completed installable iOS build is available yet. Local Release xcodebuild is 21+ min in progress (PID 52513); EAS ios-simulator build initiated but output pending.
 
 **Progress:**
 - **Detox simulator automation** — ✅ PASS (2026-05-13): `firstTest.e2e.js` proves `Continuar con Google` button is present, tappable, and triggers ASWebAuthenticationSession system dialog.
 - **Backend verification** — ✅ `/login/google` returns 401 for invalid tokens (correctly configured and alive).
-- **EAS preview build** — ❌ FAILED (2026-05-13): No iOS credentials for internal distribution.
+- **EAS preview build** — ❌ FAILED (2026-05-13): No iOS credentials for internal distribution. Preview profile still blocked.
+- **EAS ios-simulator build** — 🔨 INITIATED (2026-05-13): `eas.json` `ios-simulator` profile fixed to extend `preview` (no credentials needed). Build started 08:23 UTC; output pending.
+- **Local Release build** — 🔨 IN PROGRESS (2026-05-13): xcodebuild PID 52513 compiling Release-iphonesimulator since ~03:04 UTC. Many modules built; TDFRecords.app bundle exists but executable not yet linked.
 
-**Immediate next action (operator/CTO):**
-1. Configure EAS iOS signing credentials: `cd tdf-mobile && npx eas-cli@latest build --profile preview --platform ios` (interactive mode).
-2. Once build succeeds, install `.ipa` on physical iOS device and execute `docs/google-oauth-manual-test.md`.
-3. Record result in sign-off table.
+**Immediate next action (tdf-label-platform / operator):**
+1. Wait for local xcodebuild PID 52513 to complete, OR run `npx expo run:ios --configuration Release` to produce fresh Release-iphonesimulator `.app`.
+2. Once Release `.app` is available, install on simulator `3C3D5759-6E10-480D-B768-2747B9B0D02A` and verify it launches without Metro.
+3. Then run Maestro `google-oauth-flow.yaml` or Detox `firstTest.e2e.js` against Release build.
+4. Alternatively, once EAS ios-simulator build completes, download `.app` and test.
+5. For physical device test: configure EAS preview credentials and build `.ipa`. |
 
 ## RC Verdict
 

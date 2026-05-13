@@ -1,6 +1,6 @@
 # TDF Mobile Release Setup
 
-Last updated: 2026-03-13
+Last updated: 2026-05-13
 
 ## App Identity
 
@@ -8,7 +8,7 @@ Last updated: 2026-03-13
 - Expo slug: `tdf-mobile`
 - iOS bundle identifier: `com.tdfrecords.app`
 - Android package: `com.tdfrecords.app`
-- Marketing version: `1.0.0`
+- Marketing version: `1.0.1`
 - Build numbers: managed by EAS remote versioning with `autoIncrement` in `eas.json`
 
 ## Public Store URLs
@@ -54,6 +54,18 @@ npx eas-cli@latest build --platform android --profile production
 npx eas-cli@latest submit --platform ios --profile production --latest
 npx eas-cli@latest submit --platform android --profile production --latest
 ```
+
+## Testing Version Baselines
+
+| Build ID | Date | Parent SHA | tdf-mobile SHA | Profile | Verdict | Evidence |
+|---|---|---|---|---|---|---|
+| `8d91fabe-a01c-41d1-bc6b-b55dc9c689e9` | 2026-05-13 | `a47331d9` | `b7f5839` | `ios-simulator` | **GO** — Both username/password and Google OAuth proven via Detox on EAS artifact without Metro. | `tdf-label-release.md` report entry 2026-05-13 20:35 UTC; Detox screenshots in `artifacts/ios.sim.release.2026-05-13 15-35-20Z/`. |
+
+> **How to reproduce this baseline:**
+> ```bash
+> cd tdf-mobile && npx eas build --profile ios-simulator --platform ios --non-interactive
+> ```
+> Then run: `npx detox test --configuration ios.sim.release`
 
 ## Notes
 

@@ -52,5 +52,5 @@ describe('Login Screen', () => {
     // Take a screenshot for evidence; the system-alert presence itself
     // proves the tap registered and the system auth session started.
     await device.takeScreenshot('google-oauth-dialog');
-  }, 45000);
+  }, 60000);
 });

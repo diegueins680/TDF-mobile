@@ -15,6 +15,8 @@
 | Dev auto-fill retirement | ⏳ GATED | — | Gate: Detox proves real text-input automation |
 | EAS ios-simulator build | 🔨 RE-QUEUED | 2026-05-13 | Build ID `e9fd7e34-5ca2-448d-9bb9-5f7e0f348882` IN_QUEUE (position 748). `eas.json` now includes `GOOGLE_IOS_URL_SCHEME`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, and `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` in `preview`/`ios-simulator` profile `env`. Previous build `54628aea...` lacked Google button; fix applied, awaiting verification. |
 
+> **Primary test simulator:** `3C3D5759-6E10-480D-B768-2747B9B0D02A`. This device is pinned across all Detox and `simctl` workflows. Do not change — other simulators experience `simctl` hangs that break automation.
+
 ## Gated Conditions for Shippable Build
 
 1. **Google OAuth e2e proven** — ✅ SIMULATOR-REALISTIC PASS. Detox proves button → ASWebAuthenticationSession. Full device test recommended before production.

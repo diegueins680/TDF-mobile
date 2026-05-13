@@ -20,10 +20,13 @@ describe('Login Screen', () => {
       // onboarding already seen or not visible — proceed with login fields
     }
     await waitFor(element(by.id('usernameInput'))).toBeVisible().withTimeout(15000);
-    await element(by.id('usernameInput')).typeText('tdf-owner');
-    await element(by.id('passwordInput')).typeText('TDFowner2025!');
+    await element(by.id('usernameInput')).replaceText('tdf-owner');
+    await element(by.id('passwordInput')).replaceText('TDFowner2025!');
+    await device.disableSynchronization();
     await element(by.id('loginButton')).tap();
+    await device.takeScreenshot('after-login');
     await waitFor(element(by.id('partiesScreen'))).toBeVisible().withTimeout(20000);
+    await device.enableSynchronization();
   }, 60000);
 
   it('should start Google OAuth flow and handle system dialog', async () => {

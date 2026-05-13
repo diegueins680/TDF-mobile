@@ -13,7 +13,7 @@
 | Detox login test | ✅ PASSED | 2026-05-12 | `device.clearKeychain()` in `beforeAll` resolves keychain persistence. `firstTest.e2e.js` username/password flow PASS (13.1s). Owner: tdf-label-platform (commit `31dd61b`). |
 | Maestro install | ✅ INSTALLED | 2026-05-12 | Maestro CLI `2.5.1` installed to `~/.maestro/bin`. Java runtime `17.0.12+7` installed to `~/.local/java/`. First test failed on XCUITest driver startup timeout. Owner: tdf-label-release. |
 | Dev auto-fill retirement | ⏳ GATED | — | Gate: Detox proves real text-input automation |
-| EAS ios-simulator build | ⏳ QUEUED | 2026-05-13 | Build ID `54628aea-b5e0-4a2d-a565-a1193ac774ab`; queue pos 26; ~112s wait. No credentials needed. Will produce downloadable `.app` for simulator. |
+| EAS ios-simulator build | ⚠️ COMPLETE with BLOCKER | 2026-05-13 | Build ID `54628aea-b5e0-4a2d-a565-a1193ac774ab` FINISHED; artifact downloaded, installed, launched without Metro. Login screen renders. **CRITICAL: "Continuar con Google" button is MISSING** — EAS cloud build lacks `GOOGLE_IOS_URL_SCHEME` env var, so `@react-native-google-signin/google-signin` plugin is excluded. Fix: add Google OAuth env vars to `eas.json` and re-queue. |
 
 ## Gated Conditions for Shippable Build
 
@@ -26,13 +26,14 @@
 
 | Blocker | Owner | Fix |
 |---|---|---|
+| `EAS_BUILD_GOOGLE_OAUTH_MISSING` | tdf-label-release / tdf-label-platform | EAS ios-simulator build artifact lacks Google Sign-In button. Root cause: EAS cloud build does not read local `.env.local`; `app.config.ts` conditionally includes Google Sign-In plugin only when `GOOGLE_IOS_URL_SCHEME` is present. Fix: add `GOOGLE_IOS_URL_SCHEME`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, and `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` to `eas.json` `env` for `ios-simulator` and `preview` profiles, then re-queue build and verify. |
 | `GOOGLE_OAUTH_DETOX_TEST_RELIABILITY` | tdf-label-release | `firstTest.e2e.js` second test fails because session from first test persists in keychain. Fix: add `device.clearKeychain()` to second test's `beforeEach` or split into separate test file with independent `beforeAll`. |
 | `EAS_IOS_CREDENTIALS_MISSING` | operator/CTO | No iOS signing credentials configured for EAS `preview` profile (internal/ad-hoc distribution). Fix: run `cd tdf-mobile && npx eas-cli@latest build --profile preview --platform ios` in interactive mode and follow credential setup prompts. |
 | `XCODE_CLT_OUTDATED` | operator (optional) | `sudo rm -rf /Library/Developer/CommandLineTools && sudo xcode-select --install` — not blocking testing version. |
 
 ## Ship Gate — Google OAuth e2e
 
-**Status:** ⏳ OPEN — simulator-realistic proven; full device test pending; Release build now available.
+**Status:** ⏳ OPEN — simulator-realistic proven locally; EAS build missing Google button; full device test pending.
 
 **What is the one thing preventing shipping?**
 > Google OAuth full end-to-end proof on physical iOS device has not been completed. EAS `preview` credentials are not configured, so no `.ipa` can be produced for device distribution.
@@ -44,20 +45,22 @@
 - **Backend verification** — ✅ `/login/google` returns 401 for invalid tokens (correctly configured and alive).
 - **EAS preview build** — ❌ BLOCKED: No iOS credentials for internal distribution.
 - **Local Release build** — ✅ COMPLETE (2026-05-13): xcodebuild completed; executable present at `ios/build/Build/Products/Release-iphonesimulator/TDFRecords.app/TDFRecords` (32 MB).
+- **EAS ios-simulator build** — ⚠️ COMPLETE with BLOCKER (2026-05-13): Build `54628aea-b5e0-4a2d-a565-a1193ac774ab` FINISHED; artifact launches without Metro; **Google Sign-In button missing** due to missing build-time env vars.
 
 **Immediate next action:**
-1. **tdf-label-release**: Fix Detox test reliability (clear keychain between tests) and re-run `detox test --configuration ios.sim.release` to verify both tests pass.
-2. **operator/CTO**: Configure EAS iOS signing credentials and run `npx eas build --profile preview --platform ios` to produce `.ipa` for physical device manual test.
-5. For physical device test: configure EAS preview credentials and build `.ipa`. |
+1. **tdf-label-release / tdf-label-platform**: Add Google OAuth env vars (`GOOGLE_IOS_URL_SCHEME`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`) to `eas.json` `env` for `ios-simulator` and `preview` profiles. Re-queue EAS ios-simulator build and verify "Continuar con Google" button appears.
+2. **tdf-label-release**: Fix Detox test reliability (clear keychain between tests) and re-run `detox test --configuration ios.sim.release` to verify both tests pass.
+3. **operator/CTO**: Configure EAS iOS signing credentials and run `npx eas build --profile preview --platform ios` to produce `.ipa` for physical device manual test.
 
 ## RC Verdict
 
-`CONDITIONAL-GO` — Username/password auth: Detox automated PASS on both Debug and Release builds. Google OAuth: Detox simulator-realistic PASS on Debug (button → ASWebAuthenticationSession dialog). Release build now available and username/password proven on it. Google OAuth Release build test has a test-reliability issue (session persistence), not a product defect. Backend fully ready. **BLOCKER**: EAS iOS signing credentials missing — preview `.ipa` cannot be produced for physical device test.
+`CONDITIONAL-GO` — Username/password auth: Detox automated PASS on both Debug and Release builds. Google OAuth: Detox simulator-realistic PASS on Debug (button → ASWebAuthenticationSession dialog). Release build now available and username/password proven on it. Google OAuth Release build test has a test-reliability issue (session persistence), not a product defect. Backend fully ready. **BLOCKERS**: (1) EAS ios-simulator build missing Google Sign-In button due to missing build-time env vars. (2) EAS iOS signing credentials missing — preview `.ipa` cannot be produced for physical device test.
 
 `Shipping decision: NOT YET SHIPPABLE`
 
-**Exact build command (blocked):** `cd tdf-mobile && npx eas build --platform ios --profile preview`
-**Unblocker:** Run interactively to configure iOS credentials.
+**Exact build commands:**
+- `ios-simulator` (credential-free): `cd tdf-mobile && npx eas build --profile ios-simulator --platform ios --non-interactive` — **BLOCKED on missing Google OAuth env vars in build config.**
+- `preview` (physical device): `cd tdf-mobile && npx eas build --platform ios --profile preview` — **BLOCKED on missing iOS signing credentials.**
 
 **Before production release:** Execute `docs/google-oauth-manual-test.md` on physical iOS device to verify full web-sign-in → callback → post-login flow.
 
@@ -75,4 +78,5 @@ _Revision history:_
 - 2026-05-13 — Release Director: Google OAuth Detox test PASS (42s). `Continuar con Google` button found → tapped → ASWebAuthenticationSession screenshot captured. Updated `Google OAuth e2e` to ✅ SIMULATOR-REALISTIC PASS. Cleared all active blockers. Changed RC verdict to `GO` / `TESTING VERSION READY`. Added exact `eas build` command. _(tdf-label-release)_
 - 2026-05-13 — Release Director: Maestro test with Metro running FAILED. XCUITest driver installed successfully. App launched + deep-link opened. `"Inicia sesión"` not visible within timeout — suspected onboarding/deep-link race condition. Evidence: `maestro-google-oauth-fail.png`. Updated `Google OAuth e2e`, `IOS_DEBUG_BUILD_NEEDS_METRO`, Ship Gate path 3, and Option B with failure notes. _(tdf-label-release)_
 - 2026-05-12 — Release Director: Maestro retry with `MAESTRO_DRIVER_STARTUP_TIMEOUT=300000` completed. XCUITest setup RESOLVED. Test failed with red Metro error screen: installed binary is `Debug-iphonesimulator/TDFRecords.app` requiring Metro bundler. New blocker `IOS_DEBUG_BUILD_NEEDS_METRO` added; `MAESTRO_XCUITEST_TIMEOUT` removed. Ship Gate path 3 updated with actual failure mode. Evidence: `simulator-launch.png` (red error screen + deep-link system dialog). _(tdf-label-release)_
+- 2026-05-13 — Release Director: EAS ios-simulator build `54628aea-b5e0-4a2d-a565-a1193ac774ab` FINISHED; artifact downloaded, installed, launched without Metro. Login screen renders but **"Continuar con Google" button is MISSING**. Root cause: EAS cloud build lacks `GOOGLE_IOS_URL_SCHEME` env var. New blocker `EAS_BUILD_GOOGLE_OAUTH_MISSING` added. Updated EAS ios-simulator build status, active blockers, ship gate, and RC verdict. _(tdf-label-release)_
 - 2026-05-13 — Release Director: Local Release xcodebuild completed (executable 32 MB). Added `ios.sim.release` Detox configuration to `.detoxrc.js`. Ran `detox test --configuration ios.sim.release`: username/password test PASS (25s), Google OAuth test FAIL (session persistence from first test). Updated active blockers, ship gate, and RC verdict. _(tdf-label-release)_

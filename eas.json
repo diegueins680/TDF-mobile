@@ -20,7 +20,10 @@
       "env": {
         "EXPO_PUBLIC_API_BASE": "https://tdf-hq.fly.dev",
         "EXPO_PUBLIC_UPLOAD_URL": "https://tdf-hq.fly.dev/drive/upload",
-        "EXPO_PUBLIC_TZ": "America/Guayaquil"
+        "EXPO_PUBLIC_TZ": "America/Guayaquil",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1016946267087-mvr22vuc8dql37fem7aa1msdnatjvhh4.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "1016946267087-p40em8ihkugloistpfnjt7es94mguhgv.apps.googleusercontent.com",
+        "GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.1016946267087-p40em8ihkugloistpfnjt7es94mguhgv"
       },
       "android": {
         "buildType": "apk"

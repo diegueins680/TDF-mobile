@@ -18,10 +18,10 @@ export default function CreateSheet() {
   const router = useRouter();
 
   const options = [
-    { label: 'Nueva reserva', icon: 'calendar-plus', route: '/bookings' as const },
-    { label: 'Nuevo evento', icon: 'calendar-star', route: '/events' as const },
-    { label: 'Nuevo contacto', icon: 'account-plus', route: '/parties' as const },
-    { label: 'Nueva orden', icon: 'cart-plus', route: '/bookings' as const },
+    { label: 'Nueva reserva', icon: 'calendar-plus' as const, route: '/bookings' as const },
+    { label: 'Nuevo evento', icon: 'calendar-star' as const, route: '/events' as const },
+    { label: 'Nuevo contacto', icon: 'account-plus' as const, route: '/parties' as const },
+    { label: 'Nueva orden', icon: 'cart-plus' as const, route: '/bookings' as const },
   ];
 
   return (

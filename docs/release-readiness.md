@@ -36,7 +36,7 @@
 **Status:** ✅ CLOSED for simulator testing version. Both auth paths proven on EAS ios-simulator build via Detox automation.
 
 **What is the one thing preventing shipping?**
-> EAS `preview` iOS signing credentials are not configured, so no `.ipa` can be produced for physical device distribution. Simulator testing version is ready.
+> Nothing prevents the simulator testing version — it is ready now. EAS `preview` iOS signing credentials are not configured, so no `.ipa` can be produced for physical device distribution. Physical-device Google OAuth verification is recommended before production but is not required for the simulator testing version.
 
 **Progress:**
 - **Detox simulator automation (Debug)** — ✅ PASS (2026-05-13): `firstTest.e2e.js` proves `Continuar con Google` button is present, tappable, and triggers ASWebAuthenticationSession system dialog.

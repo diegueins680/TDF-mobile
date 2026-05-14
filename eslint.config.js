@@ -11,6 +11,7 @@ const ignores = ['node_modules', '.expo', 'dist', 'build', 'web-build', 'coverag
 const baseGlobals = {
   ...globals.browser,
   ...globals.node,
+  __DEV__: 'readonly',
 };
 
 module.exports = [
@@ -57,11 +58,15 @@ module.exports = [
     }
   },
   {
-    files: ['**/__tests__/**/*.{ts,tsx}', '**/*.{test,spec}.{ts,tsx}'],
+    files: ['**/__tests__/**/*.{ts,tsx}', '**/*.{test,spec}.{ts,tsx}', 'e2e/**/*.js'],
     languageOptions: {
       globals: {
         ...baseGlobals,
         ...globals.jest,
+        device: 'readonly',
+        element: 'readonly',
+        by: 'readonly',
+        waitFor: 'readonly',
       },
     },
     rules: {

@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { palette, radii, spacing } from '../../src/theme/designTokens';
+import { palette, radii } from '../../src/theme/designTokens';
 
 const typography = {
   sizes: {
@@ -37,7 +37,7 @@ export default function CreateSheet() {
             activeOpacity={0.7}
           >
             <View style={styles.iconBox}>
-              <MaterialCommunityIcons name={opt.icon as any} size={22} color={palette.primary} />
+              <MaterialCommunityIcons name={opt.icon} size={22} color={palette.primary} />
             </View>
             <Text style={styles.optionLabel}>{opt.label}</Text>
             <MaterialCommunityIcons name="chevron-right" size={20} color={palette.textSecondary} />

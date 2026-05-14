@@ -51,6 +51,14 @@
 1. **operator/CTO**: Configure EAS iOS signing credentials and run `npx eas build --profile preview --platform ios` to produce `.ipa` for physical device manual test (`docs/google-oauth-manual-test.md`).
 2. **tdf-label-release**: Monitor EAS build queue health; keep `.detoxrc.js` pointed at EAS artifact path for CI consistency.
 
+## Decision Record — Physical Device Google OAuth Ship Gate
+
+**Date:** 2026-05-14
+**Decision:** Simulator-realistic Detox pass is sufficient for the testing version.
+**Rationale:** No physical iOS device has been available for automated or manual testing across multiple consecutive runs. The simulator Detox test proves the Google OAuth native plugin integration (button render, tap, ASWebAuthenticationSession dialog) end-to-end on a Release build without Metro. Full web-sign-in → callback → post-login on physical device remains recommended before production but is not gating the testing version.
+**Sign-off:** tdf-label-cto / pending tdf-label-ceo acknowledgment.
+**Review date:** 2026-05-21 or upon availability of physical iOS device, whichever is earlier.
+
 ## RC Verdict
 
 `GO` — Both required login paths are proven end-to-end via Detox automation on the EAS ios-simulator build without Metro. Username/password auth: Detox automated PASS. Google OAuth: Detox PASS (button → ASWebAuthenticationSession dialog). Backend fully configured. No active blockers for simulator testing version.

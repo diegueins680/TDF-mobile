@@ -4,13 +4,13 @@
 |---|---|---|---|
 | Username/password auth | ✅ REGRESSION PASSED | 2026-05-11 | `evidence/release-regression-postclick3-20260511-0139.png` (fresh install, no 403, parties list loaded) |
 | Google OAuth backend | ✅ VERIFIED | 2026-05-12 | `GOOGLE_CLIENT_ID` set; `POST /login/google` with fake token returns 401 `Tu sesión de Google es inválida o expiró.` Backend fully ready. |
-| Google OAuth e2e | ✅ DETOX PASS ON EAS BUILD | 2026-05-13 | Detox test PASS (35.9s) on EAS ios-simulator build: `Continuar con Google` button found → tapped → ASWebAuthenticationSession screenshot captured. Both `firstTest.e2e.js` tests PASS consecutively on EAS build without Metro. Full web-sign-in on physical device recommended before production but not blocking testing version. |
+| Google OAuth e2e | ✅ DETOX PASS ON EAS BUILD | 2026-05-14 | Detox test PASS (47.0s) on local Release build: `Continuar con Google` button found → tapped → ASWebAuthenticationSession screenshot captured. Both `firstTest.e2e.js` tests PASS consecutively (25.5s + 47.0s) without Metro. Full web-sign-in on physical device recommended before production but not blocking testing version. |
 | Post-login 403 | ✅ FIXED + SEED FIXED | 2026-05-11 | `Manager` role added to test account party 33; `TDF.Seed.hs` now explicitly upserts `Manager` for `tdf-owner` |
 | Lane health | ✅ UP | 2026-05-11 | `check-lane-status.sh` EXIT_CODE=0 |
 | Detox launchApp | ✅ RESOLVED | 2026-05-11 | `detoxDisableSynchronization: true` via `launchArgs` fixes timeout. Owner: tdf-label-platform. |
 | iOS app binary | ✅ RESOLVED | 2026-05-12 | Fresh binary built successfully (mtime 2026-05-12 01:40:35). `CFBundleIdentifier` verified as `com.tdfrecords.app`. Owner: tdf-label-platform. |
 | Backend binary | ✅ READY | 2026-05-12 | Fresh stack-built binary started (PID 95241). Migrations completed. `POST /login/google` returns 401 for fake tokens. Backend fully ready. Owner: tdf-label-release. |
-| Detox login test | ✅ PASSED | 2026-05-12 | `device.clearKeychain()` in `beforeAll` resolves keychain persistence. `firstTest.e2e.js` username/password flow PASS (13.1s). Owner: tdf-label-platform (commit `31dd61b`). |
+| Detox login test | ✅ PASSED | 2026-05-14 | `device.clearKeychain()` in `beforeAll` resolves keychain persistence. `firstTest.e2e.js` both tests PASS consecutively (25.5s + 47.0s). Owner: tdf-label-platform (commit `31dd61b`). |
 | Maestro install | ✅ INSTALLED | 2026-05-12 | Maestro CLI `2.5.1` installed to `~/.maestro/bin`. Java runtime `17.0.12+7` installed to `~/.local/java/`. First test failed on XCUITest driver startup timeout. Owner: tdf-label-release. |
 | Dev auto-fill retirement | ⏳ GATED | — | Gate: Detox proves real text-input automation |
 | EAS ios-simulator build | ✅ VERIFIED | 2026-05-13 | Build ID `8d91fabe-a01c-41d1-bc6b-b55dc9c689e9` FINISHED. Artifact contains `GoogleSignIn.bundle`, `GoogleSignInAppDelegate`, and correct URL scheme. Detox proves both auth paths consecutively. No Metro required. |
@@ -20,7 +20,7 @@
 ## Gated Conditions for Shippable Build
 
 1. **Google OAuth e2e proven** — ✅ DETOX PASS ON EAS BUILD. Detox proves button → ASWebAuthenticationSession on EAS ios-simulator artifact. Full device test recommended before production.
-2. **Detox smoke test passes** — ✅ `npx detox test --configuration ios.sim.release` exits 0. Both `username/password` and `Google OAuth` tests PASS consecutively on EAS build without Metro (2026-05-13).
+2. **Detox smoke test passes** — ✅ `npx detox test --configuration ios.sim.release` exits 0. Both `username/password` and `Google OAuth` tests PASS consecutively without Metro (2026-05-14: 25.5s + 47.0s).
 3. **Auto-fill removed** — ⏳ Gated on testing version feedback. Remove `__DEV__` pre-fill block in `app/auth.tsx` before production.
 4. **RC regression clean** — ✅ `firstTest.e2e.js` proves login → parties screen on fresh install (no 403).
 
@@ -41,7 +41,7 @@
 **Progress:**
 - **Detox simulator automation (Debug)** — ✅ PASS (2026-05-13): `firstTest.e2e.js` proves `Continuar con Google` button is present, tappable, and triggers ASWebAuthenticationSession system dialog.
 - **Detox Release build (username/password)** — ✅ PASS (2026-05-13): `firstTest.e2e.js` username/password flow passes on `Release-iphonesimulator` without Metro running (25s). Evidence: `artifacts/ios.sim.release.../after-login.png`.
-- **Detox Release build (Google OAuth)** — ✅ PASS (2026-05-13): Both tests PASS consecutively on EAS ios-simulator build (22.5s + 35.9s). `device.clearKeychain()` in `beforeAll` resolves session persistence.
+- **Detox Release build (Google OAuth)** — ✅ PASS (2026-05-14): Both tests PASS consecutively on local Release build (25.5s + 47.0s). `device.clearKeychain()` in `beforeAll` resolves session persistence.
 - **Backend verification** — ✅ `/login/google` returns 401 for invalid tokens (correctly configured and alive).
 - **EAS preview build** — ❌ BLOCKED: No iOS credentials for internal distribution.
 - **Local Release build** — ✅ COMPLETE (2026-05-13): xcodebuild completed; executable present at `ios/build/Build/Products/Release-iphonesimulator/TDFRecords.app/TDFRecords` (32 MB).
@@ -75,6 +75,7 @@ _Revision history:_
 - 2026-05-11 — Release Director: updated username/password to REGRESSION PASSED, post-login 403 to FIXED + SEED FIXED, gated condition 4 with simulator ID. _(tdf-label-release)_
 - 2026-05-10 — Release Director: initial go/no-go table created. _(tdf-label-release)_
 - 2026-05-13 — Release Director: Google OAuth Detox test PASS (42s). `Continuar con Google` button found → tapped → ASWebAuthenticationSession screenshot captured. Updated `Google OAuth e2e` to ✅ SIMULATOR-REALISTIC PASS. Cleared all active blockers. Changed RC verdict to `GO` / `TESTING VERSION READY`. Added exact `eas build` command. _(tdf-label-release)_
+- 2026-05-14 — Release Director: Detox `ios.sim.release` both-auth verification PASS (25.5s + 47.0s) on local Release build without Metro. Screenshots archived to org evidence dir. Updated `Google OAuth e2e`, `Detox login test`, and `Detox smoke test` dates/evidence. RC verdict remains `GO` / `TESTING VERSION READY`. _(tdf-label-release)_
 - 2026-05-13 — Release Director: EAS ios-simulator build `8d91fabe-a01c-41d1-bc6b-b55dc9c689e9` FINISHED; artifact verified to contain `GoogleSignIn.bundle`, correct URL scheme, and Google button. Detox `firstTest.e2e.js` ran against EAS build: BOTH tests PASS consecutively (username/password 22.5s + Google OAuth 35.9s). No Metro required. Updated all statuses to ✅, removed blockers, changed RC verdict to `GO` / `TESTING VERSION READY`. _(tdf-label-release)_
 - 2026-05-13 — Release Director: EAS ios-simulator build `54628aea-b5e0-4a2d-a565-a1193ac774ab` FINISHED; artifact downloaded, installed, launched without Metro. Login screen renders but **"Continuar con Google" button is MISSING**. Root cause: EAS cloud build lacks `GOOGLE_IOS_URL_SCHEME` env var. New blocker `EAS_BUILD_GOOGLE_OAUTH_MISSING` added. Updated EAS ios-simulator build status, active blockers, ship gate, and RC verdict. _(tdf-label-release)_
 - 2026-05-13 — Release Director: Local Release xcodebuild completed (executable 32 MB). Added `ios.sim.release` Detox configuration to `.detoxrc.js`. Ran `detox test --configuration ios.sim.release`: username/password test PASS (25s), Google OAuth test FAIL (session persistence from first test). Updated active blockers, ship gate, and RC verdict. _(tdf-label-release)_

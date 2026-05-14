@@ -56,7 +56,7 @@
 **Date:** 2026-05-14
 **Decision:** Simulator-realistic Detox pass is sufficient for the testing version.
 **Rationale:** No physical iOS device has been available for automated or manual testing across multiple consecutive runs. The simulator Detox test proves the Google OAuth native plugin integration (button render, tap, ASWebAuthenticationSession dialog) end-to-end on a Release build without Metro. Full web-sign-in → callback → post-login on physical device remains recommended before production but is not gating the testing version.
-**Sign-off:** tdf-label-cto / pending tdf-label-ceo acknowledgment.
+**Sign-off:** tdf-label-ceo, 2026-05-14 — simulator-realistic Detox pass sufficient for testing version; full physical-device test required before production; review date 2026-05-21.
 **Review date:** 2026-05-21 or upon availability of physical iOS device, whichever is earlier.
 
 ## RC Verdict

@@ -16,8 +16,8 @@ module.exports = {
     },
     'ios.sim.release': {
       type: 'ios.app',
-      binaryPath: '/Users/diegosaa/.openclaw/tmp/eas-cli-nodejs/eas-build-run-cache/218aca4d-c096-4892-a353-c1dd7df23448_8d91fabe-a01c-41d1-bc6b-b55dc9c689e9.app',
-      build: 'echo "Using pre-built EAS artifact; no local build required."',
+      binaryPath: 'ios/build/Build/Products/Release-iphonesimulator/TDFRecords.app',
+      build: 'xcodebuild -workspace ios/TDFRecords.xcworkspace -scheme TDFRecords -configuration Release -sdk iphonesimulator -destination "platform=iOS Simulator,name=iPhone 16" -derivedDataPath ios/build',
     },
   },
   devices: {

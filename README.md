@@ -107,10 +107,10 @@ This section documents host-specific behavior on the primary macOS build machine
 
 ### `xcodebuild -list` can hang (>45 s)
 
-Symptom: `cd ios && xcodebuild -list` times out and leaves an orphaned `xcodebuild` process.
+Symptom: `cd ios && xcodebuild -list` times out and leaves an orphaned `xcodebuild` process. The `-workspace TDFRecords.xcworkspace` variant also hangs.
 Impact: Automated scheme verification fails; process leak risk if orphans accumulate.
-Workaround: Builds still succeed via `xcodebuild -scheme TDFRecords` or `npx detox build`. If `-list` is needed, try `-workspace TDFRecords.xcworkspace` and monitor for orphans (`ps aux | grep xcodebuild`).
-Status: INTERMITTENT — resolved at ~11 s on 2026-05-15 16:00 UTC, regressed to >45 s on 2026-05-16 02:06 UTC.
+Workaround: Builds still succeed via `xcodebuild -scheme TDFRecords` or `npx detox build`. If `-list` is needed, read the scheme XML directly (`cat ios/TDFRecords.xcodeproj/xcshareddata/xcschemes/TDFRecords.xcscheme`). Monitor for orphans (`pgrep xcodebuild`) and kill with `killall -9 xcodebuild`.
+Status: DEGRADED — both `-project` and `-workspace` variants exceed 60 s as of 2026-05-16 06:36 UTC.
 Owner: tdf-label-platform.
 
 ### `xcrun simctl list` hangs

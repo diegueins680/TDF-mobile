@@ -101,6 +101,26 @@ npm run submit:android:production
 - The `/about` screen shows the resolved API base, health status, and version info.
 - Auth now uses username/password and Google login in-app; the old bearer-token flow is no longer the primary path.
 
+## Platform Known Issues
+
+This section documents host-specific behavior on the primary macOS build machine so Platform and Release agents don't rediscover them every run.
+
+### `xcodebuild -list` can hang (>45 s)
+
+Symptom: `cd ios && xcodebuild -list` times out and leaves an orphaned `xcodebuild` process.
+Impact: Automated scheme verification fails; process leak risk if orphans accumulate.
+Workaround: Builds still succeed via `xcodebuild -scheme TDFRecords` or `npx detox build`. If `-list` is needed, try `-workspace TDFRecords.xcworkspace` and monitor for orphans (`ps aux | grep xcodebuild`).
+Status: INTERMITTENT — resolved at ~11 s on 2026-05-15 16:00 UTC, regressed to >45 s on 2026-05-16 02:06 UTC.
+Owner: tdf-label-platform.
+
+### `xcrun simctl list` hangs
+
+Symptom: `xcrun simctl list devices` and related commands hang indefinitely.
+Impact: Simulator boot checks and Detox device management via simctl are blocked.
+Workaround: Device UUID is pinned in `.detoxrc.js` (`3C3D5759-6E10-480D-B768-2747B9B0D02A`). Detox can still launch the simulator directly. Use `ps aux | grep CoreSimulator` to verify simulator runtime health.
+Status: ONGOING.
+Owner: tdf-label-platform / host.
+
 ## E2E Testing
 
 Standard fresh-install run (deterministic, no `--reuse`):

@@ -4,7 +4,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 MOBILE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 
-SIM_ID="3C3D5759-6E10-480D-B768-2747B9B0D02A"
+SIM_ID="8DB9DCE0-2F80-49C9-A614-F21DA3876B7B"
 APP_PATH="$MOBILE_DIR/ios/build/Build/Products/Release-iphonesimulator/TDFRecords.app"
 EXPECTED_BUNDLE_ID="com.tdfrecords.app"
 METRO_URL="http://127.0.0.1:8081/status"
@@ -20,7 +20,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-sim_id = "3C3D5759-6E10-480D-B768-2747B9B0D02A"
+sim_id = "8DB9DCE0-2F80-49C9-A614-F21DA3876B7B"
 mobile_dir = Path("/Users/diegosaa/GitHub/tdf-app/tdf-mobile")
 app_path = mobile_dir / "ios/build/Build/Products/Release-iphonesimulator/TDFRecords.app"
 expected_bundle_id = "com.tdfrecords.app"

@@ -15,7 +15,7 @@
 | Dev auto-fill retirement | ⏳ GATED | — | Gate: Detox proves real text-input automation |
 | EAS ios-simulator build | ✅ VERIFIED | 2026-05-13 | Build ID `8d91fabe-a01c-41d1-bc6b-b55dc9c689e9` FINISHED. Artifact contains `GoogleSignIn.bundle`, `GoogleSignInAppDelegate`, and correct URL scheme. Detox proves both auth paths consecutively. No Metro required. |
 
-> **Primary test simulator:** `3C3D5759-6E10-480D-B768-2747B9B0D02A`. This device is pinned across all Detox and `simctl` workflows. Do not change — other simulators experience `simctl` hangs that break automation.
+> **Primary test simulator:** `8DB9DCE0-2F80-49C9-A614-F21DA3876B7B`. This device is pinned across all Detox and `simctl` workflows. Do not change — other simulators experience `simctl` hangs that break automation.
 
 ## Gated Conditions for Shippable Build
 

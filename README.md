@@ -117,7 +117,7 @@ Owner: tdf-label-platform.
 
 Symptom: `xcrun simctl list devices` and related commands hang indefinitely.
 Impact: Simulator boot checks and Detox device management via simctl are blocked.
-Workaround: Device UUID is pinned in `.detoxrc.js` (`3C3D5759-6E10-480D-B768-2747B9B0D02A`). Detox can still launch the simulator directly. Use `ps aux | grep CoreSimulator` to verify simulator runtime health.
+Workaround: Device UUID is pinned in `.detoxrc.js` (`8DB9DCE0-2F80-49C9-A614-F21DA3876B7B`). Detox can still launch the simulator directly. Use `ps aux | grep CoreSimulator` to verify simulator runtime health.
 Status: ONGOING.
 Owner: tdf-label-platform / host.
 
@@ -136,7 +136,7 @@ npx detox test --configuration ios.sim.debug
 Prerequisites:
 - Backend running on `http://localhost:8080` (`tdf-hq-exe` with `APP_PORT=8080`)
 - iOS simulator booted and app binary built (`npx detox build --configuration ios.sim.debug`)
-- Simulator UUID pinned in `.detoxrc.js` (default: `3C3D5759-6E10-480D-B768-2747B9B0D02A`)
+- Simulator UUID pinned in `.detoxrc.js` (default: `8DB9DCE0-2F80-49C9-A614-F21DA3876B7B`)
 
 Notes:
 - The e2e test uses `device.clearKeychain()` and `delete: true` to guarantee a fresh login state on every run.

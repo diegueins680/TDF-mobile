@@ -1,0 +1,105 @@
+/**
+ * ExperimentProvider.tsx
+ *
+ * React Context for A/B testing in tdf-mobile.
+ * Assigns users to experiment variants and persists in AsyncStorage.
+ *
+ * Usage:
+ *   const { getVariant } = useExperiments();
+ *   const variant = getVariant('streak-counter-v1'); // 'control' | 'treatment'
+ */
+
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export type ExperimentVariant = 'control' | 'treatment' | string;
+
+interface ExperimentConfig {
+  id: string;
+  variants: ExperimentVariant[];
+  weights?: number[]; // Must sum to 1, defaults to equal
+}
+
+interface ExperimentContextType {
+  getVariant: (experimentId: string) => ExperimentVariant | null;
+  isReady: boolean;
+}
+
+const ExperimentContext = createContext<ExperimentContextType>({
+  getVariant: () => null,
+  isReady: false,
+});
+
+// Define active experiments here
+const ACTIVE_EXPERIMENTS: ExperimentConfig[] = [
+  // Example: Will be populated when experiments are running
+  // {
+  //   id: 'streak-counter-v1',
+  //   variants: ['control', 'treatment'],
+  //   weights: [0.5, 0.5],
+  // },
+];
+
+const STORAGE_KEY = '@experiments:variants';
+
+function assignVariant(experiment: ExperimentConfig): ExperimentVariant {
+  const weights = experiment.weights ||
+    Array(experiment.variants.length).fill(1 / experiment.variants.length);
+
+  const random = Math.random();
+  let cumulative = 0;
+
+  for (let i = 0; i < experiment.variants.length; i++) {
+    cumulative += weights[i];
+    if (random <= cumulative) {
+      return experiment.variants[i];
+    }
+  }
+
+  return experiment.variants[0];
+}
+
+export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [variants, setVariants] = useState<Record<string, ExperimentVariant>>({});
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    async function init() {
+      try {
+        // Load existing assignments
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        const existing: Record<string, ExperimentVariant> = stored ? JSON.parse(stored) : {};
+
+        // Assign new variants for experiments not yet seen
+        const updated = { ...existing };
+        for (const exp of ACTIVE_EXPERIMENTS) {
+          if (!updated[exp.id]) {
+            updated[exp.id] = assignVariant(exp);
+          }
+        }
+
+        // Save updated assignments
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        setVariants(updated);
+      } catch (err) {
+        console.error('Experiment init failed:', err);
+      } finally {
+        setIsReady(true);
+      }
+    }
+
+    init();
+  }, []);
+
+  const getVariant = (experimentId: string): ExperimentVariant | null => {
+    return variants[experimentId] || null;
+  };
+
+  return (
+    <ExperimentContext.Provider value={{ getVariant, isReady }}>
+      {children}
+    </ExperimentContext.Provider>
+  );
+};
+
+export const useExperiments = () => useContext(ExperimentContext);

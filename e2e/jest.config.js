@@ -9,4 +9,5 @@ module.exports = {
   reporters: ['detox/runners/jest/reporter'],
   testEnvironment: 'detox/runners/jest/testEnvironment',
   verbose: true,
+  moduleDirectories: ['node_modules', '<rootDir>/../node_modules'],
 };

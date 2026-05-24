@@ -30,7 +30,7 @@ Resolve these **before** Step 5:
 
 | Blocker | Status | Fix |
 |---------|--------|-----|
-| `EAS_IOS_CREDENTIALS_MISSING` | ❌ ACTIVE | Run `npx eas build --profile preview --platform ios` interactively; follow credential setup prompts. |
+| `EAS_IOS_CREDENTIALS_MISSING` | ❌ ACTIVE | Operator runs `npx eas credentials:configure-build --platform ios --profile preview` interactively. Apple ID login → generate Distribution Certificate + Provisioning Profile for `com.tdfrecords.app`. Verify with `npx eas build --profile preview --platform ios`. |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT` | ❌ ACTIVE | Create Play Console service account + JSON key; add to EAS secrets for Android submission. |
 | Physical-device Google OAuth | ⏸️ WAIVED until 2026-05-21 | Operator review with `.ipa` install. Not blocking simulator testing version. |
 

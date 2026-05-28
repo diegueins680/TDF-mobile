@@ -28,6 +28,8 @@ const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim(
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim();
 const GOOGLE_IOS_URL_SCHEME =
   process.env.GOOGLE_IOS_URL_SCHEME?.trim() || process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME?.trim();
+const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim();
+const STRIPE_MERCHANT_IDENTIFIER = process.env.EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER?.trim();
 
 const resolveReleaseAwareEnv = (name: 'EXPO_PUBLIC_API_BASE' | 'EXPO_PUBLIC_UPLOAD_URL', releaseValue: string, localValue: string) => {
   const explicitValue = process.env[name]?.trim();
@@ -66,6 +68,14 @@ const plugins: NonNullable<ExpoConfig['plugins']> = [
       locationAlwaysAndWhenInUsePermission: false,
       locationAlwaysPermission: false,
       locationWhenInUsePermission: 'Allow TDF Records to use your location to show nearby venues.'
+    }
+  ],
+  [
+    '@stripe/stripe-react-native',
+    {
+      // Required for Apple Pay; safe to leave undefined for non-Apple-Pay PaymentSheet flows.
+      ...(STRIPE_MERCHANT_IDENTIFIER ? { merchantIdentifier: STRIPE_MERCHANT_IDENTIFIER } : {}),
+      enableGooglePay: false
     }
   ]
 ];
@@ -136,6 +146,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     appEnvironment: EAS_BUILD_PROFILE,
     defaultTimeZone: DEFAULT_TZ,
     supportEmail: SUPPORT_EMAIL,
+    ...(STRIPE_PUBLISHABLE_KEY
+      ? { stripe: { publishableKey: STRIPE_PUBLISHABLE_KEY, merchantIdentifier: STRIPE_MERCHANT_IDENTIFIER } }
+      : {}),
     ...(Object.keys(googleAuthExtra).length > 0 ? { googleAuth: googleAuthExtra } : {}),
     urls: {
       support: PUBLIC_SUPPORT_URL,

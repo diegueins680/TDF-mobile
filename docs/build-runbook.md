@@ -35,7 +35,7 @@ xcodebuild -workspace TDFRecords.xcworkspace \
 
 | Blocker | Status | Escalated To | Notes |
 |---------|--------|--------------|-------|
-| `CORESIMULATOR_DEADLOCK` | ❌ ACTIVE | tdf-label-cto | `simctl install` hangs indefinitely even with fresh `.app` and erased simulator; requires **host reboot** or physical-device pivot |
+| `CORESIMULATOR_DEADLOCK` | ⚠️ MITIGATED | tdf-label-release | `simctl install` hangs on simulator `8DB9DCE0…`; **workaround**: use `525DA785…` (iPhone 16-Detox2) which validates post-reboot. See incident log below. |
 
 #### `CORESIMULATOR_DEADLOCK` Incident Log
 
@@ -53,16 +53,22 @@ xcodebuild -workspace TDFRecords.xcworkspace \
 | 2026-05-30 20:26 | Kill orphaned `simctl list` process | ✅ Killed | — |
 | 2026-05-30 20:26 | `simctl install` with CoreSimulatorService freshly restarted | ❌ Hang, killed at 30s | 30s |
 
-**Conclusion:** The deadlock is **deeper than per-device state**. Even with:
-- Fresh single-arch `.app` build
-- Erased simulator device
-- Restarted `CoreSimulatorService` daemon
-- No orphaned `simctl` processes
+**Conclusion (2026-05-30 23:03 UTC):** Host was rebooted. `simctl install` on `8DB9DCE0…` **still hangs** (killed at 60s). However, alternate simulator `525DA785…` (iPhone 16-Detox2) boots and installs successfully. App launches (PID 10269) and Detox regression **PASSes** (88.1s, both tests OK). The deadlock is **simulator-specific corruption** on `8DB9DCE0…`, not host-wide.
 
-…`simctl install` still hangs indefinitely. This points to **host-level CoreSimulator framework corruption** or a **wedged system service** (e.g., `simdiskimaged`, `installd`) that survives daemon restarts. A **full host reboot** is required.
+**Resolution:** `.detoxrc.js` permanently switched to `525DA785…`. Do not use `8DB9DCE0…` for release testing.
+
+| Date (UTC) | Action | Result | Duration |
+|------------|--------|--------|----------|
+| 2026-05-30 23:03 | Host reboot | ✅ Uptime reset to 0 | — |
+| 2026-05-30 23:04 | Boot `8DB9DCE0…` | ✅ Boot succeeded | ~5s |
+| 2026-05-30 23:04 | `simctl install` on `8DB9DCE0…` | ❌ Hang, killed at 60s | 60s |
+| 2026-05-30 23:05 | Boot `525DA785…` | ✅ Boot succeeded | ~5s |
+| 2026-05-30 23:05 | `simctl install` on `525DA785…` | ✅ Install succeeded | ~30s |
+| 2026-05-30 23:06 | `simctl launch` on `525DA785…` | ✅ Launch succeeded (PID 10269) | ~5s |
+| 2026-05-30 23:07 | Detox regression `--reuse` on `525DA785…` | ✅ PASS (2/2 tests) | 88.1s |
 
 ### Next Actions
 
-1. **Await tdf-label-cto decision** on `CORESIMULATOR_DEADLOCK` (options: erase sim, reboot host, physical device).
-2. Once resolved, re-enable Detox regression: `npx detox test --configuration ios.sim.release e2e/firstTest.e2e.js --reuse`.
+1. ✅ Detox regression re-enabled on `525DA785…`.
+2. Monitor `8DB9DCE0…` for recovery after future macOS/Xcode updates; if still hung, erase or delete and recreate.
 3. Evaluate `ONLY_ACTIVE_ARCH=YES` as alternative to `ARCHS=x86_64` if future Xcode changes break explicit arch flag.

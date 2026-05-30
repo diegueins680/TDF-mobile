@@ -24,7 +24,7 @@ module.exports = {
     simulator: {
       type: 'ios.simulator',
       device: {
-        id: '525DA785-50A3-4AAD-AECC-AB33F54DEC6E', // iPhone 16-Detox2 — created 2026-05-29 after 8DB9DCE0 entered persistent simctl install hang (~30h post-reboot pattern)
+        id: '525DA785-50A3-4AAD-AECC-AB33F54DEC6E', // iPhone 16-Detox2 — validated working 2026-05-30 post-reboot; 8DB9DCE0 has persistent simctl install hang
       },
     },
   },

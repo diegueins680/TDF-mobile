@@ -67,8 +67,55 @@ xcodebuild -workspace TDFRecords.xcworkspace \
 | 2026-05-30 23:06 | `simctl launch` on `525DA785…` | ✅ Launch succeeded (PID 10269) | ~5s |
 | 2026-05-30 23:07 | Detox regression `--reuse` on `525DA785…` | ✅ PASS (2/2 tests) | 88.1s |
 
+## Physical Device Release Build (Local)
+
+### Standard Command
+```bash
+cd tdf-mobile/ios
+xcodebuild -workspace TDFRecords.xcworkspace \
+  -scheme TDFRecords \
+  -configuration Release \
+  -sdk iphoneos \
+  -derivedDataPath ios/build \
+  -allowProvisioningUpdates \
+  build
+```
+
+### Prerequisites
+- Apple Developer account enrolled ($99/year).
+- Valid signing identity installed: `security find-identity -v -p codesigning` should show at least one identity.
+- `DEVELOPMENT_TEAM` set in target build settings (Xcode → Signing & Capabilities → select Team).
+
+### Known Blockers
+
+| Blocker | Status | Escalated To | Notes |
+|---------|--------|--------------|-------|
+| `IOS_DEVELOPMENT_TEAM_MISSING` | ❌ ACTIVE | operator/CTO | `DEVELOPMENT_TEAM` absent from `project.pbxproj`; `security find-identity` returns 0 identities. See evidence `ios-development-team-missing-20260531-1020.md`. |
+
+#### `IOS_DEVELOPMENT_TEAM_MISSING` Incident Log
+
+| Date (UTC) | Action | Result | Duration |
+|------------|--------|--------|----------|
+| 2026-05-31 10:20 | `xcodebuild -sdk iphoneos -allowProvisioningUpdates` | ❌ Build failed — `Signing for "TDFRecords" requires a development team` | ~2 min |
+| 2026-05-31 10:20 | `security find-identity -v -p codesigning` | ❌ 0 valid identities found | — |
+| 2026-05-31 10:20 | Audit `project.pbxproj` for `DEVELOPMENT_TEAM` | ❌ Absent from target build settings (13B07F94/13B07F95) | — |
+
+**Root cause:** Project created via Expo prebuild; never configured for manual signing. Physical-device builds require `DEVELOPMENT_TEAM` + signing identity + provisioning profile.
+
+**Resolution options:**
+1. **Xcode GUI** (requires Apple ID 2FA): Open `TDFRecords.xcworkspace` → select target → Signing & Capabilities → select Team.
+2. **CLI injection** (requires operator-provided 10-character Team ID): Release Director injects `DEVELOPMENT_TEAM` into `project.pbxproj`.
+3. **EAS cloud build** (recommended): `npx eas build --platform ios --profile preview` in interactive mode; EAS manages certificates automatically.
+
+### Output Artifact
+- **Path:** `tdf-mobile/ios/build/Build/Products/Release-iphoneos/TDFRecords.app`
+- **Use:** Package into `.ipa` for physical device distribution, or install directly on connected device via Xcode.
+
+---
+
 ### Next Actions
 
 1. ✅ Detox regression re-enabled on `525DA785…`.
 2. Monitor `8DB9DCE0…` for recovery after future macOS/Xcode updates; if still hung, erase or delete and recreate.
 3. Evaluate `ONLY_ACTIVE_ARCH=YES` as alternative to `ARCHS=x86_64` if future Xcode changes break explicit arch flag.
+4. **Resolve `IOS_DEVELOPMENT_TEAM_MISSING`:** Operator selects resolution path (Xcode GUI / CLI injection / EAS cloud build).

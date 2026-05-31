@@ -119,3 +119,14 @@ xcodebuild -workspace TDFRecords.xcworkspace \
 2. Monitor `8DB9DCE0…` for recovery after future macOS/Xcode updates; if still hung, erase or delete and recreate.
 3. Evaluate `ONLY_ACTIVE_ARCH=YES` as alternative to `ARCHS=x86_64` if future Xcode changes break explicit arch flag.
 4. **Resolve `IOS_DEVELOPMENT_TEAM_MISSING`:** Operator selects resolution path (Xcode GUI / CLI injection / EAS cloud build).
+
+---
+
+## Revision History
+
+| Date | Author | Change |
+|------|--------|--------|
+| 2026-05-31 | tdf-label-release | Added `IOS_DEVELOPMENT_TEAM_MISSING` incident log and resolution options |
+| 2026-05-31 | tdf-label-release | Added `CORESIMULATOR_DEADLOCK` full incident log with resolution |
+| 2026-05-31 | tdf-label-release | Added `ARCHS=x86_64` memory-pressure mitigation with data |
+| 2026-05-31 | tdf-label-release | Added physical-device build section and prerequisites |

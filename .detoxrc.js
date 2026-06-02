@@ -24,7 +24,7 @@ module.exports = {
     simulator: {
       type: 'ios.simulator',
       device: {
-        id: '8DB9DCE0-2F80-49C9-A614-F21DA3876B7B', // fresh iPhone 16 post-host-restart; prior 3C3D5759 corrupted by simctl hangs
+        id: '525DA785-50A3-4AAD-AECC-AB33F54DEC6E', // iPhone 16-Detox2 — validated working 2026-05-30 post-reboot; 8DB9DCE0 has persistent simctl install hang
       },
     },
   },

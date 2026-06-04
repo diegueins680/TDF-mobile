@@ -1,7 +1,17 @@
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { NewUserOnboardingGate } from '../../src/experiments/NewUserOnboardingGate';
+
 export default function TabsLayout() {
+  return (
+    <NewUserOnboardingGate>
+      <TabsInner />
+    </NewUserOnboardingGate>
+  );
+}
+
+function TabsInner() {
   return (
     <Tabs screenOptions={{
       headerShown: false,
@@ -61,3 +71,4 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+

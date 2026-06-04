@@ -6,6 +6,7 @@ import { AnalyticsProvider } from '../analytics/AnalyticsProvider';
 import { ExperimentProvider } from '../experiments/ExperimentProvider';
 import { queryClient } from '../lib/queryClient';
 import { AuthProvider } from './AuthProvider';
+import { FirstRunProvider } from './FirstRunProvider';
 import { UserSettingsProvider } from './UserSettingsProvider';
 
 export function AppProviders({ children }: PropsWithChildren) {
@@ -16,8 +17,12 @@ export function AppProviders({ children }: PropsWithChildren) {
           {/* AnalyticsProvider must sit inside AuthProvider so it can observe partyId. */}
           <AnalyticsProvider>
             <UserSettingsProvider>
-              {/* ExperimentProvider sits inside Analytics so assignment events have a destination. */}
-              <ExperimentProvider>{children}</ExperimentProvider>
+              {/* FirstRunProvider derives the new-user cohort used by
+                  single-feature-onboarding-v1 and persists install/signup seen flags. */}
+              <FirstRunProvider>
+                {/* ExperimentProvider sits inside Analytics so assignment events have a destination. */}
+                <ExperimentProvider>{children}</ExperimentProvider>
+              </FirstRunProvider>
             </UserSettingsProvider>
           </AnalyticsProvider>
         </AuthProvider>

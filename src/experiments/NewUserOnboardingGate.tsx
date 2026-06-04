@@ -10,8 +10,8 @@
  *   - `experiment_viewed`     fires once when the gate first engages.
  *   - `experiment_converted`  fires once when the user posts their first
  *                             reaction on a moment (value=1). Conversion
- *                             is detected by polling the moments feed for
- *                             a reaction authored by the current actor.
+ *                             is detected via a direct callback from the
+ *                             moment card after a successful reaction toggle.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -23,7 +23,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { Events } from '../api/events';
@@ -38,7 +38,6 @@ import { useAuth } from '../providers/AuthProvider';
 import { useFirstRun } from '../providers/FirstRunProvider';
 import { useUserSettings } from '../providers/UserSettingsProvider';
 import type {
-  EventMoment,
   EventMomentReactionKind,
   ID,
   SocialEvent,
@@ -53,14 +52,21 @@ type Props = {
   children: React.ReactNode;
 };
 
-const pickMostRecentEvent = (events: SocialEvent[] | undefined): SocialEvent | null => {
+const pickAnchorEvent = (events: SocialEvent[] | undefined): SocialEvent | null => {
   if (!events?.length) return null;
-  // Prefer the next upcoming event (the list is already upcomingOnly, so the
-  // earliest start is the most relevant landing target).
-  const sorted = [...events].sort(
-    (a, b) => Date.parse(String(a.startTime)) - Date.parse(String(b.startTime)),
+  // Anchor on the most recent PAST event so the landing feed has a real
+  // chance of containing already-published moments. The caller is
+  // responsible for filtering to events with non-empty moment feeds.
+  const now = Date.now();
+  const past = events.filter((event) => {
+    const ts = Date.parse(String(event.startTime));
+    return Number.isFinite(ts) && ts <= now;
+  });
+  if (!past.length) return null;
+  past.sort(
+    (a, b) => Date.parse(String(b.startTime)) - Date.parse(String(a.startTime)),
   );
-  return sorted[0] ?? null;
+  return past[0] ?? null;
 };
 
 export function NewUserOnboardingGate({ children }: Props) {
@@ -103,20 +109,69 @@ export function NewUserOnboardingGate({ children }: Props) {
     });
   }, [gateEngaged, normalizedPartyId, track]);
 
-  // Pull the next upcoming event so we can land the user directly on its
-  // moments feed. Only fires when the gate actually engages.
+  // Pull a small window of recent events and anchor on the most recent past
+  // one whose moments feed is non-empty. We fetch a slightly larger page
+  // (without `upcomingOnly`) so the search has something to chew on.
   const eventsQuery = useQuery({
     queryKey: ['exp-single-feature-onboarding', 'events'],
-    queryFn: () => Events.list({ upcomingOnly: true, limit: 5 }),
+    queryFn: () => Events.list({ limit: 20 }),
     enabled: gateEngaged,
   });
 
-  const featuredEvent = useMemo(
-    () => pickMostRecentEvent(eventsQuery.data),
-    [eventsQuery.data],
-  );
-
   const shouldPreferRemoteMoments = Boolean(token?.trim());
+
+  // Walk past events from most recent to oldest and pick the first one whose
+  // moments feed has at least one entry. The probe queries are cached per
+  // event id so we don't refetch on every render.
+  const candidateEvents = useMemo(() => {
+    if (!eventsQuery.data?.length) return [] as SocialEvent[];
+    const now = Date.now();
+    return eventsQuery.data
+      .filter((event) => {
+        const ts = Date.parse(String(event.startTime));
+        return Number.isFinite(ts) && ts <= now;
+      })
+      .sort(
+        (a, b) =>
+          Date.parse(String(b.startTime)) - Date.parse(String(a.startTime)),
+      )
+      .slice(0, 5);
+  }, [eventsQuery.data]);
+
+  const candidateProbes = useQueries({
+    queries: candidateEvents.map((event) => ({
+      queryKey: [
+        'exp-single-feature-onboarding',
+        'probe',
+        event.id,
+        shouldPreferRemoteMoments ? 'remote' : 'local',
+      ] as const,
+      queryFn: () =>
+        listMomentFeed(event.id as ID, {
+          preferRemote: shouldPreferRemoteMoments,
+        }),
+      enabled: gateEngaged,
+    })),
+  });
+
+  const featuredEvent = useMemo(() => {
+    for (let i = 0; i < candidateEvents.length; i += 1) {
+      const probe = candidateProbes[i];
+      if (probe?.data && probe.data.length > 0) {
+        return candidateEvents[i] ?? null;
+      }
+    }
+    // Fall back to the most recent past event (empty-state branch keeps the
+    // existing CTA) so the header still has a sensible title.
+    return pickAnchorEvent(eventsQuery.data);
+  }, [candidateEvents, candidateProbes, eventsQuery.data]);
+
+  const featuredProbeIndex = featuredEvent
+    ? candidateEvents.findIndex((event) => event.id === featuredEvent.id)
+    : -1;
+  const featuredProbe =
+    featuredProbeIndex >= 0 ? candidateProbes[featuredProbeIndex] : undefined;
+
   const momentsQuery = useQuery({
     queryKey: [
       'exp-single-feature-onboarding',
@@ -129,22 +184,14 @@ export function NewUserOnboardingGate({ children }: Props) {
         preferRemote: shouldPreferRemoteMoments,
       }),
     enabled: gateEngaged && Boolean(featuredEvent?.id),
+    initialData: featuredProbe?.data,
   });
 
-  // Conversion detection: fire experiment_converted the first time a moment
-  // in the feed contains a reaction authored by the current actor.
+  // Conversion detection: fire experiment_converted the first time the user
+  // successfully posts a reaction via the moment card.
   const convertedRef = useRef(false);
-  useEffect(() => {
-    if (!gateEngaged || convertedRef.current) return;
-    const moments = momentsQuery.data;
-    if (!moments?.length) return;
-    const actorKey = currentActor.actorKey;
-    const hasOwnReaction = moments.some((moment: EventMoment) =>
-      (Object.values(moment.reactions) as string[][]).some((list) =>
-        Array.isArray(list) && list.includes(actorKey),
-      ),
-    );
-    if (!hasOwnReaction) return;
+  const handleConversion = useCallback(() => {
+    if (convertedRef.current) return;
     convertedRef.current = true;
     track('experiment_converted', {
       experimentId: EXPERIMENT_ID,
@@ -152,7 +199,7 @@ export function NewUserOnboardingGate({ children }: Props) {
       userId: normalizedPartyId ?? undefined,
       metadata: { value: 1, surface: 'gate_moment_reaction' },
     });
-  }, [gateEngaged, momentsQuery.data, currentActor.actorKey, normalizedPartyId, track]);
+  }, [normalizedPartyId, track]);
 
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const handleChangeComment = useCallback((momentId: string, value: string) => {
@@ -239,6 +286,7 @@ export function NewUserOnboardingGate({ children }: Props) {
                 }
               }}
               onToggleReaction={handleToggleReaction}
+              onReactionPosted={handleConversion}
               commentDisabled
               connectDisabled
             />

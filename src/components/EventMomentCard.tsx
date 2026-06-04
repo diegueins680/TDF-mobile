@@ -36,6 +36,7 @@ type EventMomentCardProps = {
   onChangeComment: (momentId: string, value: string) => void;
   onSubmitComment: (momentId: string) => void;
   onToggleReaction: (momentId: string, reaction: EventMomentReactionKind) => void;
+  onReactionPosted?: () => void;
   onConnectAuthor?: (partyId: string) => void;
   onOpenMedia?: (uri: string) => void;
 };
@@ -52,6 +53,7 @@ export function EventMomentCard({
   onChangeComment,
   onSubmitComment,
   onToggleReaction,
+  onReactionPosted,
   onConnectAuthor,
   onOpenMedia,
 }: EventMomentCardProps) {
@@ -120,7 +122,15 @@ export function EventMomentCard({
                 active && { borderColor: reaction.color, backgroundColor: `${reaction.color}14` },
                 reactionDisabled && styles.buttonDisabled,
               ]}
-              onPress={() => onToggleReaction(moment.id, reaction.kind)}
+              onPress={async () => {
+                try {
+                  await onToggleReaction(moment.id, reaction.kind);
+                  onReactionPosted?.();
+                } catch {
+                  // Swallow — the parent owns error surfacing for the toggle
+                  // mutation; we only fire the conversion callback on success.
+                }
+              }}
               disabled={reactionDisabled}
             >
               <MaterialCommunityIcons name={reaction.icon} size={16} color={active ? reaction.color : '#64748b'} />

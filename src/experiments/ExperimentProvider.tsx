@@ -34,12 +34,15 @@ const ExperimentContext = createContext<ExperimentContextType>({
 
 // Define active experiments here
 const ACTIVE_EXPERIMENTS: ExperimentConfig[] = [
-  // Example: Will be populated when experiments are running
-  // {
-  //   id: 'streak-counter-v1',
-  //   variants: ['control', 'treatment'],
-  //   weights: [0.5, 0.5],
-  // },
+  {
+    // Single-feature onboarding test: show brand-new users only Event
+    // Moments + reactions instead of the full app surface. Hypothesis: a
+    // tighter first-run focus improves D1 activation (first reaction
+    // within 24h of signup).
+    id: 'single-feature-onboarding-v1',
+    variants: ['control', 'treatment_singlefeature'],
+    weights: [0.5, 0.5],
+  },
 ];
 
 const STORAGE_KEY = '@experiments:variants';

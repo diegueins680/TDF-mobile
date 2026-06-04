@@ -12,6 +12,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { getAnalyticsClient } from '../analytics/posthog';
+
 export type ExperimentVariant = 'control' | 'treatment' | string;
 
 interface ExperimentConfig {
@@ -70,11 +72,20 @@ export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         const existing: Record<string, ExperimentVariant> = stored ? JSON.parse(stored) : {};
 
-        // Assign new variants for experiments not yet seen
+        // Assign new variants for experiments not yet seen, and emit an
+        // analytics event for each *new* assignment so PostHog dashboards
+        // can bucket downstream events by variant.
         const updated = { ...existing };
+        const analytics = getAnalyticsClient();
         for (const exp of ACTIVE_EXPERIMENTS) {
           if (!updated[exp.id]) {
-            updated[exp.id] = assignVariant(exp);
+            const assigned = assignVariant(exp);
+            updated[exp.id] = assigned;
+            analytics.capture('experiment_assigned', {
+              experimentId: exp.id,
+              variant: assigned,
+              source: 'client_local',
+            });
           }
         }
 

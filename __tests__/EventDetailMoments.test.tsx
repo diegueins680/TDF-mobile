@@ -34,6 +34,12 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+jest.mock('expo-camera', () => ({
+  CameraView: 'CameraView',
+  useCameraPermissions: () => [{ granted: true }, jest.fn(async () => ({ granted: true })), jest.fn()],
+  useMicrophonePermissions: () => [{ granted: true }, jest.fn(async () => ({ granted: true })), jest.fn()],
+}));
+
 jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: () => ({ token: 'Bearer test-token', partyId: '7' }),
 }));
@@ -88,7 +94,21 @@ describe('EventDetail moments tab', () => {
               createdAt: '2026-04-01T00:00:00.000Z',
               updatedAt: '2026-04-01T00:00:00.000Z',
             },
-            artistIds: [],
+            artistIds: ['2'],
+            artists: [
+              {
+                id: '2',
+                partyId: '20',
+                name: 'TDF Artist',
+                bio: null,
+                imageUrl: null,
+                genres: ['Rock'],
+                instagramHandle: null,
+                spotifyUrl: null,
+                createdAt: '2026-04-01T00:00:00.000Z',
+                updatedAt: '2026-04-01T00:00:00.000Z',
+              },
+            ],
             createdBy: '7',
             isPublic: true,
             rsvpCount: 2,
@@ -139,6 +159,48 @@ describe('EventDetail moments tab', () => {
         };
       }
 
+      if (queryKey[0] === 'event-artist-followers') {
+        return {
+          data: {
+            '2': [
+              {
+                artistId: '2',
+                followerPartyId: '7',
+                createdAt: '2026-04-10T20:00:00.000Z',
+              },
+            ],
+          },
+          isLoading: false,
+        };
+      }
+
+      if (queryKey[0] === 'event-live-broadcasts') {
+        return {
+          data: [
+            {
+              id: 'live-1',
+              eventId: '42',
+              artistId: '2',
+              artistName: 'TDF Artist',
+              broadcasterName: 'Cuco',
+              broadcasterPartyId: '7',
+              title: 'Live desde front row',
+              description: 'Coro final',
+              status: 'live',
+              playbackUrl: 'https://stream.example.com/live-1/index.m3u8',
+              ingestUrl: 'rtmp://stream.example.com/live/live-1',
+              whipUrl: 'https://stream.example.com/whip/live-1',
+              streamKey: 'live-1',
+              viewerCount: 12,
+              startedAt: '2026-04-10T22:10:00.000Z',
+              endedAt: null,
+              lastHeartbeatAt: '2026-04-10T22:12:00.000Z',
+            },
+          ],
+          isLoading: false,
+        };
+      }
+
       return { data: null, isLoading: false };
     });
   });
@@ -154,5 +216,18 @@ describe('EventDetail moments tab', () => {
     expect(screen.getByText('Top moment')).toBeTruthy();
     expect(screen.getByText('Conectar')).toBeTruthy();
     expect(screen.getByText('Publicas como Cuco')).toBeTruthy();
+  });
+
+  it('renders fanclub live broadcasts for followed event artists', () => {
+    render(<EventDetailScreen />);
+
+    fireEvent.press(screen.getByText('En Vivo (1)'));
+
+    expect(screen.getByText('Transmisiones del fanclub')).toBeTruthy();
+    expect(screen.getByText('Puedes transmitir para TDF Artist.')).toBeTruthy();
+    expect(screen.getByText('Live desde front row')).toBeTruthy();
+    expect(screen.getByText('Coro final')).toBeTruthy();
+    expect(screen.getByText('Ver stream')).toBeTruthy();
+    expect(screen.getByText('Cerrar vivo')).toBeTruthy();
   });
 });

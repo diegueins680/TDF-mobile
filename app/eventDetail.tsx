@@ -13,20 +13,30 @@ import {
   TextInput,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions, useMicrophonePermissions, type CameraType } from 'expo-camera';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
 import { Social } from '../src/api/social';
 import { uploadMedia } from '../src/api/upload';
+import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard';
 import { EventMomentCard } from '../src/components/EventMomentCard';
 import {
   buildMomentActor,
   countMomentReactions,
   listFeaturedMoments,
 } from '../src/lib/eventMoments';
+import { countLiveBroadcasts } from '../src/lib/liveBroadcasts';
+import {
+  createLiveBroadcastFeedItem,
+  endLiveBroadcastFeedItem,
+  heartbeatLiveBroadcastFeedItem,
+  listLiveBroadcastFeed,
+} from '../src/lib/liveBroadcastsRepository';
 import {
   addMomentFeedComment,
   createMomentFeedItem,
@@ -41,13 +51,15 @@ import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 import type {
   EventInvitationStatus,
+  EventLiveBroadcast,
+  EventLiveBroadcastQuality,
   EventMoment,
   EventMomentReactionKind,
   ID,
   RSVPStatus,
 } from '../src/types';
 
-type EventDetailTab = 'details' | 'moments';
+type EventDetailTab = 'details' | 'moments' | 'live';
 type DraftMomentMedia = EventMoment['media'] & { fileName?: string | null };
 
 const parsePositivePartyId = (value: string | null | undefined): number | null => {
@@ -55,6 +67,11 @@ const parsePositivePartyId = (value: string | null | undefined): number | null =
   const parsed = Number.parseInt(value.trim(), 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 };
+
+const LIVE_QUALITY_OPTIONS: EventLiveBroadcastQuality[] = ['auto', '720p', '480p'];
+
+const isExternalPlaybackUrl = (url?: string | null): boolean =>
+  Boolean(url && !url.startsWith('tdf://'));
 
 export default function EventDetailScreen() {
   const { eventId: rawEventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
@@ -69,6 +86,8 @@ export default function EventDetailScreen() {
     [displayName, normalizedPartyId],
   );
   const shouldPreferRemoteMoments = Boolean(token?.trim());
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
 
   const [activeTab, setActiveTab] = useState<EventDetailTab>('details');
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('NONE');
@@ -78,6 +97,13 @@ export default function EventDetailScreen() {
   const [showMomentComposer, setShowMomentComposer] = useState(false);
   const [momentCaption, setMomentCaption] = useState('');
   const [momentMedia, setMomentMedia] = useState<DraftMomentMedia | null>(null);
+  const [showLiveStudio, setShowLiveStudio] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastDescription, setBroadcastDescription] = useState('');
+  const [broadcastQuality, setBroadcastQuality] = useState<EventLiveBroadcastQuality>('auto');
+  const [selectedBroadcastArtistId, setSelectedBroadcastArtistId] = useState<string | null>(null);
+  const [activeBroadcastId, setActiveBroadcastId] = useState<string | null>(null);
+  const [cameraFacing, setCameraFacing] = useState<CameraType>('back');
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
 
   const { data: event, isLoading, isError } = useQuery({
@@ -109,6 +135,32 @@ export default function EventDetailScreen() {
     enabled: Boolean(eventId),
   });
 
+  const eventArtists = useMemo(() => event?.artists ?? [], [event?.artists]);
+  const artistIdsKey = useMemo(
+    () => eventArtists.map((artist) => String(artist.id)).sort().join(','),
+    [eventArtists],
+  );
+
+  const artistFollowersQuery = useQuery({
+    queryKey: ['event-artist-followers', eventId, artistIdsKey],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        eventArtists.map(async (artist) => {
+          const followers = await Artists.listFollowers(artist.id);
+          return [String(artist.id), followers] as const;
+        }),
+      );
+      return Object.fromEntries(entries);
+    },
+    enabled: Boolean(eventId && eventArtists.length > 0),
+  });
+
+  const liveBroadcastsQuery = useQuery({
+    queryKey: ['event-live-broadcasts', eventId, shouldPreferRemoteMoments ? 'remote' : 'local'],
+    queryFn: () => listLiveBroadcastFeed(eventId as ID, { preferRemote: shouldPreferRemoteMoments }),
+    enabled: Boolean(eventId),
+  });
+
   useEffect(() => {
     if (!normalizedPartyId || !rsvpQuery.data) return;
     const mine = rsvpQuery.data.find((r) => String(r.userId) === normalizedPartyId);
@@ -123,6 +175,58 @@ export default function EventDetailScreen() {
     () => new Set(featuredMoments.map((moment) => moment.id)),
     [featuredMoments],
   );
+  const followedBroadcastArtists = useMemo(() => {
+    if (!normalizedPartyId) return [];
+    const followersByArtist = artistFollowersQuery.data ?? {};
+    return eventArtists.filter((artist) =>
+      (followersByArtist[String(artist.id)] ?? []).some(
+        (follower) => String(follower.followerPartyId) === normalizedPartyId,
+      ),
+    );
+  }, [artistFollowersQuery.data, eventArtists, normalizedPartyId]);
+  const selectedBroadcastArtist = useMemo(() => {
+    if (followedBroadcastArtists.length === 0) return null;
+    return (
+      followedBroadcastArtists.find((artist) => String(artist.id) === selectedBroadcastArtistId) ??
+      followedBroadcastArtists[0] ??
+      null
+    );
+  }, [followedBroadcastArtists, selectedBroadcastArtistId]);
+  const liveBroadcasts = useMemo(
+    () => liveBroadcastsQuery.data ?? [],
+    [liveBroadcastsQuery.data],
+  );
+  const liveBroadcastCount = countLiveBroadcasts(liveBroadcasts);
+  const activeBroadcast = useMemo(
+    () => liveBroadcasts.find((broadcast) => broadcast.id === activeBroadcastId) ?? null,
+    [activeBroadcastId, liveBroadcasts],
+  );
+  const ownLiveBroadcast = useMemo(
+    () =>
+      liveBroadcasts.find(
+        (broadcast) =>
+          broadcast.status === 'live' &&
+          currentActor.partyId &&
+          broadcast.broadcasterPartyId === currentActor.partyId,
+      ) ?? null,
+    [currentActor.partyId, liveBroadcasts],
+  );
+  const canStartFanclubBroadcast =
+    Boolean(currentActor.partyId) && followedBroadcastArtists.length > 0 && !ownLiveBroadcast;
+
+  useEffect(() => {
+    if (followedBroadcastArtists.length === 0) {
+      setSelectedBroadcastArtistId(null);
+      return;
+    }
+
+    const stillAvailable = followedBroadcastArtists.some(
+      (artist) => String(artist.id) === selectedBroadcastArtistId,
+    );
+    if (!stillAvailable) {
+      setSelectedBroadcastArtistId(String(followedBroadcastArtists[0]?.id));
+    }
+  }, [followedBroadcastArtists, selectedBroadcastArtistId]);
 
   const rsvpMutation = useMutation({
     mutationFn: (status: RSVPStatus) => {
@@ -250,6 +354,76 @@ export default function EventDetailScreen() {
     },
   });
 
+  const startLiveBroadcastMutation = useMutation({
+    mutationFn: async () => {
+      if (!eventId) throw new Error('Event not found');
+      if (!selectedBroadcastArtist) throw new Error('Elige un artista que sigues para transmitir.');
+      if (!currentActor.partyId) throw new Error('Configura tu Party ID para transmitir como fan.');
+
+      return createLiveBroadcastFeedItem({
+        eventId,
+        artistId: selectedBroadcastArtist.id,
+        artistName: selectedBroadcastArtist.name,
+        broadcasterName: currentActor.displayName,
+        broadcasterPartyId: currentActor.partyId,
+        title: broadcastTitle,
+        description: broadcastDescription,
+        quality: broadcastQuality,
+      }, { preferRemote: shouldPreferRemoteMoments });
+    },
+    onSuccess: ({ broadcast, source, fallbackReason, transmissionProvisioned }) => {
+      setActiveBroadcastId(broadcast.id);
+      setBroadcastTitle('');
+      setBroadcastDescription('');
+      qc.invalidateQueries({ queryKey: ['event-live-broadcasts', eventId] });
+      const notices = [
+        source === 'local' && shouldPreferRemoteMoments
+          ? fallbackReason ?? 'La transmisión quedó activa solo en este dispositivo.'
+          : null,
+        transmissionProvisioned ? 'Enlaces de transmisión listos.' : null,
+      ].filter((value): value is string => Boolean(value));
+      Alert.alert('En vivo', notices.join('\n\n') || `Transmitiendo para el fanclub de ${broadcast.artistName}.`);
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'No pudimos iniciar la transmisión.';
+      Alert.alert('Error', message);
+    },
+  });
+
+  const endLiveBroadcastMutation = useMutation({
+    mutationFn: (broadcast: EventLiveBroadcast) => {
+      if (!eventId) throw new Error('Event not found');
+      return endLiveBroadcastFeedItem({
+        eventId,
+        broadcastId: broadcast.id,
+        broadcasterPartyId: currentActor.partyId,
+      }, { preferRemote: shouldPreferRemoteMoments });
+    },
+    onSuccess: () => {
+      setActiveBroadcastId(null);
+      qc.invalidateQueries({ queryKey: ['event-live-broadcasts', eventId] });
+      Alert.alert('Listo', 'La transmisión se cerró para el fanclub.');
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'No pudimos cerrar la transmisión.';
+      Alert.alert('Error', message);
+    },
+  });
+
+  const watchLiveBroadcastMutation = useMutation({
+    mutationFn: (broadcast: EventLiveBroadcast) => {
+      if (!eventId) throw new Error('Event not found');
+      return heartbeatLiveBroadcastFeedItem({
+        eventId,
+        broadcastId: broadcast.id,
+        viewerDelta: 1,
+      }, { preferRemote: shouldPreferRemoteMoments });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['event-live-broadcasts', eventId] });
+    },
+  });
+
   const reactionMutation = useMutation({
     mutationFn: ({ momentId, reaction }: { momentId: string; reaction: EventMomentReactionKind }) => {
       if (!eventId) throw new Error('Event not found');
@@ -332,6 +506,81 @@ export default function EventDetailScreen() {
   const handleToggleSaved = useCallback(() => {
     saveEventMutation.mutate();
   }, [saveEventMutation]);
+
+  const ensureBroadcastPermissions = useCallback(async () => {
+    const cameraResult = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
+    const microphoneResult = microphonePermission?.granted
+      ? microphonePermission
+      : await requestMicrophonePermission();
+
+    if (!cameraResult.granted || !microphoneResult.granted) {
+      Alert.alert('Permisos requeridos', 'Activa cámara y micrófono para transmitir en vivo desde el evento.');
+      return false;
+    }
+
+    return true;
+  }, [cameraPermission, microphonePermission, requestCameraPermission, requestMicrophonePermission]);
+
+  const handleOpenLiveStudio = useCallback(async () => {
+    if (!currentActor.partyId) {
+      Alert.alert('Configura tu Party ID', 'Ve a tu perfil y guarda tu Party ID para transmitir como fan.');
+      return;
+    }
+    if (artistFollowersQuery.isLoading) {
+      Alert.alert('Validando fanclub', 'Estamos verificando los artistas que sigues.');
+      return;
+    }
+    if (followedBroadcastArtists.length === 0) {
+      Alert.alert('Sigue a un artista', 'Debes seguir a un artista de este evento para transmitir a su fanclub.');
+      return;
+    }
+    if (ownLiveBroadcast) {
+      setActiveBroadcastId(ownLiveBroadcast.id);
+      setShowLiveStudio(true);
+      return;
+    }
+
+    const granted = await ensureBroadcastPermissions();
+    if (!granted) return;
+    setShowLiveStudio(true);
+  }, [
+    artistFollowersQuery.isLoading,
+    currentActor.partyId,
+    ensureBroadcastPermissions,
+    followedBroadcastArtists.length,
+    ownLiveBroadcast,
+  ]);
+
+  const handleStartBroadcast = useCallback(async () => {
+    if (!canStartFanclubBroadcast) {
+      if (ownLiveBroadcast) {
+        setActiveBroadcastId(ownLiveBroadcast.id);
+        return;
+      }
+      Alert.alert('Fanclub requerido', 'Sigue a un artista de este evento para transmitir a su fanclub.');
+      return;
+    }
+
+    const granted = await ensureBroadcastPermissions();
+    if (!granted) return;
+    startLiveBroadcastMutation.mutate();
+  }, [canStartFanclubBroadcast, ensureBroadcastPermissions, ownLiveBroadcast, startLiveBroadcastMutation]);
+
+  const handleWatchBroadcast = useCallback((broadcast: EventLiveBroadcast) => {
+    if (!isExternalPlaybackUrl(broadcast.playbackUrl)) {
+      Alert.alert('Stream local', 'Esta transmisión todavía no tiene enlace de reproducción.');
+      return;
+    }
+
+    watchLiveBroadcastMutation.mutate(broadcast);
+    Linking.openURL(broadcast.playbackUrl as string).catch(() => {
+      Alert.alert('Error', 'No pudimos abrir la transmisión.');
+    });
+  }, [watchLiveBroadcastMutation]);
+
+  const handleEndBroadcast = useCallback((broadcast: EventLiveBroadcast) => {
+    endLiveBroadcastMutation.mutate(broadcast);
+  }, [endLiveBroadcastMutation]);
 
   const selectMomentMedia = useCallback(async (mode: 'camera' | 'library'): Promise<DraftMomentMedia | null> => {
     if (mode === 'camera') {
@@ -427,6 +676,11 @@ export default function EventDetailScreen() {
   const invitations = invitationsQuery.data ?? [];
   const isSaved = savedEventIdsQuery.data?.includes(String(event.id)) ?? false;
   const momentCount = momentsQuery.data?.length ?? 0;
+  const selectedArtistFollowerCount = selectedBroadcastArtist
+    ? (artistFollowersQuery.data?.[String(selectedBroadcastArtist.id)] ?? []).length
+    : 0;
+  const studioBroadcast = activeBroadcast ?? ownLiveBroadcast;
+  const cameraReady = Boolean(cameraPermission?.granted && microphonePermission?.granted);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -460,6 +714,14 @@ export default function EventDetailScreen() {
           >
             <Text style={[styles.tabButtonText, activeTab === 'moments' && styles.tabButtonTextActive]}>
               Momentos ({momentCount})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'live' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('live')}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'live' && styles.tabButtonTextActive]}>
+              En Vivo ({liveBroadcastCount})
             </Text>
           </TouchableOpacity>
         </View>
@@ -575,7 +837,7 @@ export default function EventDetailScreen() {
               </TouchableOpacity>
             </View>
           </>
-        ) : (
+        ) : activeTab === 'moments' ? (
           <>
             <View style={styles.section}>
               <View style={styles.momentHero}>
@@ -658,6 +920,80 @@ export default function EventDetailScreen() {
               )}
             </View>
           </>
+        ) : (
+          <>
+            <View style={styles.section}>
+              <View style={styles.liveHero}>
+                <View style={styles.liveHeroCopy}>
+                  <View style={styles.liveBadge}>
+                    <MaterialCommunityIcons name="broadcast" size={15} color="#b91c1c" />
+                    <Text style={styles.liveBadgeText}>Fanclub Live</Text>
+                  </View>
+                  <Text style={styles.liveHeroTitle}>Transmisiones del fanclub</Text>
+                  <Text style={styles.liveHeroText}>
+                    Fans que siguen a un artista del lineup pueden abrir cámara y compartir el evento en vivo.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.livePrimaryButton,
+                    (!canStartFanclubBroadcast && !ownLiveBroadcast) && styles.buttonDisabled,
+                  ]}
+                  onPress={() => void handleOpenLiveStudio()}
+                  disabled={!canStartFanclubBroadcast && !ownLiveBroadcast}
+                >
+                  <MaterialCommunityIcons name="video-wireless-outline" size={17} color="#fff" />
+                  <Text style={styles.livePrimaryButtonText}>
+                    {ownLiveBroadcast ? 'Volver al vivo' : 'Transmitir'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.liveEligibilityBox}>
+                {!currentActor.partyId ? (
+                  <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para validar tu fanclub.</Text>
+                ) : artistFollowersQuery.isLoading ? (
+                  <Text style={styles.helperText}>Validando artistas seguidos...</Text>
+                ) : followedBroadcastArtists.length > 0 ? (
+                  <Text style={styles.helperText}>
+                    Puedes transmitir para {followedBroadcastArtists.map((artist) => artist.name).join(', ')}.
+                  </Text>
+                ) : (
+                  <Text style={styles.helperText}>
+                    Sigue a uno de los artistas del evento para abrir una transmisión del fanclub.
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>Streams</Text>
+              {liveBroadcastsQuery.isLoading ? (
+                <ActivityIndicator color="#dc2626" />
+              ) : liveBroadcasts.length === 0 ? (
+                <View style={styles.emptyLiveCard}>
+                  <MaterialCommunityIcons name="broadcast-off" size={32} color="#94a3b8" />
+                  <Text style={styles.emptyMomentsTitle}>No hay transmisiones activas</Text>
+                  <Text style={styles.emptyMomentsText}>
+                    Cuando un fan abra cámara desde este evento, aparecerá aquí para el fanclub.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.momentList}>
+                  {liveBroadcasts.map((broadcast) => (
+                    <EventLiveBroadcastCard
+                      key={broadcast.id}
+                      broadcast={broadcast}
+                      currentPartyId={currentActor.partyId}
+                      watchDisabled={watchLiveBroadcastMutation.isPending}
+                      endDisabled={endLiveBroadcastMutation.isPending}
+                      onWatch={handleWatchBroadcast}
+                      onEnd={handleEndBroadcast}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          </>
         )}
       </ScrollView>
 
@@ -724,6 +1060,186 @@ export default function EventDetailScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={showLiveStudio} transparent animationType="slide">
+        <SafeAreaView style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowLiveStudio(false)}>
+              <Text style={styles.modalClose}>Cerrar</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Fanclub Live</Text>
+            <View style={{ width: 60 }} />
+          </View>
+          <ScrollView contentContainerStyle={styles.liveStudioContent}>
+            {studioBroadcast?.status === 'live' ? (
+              <>
+                <View style={styles.liveStudioSummary}>
+                  <View style={styles.liveBadge}>
+                    <MaterialCommunityIcons name="broadcast" size={15} color="#b91c1c" />
+                    <Text style={styles.liveBadgeText}>En vivo</Text>
+                  </View>
+                  <Text style={styles.liveStudioTitle}>{studioBroadcast.title}</Text>
+                  <Text style={styles.liveStudioText}>
+                    Fanclub de {studioBroadcast.artistName} · {studioBroadcast.viewerCount} viendo
+                  </Text>
+                </View>
+
+                <View style={styles.cameraFrame}>
+                  {cameraReady ? (
+                    <CameraView style={styles.cameraPreview} facing={cameraFacing} mode="video" mute={false} />
+                  ) : (
+                    <View style={styles.cameraPermissionBox}>
+                      <MaterialCommunityIcons name="camera-off-outline" size={34} color="#94a3b8" />
+                      <Text style={styles.emptyMomentsText}>Activa cámara y micrófono para ver la vista previa.</Text>
+                    </View>
+                  )}
+                  <View style={styles.cameraOverlay}>
+                    <View style={styles.cameraLiveDot} />
+                    <Text style={styles.cameraOverlayText}>LIVE</Text>
+                  </View>
+                </View>
+
+                <View style={styles.liveStudioActions}>
+                  <TouchableOpacity
+                    style={styles.secondaryActionButton}
+                    onPress={() => setCameraFacing((current) => (current === 'back' ? 'front' : 'back'))}
+                  >
+                    <MaterialCommunityIcons name="camera-flip-outline" size={17} color="#334155" />
+                    <Text style={styles.secondaryActionButtonText}>Cambiar cámara</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.liveDangerButton, endLiveBroadcastMutation.isPending && styles.buttonDisabled]}
+                    onPress={() => handleEndBroadcast(studioBroadcast)}
+                    disabled={endLiveBroadcastMutation.isPending}
+                  >
+                    <MaterialCommunityIcons name="stop-circle-outline" size={17} color="#fff" />
+                    <Text style={styles.liveDangerButtonText}>
+                      {endLiveBroadcastMutation.isPending ? 'Cerrando...' : 'Cerrar vivo'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {isExternalPlaybackUrl(studioBroadcast.playbackUrl) ? (
+                  <TouchableOpacity
+                    style={styles.livePlaybackButton}
+                    onPress={() => handleWatchBroadcast(studioBroadcast)}
+                    disabled={watchLiveBroadcastMutation.isPending}
+                  >
+                    <MaterialCommunityIcons name="open-in-new" size={17} color="#1d4ed8" />
+                    <Text style={styles.livePlaybackButtonText}>Abrir enlace de reproducción</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Text style={styles.modalMessage}>
+                  Elige el artista cuyo fanclub recibirá la transmisión y revisa cámara antes de salir en vivo.
+                </Text>
+
+                <View style={styles.artistSelector}>
+                  <Text style={styles.label}>Fanclub</Text>
+                  <View style={styles.artistChipRow}>
+                    {followedBroadcastArtists.map((artist) => {
+                      const active = selectedBroadcastArtist?.id === artist.id;
+                      const followerCount = (artistFollowersQuery.data?.[String(artist.id)] ?? []).length;
+                      return (
+                        <TouchableOpacity
+                          key={String(artist.id)}
+                          style={[styles.artistChip, active && styles.artistChipActive]}
+                          onPress={() => setSelectedBroadcastArtistId(String(artist.id))}
+                        >
+                          <Text style={[styles.artistChipText, active && styles.artistChipTextActive]}>
+                            {artist.name}
+                          </Text>
+                          <Text style={[styles.artistChipMeta, active && styles.artistChipTextActive]}>
+                            {followerCount} fans
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View style={styles.cameraFrame}>
+                  {cameraReady ? (
+                    <CameraView style={styles.cameraPreview} facing={cameraFacing} mode="video" mute={false} />
+                  ) : (
+                    <TouchableOpacity style={styles.cameraPermissionBox} onPress={() => void ensureBroadcastPermissions()}>
+                      <MaterialCommunityIcons name="camera-plus-outline" size={34} color="#94a3b8" />
+                      <Text style={styles.emptyMomentsText}>Activar cámara y micrófono</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.liveStudioActions}>
+                  <TouchableOpacity
+                    style={styles.secondaryActionButton}
+                    onPress={() => setCameraFacing((current) => (current === 'back' ? 'front' : 'back'))}
+                  >
+                    <MaterialCommunityIcons name="camera-flip-outline" size={17} color="#334155" />
+                    <Text style={styles.secondaryActionButtonText}>Cambiar cámara</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <TextInput
+                    placeholder={selectedBroadcastArtist ? `${selectedBroadcastArtist.name} en vivo` : 'Título del vivo'}
+                    value={broadcastTitle}
+                    onChangeText={setBroadcastTitle}
+                    style={styles.input}
+                    maxLength={120}
+                  />
+                  <TextInput
+                    placeholder="Contexto del show, canción o momento"
+                    value={broadcastDescription}
+                    onChangeText={setBroadcastDescription}
+                    style={[styles.input, styles.inputMultiline]}
+                    multiline
+                    maxLength={280}
+                  />
+                </View>
+
+                <View style={styles.qualityRow}>
+                  {LIVE_QUALITY_OPTIONS.map((quality) => {
+                    const active = broadcastQuality === quality;
+                    return (
+                      <TouchableOpacity
+                        key={quality}
+                        style={[styles.qualityButton, active && styles.qualityButtonActive]}
+                        onPress={() => setBroadcastQuality(quality)}
+                      >
+                        <Text style={[styles.qualityButtonText, active && styles.qualityButtonTextActive]}>
+                          {quality}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.liveAudienceBox}>
+                  <Text style={styles.helperText}>
+                    Audiencia estimada: {selectedArtistFollowerCount} fans de {selectedBroadcastArtist?.name ?? 'este artista'}.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.liveStartButton,
+                    (!canStartFanclubBroadcast || !cameraReady || startLiveBroadcastMutation.isPending) && styles.buttonDisabled,
+                  ]}
+                  onPress={() => void handleStartBroadcast()}
+                  disabled={!canStartFanclubBroadcast || !cameraReady || startLiveBroadcastMutation.isPending}
+                >
+                  <MaterialCommunityIcons name="broadcast" size={18} color="#fff" />
+                  <Text style={styles.liveStartButtonText}>
+                    {startLiveBroadcastMutation.isPending ? 'Iniciando...' : 'Salir en vivo'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -920,6 +1436,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   inviteButtonText: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  liveHero: {
+    borderRadius: 16,
+    backgroundColor: '#111827',
+    padding: 16,
+    gap: 14,
+  },
+  liveHeroCopy: {
+    gap: 8,
+  },
+  liveBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 999,
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  liveBadgeText: {
+    color: '#b91c1c',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  liveHeroTitle: {
+    color: '#f8fafc',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  liveHeroText: {
+    color: '#cbd5e1',
+    lineHeight: 20,
+  },
+  livePrimaryButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 10,
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  livePrimaryButtonText: {
+    color: '#fff',
+    fontWeight: '800',
+  },
+  liveEligibilityBox: {
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+  },
+  emptyLiveCard: {
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 16,
+    padding: 24,
+    backgroundColor: '#f8fafc',
+  },
   momentHero: {
     borderRadius: 18,
     backgroundColor: '#0f172a',
@@ -1012,6 +1592,138 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
   modalContent: { flex: 1, paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
   modalMessage: { fontSize: 14, color: '#555', textAlign: 'left', lineHeight: 20 },
+  liveStudioContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingBottom: 28,
+    gap: 14,
+  },
+  liveStudioSummary: {
+    gap: 8,
+  },
+  liveStudioTitle: {
+    color: '#0f172a',
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  liveStudioText: {
+    color: '#475569',
+    lineHeight: 20,
+  },
+  cameraFrame: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 9 / 16,
+    maxHeight: 460,
+    minHeight: 320,
+    overflow: 'hidden',
+    borderRadius: 16,
+    backgroundColor: '#0f172a',
+  },
+  cameraPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  cameraPermissionBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: 18,
+    backgroundColor: '#f1f5f9',
+  },
+  cameraOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    backgroundColor: '#00000099',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+  },
+  cameraLiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ef4444',
+  },
+  cameraOverlayText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  liveStudioActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  liveDangerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 10,
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  liveDangerButtonText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  livePlaybackButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  livePlaybackButtonText: {
+    color: '#1d4ed8',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  artistSelector: {
+    gap: 8,
+  },
+  artistChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  artistChip: {
+    minWidth: 112,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 3,
+  },
+  artistChipActive: {
+    borderColor: '#dc2626',
+    backgroundColor: '#fee2e2',
+  },
+  artistChipText: {
+    color: '#0f172a',
+    fontWeight: '800',
+  },
+  artistChipTextActive: {
+    color: '#991b1b',
+  },
+  artistChipMeta: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   inputGroup: { gap: 10 },
   input: { borderWidth: 1, borderColor: '#d4d4d4', borderRadius: 10, padding: 10 },
   inputMultiline: { minHeight: 70, textAlignVertical: 'top' },
@@ -1024,6 +1736,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   secondaryActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#cbd5e1',
@@ -1034,6 +1749,51 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontWeight: '700',
     fontSize: 12,
+  },
+  qualityRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  qualityButton: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  qualityButtonActive: {
+    borderColor: '#dc2626',
+    backgroundColor: '#fee2e2',
+  },
+  qualityButtonText: {
+    color: '#334155',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  qualityButtonTextActive: {
+    color: '#991b1b',
+  },
+  liveAudienceBox: {
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+  },
+  liveStartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    backgroundColor: '#dc2626',
+    paddingVertical: 13,
+  },
+  liveStartButtonText: {
+    color: '#fff',
+    fontWeight: '900',
   },
   selectedMomentCard: {
     gap: 10,

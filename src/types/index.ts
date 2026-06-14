@@ -319,6 +319,50 @@ export type EventMomentActor = {
   partyId?: string | null;
 };
 
+export type EventLiveBroadcastStatus = 'live' | 'ended';
+export type EventLiveBroadcastQuality = 'auto' | '720p' | '480p';
+
+export type EventLiveBroadcast = {
+  id: string;
+  eventId: string;
+  artistId: string;
+  artistName: string;
+  broadcasterName: string;
+  broadcasterPartyId?: string | null;
+  title: string;
+  description?: string | null;
+  status: EventLiveBroadcastStatus;
+  playbackUrl?: string | null;
+  ingestUrl?: string | null;
+  whipUrl?: string | null;
+  streamKey?: string | null;
+  viewerCount: number;
+  startedAt: string;
+  endedAt?: string | null;
+  lastHeartbeatAt: string;
+};
+
+export type EventLiveBroadcastCreateInput = {
+  eventId: ID;
+  artistId: ID;
+  artistName: string;
+  broadcasterName: string;
+  broadcasterPartyId?: ID | null;
+  title?: string | null;
+  description?: string | null;
+  quality?: EventLiveBroadcastQuality;
+  playbackUrl?: string | null;
+  ingestUrl?: string | null;
+  whipUrl?: string | null;
+  streamKey?: string | null;
+};
+
+export type EventLiveBroadcastHeartbeatInput = {
+  eventId: ID;
+  broadcastId: string;
+  viewerDelta?: number;
+};
+
 export type PartyFollow = {
   pfFollowerId: number;
   pfFollowingId: number;

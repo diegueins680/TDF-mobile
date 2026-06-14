@@ -49,15 +49,15 @@ const plugins: NonNullable<ExpoConfig['plugins']> = [
   [
     'expo-camera',
     {
-      cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes and capture inventory images.',
-      microphonePermission: false
+      cameraPermission: 'Allow TDF Records to use your camera for QR scanning, media capture, and fanclub live broadcasts.',
+      microphonePermission: 'Allow TDF Records to use your microphone for fanclub live broadcasts.'
     }
   ],
   [
     'expo-image-picker',
     {
       photosPermission: 'Allow TDF Records to access your photos so you can attach inventory images.',
-      cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes and capture inventory images.'
+      cameraPermission: 'Allow TDF Records to use your camera for QR scanning, media capture, and fanclub live broadcasts.'
     }
   ],
   [
@@ -108,7 +108,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: BUNDLE_ID,
-    blockedPermissions: ['android.permission.RECORD_AUDIO'],
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       monochromeImage: './assets/adaptive-icon-monochrome.png',

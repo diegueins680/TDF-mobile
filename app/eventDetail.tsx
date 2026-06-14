@@ -91,7 +91,7 @@ const STRIPE_MERCHANT_IDENTIFIER =
 
 type TicketPaymentResult =
   | { status: 'paid'; orderId: string; quantity: number }
-  | { status: 'cancelled'; orderId: string };
+  | { status: 'cancelled'; orderId: string; releasedReservation: boolean };
 
 export default function EventDetailScreen() {
   const { eventId: rawEventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
@@ -428,7 +428,10 @@ export default function EventDetailScreen() {
       const presentResult = await presentPaymentSheet();
       if (presentResult.error) {
         if (presentResult.error.code === 'Canceled') {
-          return { status: 'cancelled', orderId: paymentIntent.orderId };
+          const releasedReservation = await Events.updateTicketOrderStatus(eventId, paymentIntent.orderId, 'cancelled')
+            .then(() => true)
+            .catch(() => false);
+          return { status: 'cancelled', orderId: paymentIntent.orderId, releasedReservation };
         }
         throw new Error(presentResult.error.localizedMessage ?? presentResult.error.message ?? 'No pudimos completar el pago.');
       }
@@ -440,7 +443,12 @@ export default function EventDetailScreen() {
       qc.invalidateQueries({ queryKey: ['event-ticket-orders', eventId, normalizedPartyId] });
       qc.invalidateQueries({ queryKey: ['event', eventId] });
       if (result.status === 'cancelled') {
-        Alert.alert('Pago cancelado', 'No se cobró la tarjeta.');
+        Alert.alert(
+          'Pago cancelado',
+          result.releasedReservation
+            ? 'No se cobró la tarjeta y liberamos la reserva.'
+            : 'No se cobró la tarjeta. No pudimos liberar la reserva automáticamente.',
+        );
         return;
       }
       setTicketQuantity('1');

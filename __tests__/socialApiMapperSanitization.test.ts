@@ -9,9 +9,10 @@ import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
 import { Venues } from '../src/api/venues';
 
-const { get, post } = jest.requireMock('../src/api/client') as {
+const { get, post, put } = jest.requireMock('../src/api/client') as {
   get: jest.Mock;
   post: jest.Mock;
+  put: jest.Mock;
 };
 const ISO_TIMESTAMP_PREFIX = /^\d{4}-\d{2}-\d{2}T/;
 
@@ -543,5 +544,25 @@ describe('Social API mapper sanitization', () => {
         publishableKey: 'pk_test_123',
       },
     });
+  });
+
+  it('Events.updateTicketOrderStatus posts the ticket order status payload', async () => {
+    put.mockResolvedValueOnce({
+      ticketOrderId: 'order-3',
+      ticketOrderEventId: 'event-1',
+      ticketOrderTierId: 'tier-1',
+      ticketOrderQuantity: 2,
+      ticketOrderAmountCents: 8000,
+      ticketOrderCurrency: 'USD',
+      ticketOrderStatusValue: 'cancelled',
+      ticketOrderTickets: [],
+    });
+
+    const order = await Events.updateTicketOrderStatus('event-1', 'order-3', 'cancelled');
+
+    expect(put).toHaveBeenCalledWith('/social-events/events/event-1/ticket-orders/order-3/status', {
+      ticketOrderStatus: 'cancelled',
+    });
+    expect(order.status).toBe('cancelled');
   });
 });

@@ -536,6 +536,22 @@ export const Events = {
     return mapStripePaymentIntentDto(dto);
   },
 
+  updateTicketOrderStatus: async (
+    eventId: ID,
+    orderId: ID,
+    status: 'paid' | 'cancelled' | 'refunded',
+  ): Promise<EventTicketOrder> => {
+    const normalizedOrderId = normalizeOptionalPositiveIdParam(orderId);
+    if (!normalizedOrderId) {
+      throw new Error('Orden de tickets inválida.');
+    }
+    const dto = await put<BackendTicketOrderDTO>(
+      `/social-events/events/${eventId}/ticket-orders/${encodeURIComponent(normalizedOrderId)}/status`,
+      { ticketOrderStatus: status },
+    );
+    return mapTicketOrderDto(dto, eventId);
+  },
+
   // Event moments
   listMoments: async (eventId: ID): Promise<EventMoment[]> => {
     const list = await get<BackendMomentDTO[]>(`/social-events/events/${eventId}/moments`);

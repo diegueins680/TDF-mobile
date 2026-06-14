@@ -18,6 +18,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  Constants as StripeConstants,
+  initStripe,
+  usePaymentSheet,
+} from '@stripe/stripe-react-native';
 
 import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
@@ -73,10 +78,26 @@ const LIVE_QUALITY_OPTIONS: EventLiveBroadcastQuality[] = ['auto', '720p', '480p
 const isExternalPlaybackUrl = (url?: string | null): boolean =>
   Boolean(url && !url.startsWith('tdf://'));
 
+const formatTicketMoney = (amountCents: number, currency: string): string =>
+  `${currency.toUpperCase()} ${(amountCents / 100).toFixed(2)}`;
+
+const ticketTierAvailability = (tier: { quantityTotal: number; quantitySold: number }): number =>
+  Math.max(0, tier.quantityTotal - tier.quantitySold);
+
+const STRIPE_MERCHANT_DISPLAY_NAME = 'TDF Records';
+const STRIPE_RETURN_URL = 'tdf://stripe-redirect';
+const STRIPE_MERCHANT_IDENTIFIER =
+  process.env.STRIPE_MERCHANT_IDENTIFIER?.trim() || process.env.EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER?.trim() || undefined;
+
+type TicketPaymentResult =
+  | { status: 'paid'; orderId: string; quantity: number }
+  | { status: 'cancelled'; orderId: string };
+
 export default function EventDetailScreen() {
   const { eventId: rawEventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const { initPaymentSheet, presentPaymentSheet } = usePaymentSheet();
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: authPartyId } = useAuth();
   const { partyId: settingsPartyId, displayName } = useUserSettings();
@@ -105,6 +126,10 @@ export default function EventDetailScreen() {
   const [activeBroadcastId, setActiveBroadcastId] = useState<string | null>(null);
   const [cameraFacing, setCameraFacing] = useState<CameraType>('back');
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [selectedTicketTierId, setSelectedTicketTierId] = useState<string | null>(null);
+  const [ticketQuantity, setTicketQuantity] = useState('1');
+  const [ticketBuyerName, setTicketBuyerName] = useState(displayName ?? '');
+  const [ticketBuyerEmail, setTicketBuyerEmail] = useState('');
 
   const { data: event, isLoading, isError } = useQuery({
     queryKey: ['event', eventId],
@@ -122,6 +147,18 @@ export default function EventDetailScreen() {
     queryKey: ['event-invitations', eventId],
     queryFn: () => Events.getInvitations(eventId as ID),
     enabled: Boolean(eventId),
+  });
+
+  const ticketTiersQuery = useQuery({
+    queryKey: ['event-ticket-tiers', eventId],
+    queryFn: () => Events.listTicketTiers(eventId as ID),
+    enabled: Boolean(eventId),
+  });
+
+  const ticketOrdersQuery = useQuery({
+    queryKey: ['event-ticket-orders', eventId, normalizedPartyId],
+    queryFn: () => Events.listTicketOrders(eventId as ID, { buyerPartyId: normalizedPartyId }),
+    enabled: Boolean(eventId && normalizedPartyId),
   });
 
   const savedEventIdsQuery = useQuery({
@@ -197,6 +234,25 @@ export default function EventDetailScreen() {
     [liveBroadcastsQuery.data],
   );
   const liveBroadcastCount = countLiveBroadcasts(liveBroadcasts);
+  const ticketTiers = useMemo(
+    () => ticketTiersQuery.data ?? [],
+    [ticketTiersQuery.data],
+  );
+  const availableTicketTiers = useMemo(
+    () => ticketTiers.filter((tier) => tier.active && ticketTierAvailability(tier) > 0),
+    [ticketTiers],
+  );
+  const selectedTicketTier = useMemo(
+    () =>
+      availableTicketTiers.find((tier) => String(tier.id) === selectedTicketTierId) ??
+      availableTicketTiers[0] ??
+      null,
+    [availableTicketTiers, selectedTicketTierId],
+  );
+  const ticketOrders = useMemo(
+    () => ticketOrdersQuery.data ?? [],
+    [ticketOrdersQuery.data],
+  );
   const activeBroadcast = useMemo(
     () => liveBroadcasts.find((broadcast) => broadcast.id === activeBroadcastId) ?? null,
     [activeBroadcastId, liveBroadcasts],
@@ -213,6 +269,22 @@ export default function EventDetailScreen() {
   );
   const canStartFanclubBroadcast =
     Boolean(currentActor.partyId) && followedBroadcastArtists.length > 0 && !ownLiveBroadcast;
+
+  useEffect(() => {
+    setTicketBuyerName((current) => current.trim() || displayName || '');
+  }, [displayName]);
+
+  useEffect(() => {
+    const fallbackTierId = availableTicketTiers[0]?.id != null ? String(availableTicketTiers[0].id) : null;
+    if (!fallbackTierId) {
+      if (selectedTicketTierId !== null) setSelectedTicketTierId(null);
+      return;
+    }
+    const selectedStillAvailable = availableTicketTiers.some((tier) => String(tier.id) === selectedTicketTierId);
+    if (!selectedTicketTierId || !selectedStillAvailable) {
+      setSelectedTicketTierId(fallbackTierId);
+    }
+  }, [availableTicketTiers, selectedTicketTierId]);
 
   useEffect(() => {
     if (followedBroadcastArtists.length === 0) {
@@ -295,6 +367,91 @@ export default function EventDetailScreen() {
     },
     onError: () => {
       Alert.alert('Error', 'No pudimos actualizar tus eventos guardados.');
+    },
+  });
+
+  const purchaseTicketsMutation = useMutation<TicketPaymentResult>({
+    mutationFn: async () => {
+      if (!eventId) throw new Error('Event not found');
+      if (!normalizedPartyId) throw new Error('Guarda tu Party ID en tu perfil para comprar tickets.');
+      if (!selectedTicketTier) throw new Error('Selecciona un ticket disponible.');
+      const stripeApiVersion = StripeConstants.API_VERSIONS.CORE?.trim();
+      if (!stripeApiVersion) {
+        throw new Error('No pudimos obtener la versión de Stripe del SDK móvil.');
+      }
+      const quantity = Number.parseInt(ticketQuantity.trim(), 10);
+      if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+        throw new Error('Cantidad inválida.');
+      }
+      if (quantity > ticketTierAvailability(selectedTicketTier)) {
+        throw new Error('No hay suficientes tickets disponibles.');
+      }
+
+      const buyerName = ticketBuyerName.trim() || displayName || null;
+      const buyerEmail = ticketBuyerEmail.trim() || null;
+      const paymentIntent = await Events.createTicketPaymentSheet(
+        {
+          eventId,
+          tierId: selectedTicketTier.id,
+          quantity,
+          buyerPartyId: normalizedPartyId,
+          buyerName,
+          buyerEmail,
+        },
+        stripeApiVersion,
+      );
+
+      await initStripe({
+        publishableKey: paymentIntent.paymentSheet.publishableKey,
+        merchantIdentifier: STRIPE_MERCHANT_IDENTIFIER,
+        urlScheme: 'tdf',
+        setReturnUrlSchemeOnAndroid: true,
+      });
+
+      const initResult = await initPaymentSheet({
+        merchantDisplayName: STRIPE_MERCHANT_DISPLAY_NAME,
+        customerId: paymentIntent.paymentSheet.customerId,
+        customerEphemeralKeySecret: paymentIntent.paymentSheet.ephemeralKeySecret,
+        paymentIntentClientSecret: paymentIntent.paymentSheet.paymentIntentClientSecret,
+        returnURL: STRIPE_RETURN_URL,
+        allowsDelayedPaymentMethods: false,
+        primaryButtonLabel: `Pagar ${formatTicketMoney(paymentIntent.amountCents, paymentIntent.currency)}`,
+        defaultBillingDetails: {
+          name: buyerName ?? undefined,
+          email: buyerEmail ?? undefined,
+        },
+      });
+      if (initResult.error) {
+        throw new Error(initResult.error.localizedMessage ?? initResult.error.message ?? 'No pudimos iniciar el pago.');
+      }
+
+      const presentResult = await presentPaymentSheet();
+      if (presentResult.error) {
+        if (presentResult.error.code === 'Canceled') {
+          return { status: 'cancelled', orderId: paymentIntent.orderId };
+        }
+        throw new Error(presentResult.error.localizedMessage ?? presentResult.error.message ?? 'No pudimos completar el pago.');
+      }
+
+      return { status: 'paid', orderId: paymentIntent.orderId, quantity };
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['event-ticket-tiers', eventId] });
+      qc.invalidateQueries({ queryKey: ['event-ticket-orders', eventId, normalizedPartyId] });
+      qc.invalidateQueries({ queryKey: ['event', eventId] });
+      if (result.status === 'cancelled') {
+        Alert.alert('Pago cancelado', 'No se cobró la tarjeta.');
+        return;
+      }
+      setTicketQuantity('1');
+      Alert.alert(
+        'Pago aprobado',
+        `Orden ${result.orderId}: ${result.quantity} ticket${result.quantity === 1 ? '' : 's'}.`,
+      );
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'No pudimos comprar tickets.';
+      Alert.alert('Error', message);
     },
   });
 
@@ -769,15 +926,123 @@ export default function EventDetailScreen() {
 
             <View style={styles.section}>
               <Text style={styles.label}>Tickets</Text>
-              {event.ticketPrice ? (
+              {ticketTiersQuery.isLoading ? (
+                <ActivityIndicator color="#2563eb" />
+              ) : ticketTiersQuery.isError ? (
+                <Text style={styles.helperText}>No pudimos cargar los tickets de este evento.</Text>
+              ) : ticketTiers.length > 0 ? (
+                <View style={styles.ticketTierList}>
+                  {ticketTiers.map((tier) => {
+                    const availability = ticketTierAvailability(tier);
+                    const selectable = tier.active && availability > 0;
+                    const selected = selectedTicketTier ? String(selectedTicketTier.id) === String(tier.id) : false;
+                    return (
+                      <TouchableOpacity
+                        key={String(tier.id)}
+                        style={[
+                          styles.ticketTierCard,
+                          selected && styles.ticketTierCardSelected,
+                          !selectable && styles.ticketTierCardDisabled,
+                        ]}
+                        onPress={() => selectable && setSelectedTicketTierId(String(tier.id))}
+                        disabled={!selectable}
+                      >
+                        <View style={styles.ticketTierHeader}>
+                          <Text style={styles.ticketTierName}>{tier.name}</Text>
+                          <Text style={styles.ticketTierPrice}>
+                            {formatTicketMoney(tier.priceCents, tier.currency)}
+                          </Text>
+                        </View>
+                        {tier.description ? <Text style={styles.helperText}>{tier.description}</Text> : null}
+                        <Text style={styles.ticketTierMeta}>
+                          {selectable ? `${availability} disponibles` : 'Agotado'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : event.ticketPrice ? (
                 <Text style={styles.price}>${event.ticketPrice.toFixed(2)}</Text>
               ) : (
                 <Text style={styles.text}>Free</Text>
               )}
+
+              {ticketTiers.length > 0 ? (
+                <View style={styles.ticketPurchaseBox}>
+                  {!normalizedPartyId ? (
+                    <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para comprar tickets.</Text>
+                  ) : null}
+                  <View style={styles.ticketFormRow}>
+                    <TextInput
+                      placeholder="Cantidad"
+                      value={ticketQuantity}
+                      onChangeText={setTicketQuantity}
+                      keyboardType="number-pad"
+                      style={[styles.input, styles.ticketQuantityInput]}
+                    />
+                    <TextInput
+                      placeholder="Nombre comprador"
+                      value={ticketBuyerName}
+                      onChangeText={setTicketBuyerName}
+                      style={[styles.input, styles.ticketBuyerInput]}
+                    />
+                  </View>
+                  <TextInput
+                    placeholder="Email comprador (opcional)"
+                    value={ticketBuyerEmail}
+                    onChangeText={setTicketBuyerEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    style={styles.input}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.ticketButton,
+                      (!selectedTicketTier || !normalizedPartyId || purchaseTicketsMutation.isPending) && styles.buttonDisabled,
+                    ]}
+                    onPress={() => purchaseTicketsMutation.mutate()}
+                    disabled={!selectedTicketTier || !normalizedPartyId || purchaseTicketsMutation.isPending}
+                  >
+                    <Text style={styles.ticketButtonText}>
+                      {purchaseTicketsMutation.isPending ? 'Abriendo pago...' : 'Pagar con tarjeta'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
               {event.ticketUrl ? (
-                <TouchableOpacity style={styles.ticketButton} onPress={handleOpenTickets}>
-                  <Text style={styles.ticketButtonText}>Buy Tickets</Text>
+                <TouchableOpacity style={styles.externalTicketButton} onPress={handleOpenTickets}>
+                  <Text style={styles.externalTicketButtonText}>Compra externa</Text>
                 </TouchableOpacity>
+              ) : null}
+
+              {normalizedPartyId ? (
+                <View style={styles.ticketOrdersBox}>
+                  <Text style={styles.ticketOrdersTitle}>Mis órdenes</Text>
+                  {ticketOrdersQuery.isLoading ? (
+                    <Text style={styles.helperText}>Cargando órdenes...</Text>
+                  ) : ticketOrdersQuery.isError ? (
+                    <Text style={styles.helperText}>No pudimos cargar tus órdenes.</Text>
+                  ) : ticketOrders.length === 0 ? (
+                    <Text style={styles.helperText}>Todavía no tienes tickets para este evento.</Text>
+                  ) : (
+                    ticketOrders.map((order) => (
+                      <View key={String(order.id)} style={styles.ticketOrderCard}>
+                        <Text style={styles.ticketOrderTitle}>
+                          {order.quantity} ticket{order.quantity === 1 ? '' : 's'} · {order.status}
+                        </Text>
+                        <Text style={styles.ticketOrderMeta}>
+                          {formatTicketMoney(order.amountCents, order.currency)}
+                        </Text>
+                        {order.tickets.map((ticket) => (
+                          <Text key={String(ticket.id)} style={styles.ticketCode}>
+                            {ticket.code} · {ticket.status}
+                          </Text>
+                        ))}
+                      </View>
+                    ))
+                  )}
+                </View>
               ) : null}
             </View>
 
@@ -1386,6 +1651,34 @@ const styles = StyleSheet.create({
   text: { fontSize: 14, color: '#1a1a1a', lineHeight: 20 },
   helperText: { fontSize: 12, color: '#6b7280', marginBottom: 6 },
   price: { fontSize: 18, fontWeight: '700', color: '#2563eb', marginBottom: 8 },
+  ticketTierList: { gap: 8 },
+  ticketTierCard: {
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    gap: 6,
+  },
+  ticketTierCardSelected: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
+  },
+  ticketTierCardDisabled: {
+    opacity: 0.55,
+  },
+  ticketTierHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  ticketTierName: { flex: 1, color: '#111827', fontSize: 14, fontWeight: '800' },
+  ticketTierPrice: { color: '#1d4ed8', fontSize: 13, fontWeight: '800' },
+  ticketTierMeta: { color: '#64748b', fontSize: 12, fontWeight: '700' },
+  ticketPurchaseBox: { gap: 10 },
+  ticketFormRow: { flexDirection: 'row', gap: 8 },
+  ticketQuantityInput: { width: 96 },
+  ticketBuyerInput: { flex: 1 },
   ticketButton: {
     backgroundColor: '#2563eb',
     paddingVertical: 10,
@@ -1394,6 +1687,28 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   ticketButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  externalTicketButton: {
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  externalTicketButtonText: { color: '#1d4ed8', fontWeight: '700', fontSize: 14 },
+  ticketOrdersBox: { gap: 8, marginTop: 4 },
+  ticketOrdersTitle: { color: '#111827', fontSize: 13, fontWeight: '800' },
+  ticketOrderCard: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    padding: 10,
+    gap: 4,
+  },
+  ticketOrderTitle: { color: '#111827', fontSize: 13, fontWeight: '800' },
+  ticketOrderMeta: { color: '#64748b', fontSize: 12, fontWeight: '700' },
+  ticketCode: { color: '#334155', fontSize: 12 },
   artistItem: {
     marginBottom: 8,
     paddingBottom: 8,

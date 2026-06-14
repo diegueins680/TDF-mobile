@@ -265,6 +265,77 @@ export type EventInvitationCreate = {
   message?: string | null;
 };
 
+export type EventTicketTier = {
+  id: ID;
+  eventId?: ID | null;
+  code: string;
+  name: string;
+  description?: string | null;
+  priceCents: number;
+  currency: string;
+  quantityTotal: number;
+  quantitySold: number;
+  salesStart?: string | null;
+  salesEnd?: string | null;
+  active: boolean;
+  position?: number | null;
+};
+
+export type EventTicket = {
+  id: ID;
+  eventId?: ID | null;
+  tierId?: ID | null;
+  orderId?: ID | null;
+  code: string;
+  status: string;
+  holderName?: string | null;
+  holderEmail?: string | null;
+  checkedInAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type EventTicketOrder = {
+  id: ID;
+  eventId?: ID | null;
+  tierId?: ID | null;
+  buyerPartyId?: ID | null;
+  buyerName?: string | null;
+  buyerEmail?: string | null;
+  quantity: number;
+  amountCents: number;
+  currency: string;
+  status: string;
+  purchasedAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  tickets: EventTicket[];
+};
+
+export type EventTicketPurchaseInput = {
+  eventId: ID;
+  tierId: ID;
+  quantity: number;
+  buyerPartyId?: ID | null;
+  buyerName?: string | null;
+  buyerEmail?: string | null;
+};
+
+export type EventTicketPaymentSheetParams = {
+  customerId: string;
+  ephemeralKeySecret: string;
+  paymentIntentClientSecret: string;
+  publishableKey: string;
+};
+
+export type EventTicketPaymentIntent = {
+  clientSecret: string;
+  orderId: string;
+  amountCents: number;
+  currency: string;
+  paymentSheet: EventTicketPaymentSheetParams;
+};
+
 export type EventMomentMediaKind = 'image' | 'video';
 export type EventMomentReactionKind = 'fire' | 'love' | 'applause';
 

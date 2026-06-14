@@ -382,4 +382,166 @@ describe('Social API mapper sanitization', () => {
     expect(invitations[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
     expect(invitations[0]?.updatedAt).toBeNull();
   });
+
+  it('Events.listTicketTiers maps ticket inventory defensively', async () => {
+    get.mockResolvedValueOnce([
+      {
+        ticketTierId: 'tier-1',
+        ticketTierEventId: 'event-1',
+        ticketTierCode: ' ga ',
+        ticketTierName: ' General ',
+        ticketTierPriceCents: Number.NaN,
+        ticketTierCurrency: ' usd ',
+        ticketTierQuantityTotal: 100.7,
+        ticketTierQuantitySold: -5,
+        ticketTierActive: null,
+        ticketTierSalesStart: ' ',
+      },
+    ]);
+
+    const tiers = await Events.listTicketTiers('event-1');
+
+    expect(get).toHaveBeenCalledWith('/social-events/events/event-1/ticket-tiers');
+    expect(tiers).toHaveLength(1);
+    expect(tiers[0]).toEqual(
+      expect.objectContaining({
+        id: 'tier-1',
+        eventId: 'event-1',
+        code: 'ga',
+        name: 'General',
+        priceCents: 0,
+        currency: 'USD',
+        quantityTotal: 100,
+        quantitySold: 0,
+        active: true,
+        salesStart: null,
+      }),
+    );
+  });
+
+  it('Events.listTicketOrders maps orders, tickets, and query filters', async () => {
+    get.mockResolvedValueOnce([
+      {
+        ticketOrderId: 'order-1',
+        ticketOrderEventId: 'event-1',
+        ticketOrderTierId: 'tier-1',
+        ticketOrderBuyerPartyId: 'buyer-1',
+        ticketOrderQuantity: 2,
+        ticketOrderAmountCents: 5000,
+        ticketOrderCurrency: 'usd',
+        ticketOrderStatusValue: 'paid',
+        ticketOrderTickets: [
+          {
+            ticketId: 'ticket-1',
+            ticketCode: 'ABC123',
+            ticketStatus: 'issued',
+          },
+        ],
+      },
+    ]);
+
+    const orders = await Events.listTicketOrders('event-1', { buyerPartyId: ' buyer-1 ', status: ' paid ' });
+
+    expect(get).toHaveBeenCalledWith('/social-events/events/event-1/ticket-orders?buyerPartyId=buyer-1&status=paid');
+    expect(orders).toHaveLength(1);
+    expect(orders[0]).toEqual(
+      expect.objectContaining({
+        id: 'order-1',
+        eventId: 'event-1',
+        tierId: 'tier-1',
+        buyerPartyId: 'buyer-1',
+        quantity: 2,
+        amountCents: 5000,
+        currency: 'USD',
+        status: 'paid',
+      }),
+    );
+    expect(orders[0]?.tickets[0]).toEqual(
+      expect.objectContaining({
+        id: 'ticket-1',
+        code: 'ABC123',
+        status: 'issued',
+      }),
+    );
+  });
+
+  it('Events.buyTickets posts the backend ticket purchase payload', async () => {
+    post.mockResolvedValueOnce({
+      ticketOrderId: 'order-2',
+      ticketOrderEventId: 'event-1',
+      ticketOrderTierId: 'tier-1',
+      ticketOrderQuantity: 2,
+      ticketOrderAmountCents: 7000,
+      ticketOrderCurrency: 'USD',
+      ticketOrderStatusValue: 'paid',
+      ticketOrderTickets: [],
+    });
+
+    const order = await Events.buyTickets({
+      eventId: 'event-1',
+      tierId: 'tier-1',
+      quantity: 2,
+      buyerPartyId: ' 7 ',
+      buyerName: ' Ana ',
+      buyerEmail: ' ',
+    });
+
+    expect(post).toHaveBeenCalledWith('/social-events/events/event-1/ticket-orders', {
+      ticketPurchaseTierId: 'tier-1',
+      ticketPurchaseQuantity: 2,
+      ticketPurchaseBuyerPartyId: '7',
+      ticketPurchaseBuyerName: 'Ana',
+      ticketPurchaseBuyerEmail: null,
+    });
+    expect(order.quantity).toBe(2);
+    expect(order.amountCents).toBe(7000);
+  });
+
+  it('Events.createTicketPaymentSheet requests mobile PaymentSheet params', async () => {
+    post.mockResolvedValueOnce({
+      spiClientSecret: 'pi_secret',
+      spiOrderId: 'order-3',
+      spiAmountCents: 8000,
+      spiCurrency: 'usd',
+      spiPaymentSheet: {
+        psCustomerId: 'cus_123',
+        psEphemeralKeySecret: 'ek_secret',
+        psPaymentIntentClientSecret: 'pi_secret',
+        psPublishableKey: 'pk_test_123',
+      },
+    });
+
+    const intent = await Events.createTicketPaymentSheet(
+      {
+        eventId: 'event-1',
+        tierId: 'tier-1',
+        quantity: 2,
+        buyerPartyId: '7',
+        buyerName: 'Ana',
+        buyerEmail: 'ana@example.com',
+      },
+      '2026-04-22.dahlia',
+    );
+
+    expect(post).toHaveBeenCalledWith('/social-events/stripe/create-payment-intent', {
+      ticketPurchaseTierId: 'tier-1',
+      ticketPurchaseQuantity: 2,
+      ticketPurchaseBuyerPartyId: '7',
+      ticketPurchaseBuyerName: 'Ana',
+      ticketPurchaseBuyerEmail: 'ana@example.com',
+      ticketPurchaseMobileSdkStripeVersion: '2026-04-22.dahlia',
+    });
+    expect(intent).toEqual({
+      clientSecret: 'pi_secret',
+      orderId: 'order-3',
+      amountCents: 8000,
+      currency: 'USD',
+      paymentSheet: {
+        customerId: 'cus_123',
+        ephemeralKeySecret: 'ek_secret',
+        paymentIntentClientSecret: 'pi_secret',
+        publishableKey: 'pk_test_123',
+      },
+    });
+  });
 });

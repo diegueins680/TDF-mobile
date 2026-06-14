@@ -28,6 +28,8 @@ const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim(
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim();
 const GOOGLE_IOS_URL_SCHEME =
   process.env.GOOGLE_IOS_URL_SCHEME?.trim() || process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME?.trim();
+const STRIPE_MERCHANT_IDENTIFIER =
+  process.env.STRIPE_MERCHANT_IDENTIFIER?.trim() || process.env.EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER?.trim();
 
 const resolveReleaseAwareEnv = (name: 'EXPO_PUBLIC_API_BASE' | 'EXPO_PUBLIC_UPLOAD_URL', releaseValue: string, localValue: string) => {
   const explicitValue = process.env[name]?.trim();
@@ -67,6 +69,14 @@ const plugins: NonNullable<ExpoConfig['plugins']> = [
       locationAlwaysPermission: false,
       locationWhenInUsePermission: 'Allow TDF Records to use your location to show nearby venues.'
     }
+  ],
+  [
+    '@stripe/stripe-react-native',
+    STRIPE_MERCHANT_IDENTIFIER
+      ? {
+          merchantIdentifier: STRIPE_MERCHANT_IDENTIFIER
+        }
+      : {}
   ]
 ];
 

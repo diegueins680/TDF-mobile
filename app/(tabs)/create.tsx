@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { palette, radii } from '../../src/theme/designTokens';
+import { QUICK_ACTIONS } from '../../src/navigation/menu';
 
 const typography = {
   sizes: {
@@ -17,19 +18,12 @@ const typography = {
 export default function CreateSheet() {
   const router = useRouter();
 
-  const options = [
-    { label: 'Nueva reserva', icon: 'calendar-plus' as const, route: '/bookings' as const },
-    { label: 'Nuevo evento', icon: 'calendar-star' as const, route: '/events' as const },
-    { label: 'Nuevo contacto', icon: 'account-plus' as const, route: '/parties' as const },
-    { label: 'Nueva orden', icon: 'cart-plus' as const, route: '/bookings' as const },
-  ];
-
   return (
     <View style={styles.container}>
       <View style={styles.sheet}>
         <View style={styles.handle} />
-        <Text style={styles.title}>Crear nuevo</Text>
-        {options.map((opt) => (
+        <Text style={styles.title}>Accesos rápidos</Text>
+        {QUICK_ACTIONS.map((opt) => (
           <TouchableOpacity
             key={opt.label}
             style={styles.option}

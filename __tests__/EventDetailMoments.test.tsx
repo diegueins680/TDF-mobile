@@ -40,6 +40,20 @@ jest.mock('expo-camera', () => ({
   useMicrophonePermissions: () => [{ granted: true }, jest.fn(async () => ({ granted: true })), jest.fn()],
 }));
 
+jest.mock('@stripe/stripe-react-native', () => ({
+  Constants: {
+    API_VERSIONS: {
+      CORE: '2026-04-22.dahlia',
+      ISSUING: '2026-04-22.dahlia',
+    },
+  },
+  initStripe: jest.fn(async () => undefined),
+  usePaymentSheet: () => ({
+    initPaymentSheet: jest.fn(async () => ({})),
+    presentPaymentSheet: jest.fn(async () => ({})),
+  }),
+}));
+
 jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: () => ({ token: 'Bearer test-token', partyId: '7' }),
 }));
@@ -53,6 +67,9 @@ jest.mock('../src/api/events', () => ({
     getById: jest.fn(),
     getRSVPs: jest.fn(),
     getInvitations: jest.fn(),
+    listTicketTiers: jest.fn(),
+    listTicketOrders: jest.fn(),
+    createTicketPaymentSheet: jest.fn(),
     rsvp: jest.fn(),
     sendInvitation: jest.fn(),
     respondToInvitation: jest.fn(),

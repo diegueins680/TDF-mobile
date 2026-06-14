@@ -13,6 +13,11 @@ import type {
   EventMomentCommentInput,
   EventMomentCreateInput,
   EventMomentReactionKind,
+  EventTicketOrder,
+  EventTicketPaymentIntent,
+  EventTicketPaymentSheetParams,
+  EventTicketPurchaseInput,
+  EventTicketTier,
   RSVPStatus,
   EventInvitationStatus,
   ArtistSocialLinks
@@ -71,6 +76,68 @@ type BackendInvitationDTO = {
   invitationMessage?: string | null;
   invitationCreatedAt?: string;
   invitationUpdatedAt?: string;
+};
+
+type BackendTicketTierDTO = {
+  ticketTierId?: ID | null;
+  ticketTierEventId?: ID | null;
+  ticketTierCode?: string | null;
+  ticketTierName?: string | null;
+  ticketTierDescription?: string | null;
+  ticketTierPriceCents?: number | null;
+  ticketTierCurrency?: string | null;
+  ticketTierQuantityTotal?: number | null;
+  ticketTierQuantitySold?: number | null;
+  ticketTierSalesStart?: string | null;
+  ticketTierSalesEnd?: string | null;
+  ticketTierActive?: boolean | null;
+  ticketTierPosition?: number | null;
+};
+
+type BackendTicketDTO = {
+  ticketId?: ID | null;
+  ticketEventId?: ID | null;
+  ticketTierId?: ID | null;
+  ticketOrderId?: ID | null;
+  ticketCode?: string | null;
+  ticketStatus?: string | null;
+  ticketHolderName?: string | null;
+  ticketHolderEmail?: string | null;
+  ticketCheckedInAt?: string | null;
+  ticketCreatedAt?: string | null;
+  ticketUpdatedAt?: string | null;
+};
+
+type BackendTicketOrderDTO = {
+  ticketOrderId?: ID | null;
+  ticketOrderEventId?: ID | null;
+  ticketOrderTierId?: ID | null;
+  ticketOrderBuyerPartyId?: ID | null;
+  ticketOrderBuyerName?: string | null;
+  ticketOrderBuyerEmail?: string | null;
+  ticketOrderQuantity?: number | null;
+  ticketOrderAmountCents?: number | null;
+  ticketOrderCurrency?: string | null;
+  ticketOrderStatusValue?: string | null;
+  ticketOrderPurchasedAt?: string | null;
+  ticketOrderCreatedAt?: string | null;
+  ticketOrderUpdatedAt?: string | null;
+  ticketOrderTickets?: BackendTicketDTO[] | null;
+};
+
+type BackendPaymentSheetParamsDTO = {
+  psCustomerId?: string | null;
+  psEphemeralKeySecret?: string | null;
+  psPaymentIntentClientSecret?: string | null;
+  psPublishableKey?: string | null;
+};
+
+type BackendStripePaymentIntentDTO = {
+  spiClientSecret?: string | null;
+  spiOrderId?: string | null;
+  spiAmountCents?: number | null;
+  spiCurrency?: string | null;
+  spiPaymentSheet?: BackendPaymentSheetParamsDTO | null;
 };
 
 type BackendMomentReactionDTO = {
@@ -192,6 +259,11 @@ const normalizeOptionalPositiveIdParam = (value: ID | null | undefined): string 
 const normalizeOptionalText = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+};
+
+const normalizeNonNegativeInteger = (value: number | null | undefined): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.trunc(value));
 };
 
 const normalizeMomentMediaKind = (value: string | null | undefined): 'image' | 'video' => {
@@ -394,6 +466,74 @@ export const Events = {
       payload
     );
     return mapInvitationDto(dto, eventId);
+  },
+
+  // Ticketing
+  listTicketTiers: async (eventId: ID): Promise<EventTicketTier[]> => {
+    const list = await get<BackendTicketTierDTO[]>(`/social-events/events/${eventId}/ticket-tiers`);
+    return list.map((dto) => mapTicketTierDto(dto, eventId));
+  },
+
+  listTicketOrders: async (
+    eventId: ID,
+    filters?: { buyerPartyId?: ID | null; status?: string | null },
+  ): Promise<EventTicketOrder[]> => {
+    const query = new URLSearchParams();
+    const buyerPartyId = normalizeOptionalIdParam(filters?.buyerPartyId);
+    const status = normalizeOptionalText(filters?.status ?? null);
+    if (buyerPartyId) query.append('buyerPartyId', buyerPartyId);
+    if (status) query.append('status', status);
+    const url = `/social-events/events/${eventId}/ticket-orders${query.toString() ? `?${query.toString()}` : ''}`;
+    const list = await get<BackendTicketOrderDTO[]>(url);
+    return list.map((dto) => mapTicketOrderDto(dto, eventId));
+  },
+
+  buyTickets: async (input: EventTicketPurchaseInput): Promise<EventTicketOrder> => {
+    const normalizedTierId = normalizeOptionalPositiveIdParam(input.tierId);
+    if (!normalizedTierId) {
+      throw new Error('Selecciona un tipo de ticket válido.');
+    }
+    if (!Number.isSafeInteger(input.quantity) || input.quantity <= 0) {
+      throw new Error('Cantidad inválida.');
+    }
+
+    const payload = {
+      ticketPurchaseTierId: normalizedTierId,
+      ticketPurchaseQuantity: input.quantity,
+      ticketPurchaseBuyerPartyId: normalizeOptionalIdParam(input.buyerPartyId),
+      ticketPurchaseBuyerName: normalizeOptionalText(input.buyerName ?? null),
+      ticketPurchaseBuyerEmail: normalizeOptionalText(input.buyerEmail ?? null),
+    };
+    const dto = await post<BackendTicketOrderDTO>(`/social-events/events/${input.eventId}/ticket-orders`, payload);
+    return mapTicketOrderDto(dto, input.eventId);
+  },
+
+  createTicketPaymentSheet: async (
+    input: EventTicketPurchaseInput,
+    mobileSdkStripeVersion: string,
+  ): Promise<EventTicketPaymentIntent> => {
+    const normalizedTierId = normalizeOptionalPositiveIdParam(input.tierId);
+    const normalizedStripeVersion = normalizeOptionalText(mobileSdkStripeVersion);
+    if (!normalizedTierId) {
+      throw new Error('Selecciona un tipo de ticket válido.');
+    }
+    if (!Number.isSafeInteger(input.quantity) || input.quantity <= 0) {
+      throw new Error('Cantidad inválida.');
+    }
+    if (!normalizedStripeVersion) {
+      throw new Error('La versión de Stripe móvil no está disponible.');
+    }
+
+    const payload = {
+      ticketPurchaseTierId: normalizedTierId,
+      ticketPurchaseQuantity: input.quantity,
+      ticketPurchaseBuyerPartyId: normalizeOptionalIdParam(input.buyerPartyId),
+      ticketPurchaseBuyerName: normalizeOptionalText(input.buyerName ?? null),
+      ticketPurchaseBuyerEmail: normalizeOptionalText(input.buyerEmail ?? null),
+      ticketPurchaseMobileSdkStripeVersion: normalizedStripeVersion,
+    };
+    const dto = await post<BackendStripePaymentIntentDTO>('/social-events/stripe/create-payment-intent', payload);
+    return mapStripePaymentIntentDto(dto);
   },
 
   // Event moments
@@ -616,6 +756,94 @@ function mapInvitationDto(dto: BackendInvitationDTO, fallbackEventId: ID): Event
     message: dto.invitationMessage ?? null,
     createdAt,
     updatedAt
+  };
+}
+
+function mapTicketTierDto(dto: BackendTicketTierDTO, fallbackEventId: ID): EventTicketTier {
+  const code = normalizeOptionalText(dto.ticketTierCode ?? null) ?? 'ticket';
+  return {
+    id: dto.ticketTierId ?? `${String(fallbackEventId)}:${code}`,
+    eventId: dto.ticketTierEventId ?? fallbackEventId,
+    code,
+    name: normalizeOptionalText(dto.ticketTierName ?? null) ?? code,
+    description: normalizeOptionalText(dto.ticketTierDescription ?? null),
+    priceCents: normalizeNonNegativeInteger(dto.ticketTierPriceCents),
+    currency: normalizeOptionalText(dto.ticketTierCurrency ?? null)?.toUpperCase() ?? 'USD',
+    quantityTotal: normalizeNonNegativeInteger(dto.ticketTierQuantityTotal),
+    quantitySold: normalizeNonNegativeInteger(dto.ticketTierQuantitySold),
+    salesStart: normalizeOptionalTimestamp(dto.ticketTierSalesStart) ?? null,
+    salesEnd: normalizeOptionalTimestamp(dto.ticketTierSalesEnd) ?? null,
+    active: dto.ticketTierActive !== false,
+    position: dto.ticketTierPosition ?? null,
+  };
+}
+
+function mapTicketDto(dto: BackendTicketDTO, fallbackEventId: ID, fallbackOrderId: ID, index = 0) {
+  const code = normalizeOptionalText(dto.ticketCode ?? null) ?? `ticket-${index + 1}`;
+  return {
+    id: dto.ticketId ?? `${String(fallbackOrderId)}:${code}`,
+    eventId: dto.ticketEventId ?? fallbackEventId,
+    tierId: dto.ticketTierId ?? null,
+    orderId: dto.ticketOrderId ?? fallbackOrderId,
+    code,
+    status: normalizeOptionalText(dto.ticketStatus ?? null) ?? 'issued',
+    holderName: normalizeOptionalText(dto.ticketHolderName ?? null),
+    holderEmail: normalizeOptionalText(dto.ticketHolderEmail ?? null),
+    checkedInAt: normalizeOptionalTimestamp(dto.ticketCheckedInAt) ?? null,
+    createdAt: normalizeOptionalTimestamp(dto.ticketCreatedAt) ?? null,
+    updatedAt: normalizeOptionalTimestamp(dto.ticketUpdatedAt) ?? null,
+  };
+}
+
+function mapTicketOrderDto(dto: BackendTicketOrderDTO, fallbackEventId: ID): EventTicketOrder {
+  const orderId = dto.ticketOrderId ?? `${String(fallbackEventId)}:${dto.ticketOrderTierId ?? 'order'}`;
+  return {
+    id: orderId,
+    eventId: dto.ticketOrderEventId ?? fallbackEventId,
+    tierId: dto.ticketOrderTierId ?? null,
+    buyerPartyId: dto.ticketOrderBuyerPartyId ?? null,
+    buyerName: normalizeOptionalText(dto.ticketOrderBuyerName ?? null),
+    buyerEmail: normalizeOptionalText(dto.ticketOrderBuyerEmail ?? null),
+    quantity: normalizeNonNegativeInteger(dto.ticketOrderQuantity),
+    amountCents: normalizeNonNegativeInteger(dto.ticketOrderAmountCents),
+    currency: normalizeOptionalText(dto.ticketOrderCurrency ?? null)?.toUpperCase() ?? 'USD',
+    status: normalizeOptionalText(dto.ticketOrderStatusValue ?? null) ?? 'pending',
+    purchasedAt: normalizeOptionalTimestamp(dto.ticketOrderPurchasedAt) ?? null,
+    createdAt: normalizeOptionalTimestamp(dto.ticketOrderCreatedAt) ?? null,
+    updatedAt: normalizeOptionalTimestamp(dto.ticketOrderUpdatedAt) ?? null,
+    tickets: (dto.ticketOrderTickets ?? []).map((ticket, index) =>
+      mapTicketDto(ticket, dto.ticketOrderEventId ?? fallbackEventId, orderId, index)
+    ),
+  };
+}
+
+function requirePaymentSheetText(value: string | null | undefined, field: string): string {
+  const normalized = normalizeOptionalText(value ?? null);
+  if (!normalized) {
+    throw new Error(`Stripe PaymentSheet response missing ${field}.`);
+  }
+  return normalized;
+}
+
+function mapPaymentSheetParamsDto(dto: BackendPaymentSheetParamsDTO | null | undefined): EventTicketPaymentSheetParams {
+  if (!dto) {
+    throw new Error('Stripe PaymentSheet response missing payment sheet params.');
+  }
+  return {
+    customerId: requirePaymentSheetText(dto.psCustomerId, 'customerId'),
+    ephemeralKeySecret: requirePaymentSheetText(dto.psEphemeralKeySecret, 'ephemeralKeySecret'),
+    paymentIntentClientSecret: requirePaymentSheetText(dto.psPaymentIntentClientSecret, 'paymentIntentClientSecret'),
+    publishableKey: requirePaymentSheetText(dto.psPublishableKey, 'publishableKey'),
+  };
+}
+
+function mapStripePaymentIntentDto(dto: BackendStripePaymentIntentDTO): EventTicketPaymentIntent {
+  return {
+    clientSecret: requirePaymentSheetText(dto.spiClientSecret, 'clientSecret'),
+    orderId: requirePaymentSheetText(dto.spiOrderId, 'orderId'),
+    amountCents: normalizeNonNegativeInteger(dto.spiAmountCents),
+    currency: normalizeOptionalText(dto.spiCurrency ?? null)?.toUpperCase() ?? 'USD',
+    paymentSheet: mapPaymentSheetParamsDto(dto.spiPaymentSheet),
   };
 }
 

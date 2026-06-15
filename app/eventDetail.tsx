@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -17,16 +17,35 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  Constants as StripeConstants,
+  initStripe,
+  usePaymentSheet,
+} from '@stripe/stripe-react-native';
 
 import { Events } from '../src/api/events';
+import { Artists } from '../src/api/artists';
 import { Social } from '../src/api/social';
 import { uploadMedia } from '../src/api/upload';
+import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard';
 import { EventMomentCard } from '../src/components/EventMomentCard';
 import {
   buildMomentActor,
   countMomentReactions,
   listFeaturedMoments,
 } from '../src/lib/eventMoments';
+import { countLiveBroadcasts } from '../src/lib/liveBroadcasts';
+import {
+  endLiveBroadcastSession,
+  heartbeatLiveBroadcastSession,
+  listLiveBroadcastFeed,
+  startLiveBroadcastSession,
+} from '../src/lib/liveBroadcastsRepository';
+import {
+  RTCView,
+  startWhipBroadcastPublisher,
+  type LiveBroadcastPublisherSession,
+} from '../src/lib/liveBroadcastPublishing';
 import {
   addMomentFeedComment,
   createMomentFeedItem,
@@ -40,15 +59,27 @@ import { useAuth } from '../src/providers/AuthProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 import type {
+  EventLiveBroadcast,
+  EventLiveBroadcastQuality,
   EventInvitationStatus,
   EventMoment,
   EventMomentReactionKind,
+  EventTicketTier,
   ID,
   RSVPStatus,
 } from '../src/types';
 
-type EventDetailTab = 'details' | 'moments';
+type EventDetailTab = 'details' | 'moments' | 'live';
 type DraftMomentMedia = EventMoment['media'] & { fileName?: string | null };
+type TicketPaymentResult =
+  | { status: 'paid'; orderId: string; quantity: number }
+  | { status: 'cancelled'; orderId: string; releasedReservation: boolean };
+
+const LIVE_QUALITY_OPTIONS: EventLiveBroadcastQuality[] = ['auto', '720p', '480p'];
+const STRIPE_MERCHANT_DISPLAY_NAME = 'TDF Records';
+const STRIPE_RETURN_URL = 'tdf://stripe-redirect';
+const STRIPE_MERCHANT_IDENTIFIER =
+  process.env.STRIPE_MERCHANT_IDENTIFIER?.trim() || process.env.EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER?.trim() || undefined;
 
 const parsePositivePartyId = (value: string | null | undefined): number | null => {
   if (!value || !/^\d+$/.test(value.trim())) return null;
@@ -56,10 +87,26 @@ const parsePositivePartyId = (value: string | null | undefined): number | null =
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
+const formatTicketMoney = (amountCents: number, currency: string): string =>
+  new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amountCents / 100);
+
+const ticketTierAvailability = (tier: EventTicketTier): number =>
+  Math.max(0, tier.quantityTotal - tier.quantitySold);
+
+const isTicketTierOnSale = (tier: EventTicketTier, now = Date.now()): boolean => {
+  if (!tier.active || ticketTierAvailability(tier) <= 0) return false;
+  const salesStart = tier.salesStart ? Date.parse(tier.salesStart) : null;
+  const salesEnd = tier.salesEnd ? Date.parse(tier.salesEnd) : null;
+  if (typeof salesStart === 'number' && Number.isFinite(salesStart) && now < salesStart) return false;
+  if (typeof salesEnd === 'number' && Number.isFinite(salesEnd) && now > salesEnd) return false;
+  return true;
+};
+
 export default function EventDetailScreen() {
   const { eventId: rawEventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const { initPaymentSheet, presentPaymentSheet } = usePaymentSheet();
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: authPartyId } = useAuth();
   const { partyId: settingsPartyId, displayName } = useUserSettings();
@@ -69,6 +116,8 @@ export default function EventDetailScreen() {
     [displayName, normalizedPartyId],
   );
   const shouldPreferRemoteMoments = Boolean(token?.trim());
+  const shouldPreferRemoteBroadcasts = Boolean(token?.trim());
+  const publisherSessionRef = useRef<LiveBroadcastPublisherSession | null>(null);
 
   const [activeTab, setActiveTab] = useState<EventDetailTab>('details');
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('NONE');
@@ -79,6 +128,16 @@ export default function EventDetailScreen() {
   const [momentCaption, setMomentCaption] = useState('');
   const [momentMedia, setMomentMedia] = useState<DraftMomentMedia | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [selectedTicketTierId, setSelectedTicketTierId] = useState<string | null>(null);
+  const [ticketQuantity, setTicketQuantity] = useState('1');
+  const [ticketBuyerName, setTicketBuyerName] = useState(displayName ?? '');
+  const [ticketBuyerEmail, setTicketBuyerEmail] = useState('');
+  const [selectedLiveArtistId, setSelectedLiveArtistId] = useState<string | null>(null);
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastDescription, setBroadcastDescription] = useState('');
+  const [broadcastQuality, setBroadcastQuality] = useState<EventLiveBroadcastQuality>('auto');
+  const [activeBroadcastId, setActiveBroadcastId] = useState<string | null>(null);
+  const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
 
   const { data: event, isLoading, isError } = useQuery({
     queryKey: ['event', eventId],
@@ -103,17 +162,58 @@ export default function EventDetailScreen() {
     queryFn: listSavedEventIds,
   });
 
+  const ticketTiersQuery = useQuery({
+    queryKey: ['event-ticket-tiers', eventId],
+    queryFn: () => Events.listTicketTiers(eventId as ID),
+    enabled: Boolean(eventId),
+  });
+
+  const ticketOrdersQuery = useQuery({
+    queryKey: ['event-ticket-orders', eventId, normalizedPartyId],
+    queryFn: () => Events.listTicketOrders(eventId as ID, normalizedPartyId),
+    enabled: Boolean(eventId && normalizedPartyId),
+  });
+
   const momentsQuery = useQuery({
     queryKey: ['event-moments', eventId, shouldPreferRemoteMoments ? 'remote' : 'local'],
     queryFn: () => listMomentFeed(eventId as ID, { preferRemote: shouldPreferRemoteMoments }),
     enabled: Boolean(eventId),
   });
 
-  useEffect(() => {
-    if (!normalizedPartyId || !rsvpQuery.data) return;
-    const mine = rsvpQuery.data.find((r) => String(r.userId) === normalizedPartyId);
-    setRsvpStatus(mine?.status ?? 'NONE');
-  }, [normalizedPartyId, rsvpQuery.data]);
+  const liveBroadcastsQuery = useQuery({
+    queryKey: ['event-live-broadcasts', eventId, shouldPreferRemoteBroadcasts ? 'remote' : 'local'],
+    queryFn: () => listLiveBroadcastFeed(eventId as ID, { preferRemote: shouldPreferRemoteBroadcasts }),
+    enabled: Boolean(eventId),
+  });
+
+  const followedLiveArtistIdsQuery = useQuery({
+    queryKey: [
+      'event-live-followed-artists',
+      eventId,
+      currentActor.partyId,
+      event?.artists?.map((artist) => String(artist.id)).join(',') ?? '',
+    ],
+    queryFn: async () => {
+      const partyId = currentActor.partyId;
+      const artists = event?.artists ?? [];
+      if (!partyId || artists.length === 0) return [];
+
+      const settled = await Promise.allSettled(
+        artists.map(async (artist) => {
+          const followers = await Artists.listFollowers(artist.id);
+          const isFollower = followers.some(
+            (follower) => follower.followerPartyId.trim() === partyId,
+          );
+          return isFollower ? String(artist.id) : null;
+        }),
+      );
+
+      return settled
+        .map((result) => (result.status === 'fulfilled' ? result.value : null))
+        .filter((artistId): artistId is string => Boolean(artistId));
+    },
+    enabled: Boolean(eventId && currentActor.partyId && event?.artists?.length),
+  });
 
   const featuredMoments = useMemo(
     () => listFeaturedMoments(momentsQuery.data ?? [], 3),
@@ -123,6 +223,93 @@ export default function EventDetailScreen() {
     () => new Set(featuredMoments.map((moment) => moment.id)),
     [featuredMoments],
   );
+  const eventArtists = useMemo(() => event?.artists ?? [], [event?.artists]);
+  const followedLiveArtistIds = useMemo(
+    () => new Set(followedLiveArtistIdsQuery.data ?? []),
+    [followedLiveArtistIdsQuery.data],
+  );
+  const followedLiveArtists = useMemo(
+    () => eventArtists.filter((artist) => followedLiveArtistIds.has(String(artist.id))),
+    [eventArtists, followedLiveArtistIds],
+  );
+  const selectedLiveArtist = useMemo(
+    () =>
+      followedLiveArtists.find((artist) => String(artist.id) === selectedLiveArtistId) ??
+      followedLiveArtists[0] ??
+      null,
+    [followedLiveArtists, selectedLiveArtistId],
+  );
+
+  useEffect(() => {
+    if (!normalizedPartyId || !rsvpQuery.data) return;
+    const mine = rsvpQuery.data.find((r) => String(r.userId) === normalizedPartyId);
+    setRsvpStatus(mine?.status ?? 'NONE');
+  }, [normalizedPartyId, rsvpQuery.data]);
+
+  useEffect(() => {
+    if (followedLiveArtists.length === 0) {
+      setSelectedLiveArtistId(null);
+      return;
+    }
+    if (selectedLiveArtistId && followedLiveArtists.some((artist) => String(artist.id) === selectedLiveArtistId)) {
+      return;
+    }
+    setSelectedLiveArtistId(String(followedLiveArtists[0].id));
+  }, [followedLiveArtists, selectedLiveArtistId]);
+
+  useEffect(() => () => {
+    const session = publisherSessionRef.current;
+    publisherSessionRef.current = null;
+    if (session) {
+      void session.stop();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!eventId || !activeBroadcastId) return undefined;
+    const interval = setInterval(() => {
+      void heartbeatLiveBroadcastSession(
+        { eventId, broadcastId: activeBroadcastId, viewerDelta: 0 },
+        { preferRemote: shouldPreferRemoteBroadcasts },
+      ).then(() => {
+        qc.invalidateQueries({ queryKey: ['event-live-broadcasts', eventId] });
+      }).catch(() => undefined);
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [activeBroadcastId, eventId, qc, shouldPreferRemoteBroadcasts]);
+
+  const availableTicketTiers = useMemo(
+    () => (ticketTiersQuery.data ?? []).filter((tier) => isTicketTierOnSale(tier)),
+    [ticketTiersQuery.data],
+  );
+  const selectedTicketTier = useMemo(
+    () =>
+      availableTicketTiers.find((tier) => tier.id === selectedTicketTierId) ??
+      availableTicketTiers[0] ??
+      null,
+    [availableTicketTiers, selectedTicketTierId],
+  );
+  const parsedTicketQuantity = Number.parseInt(ticketQuantity.trim(), 10);
+  const selectedTicketTotalCents =
+    selectedTicketTier && Number.isSafeInteger(parsedTicketQuantity) && parsedTicketQuantity > 0
+      ? selectedTicketTier.priceCents * parsedTicketQuantity
+      : 0;
+
+  useEffect(() => {
+    setTicketBuyerName((current) => (current.trim() ? current : displayName ?? ''));
+  }, [displayName]);
+
+  useEffect(() => {
+    if (availableTicketTiers.length === 0) {
+      setSelectedTicketTierId(null);
+      return;
+    }
+    if (selectedTicketTierId && availableTicketTiers.some((tier) => tier.id === selectedTicketTierId)) {
+      return;
+    }
+    setSelectedTicketTierId(availableTicketTiers[0].id);
+  }, [availableTicketTiers, selectedTicketTierId]);
 
   const rsvpMutation = useMutation({
     mutationFn: (status: RSVPStatus) => {
@@ -191,6 +378,98 @@ export default function EventDetailScreen() {
     },
     onError: () => {
       Alert.alert('Error', 'No pudimos actualizar tus eventos guardados.');
+    },
+  });
+
+  const purchaseTicketsMutation = useMutation<TicketPaymentResult>({
+    mutationFn: async () => {
+      if (!eventId) throw new Error('Event not found');
+      if (!normalizedPartyId) throw new Error('Guarda tu Party ID en tu perfil para comprar tickets.');
+      if (!selectedTicketTier) throw new Error('Selecciona un ticket disponible.');
+
+      const stripeApiVersion = StripeConstants.API_VERSIONS.CORE?.trim();
+      if (!stripeApiVersion) {
+        throw new Error('No pudimos obtener la versión de Stripe del SDK móvil.');
+      }
+
+      const quantity = Number.parseInt(ticketQuantity.trim(), 10);
+      if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+        throw new Error('Cantidad inválida.');
+      }
+      if (quantity > ticketTierAvailability(selectedTicketTier)) {
+        throw new Error('No hay suficientes tickets disponibles.');
+      }
+
+      const buyerName = ticketBuyerName.trim() || displayName || null;
+      const buyerEmail = ticketBuyerEmail.trim() || null;
+      const paymentIntent = await Events.createTicketPaymentSheet(
+        {
+          eventId,
+          tierId: selectedTicketTier.id,
+          quantity,
+          buyerPartyId: normalizedPartyId,
+          buyerName,
+          buyerEmail,
+        },
+        stripeApiVersion,
+      );
+
+      await initStripe({
+        publishableKey: paymentIntent.paymentSheet.publishableKey,
+        merchantIdentifier: STRIPE_MERCHANT_IDENTIFIER,
+        urlScheme: 'tdf',
+        setReturnUrlSchemeOnAndroid: true,
+      });
+
+      const initResult = await initPaymentSheet({
+        merchantDisplayName: STRIPE_MERCHANT_DISPLAY_NAME,
+        customerId: paymentIntent.paymentSheet.customerId,
+        customerEphemeralKeySecret: paymentIntent.paymentSheet.ephemeralKeySecret,
+        paymentIntentClientSecret: paymentIntent.paymentSheet.paymentIntentClientSecret,
+        returnURL: STRIPE_RETURN_URL,
+        allowsDelayedPaymentMethods: false,
+        primaryButtonLabel: `Pagar ${formatTicketMoney(paymentIntent.amountCents, paymentIntent.currency)}`,
+        defaultBillingDetails: {
+          name: buyerName ?? undefined,
+          email: buyerEmail ?? undefined,
+        },
+      });
+      if (initResult.error) {
+        throw new Error(initResult.error.localizedMessage ?? initResult.error.message ?? 'No pudimos iniciar el pago.');
+      }
+
+      const presentResult = await presentPaymentSheet();
+      if (presentResult.error) {
+        if (presentResult.error.code === 'Canceled') {
+          const releasedReservation = await Events.updateTicketOrderStatus(eventId, paymentIntent.orderId, 'cancelled')
+            .then(() => true)
+            .catch(() => false);
+          return { status: 'cancelled', orderId: paymentIntent.orderId, releasedReservation };
+        }
+        throw new Error(presentResult.error.localizedMessage ?? presentResult.error.message ?? 'No pudimos completar el pago.');
+      }
+
+      return { status: 'paid', orderId: paymentIntent.orderId, quantity };
+    },
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['event-ticket-tiers', eventId] });
+      qc.invalidateQueries({ queryKey: ['event-ticket-orders', eventId, normalizedPartyId] });
+      qc.invalidateQueries({ queryKey: ['event', eventId] });
+      if (result.status === 'cancelled') {
+        Alert.alert(
+          'Pago cancelado',
+          result.releasedReservation
+            ? 'No se cobró la tarjeta y liberamos la reserva.'
+            : 'No se cobró la tarjeta. No pudimos liberar la reserva automáticamente.',
+        );
+        return;
+      }
+      setTicketQuantity('1');
+      Alert.alert('Compra enviada', `Pago confirmado. Orden #${result.orderId} por ${result.quantity} ticket(s).`);
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'No pudimos procesar el pago.';
+      Alert.alert('Error', message);
     },
   });
 
@@ -307,6 +586,112 @@ export default function EventDetailScreen() {
     },
   });
 
+  const stopActivePublisher = useCallback(async () => {
+    const session = publisherSessionRef.current;
+    publisherSessionRef.current = null;
+    setLivePreviewUrl(null);
+    if (session) {
+      await session.stop();
+    }
+  }, []);
+
+  const startLiveBroadcastMutation = useMutation({
+    mutationFn: async () => {
+      if (!eventId) throw new Error('Event not found');
+      if (!token?.trim()) throw new Error('Inicia sesión para transmitir al fanclub.');
+      if (!currentActor.partyId) throw new Error('Configura tu Party ID para transmitir como fan.');
+      if (!selectedLiveArtist) throw new Error('Sigue a un artista del lineup para transmitir a su fanclub.');
+
+      let created:
+        | Awaited<ReturnType<typeof startLiveBroadcastSession>>
+        | null = null;
+
+      try {
+        created = await startLiveBroadcastSession(
+          {
+            eventId,
+            artistId: selectedLiveArtist.id,
+            artistName: selectedLiveArtist.name,
+            broadcasterName: currentActor.displayName,
+            broadcasterPartyId: currentActor.partyId,
+            title: broadcastTitle,
+            description: broadcastDescription,
+            quality: broadcastQuality,
+          },
+          { preferRemote: shouldPreferRemoteBroadcasts },
+        );
+
+        if (!created.broadcast.whipUrl) {
+          if (created.broadcast.ingestUrl) {
+            throw new Error('El servidor devolvió RTMP, pero la app móvil publica video en vivo por WHIP.');
+          }
+          throw new Error('El servidor no devolvió un endpoint de publicación para esta transmisión.');
+        }
+
+        const publisher = await startWhipBroadcastPublisher({
+          whipUrl: created.broadcast.whipUrl,
+          streamKey: created.broadcast.streamKey,
+          quality: broadcastQuality,
+        });
+
+        return { ...created, publisher };
+      } catch (error) {
+        if (created) {
+          await endLiveBroadcastSession(
+            {
+              eventId,
+              broadcastId: created.broadcast.id,
+              broadcasterPartyId: currentActor.partyId,
+            },
+            { preferRemote: shouldPreferRemoteBroadcasts },
+          ).catch(() => undefined);
+        }
+        throw error;
+      }
+    },
+    onSuccess: ({ broadcast, source, fallbackReason, publisher }) => {
+      publisherSessionRef.current = publisher;
+      setLivePreviewUrl(publisher.previewUrl);
+      setActiveBroadcastId(broadcast.id);
+      setBroadcastTitle('');
+      setBroadcastDescription('');
+      qc.invalidateQueries({ queryKey: ['event-live-broadcasts', eventId] });
+      const notices = [
+        source === 'local' && shouldPreferRemoteBroadcasts
+          ? fallbackReason ?? 'No pudimos sincronizar con el backend.'
+          : null,
+      ].filter((value): value is string => Boolean(value));
+      Alert.alert('En vivo', notices.join('\n\n') || `Transmitiendo para el fanclub de ${broadcast.artistName}.`);
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'No pudimos iniciar la transmisión.';
+      Alert.alert('Error', message);
+    },
+  });
+
+  const endLiveBroadcastMutation = useMutation({
+    mutationFn: async (broadcast: EventLiveBroadcast) => {
+      await stopActivePublisher();
+      await endLiveBroadcastSession(
+        {
+          eventId: broadcast.eventId,
+          broadcastId: broadcast.id,
+          broadcasterPartyId: currentActor.partyId,
+        },
+        { preferRemote: shouldPreferRemoteBroadcasts },
+      );
+    },
+    onSuccess: () => {
+      setActiveBroadcastId(null);
+      qc.invalidateQueries({ queryKey: ['event-live-broadcasts', eventId] });
+      Alert.alert('Listo', 'Transmisión finalizada.');
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'No pudimos finalizar la transmisión.';
+      Alert.alert('Error', message);
+    },
+  });
+
   const handleOpenTickets = useCallback(() => {
     if (event?.ticketUrl) {
       Linking.openURL(event.ticketUrl).catch(() => {
@@ -320,6 +705,30 @@ export default function EventDetailScreen() {
       Alert.alert('Error', 'No pudimos abrir este archivo.');
     });
   }, []);
+
+  const handleWatchBroadcast = useCallback((broadcast: EventLiveBroadcast) => {
+    if (!broadcast.playbackUrl || !/^https?:\/\//i.test(broadcast.playbackUrl.trim())) {
+      Alert.alert('En vivo', 'Esta transmisión todavía no tiene una URL pública de reproducción.');
+      return;
+    }
+
+    if (eventId) {
+      void heartbeatLiveBroadcastSession(
+        { eventId, broadcastId: broadcast.id, viewerDelta: 1 },
+        { preferRemote: shouldPreferRemoteBroadcasts },
+      ).then(() => {
+        qc.invalidateQueries({ queryKey: ['event-live-broadcasts', eventId] });
+      }).catch(() => undefined);
+    }
+
+    Linking.openURL(broadcast.playbackUrl).catch(() => {
+      Alert.alert('Error', 'No pudimos abrir la transmisión.');
+    });
+  }, [eventId, qc, shouldPreferRemoteBroadcasts]);
+
+  const handleEndBroadcast = useCallback((broadcast: EventLiveBroadcast) => {
+    endLiveBroadcastMutation.mutate(broadcast);
+  }, [endLiveBroadcastMutation]);
 
   const handleRsvpPress = useCallback((status: RSVPStatus) => {
     if (!normalizedPartyId) {
@@ -427,6 +836,27 @@ export default function EventDetailScreen() {
   const invitations = invitationsQuery.data ?? [];
   const isSaved = savedEventIdsQuery.data?.includes(String(event.id)) ?? false;
   const momentCount = momentsQuery.data?.length ?? 0;
+  const liveBroadcasts = liveBroadcastsQuery.data ?? [];
+  const liveBroadcastCount = countLiveBroadcasts(liveBroadcasts);
+  const activeBroadcast = activeBroadcastId
+    ? liveBroadcasts.find((broadcast) => broadcast.id === activeBroadcastId) ?? null
+    : null;
+  const hasLivePublisher = Boolean(activeBroadcast && livePreviewUrl);
+  const canStartLiveBroadcast =
+    Boolean(token?.trim()) &&
+    Boolean(currentActor.partyId) &&
+    Boolean(selectedLiveArtist) &&
+    !hasLivePublisher &&
+    !startLiveBroadcastMutation.isPending;
+  const ticketOrders = ticketOrdersQuery.data ?? [];
+  const selectedTicketAvailability = selectedTicketTier ? ticketTierAvailability(selectedTicketTier) : 0;
+  const canBuySelectedTickets =
+    Boolean(normalizedPartyId) &&
+    Boolean(selectedTicketTier) &&
+    Number.isSafeInteger(parsedTicketQuantity) &&
+    parsedTicketQuantity > 0 &&
+    parsedTicketQuantity <= selectedTicketAvailability &&
+    !purchaseTicketsMutation.isPending;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -460,6 +890,14 @@ export default function EventDetailScreen() {
           >
             <Text style={[styles.tabButtonText, activeTab === 'moments' && styles.tabButtonTextActive]}>
               Momentos ({momentCount})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'live' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('live')}
+          >
+            <Text style={[styles.tabButtonText, activeTab === 'live' && styles.tabButtonTextActive]}>
+              En Vivo ({liveBroadcastCount})
             </Text>
           </TouchableOpacity>
         </View>
@@ -507,16 +945,129 @@ export default function EventDetailScreen() {
 
             <View style={styles.section}>
               <Text style={styles.label}>Tickets</Text>
-              {event.ticketPrice ? (
-                <Text style={styles.price}>${event.ticketPrice.toFixed(2)}</Text>
+              {ticketTiersQuery.isLoading ? (
+                <ActivityIndicator color="#2563eb" />
+              ) : availableTicketTiers.length === 0 ? (
+                <>
+                  {event.ticketPrice ? (
+                    <Text style={styles.price}>${event.ticketPrice.toFixed(2)}</Text>
+                  ) : (
+                    <Text style={styles.text}>Free</Text>
+                  )}
+                  {event.ticketUrl ? (
+                    <TouchableOpacity style={styles.ticketButton} onPress={handleOpenTickets}>
+                      <Text style={styles.ticketButtonText}>Abrir tickets</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.helperText}>No hay tickets en venta para este evento.</Text>
+                  )}
+                </>
               ) : (
-                <Text style={styles.text}>Free</Text>
+                <>
+                  <View style={styles.ticketTierList}>
+                    {availableTicketTiers.map((tier) => {
+                      const selected = selectedTicketTier?.id === tier.id;
+                      const available = ticketTierAvailability(tier);
+                      return (
+                        <TouchableOpacity
+                          key={tier.id}
+                          style={[styles.ticketTierCard, selected && styles.ticketTierCardActive]}
+                          onPress={() => setSelectedTicketTierId(tier.id)}
+                          disabled={purchaseTicketsMutation.isPending}
+                        >
+                          <View style={styles.ticketTierHeader}>
+                            <Text style={styles.ticketTierName}>{tier.name}</Text>
+                            <Text style={styles.ticketTierPrice}>
+                              {formatTicketMoney(tier.priceCents, tier.currency)}
+                            </Text>
+                          </View>
+                          {tier.description ? (
+                            <Text style={styles.ticketTierDescription}>{tier.description}</Text>
+                          ) : null}
+                          <Text style={styles.ticketTierMeta}>{available} disponibles</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <View style={styles.ticketForm}>
+                    {!normalizedPartyId ? (
+                      <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para comprar tickets.</Text>
+                    ) : null}
+                    <View style={styles.ticketFormRow}>
+                      <View style={styles.ticketQuantityField}>
+                        <Text style={styles.ticketFieldLabel}>Cantidad</Text>
+                        <TextInput
+                          value={ticketQuantity}
+                          onChangeText={setTicketQuantity}
+                          style={styles.input}
+                          keyboardType="number-pad"
+                          editable={!purchaseTicketsMutation.isPending}
+                          maxLength={3}
+                        />
+                      </View>
+                      <View style={styles.ticketTotalBox}>
+                        <Text style={styles.ticketFieldLabel}>Total</Text>
+                        <Text style={styles.ticketTotalText}>
+                          {selectedTicketTier
+                            ? formatTicketMoney(selectedTicketTotalCents, selectedTicketTier.currency)
+                            : '--'}
+                        </Text>
+                      </View>
+                    </View>
+                    <TextInput
+                      placeholder="Nombre para la orden"
+                      value={ticketBuyerName}
+                      onChangeText={setTicketBuyerName}
+                      style={styles.input}
+                      editable={!purchaseTicketsMutation.isPending}
+                    />
+                    <TextInput
+                      placeholder="Email para recibo"
+                      value={ticketBuyerEmail}
+                      onChangeText={setTicketBuyerEmail}
+                      style={styles.input}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      editable={!purchaseTicketsMutation.isPending}
+                    />
+                    <TouchableOpacity
+                      style={[styles.ticketButton, !canBuySelectedTickets && styles.buttonDisabled]}
+                      onPress={() => purchaseTicketsMutation.mutate()}
+                      disabled={!canBuySelectedTickets}
+                    >
+                      <Text style={styles.ticketButtonText}>
+                        {purchaseTicketsMutation.isPending ? 'Abriendo pago...' : 'Pagar con tarjeta'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.ticketOrdersBox}>
+                    <Text style={styles.ticketOrdersTitle}>Mis órdenes</Text>
+                    {!normalizedPartyId ? (
+                      <Text style={styles.helperText}>Inicia con tu Party ID para ver tus órdenes.</Text>
+                    ) : ticketOrdersQuery.isLoading ? (
+                      <ActivityIndicator color="#2563eb" />
+                    ) : ticketOrders.length === 0 ? (
+                      <Text style={styles.helperText}>Todavía no tienes órdenes para este evento.</Text>
+                    ) : (
+                      ticketOrders.map((order) => (
+                        <View key={order.id} style={styles.ticketOrderRow}>
+                          <View>
+                            <Text style={styles.ticketOrderTitle}>Orden #{order.id}</Text>
+                            <Text style={styles.ticketOrderMeta}>
+                              {order.quantity} ticket(s) · {order.status}
+                            </Text>
+                          </View>
+                          <Text style={styles.ticketOrderAmount}>
+                            {formatTicketMoney(order.amountCents, order.currency)}
+                          </Text>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </>
               )}
-              {event.ticketUrl ? (
-                <TouchableOpacity style={styles.ticketButton} onPress={handleOpenTickets}>
-                  <Text style={styles.ticketButtonText}>Buy Tickets</Text>
-                </TouchableOpacity>
-              ) : null}
             </View>
 
             <View style={styles.section}>
@@ -575,7 +1126,7 @@ export default function EventDetailScreen() {
               </TouchableOpacity>
             </View>
           </>
-        ) : (
+        ) : activeTab === 'moments' ? (
           <>
             <View style={styles.section}>
               <View style={styles.momentHero}>
@@ -652,6 +1203,172 @@ export default function EventDetailScreen() {
                       onToggleReaction={(momentId, reaction) => reactionMutation.mutate({ momentId, reaction })}
                       onConnectAuthor={handleConnectAuthor}
                       onOpenMedia={handleOpenMomentMedia}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.section}>
+              <View style={styles.liveHero}>
+                <View style={styles.liveHeroHeader}>
+                  <View style={styles.liveHeroTitleRow}>
+                    <MaterialCommunityIcons name="broadcast" size={20} color="#dc2626" />
+                    <Text style={styles.liveHeroTitle}>Fanclub en vivo</Text>
+                  </View>
+                  {hasLivePublisher ? (
+                    <View style={styles.liveNowBadge}>
+                      <Text style={styles.liveNowBadgeText}>Transmitiendo</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {livePreviewUrl ? (
+                  <RTCView
+                    streamURL={livePreviewUrl}
+                    objectFit="cover"
+                    mirror={false}
+                    style={styles.livePreview}
+                  />
+                ) : (
+                  <View style={styles.livePreviewPlaceholder}>
+                    <MaterialCommunityIcons name="video-wireless-outline" size={34} color="#fecaca" />
+                    <Text style={styles.livePreviewText}>Vista previa al iniciar</Text>
+                  </View>
+                )}
+
+                <Text style={styles.liveHeroMeta}>
+                  Transmites como {currentActor.displayName}
+                  {selectedLiveArtist ? ` para ${selectedLiveArtist.name}` : ''}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>Fanclub</Text>
+              {!token?.trim() ? (
+                <Text style={styles.helperText}>Inicia sesión para transmitir al fanclub.</Text>
+              ) : null}
+              {!currentActor.partyId ? (
+                <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para transmitir.</Text>
+              ) : null}
+              {eventArtists.length === 0 ? (
+                <Text style={styles.text}>Este evento todavía no tiene artistas asociados.</Text>
+              ) : followedLiveArtistIdsQuery.isLoading ? (
+                <ActivityIndicator color="#2563eb" />
+              ) : followedLiveArtists.length === 0 ? (
+                <Text style={styles.text}>Sigue a un artista del lineup para transmitir a su fanclub.</Text>
+              ) : (
+                <View style={styles.liveArtistChips}>
+                  {followedLiveArtists.map((artist) => {
+                    const active = String(artist.id) === String(selectedLiveArtist?.id);
+                    return (
+                      <TouchableOpacity
+                        key={String(artist.id)}
+                        style={[styles.liveArtistChip, active && styles.liveArtistChipActive]}
+                        onPress={() => setSelectedLiveArtistId(String(artist.id))}
+                        disabled={hasLivePublisher || startLiveBroadcastMutation.isPending}
+                      >
+                        <Text style={[styles.liveArtistChipText, active && styles.liveArtistChipTextActive]}>
+                          {artist.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>Estudio</Text>
+              <View style={styles.inputGroup}>
+                <TextInput
+                  placeholder="Título"
+                  value={broadcastTitle}
+                  onChangeText={setBroadcastTitle}
+                  style={styles.input}
+                  maxLength={80}
+                  editable={!hasLivePublisher && !startLiveBroadcastMutation.isPending}
+                />
+                <TextInput
+                  placeholder="Descripción opcional"
+                  value={broadcastDescription}
+                  onChangeText={setBroadcastDescription}
+                  style={[styles.input, styles.inputMultiline]}
+                  multiline
+                  maxLength={280}
+                  editable={!hasLivePublisher && !startLiveBroadcastMutation.isPending}
+                />
+                <View style={styles.liveQualityRow}>
+                  {LIVE_QUALITY_OPTIONS.map((quality) => {
+                    const active = broadcastQuality === quality;
+                    return (
+                      <TouchableOpacity
+                        key={quality}
+                        style={[styles.liveQualityButton, active && styles.liveQualityButtonActive]}
+                        onPress={() => setBroadcastQuality(quality)}
+                        disabled={hasLivePublisher || startLiveBroadcastMutation.isPending}
+                      >
+                        <Text style={[styles.liveQualityText, active && styles.liveQualityTextActive]}>
+                          {quality}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {hasLivePublisher && activeBroadcast ? (
+                  <TouchableOpacity
+                    style={[styles.liveEndButton, endLiveBroadcastMutation.isPending && styles.buttonDisabled]}
+                    onPress={() => handleEndBroadcast(activeBroadcast)}
+                    disabled={endLiveBroadcastMutation.isPending}
+                  >
+                    <MaterialCommunityIcons name="stop-circle-outline" size={18} color="#fff" />
+                    <Text style={styles.liveEndButtonText}>
+                      {endLiveBroadcastMutation.isPending ? 'Cerrando...' : 'Terminar transmisión'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.liveStartButton,
+                      !canStartLiveBroadcast && styles.buttonDisabled,
+                    ]}
+                    onPress={() => startLiveBroadcastMutation.mutate()}
+                    disabled={!canStartLiveBroadcast}
+                  >
+                    <MaterialCommunityIcons name="broadcast" size={18} color="#fff" />
+                    <Text style={styles.liveStartButtonText}>
+                      {startLiveBroadcastMutation.isPending ? 'Iniciando...' : 'Iniciar en vivo'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>Transmisiones</Text>
+              {liveBroadcastsQuery.isLoading ? (
+                <ActivityIndicator color="#2563eb" />
+              ) : liveBroadcasts.length === 0 ? (
+                <View style={styles.emptyMomentsCard}>
+                  <MaterialCommunityIcons name="broadcast-off" size={32} color="#94a3b8" />
+                  <Text style={styles.emptyMomentsTitle}>No hay transmisiones</Text>
+                  <Text style={styles.emptyMomentsText}>
+                    Cuando un fan salga en vivo desde este evento, aparecerá aquí.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.momentList}>
+                  {liveBroadcasts.map((broadcast) => (
+                    <EventLiveBroadcastCard
+                      key={broadcast.id}
+                      broadcast={broadcast}
+                      currentPartyId={currentActor.partyId}
+                      ending={endLiveBroadcastMutation.isPending}
+                      onWatch={handleWatchBroadcast}
+                      onEnd={handleEndBroadcast}
                     />
                   ))}
                 </View>
@@ -878,6 +1595,109 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   ticketButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  ticketTierList: {
+    gap: 10,
+  },
+  ticketTierCard: {
+    borderWidth: 1,
+    borderColor: '#dbe1ea',
+    borderRadius: 8,
+    padding: 12,
+    gap: 6,
+    backgroundColor: '#fff',
+  },
+  ticketTierCardActive: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
+  },
+  ticketTierHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  ticketTierName: {
+    flex: 1,
+    color: '#0f172a',
+    fontWeight: '800',
+  },
+  ticketTierPrice: {
+    color: '#1d4ed8',
+    fontWeight: '800',
+  },
+  ticketTierDescription: {
+    color: '#475569',
+    lineHeight: 18,
+  },
+  ticketTierMeta: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  ticketForm: {
+    gap: 10,
+  },
+  ticketFormRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  ticketQuantityField: {
+    width: 110,
+    gap: 6,
+  },
+  ticketTotalBox: {
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 10,
+    justifyContent: 'center',
+  },
+  ticketFieldLabel: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  ticketTotalText: {
+    color: '#0f172a',
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  ticketOrdersBox: {
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 12,
+  },
+  ticketOrdersTitle: {
+    color: '#0f172a',
+    fontWeight: '800',
+  },
+  ticketOrderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 10,
+  },
+  ticketOrderTitle: {
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  ticketOrderMeta: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  ticketOrderAmount: {
+    color: '#1d4ed8',
+    fontWeight: '800',
+  },
   artistItem: {
     marginBottom: 8,
     paddingBottom: 8,
@@ -937,6 +1757,143 @@ const styles = StyleSheet.create({
   momentHeroText: {
     color: '#cbd5e1',
     lineHeight: 20,
+  },
+  liveHero: {
+    borderRadius: 14,
+    backgroundColor: '#111827',
+    padding: 14,
+    gap: 12,
+  },
+  liveHeroHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+  },
+  liveHeroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+  },
+  liveHeroTitle: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  liveNowBadge: {
+    borderRadius: 999,
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  liveNowBadgeText: {
+    color: '#b91c1c',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  livePreview: {
+    width: '100%',
+    height: 220,
+    borderRadius: 12,
+    backgroundColor: '#020617',
+    overflow: 'hidden',
+  },
+  livePreviewPlaceholder: {
+    height: 180,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+    backgroundColor: '#1f2937',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  livePreviewText: {
+    color: '#fecaca',
+    fontWeight: '800',
+  },
+  liveHeroMeta: {
+    color: '#e5e7eb',
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+  liveArtistChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  liveArtistChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fff',
+  },
+  liveArtistChipActive: {
+    borderColor: '#dc2626',
+    backgroundColor: '#fee2e2',
+  },
+  liveArtistChipText: {
+    color: '#334155',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  liveArtistChipTextActive: {
+    color: '#b91c1c',
+  },
+  liveQualityRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  liveQualityButton: {
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingVertical: 9,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  liveQualityButtonActive: {
+    borderColor: '#dc2626',
+    backgroundColor: '#fee2e2',
+  },
+  liveQualityText: {
+    color: '#334155',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  liveQualityTextActive: {
+    color: '#b91c1c',
+  },
+  liveStartButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: '#dc2626',
+    paddingVertical: 12,
+  },
+  liveStartButtonText: {
+    color: '#fff',
+    fontWeight: '800',
+  },
+  liveEndButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: '#991b1b',
+    paddingVertical: 12,
+  },
+  liveEndButtonText: {
+    color: '#fff',
+    fontWeight: '800',
   },
   momentHintRow: {
     marginTop: 2,

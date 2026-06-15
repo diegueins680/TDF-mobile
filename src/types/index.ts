@@ -265,6 +265,79 @@ export type EventInvitationCreate = {
   message?: string | null;
 };
 
+export type EventTicketTier = {
+  id: string;
+  eventId: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  priceCents: number;
+  currency: string;
+  quantityTotal: number;
+  quantitySold: number;
+  salesStart?: string | null;
+  salesEnd?: string | null;
+  active: boolean;
+  position?: number | null;
+};
+
+export type EventTicketOrderStatus = 'pending' | 'paid' | 'cancelled' | 'refunded' | string;
+
+export type EventTicket = {
+  id: string;
+  eventId: string;
+  tierId: string;
+  orderId: string;
+  code: string;
+  status: string;
+  holderName?: string | null;
+  holderEmail?: string | null;
+  checkedInAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type EventTicketOrder = {
+  id: string;
+  eventId: string;
+  tierId: string;
+  buyerPartyId?: string | null;
+  buyerName?: string | null;
+  buyerEmail?: string | null;
+  quantity: number;
+  amountCents: number;
+  currency: string;
+  status: EventTicketOrderStatus;
+  purchasedAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  tickets: EventTicket[];
+};
+
+export type EventTicketPurchaseInput = {
+  eventId: ID;
+  tierId: ID;
+  quantity: number;
+  buyerPartyId?: ID | null;
+  buyerName?: string | null;
+  buyerEmail?: string | null;
+};
+
+export type EventTicketPaymentSheetParams = {
+  customerId: string;
+  ephemeralKeySecret: string;
+  paymentIntentClientSecret: string;
+  publishableKey: string;
+};
+
+export type EventTicketPaymentIntent = {
+  clientSecret: string;
+  orderId: string;
+  amountCents: number;
+  currency: string;
+  paymentSheet: EventTicketPaymentSheetParams;
+};
+
 export type EventMomentMediaKind = 'image' | 'video';
 export type EventMomentReactionKind = 'fire' | 'love' | 'applause';
 
@@ -317,6 +390,50 @@ export type EventMomentActor = {
   actorKey: string;
   displayName: string;
   partyId?: string | null;
+};
+
+export type EventLiveBroadcastStatus = 'live' | 'ended';
+export type EventLiveBroadcastQuality = 'auto' | '720p' | '480p';
+
+export type EventLiveBroadcast = {
+  id: string;
+  eventId: string;
+  artistId: string;
+  artistName: string;
+  broadcasterName: string;
+  broadcasterPartyId?: string | null;
+  title: string;
+  description?: string | null;
+  status: EventLiveBroadcastStatus;
+  playbackUrl?: string | null;
+  ingestUrl?: string | null;
+  whipUrl?: string | null;
+  streamKey?: string | null;
+  viewerCount: number;
+  startedAt: string;
+  endedAt?: string | null;
+  lastHeartbeatAt: string;
+};
+
+export type EventLiveBroadcastCreateInput = {
+  eventId: ID;
+  artistId: ID;
+  artistName?: string | null;
+  broadcasterName: string;
+  broadcasterPartyId?: ID | null;
+  title?: string | null;
+  description?: string | null;
+  quality?: EventLiveBroadcastQuality;
+  playbackUrl?: string | null;
+  ingestUrl?: string | null;
+  whipUrl?: string | null;
+  streamKey?: string | null;
+};
+
+export type EventLiveBroadcastHeartbeatInput = {
+  eventId: ID;
+  broadcastId: string;
+  viewerDelta?: number;
 };
 
 export type PartyFollow = {

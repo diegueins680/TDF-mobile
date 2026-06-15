@@ -54,7 +54,9 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Allow TDF Records to use your camera to scan QR codes and capture inventory images.</string>
+	<string>Allow TDF Records to use your camera to scan QR codes, capture inventory images, and broadcast live video.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Allow TDF Records to use your microphone for fanclub live broadcasts.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Allow TDF Records to use your location to show nearby venues.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

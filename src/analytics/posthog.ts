@@ -34,7 +34,6 @@ export interface AnalyticsClient {
 let cachedClient: AnalyticsClient | null = null;
 
 function buildNoopClient(reason: string): AnalyticsClient {
-  // eslint-disable-next-line no-console
   console.info(`[analytics] PostHog disabled: ${reason}. Events will not be sent.`);
   return {
     ready: false,
@@ -72,7 +71,6 @@ export function getAnalyticsClient(): AnalyticsClient {
         // value would be lost regardless.
         posthog.capture(event, properties as Parameters<typeof posthog.capture>[1]);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[analytics] capture failed', err);
       }
     },
@@ -80,7 +78,6 @@ export function getAnalyticsClient(): AnalyticsClient {
       try {
         posthog.identify(distinctId, properties as Parameters<typeof posthog.identify>[1]);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[analytics] identify failed', err);
       }
     },
@@ -88,7 +85,6 @@ export function getAnalyticsClient(): AnalyticsClient {
       try {
         posthog.reset();
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[analytics] reset failed', err);
       }
     },
@@ -96,7 +92,6 @@ export function getAnalyticsClient(): AnalyticsClient {
       try {
         posthog.screen(name, properties as Parameters<typeof posthog.screen>[1]);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('[analytics] screen failed', err);
       }
     },

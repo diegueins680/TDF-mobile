@@ -28,6 +28,8 @@ const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim(
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim();
 const GOOGLE_IOS_URL_SCHEME =
   process.env.GOOGLE_IOS_URL_SCHEME?.trim() || process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME?.trim();
+const STRIPE_MERCHANT_IDENTIFIER =
+  process.env.STRIPE_MERCHANT_IDENTIFIER?.trim() || process.env.EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER?.trim();
 
 const resolveReleaseAwareEnv = (name: 'EXPO_PUBLIC_API_BASE' | 'EXPO_PUBLIC_UPLOAD_URL', releaseValue: string, localValue: string) => {
   const explicitValue = process.env[name]?.trim();
@@ -49,15 +51,15 @@ const plugins: NonNullable<ExpoConfig['plugins']> = [
   [
     'expo-camera',
     {
-      cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes and capture inventory images.',
-      microphonePermission: false
+      cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes, capture inventory images, and broadcast live video.',
+      microphonePermission: 'Allow TDF Records to use your microphone for fanclub live broadcasts.'
     }
   ],
   [
     'expo-image-picker',
     {
       photosPermission: 'Allow TDF Records to access your photos so you can attach inventory images.',
-      cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes and capture inventory images.'
+      cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes, capture inventory images, and broadcast live video.'
     }
   ],
   [
@@ -67,6 +69,14 @@ const plugins: NonNullable<ExpoConfig['plugins']> = [
       locationAlwaysPermission: false,
       locationWhenInUsePermission: 'Allow TDF Records to use your location to show nearby venues.'
     }
+  ],
+  [
+    '@stripe/stripe-react-native',
+    STRIPE_MERCHANT_IDENTIFIER
+      ? {
+          merchantIdentifier: STRIPE_MERCHANT_IDENTIFIER
+        }
+      : {}
   ]
 ];
 
@@ -108,7 +118,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: BUNDLE_ID,
-    blockedPermissions: ['android.permission.RECORD_AUDIO'],
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       monochromeImage: './assets/adaptive-icon-monochrome.png',

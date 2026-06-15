@@ -9,9 +9,10 @@ import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
 import { Venues } from '../src/api/venues';
 
-const { get, post } = jest.requireMock('../src/api/client') as {
+const { get, post, put } = jest.requireMock('../src/api/client') as {
   get: jest.Mock;
   post: jest.Mock;
+  put: jest.Mock;
 };
 const ISO_TIMESTAMP_PREFIX = /^\d{4}-\d{2}-\d{2}T/;
 
@@ -381,5 +382,145 @@ describe('Social API mapper sanitization', () => {
     expect(invitations).toHaveLength(1);
     expect(invitations[0]?.createdAt).toMatch(ISO_TIMESTAMP_PREFIX);
     expect(invitations[0]?.updatedAt).toBeNull();
+  });
+
+  it('Events.listTicketTiers maps backend ticket tier fields', async () => {
+    get.mockResolvedValueOnce([
+      {
+        ticketTierId: '3',
+        ticketTierEventId: '42',
+        ticketTierCode: 'ga',
+        ticketTierName: 'General',
+        ticketTierDescription: 'Entrada general',
+        ticketTierPriceCents: 3500,
+        ticketTierCurrency: 'usd',
+        ticketTierQuantityTotal: 100,
+        ticketTierQuantitySold: 12,
+        ticketTierActive: true,
+        ticketTierPosition: 1,
+      },
+    ]);
+
+    const tiers = await Events.listTicketTiers('42');
+
+    expect(get).toHaveBeenCalledWith('/social-events/events/42/ticket-tiers');
+    expect(tiers[0]).toEqual(
+      expect.objectContaining({
+        id: '3',
+        eventId: '42',
+        name: 'General',
+        priceCents: 3500,
+        currency: 'USD',
+        quantityTotal: 100,
+        quantitySold: 12,
+        active: true,
+      }),
+    );
+  });
+
+  it('Events.listTicketOrders filters by buyer party id and maps orders', async () => {
+    get.mockResolvedValueOnce([
+      {
+        ticketOrderId: '9',
+        ticketOrderEventId: '42',
+        ticketOrderTierId: '3',
+        ticketOrderBuyerPartyId: '7',
+        ticketOrderQuantity: 2,
+        ticketOrderAmountCents: 7000,
+        ticketOrderCurrency: 'usd',
+        ticketOrderStatusValue: 'paid',
+        ticketOrderTickets: [
+          {
+            ticketId: '11',
+            ticketEventId: '42',
+            ticketTierId: '3',
+            ticketOrderId: '9',
+            ticketCode: 'TDF-ABC',
+            ticketStatus: 'issued',
+          },
+        ],
+      },
+    ]);
+
+    const orders = await Events.listTicketOrders('42', '7');
+
+    expect(get).toHaveBeenCalledWith('/social-events/events/42/ticket-orders?buyerPartyId=7');
+    expect(orders[0]).toEqual(
+      expect.objectContaining({
+        id: '9',
+        status: 'paid',
+        quantity: 2,
+        amountCents: 7000,
+      }),
+    );
+    expect(orders[0]?.tickets[0]?.code).toBe('TDF-ABC');
+  });
+
+  it('Events.createTicketPaymentSheet requests mobile PaymentSheet params', async () => {
+    post.mockResolvedValueOnce({
+      spiClientSecret: 'pi_secret',
+      spiOrderId: '9',
+      spiAmountCents: 8000,
+      spiCurrency: 'usd',
+      spiPaymentSheet: {
+        psCustomerId: 'cus_123',
+        psEphemeralKeySecret: 'ek_secret',
+        psPaymentIntentClientSecret: 'pi_secret',
+        psPublishableKey: 'pk_test_123',
+      },
+    });
+
+    const intent = await Events.createTicketPaymentSheet(
+      {
+        eventId: '42',
+        tierId: '3',
+        quantity: 2,
+        buyerPartyId: '7',
+        buyerName: 'Ana',
+        buyerEmail: 'ana@example.com',
+      },
+      '2026-04-22.dahlia',
+    );
+
+    expect(post).toHaveBeenCalledWith('/social-events/stripe/create-payment-intent', {
+      ticketPurchaseTierId: '3',
+      ticketPurchaseQuantity: 2,
+      ticketPurchaseBuyerPartyId: '7',
+      ticketPurchaseBuyerName: 'Ana',
+      ticketPurchaseBuyerEmail: 'ana@example.com',
+      ticketPurchaseMobileSdkStripeVersion: '2026-04-22.dahlia',
+    });
+    expect(intent).toEqual({
+      clientSecret: 'pi_secret',
+      orderId: '9',
+      amountCents: 8000,
+      currency: 'USD',
+      paymentSheet: {
+        customerId: 'cus_123',
+        ephemeralKeySecret: 'ek_secret',
+        paymentIntentClientSecret: 'pi_secret',
+        publishableKey: 'pk_test_123',
+      },
+    });
+  });
+
+  it('Events.updateTicketOrderStatus posts the ticket order status payload', async () => {
+    put.mockResolvedValueOnce({
+      ticketOrderId: '9',
+      ticketOrderEventId: '42',
+      ticketOrderTierId: '3',
+      ticketOrderQuantity: 2,
+      ticketOrderAmountCents: 8000,
+      ticketOrderCurrency: 'USD',
+      ticketOrderStatusValue: 'cancelled',
+      ticketOrderTickets: [],
+    });
+
+    const order = await Events.updateTicketOrderStatus('42', '9', 'cancelled');
+
+    expect(put).toHaveBeenCalledWith('/social-events/events/42/ticket-orders/9/status', {
+      ticketOrderStatus: 'cancelled',
+    });
+    expect(order.status).toBe('cancelled');
   });
 });

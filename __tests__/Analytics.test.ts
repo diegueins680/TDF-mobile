@@ -11,13 +11,13 @@ jest.mock('posthog-react-native', () => {
   const identify = jest.fn();
   const reset = jest.fn();
   const screen = jest.fn();
-  const ctor: jest.Mock & { __mocks: typeof __mocks } = jest.fn().mockImplementation(() => ({
+  const __mocks = { capture, identify, reset, screen };
+  const ctor = jest.fn().mockImplementation(() => ({
     capture,
     identify,
     reset,
     screen,
-  })) as any;
-  const __mocks = { capture, identify, reset, screen };
+  })) as unknown as jest.Mock & { __mocks: typeof __mocks };
   ctor.__mocks = __mocks;
   return { __esModule: true, default: ctor };
 });

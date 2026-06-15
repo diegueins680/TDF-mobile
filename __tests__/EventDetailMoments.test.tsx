@@ -34,6 +34,15 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+jest.mock('@stripe/stripe-react-native', () => ({
+  Constants: { API_VERSIONS: { CORE: '2026-04-22.dahlia' } },
+  initStripe: jest.fn(),
+  usePaymentSheet: () => ({
+    initPaymentSheet: jest.fn(async () => ({})),
+    presentPaymentSheet: jest.fn(async () => ({})),
+  }),
+}));
+
 jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: () => ({ token: 'Bearer test-token', partyId: '7' }),
 }));
@@ -47,6 +56,10 @@ jest.mock('../src/api/events', () => ({
     getById: jest.fn(),
     getRSVPs: jest.fn(),
     getInvitations: jest.fn(),
+    listTicketTiers: jest.fn(),
+    listTicketOrders: jest.fn(),
+    createTicketPaymentSheet: jest.fn(),
+    updateTicketOrderStatus: jest.fn(),
     rsvp: jest.fn(),
     sendInvitation: jest.fn(),
     respondToInvitation: jest.fn(),
@@ -61,6 +74,11 @@ jest.mock('../src/api/social', () => ({
 
 jest.mock('../src/api/upload', () => ({
   uploadMedia: jest.fn(),
+}));
+
+jest.mock('../src/lib/liveBroadcastPublishing', () => ({
+  RTCView: 'RTCView',
+  startWhipBroadcastPublisher: jest.fn(),
 }));
 
 describe('EventDetail moments tab', () => {
@@ -88,7 +106,17 @@ describe('EventDetail moments tab', () => {
               createdAt: '2026-04-01T00:00:00.000Z',
               updatedAt: '2026-04-01T00:00:00.000Z',
             },
-            artistIds: [],
+            artistIds: ['99'],
+            artists: [
+              {
+                id: '99',
+                partyId: '55',
+                name: 'Demo Artist',
+                genres: ['rock'],
+                createdAt: '2026-04-01T00:00:00.000Z',
+                updatedAt: '2026-04-01T00:00:00.000Z',
+              },
+            ],
             createdBy: '7',
             isPublic: true,
             rsvpCount: 2,
@@ -109,6 +137,14 @@ describe('EventDetail moments tab', () => {
       }
 
       if (queryKey[0] === 'saved-event-ids') {
+        return { data: [], isLoading: false };
+      }
+
+      if (queryKey[0] === 'event-ticket-tiers') {
+        return { data: [], isLoading: false };
+      }
+
+      if (queryKey[0] === 'event-ticket-orders') {
         return { data: [], isLoading: false };
       }
 
@@ -139,6 +175,35 @@ describe('EventDetail moments tab', () => {
         };
       }
 
+      if (queryKey[0] === 'event-live-broadcasts') {
+        return {
+          data: [
+            {
+              id: 'live-1',
+              eventId: '42',
+              artistId: '99',
+              artistName: 'Demo Artist',
+              broadcasterName: 'Cuco',
+              broadcasterPartyId: '7',
+              title: 'Front row',
+              description: 'Coro final',
+              status: 'live',
+              playbackUrl: 'https://watch.example.com/live-1',
+              whipUrl: 'https://stream.example.com/whip/live-1',
+              streamKey: 'live-1',
+              viewerCount: 3,
+              startedAt: '2026-04-10T22:00:00.000Z',
+              lastHeartbeatAt: '2026-04-10T22:00:00.000Z',
+            },
+          ],
+          isLoading: false,
+        };
+      }
+
+      if (queryKey[0] === 'event-live-followed-artists') {
+        return { data: ['99'], isLoading: false };
+      }
+
       return { data: null, isLoading: false };
     });
   });
@@ -154,5 +219,17 @@ describe('EventDetail moments tab', () => {
     expect(screen.getByText('Top moment')).toBeTruthy();
     expect(screen.getByText('Conectar')).toBeTruthy();
     expect(screen.getByText('Publicas como Cuco')).toBeTruthy();
+  });
+
+  it('renders fanclub live broadcasts for followed event artists', () => {
+    render(<EventDetailScreen />);
+
+    fireEvent.press(screen.getByText('En Vivo (1)'));
+
+    expect(screen.getByText('Fanclub en vivo')).toBeTruthy();
+    expect(screen.getAllByText('Demo Artist').length).toBeGreaterThan(0);
+    expect(screen.getByText('Front row')).toBeTruthy();
+    expect(screen.getByText('En vivo')).toBeTruthy();
+    expect(screen.getByText('Terminar')).toBeTruthy();
   });
 });

@@ -12,6 +12,11 @@ buildscript {
   }
 }
 
+ext {
+  // Avoid dynamic Stripe SDK resolution, which can fail release builds when JitPack times out.
+  stripeVersion = '21.22.0'
+}
+
 allprojects {
   repositories {
     google()

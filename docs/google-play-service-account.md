@@ -20,7 +20,7 @@ Create a Google Play Console service account, download its JSON key, and add it 
 **Verification:** Screenshot of API access page
 
 1. Go to [Google Play Console](https://play.google.com/console)
-2. Select your app (`com.tdfrecords.app`)
+2. Select your app (`com.tdf.records`)
 3. Navigate to **Settings → Developer account → API access**
 4. If you see "Create a service account" button, proceed to Step 2
 5. If you see a billing verification banner, complete billing verification first — this is a **hard blocker**. Document the verification status and escalate to tdf-label-ceo.

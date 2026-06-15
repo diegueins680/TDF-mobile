@@ -66,5 +66,5 @@ npm run submit:ios
 ## Release Truths Already Fixed In Repo
 
 - Store metadata now points at the live Pages-hosted support, privacy, terms, and data-deletion URLs.
-- The canonical mobile app identifier in the current repo is `com.tdfrecords.app` for both iOS and Android.
+- The canonical mobile app identifiers in the current repo are `com.tdfrecords.app` for iOS and `com.tdf.records` for Android.
 - `app.json` already carries the Expo project ID `218aca4d-c096-4892-a353-c1dd7df23448`, so do not re-run `eas init` unless that linkage is intentionally changed.

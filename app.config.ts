@@ -5,7 +5,8 @@ const APP_NAME = 'TDF Records';
 const APP_SLUG = 'tdf-mobile';
 const APP_SCHEME = 'tdf';
 const APP_VERSION = process.env.APP_VERSION?.trim() || '1.0.1';
-const BUNDLE_ID = 'com.tdfrecords.app';
+const IOS_BUNDLE_ID = 'com.tdfrecords.app';
+const ANDROID_PACKAGE = 'com.tdf.records';
 const DEFAULT_TIME_ZONE = 'America/Guayaquil';
 const PUBLIC_SITE_URL = 'https://tdf-app.pages.dev/mobile-app';
 const PUBLIC_SUPPORT_URL = `${PUBLIC_SITE_URL}/support.html`;
@@ -110,14 +111,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     backgroundColor: BRAND_BACKGROUND
   },
   ios: {
-    bundleIdentifier: BUNDLE_ID,
+    bundleIdentifier: IOS_BUNDLE_ID,
     supportsTablet: false,
     config: {
       usesNonExemptEncryption: false
     }
   },
   android: {
-    package: BUNDLE_ID,
+    package: ANDROID_PACKAGE,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       monochromeImage: './assets/adaptive-icon-monochrome.png',

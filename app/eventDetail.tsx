@@ -17,11 +17,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  Constants as StripeConstants,
-  initStripe,
-  usePaymentSheet,
-} from '@stripe/stripe-react-native';
 
 import { Events } from '../src/api/events';
 import { Artists } from '../src/api/artists';
@@ -46,6 +41,12 @@ import {
   startWhipBroadcastPublisher,
   type LiveBroadcastPublisherSession,
 } from '../src/lib/liveBroadcastPublishing';
+import {
+  getStripeCoreApiVersion,
+  initNativePaymentSheet,
+  initNativeStripe,
+  presentNativePaymentSheet,
+} from '../src/lib/nativeStripe';
 import {
   addMomentFeedComment,
   createMomentFeedItem,
@@ -106,7 +107,6 @@ export default function EventDetailScreen() {
   const { eventId: rawEventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
-  const { initPaymentSheet, presentPaymentSheet } = usePaymentSheet();
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: authPartyId } = useAuth();
   const { partyId: settingsPartyId, displayName } = useUserSettings();
@@ -387,9 +387,9 @@ export default function EventDetailScreen() {
       if (!normalizedPartyId) throw new Error('Guarda tu Party ID en tu perfil para comprar tickets.');
       if (!selectedTicketTier) throw new Error('Selecciona un ticket disponible.');
 
-      const stripeApiVersion = StripeConstants.API_VERSIONS.CORE?.trim();
+      const stripeApiVersion = await getStripeCoreApiVersion();
       if (!stripeApiVersion) {
-        throw new Error('No pudimos obtener la versión de Stripe del SDK móvil.');
+        throw new Error('Los pagos con tarjeta requieren la build instalada de TDF Records; Expo Go no incluye Stripe nativo.');
       }
 
       const quantity = Number.parseInt(ticketQuantity.trim(), 10);
@@ -414,14 +414,14 @@ export default function EventDetailScreen() {
         stripeApiVersion,
       );
 
-      await initStripe({
+      await initNativeStripe({
         publishableKey: paymentIntent.paymentSheet.publishableKey,
         merchantIdentifier: STRIPE_MERCHANT_IDENTIFIER,
         urlScheme: 'tdf',
         setReturnUrlSchemeOnAndroid: true,
       });
 
-      const initResult = await initPaymentSheet({
+      const initResult = await initNativePaymentSheet({
         merchantDisplayName: STRIPE_MERCHANT_DISPLAY_NAME,
         customerId: paymentIntent.paymentSheet.customerId,
         customerEphemeralKeySecret: paymentIntent.paymentSheet.ephemeralKeySecret,
@@ -438,7 +438,7 @@ export default function EventDetailScreen() {
         throw new Error(initResult.error.localizedMessage ?? initResult.error.message ?? 'No pudimos iniciar el pago.');
       }
 
-      const presentResult = await presentPaymentSheet();
+      const presentResult = await presentNativePaymentSheet();
       if (presentResult.error) {
         if (presentResult.error.code === 'Canceled') {
           const releasedReservation = await Events.updateTicketOrderStatus(eventId, paymentIntent.orderId, 'cancelled')

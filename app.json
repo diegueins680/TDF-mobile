@@ -4,7 +4,13 @@
     "slug": "tdf-mobile",
     "scheme": "tdf",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.1016946267087-p40em8ihkugloistpfnjt7es94mguhgv"
+        }
+      ]
     ],
     "extra": {
       "apiBase": "http://localhost:8080",

@@ -12,12 +12,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import {
-  GoogleSignin,
-  isErrorWithCode,
-  isSuccessResponse,
-  statusCodes
-} from '@react-native-google-signin/google-signin';
 
 import { loginRequest, googleLoginRequest } from '../src/api/auth';
 import { API_BASE } from '../src/lib/api';
@@ -26,6 +20,7 @@ import {
   GOOGLE_IOS_URL_SCHEME,
   GOOGLE_WEB_CLIENT_ID
 } from '../src/lib/authConfig';
+import { loadNativeGoogleSignin, type NativeGoogleSigninModule } from '../src/lib/nativeGoogleSignin';
 import { useAuth } from '../src/providers/AuthProvider';
 
 const readErrorMessage = (error: unknown, fallback: string) => {
@@ -50,6 +45,7 @@ export default function AuthScreen() {
   }, []);
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [googleSigninModule, setGoogleSigninModule] = useState<NativeGoogleSigninModule | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
@@ -57,19 +53,36 @@ export default function AuthScreen() {
   const canSubmitPassword = username.trim().length > 0 && password.length > 0 && !isPasswordSubmitting;
   const isGoogleLoginAvailable =
     Platform.OS !== 'web' &&
+    Boolean(googleSigninModule) &&
     Boolean(GOOGLE_WEB_CLIENT_ID) &&
     (Platform.OS !== 'ios' || Boolean(GOOGLE_IOS_URL_SCHEME));
   const showLoginActions = !loading && !hasToken;
   const showGoogleLogin = showLoginActions && isGoogleLoginAvailable;
 
   useEffect(() => {
-    if (!isGoogleLoginAvailable || !GOOGLE_WEB_CLIENT_ID) return;
+    if (Platform.OS === 'web') return;
 
-    GoogleSignin.configure({
+    let active = true;
+
+    void loadNativeGoogleSignin().then((module) => {
+      if (active) {
+        setGoogleSigninModule(module);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isGoogleLoginAvailable || !GOOGLE_WEB_CLIENT_ID || !googleSigninModule) return;
+
+    googleSigninModule.GoogleSignin.configure({
       webClientId: GOOGLE_WEB_CLIENT_ID,
       ...(GOOGLE_IOS_CLIENT_ID ? { iosClientId: GOOGLE_IOS_CLIENT_ID } : {})
     });
-  }, [isGoogleLoginAvailable]);
+  }, [googleSigninModule, isGoogleLoginAvailable]);
 
   const handlePasswordLogin = async () => {
     if (!canSubmitPassword) return;
@@ -103,8 +116,8 @@ export default function AuthScreen() {
     setErrorMessage(null);
     setFeedbackMessage(null);
 
-    if (!isGoogleLoginAvailable) {
-      setErrorMessage('Google login no está disponible en esta build.');
+    if (!isGoogleLoginAvailable || !googleSigninModule) {
+      setErrorMessage('Google login requiere la build instalada de TDF Records; Expo Go no incluye Google Sign-In nativo.');
       return;
     }
 
@@ -112,12 +125,12 @@ export default function AuthScreen() {
 
     try {
       if (Platform.OS === 'android') {
-        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        await googleSigninModule.GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       }
 
-      const response = await GoogleSignin.signIn();
+      const response = await googleSigninModule.GoogleSignin.signIn();
 
-      if (!isSuccessResponse(response)) {
+      if (!googleSigninModule.isSuccessResponse(response)) {
         setFeedbackMessage('Inicio con Google cancelado.');
         return;
       }
@@ -136,18 +149,18 @@ export default function AuthScreen() {
       );
       router.replace('/(tabs)/parties');
     } catch (error) {
-      if (isErrorWithCode(error)) {
-        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+      if (googleSigninModule.isErrorWithCode(error)) {
+        if (error.code === googleSigninModule.statusCodes.SIGN_IN_CANCELLED) {
           setFeedbackMessage('Inicio con Google cancelado.');
           return;
         }
 
-        if (error.code === statusCodes.IN_PROGRESS) {
+        if (error.code === googleSigninModule.statusCodes.IN_PROGRESS) {
           setFeedbackMessage('Google login ya está en progreso.');
           return;
         }
 
-        if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        if (error.code === googleSigninModule.statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
           setErrorMessage('Google Play Services no está disponible en este dispositivo.');
           return;
         }
@@ -163,9 +176,9 @@ export default function AuthScreen() {
     setErrorMessage(null);
     setFeedbackMessage('Sesión cerrada.');
 
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' && googleSigninModule) {
       try {
-        await GoogleSignin.signOut();
+        await googleSigninModule.GoogleSignin.signOut();
       } catch {
         // Ignore sign out failures so local session can still be cleared.
       }

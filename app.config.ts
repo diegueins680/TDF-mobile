@@ -1,4 +1,7 @@
 import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
+import { withDangerousMod, type ConfigPlugin } from '@expo/config-plugins';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 const APP_NAME = 'TDF Records';
@@ -46,9 +49,31 @@ const resolveReleaseAwareEnv = (name: 'EXPO_PUBLIC_API_BASE' | 'EXPO_PUBLIC_UPLO
 const API_BASE = resolveReleaseAwareEnv('EXPO_PUBLIC_API_BASE', RELEASE_API_BASE, LOCAL_API_BASE);
 const UPLOAD_URL = resolveReleaseAwareEnv('EXPO_PUBLIC_UPLOAD_URL', RELEASE_UPLOAD_URL, LOCAL_UPLOAD_URL);
 
+const withGoogleSigninModularHeaders: ConfigPlugin = (config) =>
+  withDangerousMod(config, [
+    'ios',
+    async (modConfig) => {
+      const podfilePath = path.join(modConfig.modRequest.platformProjectRoot, 'Podfile');
+      const podfile = await fs.promises.readFile(podfilePath, 'utf8');
+      if (podfile.includes('use_modular_headers!')) {
+        return modConfig;
+      }
+
+      const updatedPodfile = podfile.replace(
+        /(platform :ios, podfile_properties\['ios\.deploymentTarget'\] \|\| '[^']+'\n)/,
+        '$1use_modular_headers!\n',
+      );
+      await fs.promises.writeFile(podfilePath, updatedPodfile);
+      return modConfig;
+    },
+  ]);
+const withGoogleSigninModularHeadersPlugin =
+  withGoogleSigninModularHeaders as unknown as NonNullable<ExpoConfig['plugins']>[number];
+
 const plugins: NonNullable<ExpoConfig['plugins']> = [
   'expo-router',
   'expo-secure-store',
+  withGoogleSigninModularHeadersPlugin,
   [
     'expo-camera',
     {

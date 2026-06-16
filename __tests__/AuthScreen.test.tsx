@@ -8,6 +8,7 @@ const mockGoogleLoginRequest = jest.fn();
 const mockGoogleHasPlayServices = jest.fn();
 const mockGoogleSignIn = jest.fn();
 const mockGoogleSignOut = jest.fn();
+const mockLoadNativeGoogleSignin = jest.fn();
 const mockReplace = jest.fn();
 let mockAuthConfig = {
   GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
@@ -43,20 +44,8 @@ jest.mock('../src/lib/authConfig', () => ({
   },
 }));
 
-jest.mock('@react-native-google-signin/google-signin', () => ({
-  GoogleSignin: {
-    configure: jest.fn(),
-    hasPlayServices: (...args: unknown[]) => mockGoogleHasPlayServices(...args),
-    signIn: (...args: unknown[]) => mockGoogleSignIn(...args),
-    signOut: (...args: unknown[]) => mockGoogleSignOut(...args),
-  },
-  isErrorWithCode: (error: unknown) => typeof error === 'object' && error !== null && 'code' in error,
-  isSuccessResponse: (response: { type?: string }) => response.type === 'success',
-  statusCodes: {
-    SIGN_IN_CANCELLED: 'SIGN_IN_CANCELLED',
-    IN_PROGRESS: 'IN_PROGRESS',
-    PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
-  },
+jest.mock('../src/lib/nativeGoogleSignin', () => ({
+  loadNativeGoogleSignin: () => mockLoadNativeGoogleSignin(),
 }));
 
 jest.mock('expo-router', () => ({
@@ -74,6 +63,21 @@ describe('Auth screen', () => {
     mockAuthConfig.GOOGLE_IOS_URL_SCHEME = 'com.googleusercontent.apps.123456';
     mockGoogleHasPlayServices.mockResolvedValue(true);
     mockGoogleSignOut.mockResolvedValue(null);
+    mockLoadNativeGoogleSignin.mockResolvedValue({
+      GoogleSignin: {
+        configure: jest.fn(),
+        hasPlayServices: (...args: unknown[]) => mockGoogleHasPlayServices(...args),
+        signIn: (...args: unknown[]) => mockGoogleSignIn(...args),
+        signOut: (...args: unknown[]) => mockGoogleSignOut(...args),
+      },
+      isErrorWithCode: (error: unknown) => typeof error === 'object' && error !== null && 'code' in error,
+      isSuccessResponse: (response: { type?: string }) => response.type === 'success',
+      statusCodes: {
+        SIGN_IN_CANCELLED: 'SIGN_IN_CANCELLED',
+        IN_PROGRESS: 'IN_PROGRESS',
+        PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
+      },
+    });
   });
 
   it('submits username/password login and stores the returned token', async () => {
@@ -132,7 +136,7 @@ describe('Auth screen', () => {
 
     render(<AuthScreen />);
 
-    const googleButton = screen.getByText(/Continuar con Google/i).parent;
+    const googleButton = (await screen.findByText(/Continuar con Google/i)).parent;
     if (!googleButton) throw new Error('Google button not found');
     fireEvent.press(googleButton);
 
@@ -145,16 +149,17 @@ describe('Auth screen', () => {
     expect(screen.getByText(/Party activa: 77/i)).toBeTruthy();
   });
 
-  it('hides Google login when this build has no Google client id configured', () => {
+  it('hides Google login when this build has no Google client id configured', async () => {
     mockAuthConfig.GOOGLE_WEB_CLIENT_ID = undefined;
 
     render(<AuthScreen />);
 
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
     expect(screen.queryByText(/^o$/i)).toBeNull();
   });
 
-  it('keeps login actions hidden while a saved session is still hydrating', () => {
+  it('keeps login actions hidden while a saved session is still hydrating', async () => {
     jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({
       token: null,
       partyId: null,
@@ -165,6 +170,7 @@ describe('Auth screen', () => {
 
     render(<AuthScreen />);
 
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
     expect(screen.getByText(/Cargando sesión guardada…/i)).toBeTruthy();
     expect(screen.queryByText(/Entrar con password/i)).toBeNull();
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
@@ -181,6 +187,7 @@ describe('Auth screen', () => {
 
     render(<AuthScreen />);
 
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
     const clearSessionButton = screen.getByText(/Cerrar sesión/i).parent;
     if (!clearSessionButton) throw new Error('Clear session button not found');
     fireEvent.press(clearSessionButton);

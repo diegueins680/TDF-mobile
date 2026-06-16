@@ -1,12 +1,41 @@
-import {
-  mediaDevices,
-  RTCPeerConnection,
-  RTCSessionDescription,
-  RTCView,
-  type MediaStream as NativeMediaStream,
-} from 'react-native-webrtc';
+import { createElement, type ComponentType } from 'react';
+import { View, type ViewProps } from 'react-native';
 
 import type { EventLiveBroadcastQuality } from '../types';
+
+type NativeMediaStream = {
+  getTracks: () => Array<{ stop: () => void }>;
+  release: (deep?: boolean) => void;
+  toURL: () => string;
+};
+
+type NativePeerConnection = {
+  iceGatheringState: string;
+  addTrack: (track: { stop: () => void }, stream: NativeMediaStream) => void;
+  createOffer: () => Promise<{ sdp?: string | null }>;
+  setLocalDescription: (offer: { sdp?: string | null }) => Promise<void>;
+  localDescription?: { sdp?: string | null } | null;
+  setRemoteDescription: (description: unknown) => Promise<void>;
+  close: () => void;
+};
+
+type WebRtcModule = {
+  mediaDevices: {
+    getUserMedia: (constraints: {
+      audio: boolean;
+      video: ReturnType<typeof qualityToVideoConstraints>;
+    }) => Promise<NativeMediaStream>;
+  };
+  RTCPeerConnection: new (configuration: { iceServers: never[] }) => NativePeerConnection;
+  RTCSessionDescription: new (description: { type: 'answer'; sdp: string }) => unknown;
+  RTCView: ComponentType<NativeRTCViewProps>;
+};
+
+type NativeRTCViewProps = ViewProps & {
+  streamURL: string;
+  objectFit?: 'contain' | 'cover';
+  mirror?: boolean;
+};
 
 type WhipPublisherInput = {
   whipUrl?: string | null;
@@ -20,6 +49,19 @@ export type LiveBroadcastPublisherSession = {
 };
 
 const ICE_GATHERING_TIMEOUT_MS = 8000;
+let cachedWebRtcModule: WebRtcModule | null | undefined;
+
+async function loadWebRtcModule(): Promise<WebRtcModule | null> {
+  if (cachedWebRtcModule !== undefined) return cachedWebRtcModule;
+
+  try {
+    cachedWebRtcModule = (await import('react-native-webrtc')) as unknown as WebRtcModule;
+  } catch {
+    cachedWebRtcModule = null;
+  }
+
+  return cachedWebRtcModule;
+}
 
 const qualityToVideoConstraints = (quality: EventLiveBroadcastQuality = 'auto') => {
   switch (quality) {
@@ -58,7 +100,7 @@ const buildWhipHeaders = (streamKey?: string | null): Record<string, string> => 
   return headers;
 };
 
-const waitForIceGatheringComplete = (pc: RTCPeerConnection): Promise<void> => {
+const waitForIceGatheringComplete = (pc: NativePeerConnection): Promise<void> => {
   if (pc.iceGatheringState === 'complete') return Promise.resolve();
 
   const startedAt = Date.now();
@@ -94,21 +136,26 @@ const stopMediaStream = (stream: NativeMediaStream): void => {
 export async function startWhipBroadcastPublisher(
   input: WhipPublisherInput,
 ): Promise<LiveBroadcastPublisherSession> {
+  const webRtcModule = await loadWebRtcModule();
+  if (!webRtcModule) {
+    throw new Error('Transmitir en vivo requiere la build instalada de TDF Records; Expo Go no incluye WebRTC nativo.');
+  }
+
   const whipUrl = input.whipUrl?.trim();
   if (!whipUrl) {
     throw new Error('El backend no devolvió una URL WHIP para publicar video en vivo.');
   }
 
   let stream: NativeMediaStream | null = null;
-  let pc: RTCPeerConnection | null = null;
+  let pc: NativePeerConnection | null = null;
   let resourceUrl: string | null = null;
 
   try {
-    stream = await mediaDevices.getUserMedia({
+    stream = await webRtcModule.mediaDevices.getUserMedia({
       audio: true,
       video: qualityToVideoConstraints(input.quality),
     });
-    pc = new RTCPeerConnection({ iceServers: [] });
+    pc = new webRtcModule.RTCPeerConnection({ iceServers: [] });
 
     stream.getTracks().forEach((track) => {
       pc?.addTrack(track, stream as NativeMediaStream);
@@ -139,7 +186,7 @@ export async function startWhipBroadcastPublisher(
     }
 
     resourceUrl = resolveWhipResourceUrl(response.headers.get('Location'), whipUrl);
-    await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
+    await pc.setRemoteDescription(new webRtcModule.RTCSessionDescription({ type: 'answer', sdp: answerSdp }));
 
     const activeStream = stream;
     const activePc = pc;
@@ -169,4 +216,12 @@ export async function startWhipBroadcastPublisher(
   }
 }
 
-export { RTCView };
+export function RTCView(props: NativeRTCViewProps) {
+  const NativeRTCView = cachedWebRtcModule?.RTCView;
+  if (NativeRTCView) {
+    return createElement(NativeRTCView, props);
+  }
+
+  const { streamURL: _streamURL, objectFit: _objectFit, mirror: _mirror, ...viewProps } = props;
+  return createElement(View, viewProps);
+}

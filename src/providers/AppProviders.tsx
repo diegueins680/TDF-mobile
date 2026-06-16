@@ -1,10 +1,10 @@
 import { PropsWithChildren } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { StripeProvider } from '@stripe/stripe-react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AnalyticsProvider } from '../analytics/AnalyticsProvider';
 import { ExperimentProvider } from '../experiments/ExperimentProvider';
+import { OptionalStripeProvider } from '../lib/nativeStripe';
 import { queryClient } from '../lib/queryClient';
 import { AuthProvider } from './AuthProvider';
 import { FirstRunProvider } from './FirstRunProvider';
@@ -16,7 +16,7 @@ const STRIPE_MERCHANT_IDENTIFIER =
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
-    <StripeProvider
+    <OptionalStripeProvider
       publishableKey={STRIPE_PUBLISHABLE_KEY}
       merchantIdentifier={STRIPE_MERCHANT_IDENTIFIER}
       urlScheme="tdf"
@@ -39,6 +39,6 @@ export function AppProviders({ children }: PropsWithChildren) {
           </AuthProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
-    </StripeProvider>
+    </OptionalStripeProvider>
   );
 }

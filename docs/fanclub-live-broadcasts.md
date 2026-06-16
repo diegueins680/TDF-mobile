@@ -9,6 +9,7 @@ Fans can open an event, switch to `En Vivo`, and start a live session for an art
 - Starting a session creates a backend live broadcast row, receives `whipUrl`/`streamKey`, then publishes camera and microphone through `react-native-webrtc`.
 - If WHIP publishing fails after backend session creation, the app tries to close the session immediately to avoid stale live rows.
 - Ending a broadcast closes the WHIP resource, stops local media tracks, and marks the session ended through the backend.
+- If the broadcaster leaves the event screen or the app backgrounds, the app stops publishing and best-effort closes the tracked backend broadcast.
 
 ## Backend Routes
 

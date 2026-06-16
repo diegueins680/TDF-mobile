@@ -11,6 +11,7 @@ import {
   Modal,
   Linking,
   TextInput,
+  AppState,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -72,6 +73,15 @@ import type {
 
 type EventDetailTab = 'details' | 'moments' | 'live';
 type DraftMomentMedia = EventMoment['media'] & { fileName?: string | null };
+type ActiveLiveBroadcastRecord = {
+  eventId: string;
+  broadcastId: string;
+  broadcasterPartyId?: string | null;
+  preferRemote: boolean;
+};
+type CloseLiveBroadcastOptions = {
+  updateState?: boolean;
+};
 type TicketPaymentResult =
   | { status: 'paid'; orderId: string; quantity: number }
   | { status: 'cancelled'; orderId: string; releasedReservation: boolean };
@@ -118,6 +128,7 @@ export default function EventDetailScreen() {
   const shouldPreferRemoteMoments = Boolean(token?.trim());
   const shouldPreferRemoteBroadcasts = Boolean(token?.trim());
   const publisherSessionRef = useRef<LiveBroadcastPublisherSession | null>(null);
+  const activeLiveBroadcastRef = useRef<ActiveLiveBroadcastRecord | null>(null);
 
   const [activeTab, setActiveTab] = useState<EventDetailTab>('details');
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('NONE');
@@ -256,14 +267,6 @@ export default function EventDetailScreen() {
     }
     setSelectedLiveArtistId(String(followedLiveArtists[0].id));
   }, [followedLiveArtists, selectedLiveArtistId]);
-
-  useEffect(() => () => {
-    const session = publisherSessionRef.current;
-    publisherSessionRef.current = null;
-    if (session) {
-      void session.stop();
-    }
-  }, []);
 
   useEffect(() => {
     if (!eventId || !activeBroadcastId) return undefined;
@@ -586,14 +589,54 @@ export default function EventDetailScreen() {
     },
   });
 
-  const stopActivePublisher = useCallback(async () => {
+  const stopActivePublisher = useCallback(async (options?: CloseLiveBroadcastOptions) => {
     const session = publisherSessionRef.current;
     publisherSessionRef.current = null;
-    setLivePreviewUrl(null);
+    if (options?.updateState !== false) {
+      setLivePreviewUrl(null);
+    }
     if (session) {
       await session.stop();
     }
   }, []);
+
+  const closeTrackedLiveBroadcast = useCallback(async (options?: CloseLiveBroadcastOptions) => {
+    const active = activeLiveBroadcastRef.current;
+    activeLiveBroadcastRef.current = null;
+    if (options?.updateState !== false) {
+      setActiveBroadcastId((current) => (active && current === active.broadcastId ? null : current));
+    }
+    await stopActivePublisher(options);
+    if (!active) return;
+    await endLiveBroadcastSession(
+      {
+        eventId: active.eventId,
+        broadcastId: active.broadcastId,
+        broadcasterPartyId: active.broadcasterPartyId,
+      },
+      { preferRemote: active.preferRemote },
+    );
+  }, [stopActivePublisher]);
+
+  useEffect(() => () => {
+    void closeTrackedLiveBroadcast({ updateState: false }).catch(() => undefined);
+  }, [closeTrackedLiveBroadcast]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background') {
+        void closeTrackedLiveBroadcast()
+          .then(() => {
+            if (eventId) {
+              qc.invalidateQueries({ queryKey: ['event-live-broadcasts', eventId] });
+            }
+          })
+          .catch(() => undefined);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [closeTrackedLiveBroadcast, eventId, qc]);
 
   const startLiveBroadcastMutation = useMutation({
     mutationFn: async () => {
@@ -651,6 +694,12 @@ export default function EventDetailScreen() {
     },
     onSuccess: ({ broadcast, source, fallbackReason, publisher }) => {
       publisherSessionRef.current = publisher;
+      activeLiveBroadcastRef.current = {
+        eventId: broadcast.eventId,
+        broadcastId: broadcast.id,
+        broadcasterPartyId: currentActor.partyId,
+        preferRemote: shouldPreferRemoteBroadcasts,
+      };
       setLivePreviewUrl(publisher.previewUrl);
       setActiveBroadcastId(broadcast.id);
       setBroadcastTitle('');
@@ -671,6 +720,9 @@ export default function EventDetailScreen() {
 
   const endLiveBroadcastMutation = useMutation({
     mutationFn: async (broadcast: EventLiveBroadcast) => {
+      if (activeLiveBroadcastRef.current?.broadcastId === broadcast.id) {
+        activeLiveBroadcastRef.current = null;
+      }
       await stopActivePublisher();
       await endLiveBroadcastSession(
         {

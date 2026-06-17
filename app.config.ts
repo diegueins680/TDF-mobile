@@ -8,6 +8,7 @@ const APP_NAME = 'TDF Records';
 const APP_SLUG = 'tdf-mobile';
 const APP_SCHEME = 'tdf';
 const APP_VERSION = process.env.APP_VERSION?.trim() || '1.0.1';
+const ANDROID_VERSION_CODE = Number.parseInt(process.env.ANDROID_VERSION_CODE?.trim() || '8', 10);
 const IOS_BUNDLE_ID = 'com.tdfrecords.app';
 const ANDROID_PACKAGE = 'com.tdf.records';
 const DEFAULT_TIME_ZONE = 'America/Guayaquil';
@@ -73,6 +74,7 @@ const withGoogleSigninModularHeadersPlugin =
 const plugins: NonNullable<ExpoConfig['plugins']> = [
   'expo-router',
   'expo-secure-store',
+  'expo-localization',
   withGoogleSigninModularHeadersPlugin,
   [
     'expo-camera',
@@ -144,6 +146,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: ANDROID_PACKAGE,
+    versionCode: ANDROID_VERSION_CODE,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       monochromeImage: './assets/adaptive-icon-monochrome.png',

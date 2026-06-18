@@ -5,6 +5,7 @@ import type { Href } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { setOnboardingSeen } from '../src/lib/onboarding';
+import { MOBILE_LANDING_ROUTE } from '../src/navigation/mobileSurface';
 
 type Step = {
   title: string;
@@ -15,22 +16,22 @@ type Step = {
 
 const STEPS: Step[] = [
   {
-    title: 'Inicia sesión',
-    description: 'Usa tu password o Google login para desbloquear inventario, bookings y pipelines.',
-    icon: 'key-variant',
-    color: '#38bdf8'
+    title: 'Eventos y tickets',
+    description: 'Encuentra eventos de TDF y compra tus entradas desde el móvil.',
+    icon: 'ticket-confirmation',
+    color: '#f8c96b'
   },
   {
-    title: 'Personaliza tu identidad',
-    description: 'Guarda tu Party ID y nombre para RSVP, invitaciones y vCards.',
-    icon: 'account-edit',
-    color: '#34d399'
+    title: 'Perfil, seguir y vCards',
+    description: 'Crea tu perfil, sigue artistas y comparte tu vCard con la comunidad.',
+    icon: 'account-heart',
+    color: '#7dd3fc'
   },
   {
-    title: 'Explora los modulos',
-    description: 'Revisa parties, eventos y social desde el tablero principal.',
-    icon: 'view-dashboard',
-    color: '#f97316'
+    title: 'Streaming y club de fans',
+    description: 'Accede a transmisiones, contenido exclusivo y espacios de fan club.',
+    icon: 'broadcast',
+    color: '#c4b5fd'
   }
 ] as const;
 
@@ -57,10 +58,7 @@ export default function OnboardingScreen() {
     <SafeAreaView style={styles.page}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <View style={[styles.orb, styles.orbOne]} />
-          <View style={[styles.orb, styles.orbTwo]} />
-          <View style={[styles.orb, styles.orbThree]} />
-          <TouchableOpacity style={styles.skip} onPress={() => complete('/(tabs)/parties')}>
+          <TouchableOpacity style={styles.skip} onPress={() => complete(MOBILE_LANDING_ROUTE)}>
             <Text style={styles.skipText}>Saltar</Text>
           </TouchableOpacity>
           <AnimatedView
@@ -79,17 +77,20 @@ export default function OnboardingScreen() {
               }
             ]}
           >
-            <Text style={styles.kicker}>TDF HQ Mobile</Text>
-            <Text style={styles.title}>Bienvenido a tu panel en movimiento</Text>
+            <Text style={styles.kicker}>TDF Mobile</Text>
+            <Text style={styles.title}>Tu acceso a la comunidad musical</Text>
             <Text style={styles.subtitle}>
-              Inicia sesión, personaliza tu identidad y empieza a navegar las herramientas clave.
+              Una interfaz mínima para descubrir eventos, seguir artistas y entrar a sus clubes de fans.
             </Text>
             <View style={styles.heroMeta}>
               <View style={styles.metaPill}>
-                <Text style={styles.metaText}>3 pasos</Text>
+                <Text style={styles.metaText}>Eventos</Text>
               </View>
               <View style={styles.metaPill}>
-                <Text style={styles.metaText}>Acceso inmediato</Text>
+                <Text style={styles.metaText}>Tickets</Text>
+              </View>
+              <View style={styles.metaPill}>
+                <Text style={styles.metaText}>Club de fans</Text>
               </View>
             </View>
           </AnimatedView>
@@ -111,13 +112,13 @@ export default function OnboardingScreen() {
 
         <View style={styles.actionStack}>
           <TouchableOpacity testID="goToLoginButton" style={styles.primaryButton} onPress={() => complete('/auth')}>
-            <Text style={styles.primaryText}>Ir a login</Text>
+            <Text style={styles.primaryText}>Crear cuenta</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => complete('/userProfile')}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => complete('/(tabs)/profile')}>
             <Text style={styles.secondaryText}>Configurar perfil</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.ghostButton} onPress={() => complete('/(tabs)/parties')}>
-            <Text style={styles.ghostText}>Explorar app</Text>
+          <TouchableOpacity style={styles.ghostButton} onPress={() => complete(MOBILE_LANDING_ROUTE)}>
+            <Text style={styles.ghostText}>Ver eventos</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -136,12 +137,14 @@ const styles = StyleSheet.create({
   },
   hero: {
     position: 'relative',
-    borderRadius: 24,
+    borderRadius: 16,
     padding: 20,
     backgroundColor: '#111827',
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.2)',
-    overflow: 'hidden'
+    overflow: 'hidden',
+    minHeight: 220,
+    justifyContent: 'center'
   },
   heroContent: {
     gap: 10
@@ -169,7 +172,7 @@ const styles = StyleSheet.create({
   metaPill: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.35)',
     backgroundColor: 'rgba(15,23,42,0.6)'
@@ -186,7 +189,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     padding: 16,
-    borderRadius: 18,
+    borderRadius: 12,
     backgroundColor: '#111827',
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.18)'
@@ -194,7 +197,7 @@ const styles = StyleSheet.create({
   stepIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -220,7 +223,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: '#2563eb',
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: 'center'
   },
   primaryText: {
@@ -232,7 +235,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: 'center'
   },
   secondaryText: {
@@ -256,30 +259,5 @@ const styles = StyleSheet.create({
   skipText: {
     color: '#cbd5e1',
     fontWeight: '600'
-  },
-  orb: {
-    position: 'absolute',
-    borderRadius: 999
-  },
-  orbOne: {
-    width: 160,
-    height: 160,
-    backgroundColor: 'rgba(56,189,248,0.18)',
-    top: -40,
-    right: -20
-  },
-  orbTwo: {
-    width: 140,
-    height: 140,
-    backgroundColor: 'rgba(52,211,153,0.18)',
-    bottom: -50,
-    left: -20
-  },
-  orbThree: {
-    width: 100,
-    height: 100,
-    backgroundColor: 'rgba(249,115,22,0.16)',
-    bottom: 10,
-    right: 30
   }
 });

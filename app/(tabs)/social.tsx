@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Parties } from '../../src/api/parties';
@@ -10,22 +10,17 @@ import { resolvePartyId } from '../../src/lib/identity';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 
-type TabKey = 'friends' | 'following' | 'followers';
+type TabKey = 'following' | 'followers';
 
-const parsePositivePartyId = (value: unknown): number | null => {
-  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
-  if (typeof value !== 'string' || !/^\d+$/.test(value.trim())) return null;
-  const parsed = Number.parseInt(value.trim(), 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-};
+const isPositivePartyId = (value: number): boolean =>
+  Number.isSafeInteger(value) && value > 0;
 
 export default function SocialScreen() {
   const qc = useQueryClient();
   const { token, partyId: authPartyId, loading } = useAuth();
   const { partyId: settingsPartyId, displayName } = useUserSettings();
 
-  const [activeTab, setActiveTab] = useState<TabKey>('friends');
-  const [addId, setAddId] = useState('');
+  const [activeTab, setActiveTab] = useState<TabKey>('following');
   const hasToken = Boolean(token?.trim());
   const canUseSocial = !loading && hasToken;
   const effectivePartyId = resolvePartyId(authPartyId, settingsPartyId);
@@ -46,52 +41,39 @@ export default function SocialScreen() {
     queryFn: Social.listFollowing,
     enabled: canUseSocial
   });
-  const friendsQuery = useQuery({
-    queryKey: ['social-friends'],
-    queryFn: Social.listFriends,
-    enabled: canUseSocial
-  });
-  const suggestionsQuery = useQuery({
-    queryKey: ['social-suggestions'],
-    queryFn: Social.listSuggestions,
-    enabled: canUseSocial
-  });
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['social-followers'] });
     qc.invalidateQueries({ queryKey: ['social-following'] });
-    qc.invalidateQueries({ queryKey: ['social-friends'] });
-    qc.invalidateQueries({ queryKey: ['social-suggestions'] });
   };
 
-  const addMutation = useMutation<void, Error, number | undefined>({
+  const followMutation = useMutation<void, Error, number>({
     mutationFn: async (targetId) => {
       if (!canUseSocial) throw new Error('Inicia sesión para actualizar tu red.');
-      const numeric = parsePositivePartyId(targetId) ?? parsePositivePartyId(addId);
-      if (numeric === null) throw new Error('Ingresa un ID válido.');
-      await Social.addFriend(numeric);
+      if (!isPositivePartyId(targetId)) throw new Error('No pudimos reconocer ese perfil.');
+      await Social.addFriend(targetId);
     },
     onSuccess: () => {
-      setAddId('');
       invalidateAll();
-      Alert.alert('Listo', 'Agregaste a esta persona como amigo.');
+      Alert.alert('Listo', 'Ahora sigues a esta persona.');
     },
     onError: (err) => {
-      const msg = err instanceof Error ? err.message : 'No pudimos agregar a esta persona.';
+      const msg = err instanceof Error ? err.message : 'No pudimos seguir a esta persona.';
       Alert.alert('Error', msg);
     }
   });
 
-  const removeMutation = useMutation({
+  const unfollowMutation = useMutation<void, Error, number>({
     mutationFn: (targetId: number) => {
       if (!canUseSocial) {
         throw new Error('Inicia sesión para actualizar tu red.');
       }
+      if (!isPositivePartyId(targetId)) throw new Error('No pudimos reconocer ese perfil.');
       return Social.removeFriend(targetId);
     },
     onSuccess: () => {
       invalidateAll();
-      Alert.alert('Listo', 'Actualizamos tus conexiones.');
+      Alert.alert('Listo', 'Dejaste de seguir a esta persona.');
     },
     onError: (err) => {
       const msg = err instanceof Error ? err.message : 'No pudimos actualizar tus conexiones.';
@@ -106,7 +88,6 @@ export default function SocialScreen() {
   }, [partiesQuery.data]);
 
   const tabData: Record<TabKey, { data?: PartyFollow[]; empty: string }> = {
-    friends: { data: friendsQuery.data, empty: 'Aún no tienes amigos mutuos.' },
     following: { data: followingQuery.data, empty: 'No sigues a nadie todavía.' },
     followers: { data: followersQuery.data, empty: 'Aún no tienes seguidores.' },
   };
@@ -122,9 +103,9 @@ export default function SocialScreen() {
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
       <View style={styles.card}>
-        <Text style={styles.title}>Red social</Text>
+        <Text style={styles.title}>Seguir</Text>
         <Text style={styles.subtitle}>
-          Administra seguidores, seguidos y amigos mutuos. Usa IDs para agregar contactos o intercambia vCards.
+          Consulta a quién sigues y quién te sigue. Para seguir artistas, entra a un evento o perfil de artista y toca Seguir.
         </Text>
         <View style={styles.badges}>
           <Text style={styles.badge}>Party ID: {effectivePartyId ?? 'No configurado'}</Text>
@@ -138,99 +119,7 @@ export default function SocialScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Agregar amigo</Text>
-        <View style={styles.row}>
-          <TextInput
-            placeholder="ID de contacto"
-            value={addId}
-            onChangeText={setAddId}
-            style={[styles.input, { flex: 1 }]}
-            keyboardType="number-pad"
-          />
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              (!canUseSocial || addMutation.isPending) && styles.buttonDisabled
-            ]}
-            onPress={() => addMutation.mutate(undefined)}
-            disabled={!canUseSocial || addMutation.isPending}
-          >
-            <Text style={styles.primaryButtonText}>{addMutation.isPending ? 'Agregando…' : 'Agregar'}</Text>
-          </TouchableOpacity>
-        </View>
-        {!canUseSocial && !loading && (
-          <Text style={styles.helper}>Inicia sesión para agregar o editar conexiones.</Text>
-        )}
-        {addMutation.error && (
-          <Text style={styles.errorText}>{addMutation.error.message}</Text>
-        )}
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.rowBetween}>
-          <Text style={styles.sectionTitle}>Sugerencias de amigos</Text>
-          <TouchableOpacity
-            style={[
-              styles.secondaryButton,
-              (!canUseSocial || suggestionsQuery.isFetching) && styles.buttonDisabled
-            ]}
-            onPress={() => suggestionsQuery.refetch()}
-            disabled={!canUseSocial || suggestionsQuery.isFetching}
-          >
-            <Text style={styles.secondaryButtonText}>{suggestionsQuery.isFetching ? 'Actualizando…' : 'Actualizar'}</Text>
-          </TouchableOpacity>
-        </View>
-        {!canUseSocial ? (
-          loading ? (
-            <Text style={styles.helper}>Cargando acceso…</Text>
-          ) : (
-          <Text style={styles.helper}>Acceso restringido para ver sugerencias.</Text>
-          )
-        ) : suggestionsQuery.isError ? (
-          <Text style={styles.errorText}>No pudimos cargar sugerencias.</Text>
-        ) : suggestionsQuery.isLoading ? (
-          <Text style={styles.helper}>Buscando conexiones…</Text>
-        ) : (suggestionsQuery.data?.length ?? 0) === 0 ? (
-          <Text style={styles.helper}>No tenemos sugerencias todavía. Conecta con más personas y vuelve a intentar.</Text>
-        ) : (
-          <View style={styles.list}>
-            {suggestionsQuery.data?.map((suggestion) => {
-              const label = formatParty(suggestion.sfPartyId);
-              return (
-                <View key={`suggestion-${suggestion.sfPartyId}`} style={styles.item}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.itemTitle}>{label}</Text>
-                    <Text style={styles.itemMeta}>ID #{suggestion.sfPartyId}</Text>
-                    <Text style={styles.tag}>{`${suggestion.sfMutualCount} conexión${suggestion.sfMutualCount === 1 ? '' : 'es'} en común`}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.primaryButton,
-                      { paddingHorizontal: 12, paddingVertical: 10 },
-                      (!canUseSocial || addMutation.isPending) && styles.buttonDisabled
-                    ]}
-                    onPress={() => addMutation.mutate(suggestion.sfPartyId)}
-                    disabled={!canUseSocial || addMutation.isPending}
-                  >
-                    <Text style={styles.primaryButtonText}>Conectar</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </View>
-        )}
-      </View>
-
-      <View style={styles.card}>
         <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'friends' && styles.tabActive]}
-            onPress={() => setActiveTab('friends')}
-          >
-            <Text style={[styles.tabText, activeTab === 'friends' && styles.tabTextActive]}>
-              Amigos ({friendsQuery.data?.length ?? 0})
-            </Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'following' && styles.tabActive]}
             onPress={() => setActiveTab('following')}
@@ -253,8 +142,8 @@ export default function SocialScreen() {
           <Text style={styles.helper}>
             {loading ? 'Cargando acceso…' : 'Acceso restringido para ver tus conexiones.'}
           </Text>
-        ) : (followersQuery.isLoading || followingQuery.isLoading || friendsQuery.isLoading || partiesQuery.isLoading) ? (
-          <Text style={styles.helper}>Cargando red social…</Text>
+        ) : (followersQuery.isLoading || followingQuery.isLoading || partiesQuery.isLoading) ? (
+          <Text style={styles.helper}>Cargando conexiones…</Text>
         ) : activeData.length === 0 ? (
           <Text style={styles.helper}>{tabData[activeTab].empty}</Text>
         ) : (
@@ -262,7 +151,6 @@ export default function SocialScreen() {
             {activeData.map((row) => {
               const targetId = activeTab === 'followers' ? row.pfFollowerId : row.pfFollowingId;
               const label = formatParty(targetId);
-              const isFriend = friendsQuery.data?.some((f) => f.pfFollowingId === targetId) ?? false;
               const isFollowing = followingQuery.data?.some((f) => f.pfFollowingId === targetId) ?? false;
               return (
                 <View key={`${activeTab}-${row.pfFollowerId}-${row.pfFollowingId}`} style={styles.item}>
@@ -281,10 +169,10 @@ export default function SocialScreen() {
                         style={[
                           styles.primaryButton,
                           { paddingHorizontal: 12, paddingVertical: 10 },
-                          (!canUseSocial || addMutation.isPending) && styles.buttonDisabled
+                          (!canUseSocial || followMutation.isPending) && styles.buttonDisabled
                         ]}
-                        onPress={() => addMutation.mutate(targetId)}
-                        disabled={!canUseSocial || addMutation.isPending}
+                        onPress={() => followMutation.mutate(targetId)}
+                        disabled={!canUseSocial || followMutation.isPending}
                       >
                         <Text style={styles.primaryButtonText}>Seguir</Text>
                       </TouchableOpacity>
@@ -293,12 +181,12 @@ export default function SocialScreen() {
                     <TouchableOpacity
                       style={[
                         styles.secondaryButton,
-                        (!canUseSocial || removeMutation.isPending) && styles.buttonDisabled
+                        (!canUseSocial || unfollowMutation.isPending) && styles.buttonDisabled
                       ]}
-                      onPress={() => removeMutation.mutate(targetId)}
-                      disabled={!canUseSocial || removeMutation.isPending}
+                      onPress={() => unfollowMutation.mutate(targetId)}
+                      disabled={!canUseSocial || unfollowMutation.isPending}
                     >
-                      <Text style={styles.secondaryButtonText}>{isFriend ? 'Eliminar amigo' : 'Dejar de seguir'}</Text>
+                      <Text style={styles.secondaryButtonText}>Dejar de seguir</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -319,12 +207,8 @@ const styles = StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   badge: { backgroundColor: '#eef2ff', color: '#1e3a8a', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, fontWeight: '700' },
   helper: { color: '#6b7280', fontSize: 13 },
-  input: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, padding: 10 },
   primaryButton: { backgroundColor: '#2563eb', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center' },
   primaryButtonText: { color: '#fff', fontWeight: '700' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tabs: { flexDirection: 'row', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' },
   tab: { flex: 1, paddingVertical: 10, backgroundColor: '#f9fafb' },
   tabActive: { backgroundColor: '#e0f2fe' },

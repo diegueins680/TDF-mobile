@@ -34,6 +34,7 @@ import {
   toggleMomentFeedReaction,
 } from '../lib/eventMomentsRepository';
 import { resolvePartyId } from '../lib/identity';
+import { MOBILE_LANDING_ROUTE } from '../navigation/mobileSurface';
 import { useAuth } from '../providers/AuthProvider';
 import { useFirstRun } from '../providers/FirstRunProvider';
 import { useUserSettings } from '../providers/UserSettingsProvider';
@@ -235,7 +236,7 @@ export function NewUserOnboardingGate({ children }: Props) {
 
   const handleExplore = useCallback(() => {
     setTreatmentExited(true);
-    router.replace('/(tabs)/parties');
+    router.replace(MOBILE_LANDING_ROUTE);
   }, [router]);
 
   if (!gateEngaged) {
@@ -296,7 +297,7 @@ export function NewUserOnboardingGate({ children }: Props) {
             <Text style={styles.emptyTitle}>Aún no hay momentos publicados</Text>
             <Text style={styles.emptyBody}>
               Cuando alguien suba el primer momento del evento lo verás aquí. Mientras tanto,
-              explora la app para descubrir todo lo que puedes hacer.
+              explora eventos, tickets, transmisiones y clubes de fans.
             </Text>
             <View style={styles.emptyPreview}>
               <Text style={styles.previewLabel}>Vista previa</Text>
@@ -316,7 +317,7 @@ export function NewUserOnboardingGate({ children }: Props) {
           style={styles.exploreBtn}
           onPress={handleExplore}
         >
-          <Text style={styles.exploreBtnText}>Explore more</Text>
+          <Text style={styles.exploreBtnText}>Ver eventos</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

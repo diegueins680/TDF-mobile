@@ -105,7 +105,7 @@ describe('Auth screen', () => {
         password: 'demo-pass',
       });
       expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42);
-      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/parties');
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');
     });
     expect(await screen.findByText(/Party activa: 42/i)).toBeTruthy();
   }, 10_000);
@@ -145,7 +145,7 @@ describe('Auth screen', () => {
       expect(mockGoogleLoginRequest).toHaveBeenCalledWith({ idToken: 'google-id-token' })
     );
     await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token', 77));
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/parties'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events'));
     expect(screen.getByText(/Party activa: 77/i)).toBeTruthy();
   });
 

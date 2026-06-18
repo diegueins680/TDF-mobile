@@ -21,6 +21,7 @@ import {
   GOOGLE_WEB_CLIENT_ID
 } from '../src/lib/authConfig';
 import { loadNativeGoogleSignin, type NativeGoogleSigninModule } from '../src/lib/nativeGoogleSignin';
+import { MOBILE_LANDING_ROUTE } from '../src/navigation/mobileSurface';
 import { useAuth } from '../src/providers/AuthProvider';
 
 const readErrorMessage = (error: unknown, fallback: string) => {
@@ -104,7 +105,7 @@ export default function AuthScreen() {
           ? `Sesión iniciada. Party activa: ${session.partyId}.`
           : 'Sesión iniciada.'
       );
-      router.replace('/(tabs)/parties');
+      router.replace(MOBILE_LANDING_ROUTE);
     } catch (error) {
       setErrorMessage(readErrorMessage(error, 'No pudimos iniciar sesión.'));
     } finally {
@@ -147,7 +148,7 @@ export default function AuthScreen() {
           ? `Sesión con Google iniciada. Party activa: ${session.partyId}.`
           : 'Sesión con Google iniciada.'
       );
-      router.replace('/(tabs)/parties');
+      router.replace(MOBILE_LANDING_ROUTE);
     } catch (error) {
       if (googleSigninModule.isErrorWithCode(error)) {
         if (error.code === googleSigninModule.statusCodes.SIGN_IN_CANCELLED) {
@@ -198,7 +199,8 @@ export default function AuthScreen() {
           <View style={styles.card}>
             <Text style={styles.title}>Inicia sesión</Text>
             <Text style={styles.subtitle}>
-              Usa tu cuenta de TDF Records para desbloquear inventario, bookings, parties y social desde mobile.
+              Usa tu cuenta de TDF Records para eventos, tickets, vCards, perfil, seguir artistas,
+              streaming en vivo y club de fans.
             </Text>
             <Text style={styles.meta}>API base: {API_BASE}</Text>
           </View>

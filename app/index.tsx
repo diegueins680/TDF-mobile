@@ -4,6 +4,7 @@ import type { Href } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 
 import { getOnboardingSeen } from '../src/lib/onboarding';
+import { MOBILE_LANDING_ROUTE } from '../src/navigation/mobileSurface';
 import { useAuth } from '../src/providers/AuthProvider';
 
 export default function Index() {
@@ -15,7 +16,7 @@ export default function Index() {
     (async () => {
       const seen = await getOnboardingSeen();
       if (!active) return;
-      setTarget(seen ? '/(tabs)/parties' : '/onboarding');
+      setTarget(seen ? MOBILE_LANDING_ROUTE : '/onboarding');
     })();
     return () => {
       active = false;
@@ -31,7 +32,7 @@ export default function Index() {
   }
 
   const hasToken = Boolean(token?.trim());
-  if (target === '/(tabs)/parties' && !hasToken) {
+  if (target === MOBILE_LANDING_ROUTE && !hasToken) {
     return <Redirect href="/auth" />;
   }
 

@@ -6,7 +6,17 @@ const reactHooks = require('eslint-plugin-react-hooks');
 const prettierConfig = require('eslint-config-prettier');
 const globals = require('globals');
 
-const ignores = ['node_modules', '.expo', 'dist', 'build', 'web-build', 'coverage', 'eslint.config.js', 'jest.config.js'];
+const ignores = [
+  'node_modules',
+  '.expo',
+  'dist',
+  'build',
+  '**/build/**',
+  'web-build',
+  'coverage',
+  'eslint.config.js',
+  'jest.config.js',
+];
 
 const baseGlobals = {
   ...globals.browser,

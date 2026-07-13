@@ -49,6 +49,7 @@ type BackendEventDTO = {
   eventEnd: string;
   eventVenueId?: string | null;
   eventPriceCents?: number | null;
+  eventCurrency?: string | null;
   eventCapacity?: number | null;
   eventTicketUrl?: string | null;
   eventImageUrl?: string | null;
@@ -764,6 +765,7 @@ function mapBackendEventToFrontend(
     artists,
     createdBy: normalizePartyId(e.eventOrganizerPartyId),
     ticketPrice: normalizeTicketPrice(e.eventPriceCents),
+    currency: normalizeCurrencyCode(e.eventCurrency),
     ticketUrl: e.eventTicketUrl ?? null,
     imageUrl: e.eventImageUrl ?? null,
     isPublic: typeof e.eventIsPublic === 'boolean' ? e.eventIsPublic : true,

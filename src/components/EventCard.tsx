@@ -74,7 +74,7 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
                 <Text style={styles.price}>
                   {event.ticketPrice === 0
                     ? 'Gratis'
-                    : formatTicketMoney(Math.round(event.ticketPrice * 100), 'USD')}
+                    : formatTicketMoney(Math.round(event.ticketPrice * 100), event.currency ?? 'USD')}
                 </Text>
               </View>
             )}

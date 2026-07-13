@@ -766,6 +766,7 @@ export default function EventDetailScreen() {
         <TicketPurchaseCard
           tiers={ticketTiersQuery.data ?? []}
           fallbackPrice={event.ticketPrice}
+          fallbackCurrency={event.currency}
           externalTicketUrl={event.ticketUrl}
           canBuyInternally={isEventTicketPurchaseEligible(event)}
           isLoading={ticketTiersQuery.isLoading}

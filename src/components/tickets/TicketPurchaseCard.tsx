@@ -12,6 +12,7 @@ import {
 type Props = {
   tiers: EventTicketTier[];
   fallbackPrice?: number | null;
+  fallbackCurrency?: string;
   externalTicketUrl?: string | null;
   canBuyInternally?: boolean;
   isLoading?: boolean;
@@ -24,6 +25,7 @@ type Props = {
 export function TicketPurchaseCard({
   tiers,
   fallbackPrice,
+  fallbackCurrency = 'USD',
   externalTicketUrl,
   canBuyInternally = true,
   isLoading = false,
@@ -111,7 +113,7 @@ export function TicketPurchaseCard({
             <Text style={styles.stateTitle}>Venta en sitio externo</Text>
             {fallbackCents !== null ? (
               <Text style={styles.price}>
-                {fallbackCents === 0 ? 'Gratis' : formatTicketMoney(fallbackCents, 'USD')}
+                {fallbackCents === 0 ? 'Gratis' : formatTicketMoney(fallbackCents, fallbackCurrency)}
               </Text>
             ) : null}
           </View>

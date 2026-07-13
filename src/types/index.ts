@@ -193,6 +193,7 @@ export type SocialEvent = {
   artists?: ArtistProfile[];
   createdBy: ID;
   ticketPrice?: number | null;
+  currency?: string;
   ticketUrl?: string | null;
   imageUrl?: string | null;
   isPublic: boolean;

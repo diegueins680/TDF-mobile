@@ -270,6 +270,7 @@ describe('Social API mapper sanitization', () => {
         eventEnd: '2026-01-01T01:00:00.000Z',
         eventVenueId: null,
         eventPriceCents: 0,
+        eventCurrency: 'eur',
         eventIsPublic: true,
       },
     ]);
@@ -280,6 +281,7 @@ describe('Social API mapper sanitization', () => {
     expect(events[0]?.ticketPrice).toBeNull();
     expect(events[1]?.ticketPrice).toBeNull();
     expect(events[2]?.ticketPrice).toBe(0);
+    expect(events[2]?.currency).toBe('EUR');
   });
 
   it('Events.list orders upcoming events nearest-first and maps sale status', async () => {

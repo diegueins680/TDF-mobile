@@ -662,16 +662,24 @@ export default function TicketCheckoutScreen() {
                     </View>
                   </View>
                   <View style={styles.tierList} accessibilityRole="radiogroup">
-                    {availableTiers.map((tier) => {
+                    {tiers.map((tier) => {
                       const selected = selectedTier?.id === tier.id;
+                      const selectable = isTicketTierOnSale(tier);
                       return (
                         <TouchableOpacity
                           key={tier.id}
-                          style={[styles.tierCard, selected && styles.tierCardSelected]}
+                          style={[
+                            styles.tierCard,
+                            selected && styles.tierCardSelected,
+                            !selectable && styles.tierCardUnavailable,
+                          ]}
                           onPress={() => handleSelectTier(tier)}
-                          disabled={purchaseMutation.isPending}
+                          disabled={!selectable || purchaseMutation.isPending}
                           accessibilityRole="radio"
-                          accessibilityState={{ selected, disabled: purchaseMutation.isPending }}
+                          accessibilityState={{
+                            selected,
+                            disabled: !selectable || purchaseMutation.isPending,
+                          }}
                           accessibilityLabel={`${tier.name}, ${tier.priceCents === 0 ? 'gratis' : formatTicketMoney(tier.priceCents, tier.currency)}, ${ticketTierSaleStateLabel(tier)}`}
                         >
                           <View style={styles.tierRadio}>
@@ -1015,6 +1023,7 @@ const styles = StyleSheet.create({
     gap: 11,
   },
   tierCardSelected: { borderColor: '#7c3aed', borderWidth: 2, backgroundColor: '#faf5ff' },
+  tierCardUnavailable: { opacity: 0.55, backgroundColor: '#f9fafb' },
   tierRadio: {
     width: 22,
     height: 22,

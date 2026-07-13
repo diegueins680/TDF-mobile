@@ -17,6 +17,7 @@ const mockInitStripe = jest.fn();
 const mockInitPaymentSheet = jest.fn();
 const mockPresentPaymentSheet = jest.fn();
 let mockTierPriceCents = 2500;
+let mockIncludeUnavailableTier = false;
 let mockTierQueryError = false;
 
 const mockMutationRunner = jest.fn((options) => ({
@@ -123,6 +124,7 @@ describe('Ticket checkout', () => {
       delete storage[key];
     });
     mockTierPriceCents = 2500;
+    mockIncludeUnavailableTier = false;
     mockTierQueryError = false;
     mockOrders = [];
     mockInitStripe.mockResolvedValue(undefined);
@@ -160,19 +162,34 @@ describe('Ticket checkout', () => {
         };
       }
       if (queryKey[0] === 'event-ticket-tiers') {
-        return {
-          data: [{
-            id: '3',
+        const tiers = [{
+          id: '3',
+          eventId: '42',
+          code: 'GENERAL',
+          name: 'General',
+          description: 'Acceso general',
+          priceCents: mockTierPriceCents,
+          currency: 'USD',
+          quantityTotal: 10,
+          quantitySold: 2,
+          active: true,
+        }];
+        if (mockIncludeUnavailableTier) {
+          tiers.push({
+            id: '4',
             eventId: '42',
-            code: 'GENERAL',
-            name: 'General',
-            description: 'Acceso general',
-            priceCents: mockTierPriceCents,
+            code: 'PREVENTA',
+            name: 'Preventa',
+            description: 'Cupo agotado',
+            priceCents: 1500,
             currency: 'USD',
-            quantityTotal: 10,
+            quantityTotal: 2,
             quantitySold: 2,
-            active: true,
-          }],
+            active: false,
+          });
+        }
+        return {
+          data: tiers,
           isLoading: false,
           isError: mockTierQueryError,
           refetch: jest.fn(),
@@ -206,6 +223,17 @@ describe('Ticket checkout', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Agregar una entrada' }));
     expect(screen.getByLabelText('2 entradas')).toBeTruthy();
     expect(screen.getAllByText(/50[,.]00/).length).toBeGreaterThan(0);
+  });
+
+  it('shows unavailable tiers but prevents selecting them', async () => {
+    mockIncludeUnavailableTier = true;
+    render(<TicketCheckoutScreen />);
+
+    const tier = await screen.findByRole('radio', { name: /Preventa/i });
+    expect(tier.props.accessibilityState).toMatchObject({ selected: false, disabled: true });
+    fireEvent.press(tier);
+    expect(screen.getByRole('radio', { name: /General/i }).props.accessibilityState)
+      .toMatchObject({ selected: true, disabled: false });
   });
 
   it('shows an inline email error before creating an order', async () => {

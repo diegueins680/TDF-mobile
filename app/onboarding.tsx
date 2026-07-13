@@ -1,11 +1,11 @@
 import { useEffect, type ComponentType, useRef } from 'react';
-import { Animated, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, type ViewProps } from 'react-native';
+import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View, type ViewProps } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { setOnboardingSeen } from '../src/lib/onboarding';
-import { MOBILE_LANDING_ROUTE } from '../src/navigation/mobileSurface';
 
 type Step = {
   title: string;
@@ -58,8 +58,8 @@ export default function OnboardingScreen() {
     <SafeAreaView style={styles.page}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <TouchableOpacity style={styles.skip} onPress={() => complete(MOBILE_LANDING_ROUTE)}>
-            <Text style={styles.skipText}>Saltar</Text>
+          <TouchableOpacity style={styles.skip} onPress={() => complete('/auth')}>
+            <Text style={styles.skipText}>Ingresar</Text>
           </TouchableOpacity>
           <AnimatedView
             style={[
@@ -111,14 +111,15 @@ export default function OnboardingScreen() {
         </View>
 
         <View style={styles.actionStack}>
-          <TouchableOpacity testID="goToLoginButton" style={styles.primaryButton} onPress={() => complete('/auth')}>
+          <TouchableOpacity
+            testID="goToLoginButton"
+            style={styles.primaryButton}
+            onPress={() => complete({ pathname: '/auth', params: { mode: 'signup' } })}
+          >
             <Text style={styles.primaryText}>Crear cuenta</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => complete('/(tabs)/profile')}>
-            <Text style={styles.secondaryText}>Configurar perfil</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.ghostButton} onPress={() => complete(MOBILE_LANDING_ROUTE)}>
-            <Text style={styles.ghostText}>Ver eventos</Text>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => complete('/auth')}>
+            <Text style={styles.secondaryText}>Ya tengo cuenta</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

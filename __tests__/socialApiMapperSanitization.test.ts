@@ -282,6 +282,34 @@ describe('Social API mapper sanitization', () => {
     expect(events[2]?.ticketPrice).toBe(0);
   });
 
+  it('Events.list orders upcoming events nearest-first and maps sale status', async () => {
+    get.mockResolvedValueOnce([
+      {
+        eventId: 302,
+        eventTitle: 'Evento lejano',
+        eventStart: '2027-01-02T20:00:00.000Z',
+        eventEnd: '2027-01-02T22:00:00.000Z',
+        eventVenueId: null,
+        eventIsPublic: true,
+        eventStatus: 'announced',
+      },
+      {
+        eventId: 301,
+        eventTitle: 'Evento próximo',
+        eventStart: '2027-01-01T20:00:00.000Z',
+        eventEnd: '2027-01-01T22:00:00.000Z',
+        eventVenueId: null,
+        eventIsPublic: true,
+        eventStatus: 'on_sale',
+      },
+    ]);
+
+    const events = await Events.list({ upcomingOnly: true });
+
+    expect(events.map((event) => event.id)).toEqual([301, 302]);
+    expect(events[0]?.status).toBe('on_sale');
+  });
+
   it('Events mappers sanitize blank timestamp fields across events, RSVPs, and invitations', async () => {
     get
       .mockResolvedValueOnce([
@@ -478,6 +506,7 @@ describe('Social API mapper sanitization', () => {
         buyerPartyId: '7',
         buyerName: 'Ana',
         buyerEmail: 'ana@example.com',
+        checkoutKey: 'tdf-checkout-abc123',
       },
       '2026-04-22.dahlia',
     );
@@ -488,6 +517,7 @@ describe('Social API mapper sanitization', () => {
       ticketPurchaseBuyerPartyId: '7',
       ticketPurchaseBuyerName: 'Ana',
       ticketPurchaseBuyerEmail: 'ana@example.com',
+      ticketPurchaseIdempotencyKey: 'tdf-checkout-abc123',
       ticketPurchaseMobileSdkStripeVersion: '2026-04-22.dahlia',
     });
     expect(intent).toEqual({
@@ -501,6 +531,40 @@ describe('Social API mapper sanitization', () => {
         paymentIntentClientSecret: 'pi_secret',
         publishableKey: 'pk_test_123',
       },
+    });
+  });
+
+  it('accepts an idempotent zero-total checkout without requiring a Stripe SDK version', async () => {
+    post.mockResolvedValueOnce({
+      spiClientSecret: '',
+      spiOrderId: '10',
+      spiAmountCents: 0,
+      spiCurrency: 'USD',
+      spiPaymentSheet: null,
+    });
+
+    await expect(Events.createTicketPaymentSheet(
+      {
+        eventId: '42',
+        tierId: '3',
+        quantity: 1,
+        buyerEmail: 'ana@example.com',
+        promoCode: 'INVITADO',
+        checkoutKey: 'tdf-free-checkout-123',
+      },
+    )).resolves.toEqual({
+      clientSecret: '',
+      orderId: '10',
+      amountCents: 0,
+      currency: 'USD',
+      paymentSheet: null,
+    });
+    expect(post).toHaveBeenCalledWith('/social-events/stripe/create-payment-intent', {
+      ticketPurchaseTierId: '3',
+      ticketPurchaseQuantity: 1,
+      ticketPurchaseBuyerEmail: 'ana@example.com',
+      ticketPurchasePromoCode: 'INVITADO',
+      ticketPurchaseIdempotencyKey: 'tdf-free-checkout-123',
     });
   });
 
@@ -522,5 +586,25 @@ describe('Social API mapper sanitization', () => {
       ticketOrderStatus: 'cancelled',
     });
     expect(order.status).toBe('cancelled');
+  });
+
+  it('Events.listMyTicketOrders loads the authenticated buyer history across events', async () => {
+    get.mockResolvedValueOnce([
+      {
+        ticketOrderId: '9',
+        ticketOrderEventId: '42',
+        ticketOrderTierId: '3',
+        ticketOrderQuantity: 1,
+        ticketOrderAmountCents: 2500,
+        ticketOrderCurrency: 'USD',
+        ticketOrderStatusValue: 'paid',
+        ticketOrderTickets: [],
+      },
+    ]);
+
+    const orders = await Events.listMyTicketOrders('paid');
+
+    expect(get).toHaveBeenCalledWith('/social-events/ticket-orders?status=paid');
+    expect(orders[0]).toEqual(expect.objectContaining({ eventId: '42', status: 'paid' }));
   });
 });

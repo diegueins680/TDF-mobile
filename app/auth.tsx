@@ -11,9 +11,9 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 
-import { loginRequest, googleLoginRequest } from '../src/api/auth';
+import { loginRequest, googleLoginRequest, signupRequest } from '../src/api/auth';
 import { API_BASE } from '../src/lib/api';
 import {
   GOOGLE_IOS_CLIENT_ID,
@@ -34,9 +34,19 @@ const readErrorMessage = (error: unknown, fallback: string) => {
 
 export default function AuthScreen() {
   const router = useRouter();
-  const { token, partyId, loading, setToken, clearToken } = useAuth();
+  const params = useLocalSearchParams<{ mode?: string | string[]; returnTo?: string | string[] }>();
+  const { token, loading, setToken, clearToken } = useAuth();
+  const requestedMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
+  const rawReturnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
+  const returnTo = rawReturnTo?.startsWith('/') && !rawReturnTo.startsWith('//') && rawReturnTo.length <= 500
+    ? rawReturnTo as Href
+    : MOBILE_LANDING_ROUTE;
+  const [mode, setMode] = useState<'login' | 'signup'>(requestedMode === 'signup' ? 'signup' : 'login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
 
   useEffect(() => {
     if (__DEV__) {
@@ -45,6 +55,7 @@ export default function AuthScreen() {
     }
   }, []);
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
+  const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [googleSigninModule, setGoogleSigninModule] = useState<NativeGoogleSigninModule | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -52,6 +63,11 @@ export default function AuthScreen() {
 
   const hasToken = Boolean(token?.trim());
   const canSubmitPassword = username.trim().length > 0 && password.length > 0 && !isPasswordSubmitting;
+  const canSubmitSignup =
+    firstName.trim().length > 0 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim()) &&
+    password.trim().length >= 8 &&
+    !isSignupSubmitting;
   const isGoogleLoginAvailable =
     Platform.OS !== 'web' &&
     Boolean(googleSigninModule) &&
@@ -100,16 +116,37 @@ export default function AuthScreen() {
 
       setToken(session.token, session.partyId ?? null);
       setPassword('');
-      setFeedbackMessage(
-        session.partyId
-          ? `Sesión iniciada. Party activa: ${session.partyId}.`
-          : 'Sesión iniciada.'
-      );
-      router.replace(MOBILE_LANDING_ROUTE);
+      setFeedbackMessage('Sesión iniciada.');
+      router.replace(returnTo);
     } catch (error) {
       setErrorMessage(readErrorMessage(error, 'No pudimos iniciar sesión.'));
     } finally {
       setIsPasswordSubmitting(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    if (!canSubmitSignup) return;
+
+    setErrorMessage(null);
+    setFeedbackMessage(null);
+    setIsSignupSubmitting(true);
+    try {
+      const session = await signupRequest({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: signupEmail.trim().toLowerCase(),
+        password,
+        roles: ['Fan'],
+      });
+      setToken(session.token, session.partyId ?? null);
+      setPassword('');
+      setFeedbackMessage('Cuenta creada. Ya puedes elegir tus entradas.');
+      router.replace(returnTo);
+    } catch (error) {
+      setErrorMessage(readErrorMessage(error, 'No pudimos crear tu cuenta.'));
+    } finally {
+      setIsSignupSubmitting(false);
     }
   };
 
@@ -143,12 +180,8 @@ export default function AuthScreen() {
       const session = await googleLoginRequest({ idToken: response.data.idToken });
       setToken(session.token, session.partyId ?? null);
       setPassword('');
-      setFeedbackMessage(
-        session.partyId
-          ? `Sesión con Google iniciada. Party activa: ${session.partyId}.`
-          : 'Sesión con Google iniciada.'
-      );
-      router.replace(MOBILE_LANDING_ROUTE);
+      setFeedbackMessage('Sesión con Google iniciada.');
+      router.replace(returnTo);
     } catch (error) {
       if (googleSigninModule.isErrorWithCode(error)) {
         if (error.code === googleSigninModule.statusCodes.SIGN_IN_CANCELLED) {
@@ -197,33 +230,116 @@ export default function AuthScreen() {
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
-            <Text style={styles.title}>Inicia sesión</Text>
+            <Text style={styles.title}>{mode === 'signup' ? 'Crea tu cuenta' : 'Inicia sesión'}</Text>
             <Text style={styles.subtitle}>
-              Usa tu cuenta de TDF Records para eventos, tickets, vCards, perfil, seguir artistas,
-              streaming en vivo y club de fans.
+              {mode === 'signup'
+                ? 'Solo toma un minuto. Después volverás directo a elegir tus entradas.'
+                : 'Accede a tus eventos, compras y códigos QR con tu cuenta de TDF Records.'}
             </Text>
-            <Text style={styles.meta}>API base: {API_BASE}</Text>
+            {__DEV__ ? <Text style={styles.meta}>API base: {API_BASE}</Text> : null}
           </View>
 
           {showLoginActions ? (
             <View style={styles.card}>
-              <Text style={styles.label}>Usuario o correo</Text>
-              <TextInput
-                testID="usernameInput"
-                value={username}
-                onChangeText={(value) => {
-                  setUsername(value);
-                  setErrorMessage(null);
-                }}
-                placeholder="usuario o correo"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="username"
-                textContentType="username"
-                style={styles.input}
-              />
+              <View style={styles.modeSwitch}>
+                <TouchableOpacity
+                  style={[styles.modeButton, mode === 'login' && styles.modeButtonActive]}
+                  onPress={() => {
+                    setMode('login');
+                    setErrorMessage(null);
+                  }}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: mode === 'login' }}
+                >
+                  <Text style={[styles.modeButtonText, mode === 'login' && styles.modeButtonTextActive]}>Ingresar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modeButton, mode === 'signup' && styles.modeButtonActive]}
+                  onPress={() => {
+                    setMode('signup');
+                    setErrorMessage(null);
+                  }}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: mode === 'signup' }}
+                >
+                  <Text style={[styles.modeButtonText, mode === 'signup' && styles.modeButtonTextActive]}>Crear cuenta</Text>
+                </TouchableOpacity>
+              </View>
 
-              <Text style={styles.label}>Password</Text>
+              {mode === 'signup' ? (
+                <>
+                  <View style={styles.nameRow}>
+                    <View style={styles.nameField}>
+                      <Text style={styles.label}>Nombre</Text>
+                      <TextInput
+                        value={firstName}
+                        onChangeText={(value) => {
+                          setFirstName(value);
+                          setErrorMessage(null);
+                        }}
+                        placeholder="Tu nombre"
+                        autoCapitalize="words"
+                        autoComplete="given-name"
+                        textContentType="givenName"
+                        style={styles.input}
+                        maxLength={80}
+                      />
+                    </View>
+                    <View style={styles.nameField}>
+                      <Text style={styles.label}>Apellido <Text style={styles.optionalText}>(opcional)</Text></Text>
+                      <TextInput
+                        value={lastName}
+                        onChangeText={(value) => {
+                          setLastName(value);
+                          setErrorMessage(null);
+                        }}
+                        placeholder="Tu apellido"
+                        autoCapitalize="words"
+                        autoComplete="family-name"
+                        textContentType="familyName"
+                        style={styles.input}
+                        maxLength={80}
+                      />
+                    </View>
+                  </View>
+                  <Text style={styles.label}>Correo electrónico</Text>
+                  <TextInput
+                    value={signupEmail}
+                    onChangeText={(value) => {
+                      setSignupEmail(value);
+                      setErrorMessage(null);
+                    }}
+                    placeholder="tu@correo.com"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                    keyboardType="email-address"
+                    style={styles.input}
+                    maxLength={254}
+                  />
+                </>
+              ) : (
+                <>
+                  <Text style={styles.label}>Usuario o correo</Text>
+                  <TextInput
+                    testID="usernameInput"
+                    value={username}
+                    onChangeText={(value) => {
+                      setUsername(value);
+                      setErrorMessage(null);
+                    }}
+                    placeholder="usuario o correo"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="username"
+                    textContentType="username"
+                    style={styles.input}
+                  />
+                </>
+              )}
+
+              <Text style={styles.label}>Contraseña</Text>
               <TextInput
                 testID="passwordInput"
                 value={password}
@@ -231,34 +347,47 @@ export default function AuthScreen() {
                   setPassword(value);
                   setErrorMessage(null);
                 }}
-                placeholder="Tu password"
+                placeholder={mode === 'signup' ? 'Mínimo 8 caracteres' : 'Tu contraseña'}
                 autoCapitalize="none"
                 autoCorrect={false}
-                autoComplete="password"
-                textContentType="password"
+                autoComplete={mode === 'signup' ? 'new-password' : 'password'}
+                textContentType={mode === 'signup' ? 'newPassword' : 'password'}
                 secureTextEntry
                 style={styles.input}
                 onSubmitEditing={() => {
-                  void handlePasswordLogin();
+                  if (mode === 'signup') {
+                    void handleSignup();
+                  } else {
+                    void handlePasswordLogin();
+                  }
                 }}
               />
 
               <TouchableOpacity
-                testID="loginButton"
-                style={[styles.primaryButton, !canSubmitPassword && styles.buttonDisabled]}
+                testID={mode === 'signup' ? 'signupButton' : 'loginButton'}
+                style={[
+                  styles.primaryButton,
+                  !(mode === 'signup' ? canSubmitSignup : canSubmitPassword) && styles.buttonDisabled,
+                ]}
                 onPress={() => {
-                  void handlePasswordLogin();
+                  if (mode === 'signup') {
+                    void handleSignup();
+                  } else {
+                    void handlePasswordLogin();
+                  }
                 }}
-                disabled={!canSubmitPassword}
+                disabled={!(mode === 'signup' ? canSubmitSignup : canSubmitPassword)}
               >
-                {isPasswordSubmitting ? (
+                {isPasswordSubmitting || isSignupSubmitting ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Entrar con password</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {mode === 'signup' ? 'Crear cuenta y continuar' : 'Ingresar'}
+                  </Text>
                 )}
               </TouchableOpacity>
 
-              {showGoogleLogin ? (
+              {showGoogleLogin && mode === 'login' ? (
                 <>
                   <View style={styles.dividerRow}>
                     <View style={styles.divider} />
@@ -280,11 +409,10 @@ export default function AuthScreen() {
                     )}
                   </TouchableOpacity>
 
-                  <Text style={styles.helperText}>
-                    Google login usa el mismo backend /login/google que ya existe en web.
-                  </Text>
                 </>
               ) : null}
+
+              {errorMessage ? <Text style={styles.errorText} accessibilityRole="alert">{errorMessage}</Text> : null}
             </View>
           ) : null}
 
@@ -300,11 +428,7 @@ export default function AuthScreen() {
                 <Text style={styles.statusText}>
                   Sesión: {hasToken ? 'Activa' : 'No iniciada'}
                 </Text>
-                <Text style={styles.statusText}>
-                  Party ID: {partyId ?? 'Pendiente'}
-                </Text>
                 {feedbackMessage ? <Text style={styles.successText}>{feedbackMessage}</Text> : null}
-                {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
                 <TouchableOpacity
                   style={[styles.ghostButton, !hasToken && styles.buttonDisabled]}
                   onPress={() => {
@@ -339,6 +463,30 @@ const styles = StyleSheet.create({
   subtitle: { color: '#475569', lineHeight: 20 },
   meta: { color: '#1d4ed8', fontSize: 12, fontWeight: '600' },
   label: { fontWeight: '700', color: '#0f172a' },
+  optionalText: { color: '#64748b', fontSize: 12, fontWeight: '500' },
+  modeSwitch: {
+    flexDirection: 'row',
+    gap: 6,
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9'
+  },
+  modeButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  modeButtonActive: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd6fe'
+  },
+  modeButtonText: { color: '#64748b', fontSize: 13, fontWeight: '700' },
+  modeButtonTextActive: { color: '#6d28d9' },
+  nameRow: { flexDirection: 'row', gap: 10 },
+  nameField: { flex: 1, gap: 7 },
   input: {
     borderWidth: 1,
     borderColor: '#cbd5e1',
@@ -348,7 +496,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff'
   },
   primaryButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#7c3aed',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center'

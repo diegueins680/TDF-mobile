@@ -46,23 +46,19 @@ describe('Onboarding screen', () => {
     expect(screen.queryByText(/inventario|bookings|pipelines|parties/i)).toBeNull();
   });
 
-  it('routes the primary onboarding actions to auth, profile, and events', () => {
+  it('routes new and returning users through authentication', () => {
     render(<OnboardingScreen />);
 
     const createAccountButton = screen.getByText(/Crear cuenta/i).parent;
     if (!createAccountButton) throw new Error('Create account button not found');
     fireEvent.press(createAccountButton);
     expect(mockSetOnboardingSeen).toHaveBeenCalledWith(true);
+    expect(mockReplace).toHaveBeenCalledWith({ pathname: '/auth', params: { mode: 'signup' } });
+
+    const loginButton = screen.getByText(/Ya tengo cuenta/i).parent;
+    if (!loginButton) throw new Error('Login button not found');
+    fireEvent.press(loginButton);
     expect(mockReplace).toHaveBeenCalledWith('/auth');
-
-    const profileButton = screen.getByText(/Configurar perfil/i).parent;
-    if (!profileButton) throw new Error('Profile button not found');
-    fireEvent.press(profileButton);
-    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/profile');
-
-    const eventsButton = screen.getByText(/Ver eventos/i).parent;
-    if (!eventsButton) throw new Error('Events button not found');
-    fireEvent.press(eventsButton);
-    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');
+    expect(screen.queryByText(/Configurar perfil|Ver eventos/i)).toBeNull();
   });
 });

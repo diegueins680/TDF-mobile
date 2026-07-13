@@ -1,4 +1,4 @@
-import type { Party } from '../types';
+import type { ID, Party } from '../types';
 import type { PartyDTO, PartyCreate, PartyUpdate, RoleKey } from './types';
 import { get, post, put } from './client';
 
@@ -43,6 +43,19 @@ export async function updateParty(id: Party['id'], body: Partial<Party>): Promis
     uNotes: body.notes,
   };
   const res = await put<PartyDTO>(`/parties/${id}`, payload);
+  return toParty(res);
+}
+
+export async function getParty(id: ID): Promise<Party> {
+  const normalizedId = typeof id === 'number' ? String(id) : id.trim();
+  if (
+    !/^\d+$/.test(normalizedId)
+    || !/[1-9]/.test(normalizedId)
+    || (typeof id === 'number' && (!Number.isSafeInteger(id) || id <= 0))
+  ) {
+    throw new Error('Party ID inválido.');
+  }
+  const res = await get<PartyDTO>(`/parties/${encodeURIComponent(normalizedId)}`);
   return toParty(res);
 }
 

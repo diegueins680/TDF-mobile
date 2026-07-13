@@ -1,12 +1,28 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { ActivityIndicator, View } from 'react-native';
 
 import { NewUserOnboardingGate } from '../../src/experiments/NewUserOnboardingGate';
 import { HIDDEN_INTERNAL_TABS, NEW_USER_VISIBLE_TABS } from '../../src/navigation/mobileSurface';
+import { useAuth } from '../../src/providers/AuthProvider';
 
 type MaterialCommunityIconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 export default function TabsLayout() {
+  const { token, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#7c3aed" accessibilityLabel="Cargando sesión" />
+      </View>
+    );
+  }
+
+  if (!token?.trim()) {
+    return <Redirect href="/auth" />;
+  }
+
   return (
     <NewUserOnboardingGate>
       <TabsInner />

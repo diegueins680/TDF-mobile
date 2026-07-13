@@ -196,6 +196,7 @@ export type SocialEvent = {
   ticketUrl?: string | null;
   imageUrl?: string | null;
   isPublic: boolean;
+  status?: 'planning' | 'announced' | 'on_sale' | 'live' | 'completed' | 'cancelled' | string;
   rsvpCount: number;
   createdAt: string;
   updatedAt: string;
@@ -321,6 +322,8 @@ export type EventTicketPurchaseInput = {
   buyerPartyId?: ID | null;
   buyerName?: string | null;
   buyerEmail?: string | null;
+  promoCode?: string | null;
+  checkoutKey?: string | null;
 };
 
 export type EventTicketPaymentSheetParams = {
@@ -335,7 +338,8 @@ export type EventTicketPaymentIntent = {
   orderId: string;
   amountCents: number;
   currency: string;
-  paymentSheet: EventTicketPaymentSheetParams;
+  /** Null only when the server has already issued a zero-total order. */
+  paymentSheet: EventTicketPaymentSheetParams | null;
 };
 
 export type EventMomentMediaKind = 'image' | 'video';

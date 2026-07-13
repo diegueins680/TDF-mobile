@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
@@ -220,6 +221,23 @@ export default function UserProfileScreen() {
           <Text style={styles.helperText}>Usaremos estos datos en RSVP, invitaciones y vCard.</Text>
         </View>
 
+        <TouchableOpacity
+          style={styles.myTicketsCard}
+          onPress={() => router.push('/tickets')}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir Mis entradas"
+          accessibilityHint="Muestra tus códigos QR para ingresar a eventos"
+        >
+          <View style={styles.myTicketsIcon}>
+            <MaterialCommunityIcons name="ticket-confirmation" size={25} color="#7c3aed" />
+          </View>
+          <View style={styles.myTicketsCopy}>
+            <Text style={styles.myTicketsTitle}>Mis entradas</Text>
+            <Text style={styles.myTicketsText}>Consulta tus compras y códigos QR</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#6b7280" />
+        </TouchableOpacity>
+
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'artist' && styles.tabActive]}
@@ -346,6 +364,11 @@ const styles = StyleSheet.create({
   profileName: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 },
   profileEmail: { fontSize: 13, color: '#666' },
   identityCard: { backgroundColor: '#fff', borderRadius: 8, padding: 16, borderWidth: 1, borderColor: '#f0f0f0', marginBottom: 16, gap: 10 },
+  myTicketsCard: { minHeight: 72, backgroundColor: '#faf5ff', borderRadius: 14, padding: 13, borderWidth: 1, borderColor: '#ddd6fe', marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  myTicketsIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#ede9fe', alignItems: 'center', justifyContent: 'center' },
+  myTicketsCopy: { flex: 1, gap: 2 },
+  myTicketsTitle: { color: '#2e1065', fontSize: 15, fontWeight: '800' },
+  myTicketsText: { color: '#6b7280', fontSize: 12 },
   input: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10 },
   identityActions: { flexDirection: 'row', gap: 8 },
   saveButton: { backgroundColor: '#2563eb', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center' },

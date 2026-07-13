@@ -4,6 +4,7 @@ import {
   listMomentFeed,
   toggleMomentFeedReaction,
 } from '../src/lib/eventMomentsRepository';
+import { normalizeApiError } from '../src/api/client';
 
 jest.mock('../src/api/events', () => ({
   Events: {
@@ -89,6 +90,36 @@ describe('event moments repository', () => {
       fallbackReason: 'Not Found',
       moment: { id: 'moment-local-2' },
     });
+  });
+
+  it('still falls back after the API client localizes an Axios transport error', async () => {
+    const normalizedError = normalizeApiError({
+      isAxiosError: true,
+      message: 'Network Error',
+      code: 'ERR_NETWORK',
+      response: undefined,
+    });
+    mockEvents.createMoment.mockRejectedValue(normalizedError);
+    mockLocalMoments.createEventMoment.mockResolvedValue({
+      id: 'moment-local-network',
+      eventId: '42',
+      authorName: 'Cuco',
+      media: { kind: 'image', uri: 'file:///network.jpg', mimeType: 'image/jpeg' },
+      createdAt: '2026-04-10T22:00:00.000Z',
+      reactions: { fire: [], love: [], applause: [] },
+      comments: [],
+    });
+
+    await expect(createMomentFeedItem({
+      eventId: '42',
+      authorName: 'Cuco',
+      media: { kind: 'image', uri: 'file:///network.jpg', mimeType: 'image/jpeg' },
+    }, { preferRemote: true })).resolves.toMatchObject({
+      source: 'local',
+      fallbackReason: expect.stringMatching(/internet/i),
+    });
+
+    expect((normalizedError as { code?: string }).code).toBe('ERR_NETWORK');
   });
 
   it('keeps local temporary moments on the local path even when remote mode is preferred', async () => {

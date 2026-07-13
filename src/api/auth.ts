@@ -5,6 +5,7 @@ import type { components } from './generated/types';
 
 type LoginRequestDTO = components['schemas']['LoginRequest'];
 type GoogleLoginRequestDTO = components['schemas']['GoogleLoginRequest'];
+type SignupRequestDTO = components['schemas']['SignupRequest'];
 export type LoginResponseDTO = components['schemas']['LoginResponse'];
 
 const readErrorMessage = (error: unknown, fallback: string) => {
@@ -48,5 +49,14 @@ export async function googleLoginRequest(payload: GoogleLoginRequestDTO): Promis
     return response.data;
   } catch (error) {
     throw new Error(readErrorMessage(error, 'No pudimos iniciar sesión con Google.'));
+  }
+}
+
+export async function signupRequest(payload: SignupRequestDTO): Promise<LoginResponseDTO> {
+  try {
+    const response = await http.post<LoginResponseDTO>('/signup', payload);
+    return response.data;
+  } catch (error) {
+    throw new Error(readErrorMessage(error, 'No pudimos crear tu cuenta. Revisa los datos e inténtalo de nuevo.'));
   }
 }

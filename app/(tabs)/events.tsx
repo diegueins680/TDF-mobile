@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 
 import { Events } from '../../src/api/events';
@@ -26,17 +25,16 @@ const toLocalDateKey = (value: string | Date): string => {
 };
 
 export default function EventsScreen() {
-  const router = useRouter();
   const qc = useQueryClient();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
   const [selectedDate, setSelectedDate] = useState<string>(toLocalDateKey(new Date()));
-  const [cityFilter, setCityFilter] = useState('');
-  const debouncedCity = useDebouncedValue(cityFilter, 300);
+  const [searchFilter, setSearchFilter] = useState('');
+  const debouncedSearch = useDebouncedValue(searchFilter, 250);
 
-  const { data: events, isLoading, isError } = useQuery({
-    queryKey: ['events', debouncedCity],
-    queryFn: () => Events.list({ city: debouncedCity || undefined, upcomingOnly: true })
+  const { data: events, isLoading, isError, isFetching, refetch } = useQuery({
+    queryKey: ['events', 'buyer-upcoming'],
+    queryFn: () => Events.list({ upcomingOnly: true })
   });
 
   const savedEventIdsQuery = useQuery({
@@ -52,9 +50,7 @@ export default function EventsScreen() {
     queryFn: async () => {
       const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
       const resolved = settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
-      const cityNeedle = debouncedCity.trim().toLowerCase();
-      if (!cityNeedle) return resolved;
-      return resolved.filter((event) => event.venue?.city?.toLowerCase().includes(cityNeedle));
+      return resolved;
     }
   });
 
@@ -67,9 +63,23 @@ export default function EventsScreen() {
   });
 
   const effectiveEvents = useMemo(() => {
-    if (eventScope === 'saved') return savedEventsQuery.data ?? [];
-    return events ?? [];
-  }, [eventScope, events, savedEventsQuery.data]);
+    const source = eventScope === 'saved' ? savedEventsQuery.data ?? [] : events ?? [];
+    const needle = debouncedSearch.trim().toLocaleLowerCase('es-EC');
+    return source
+      .filter((event) => {
+        if (!event.isPublic) return false;
+        const status = event.status?.toLowerCase();
+        if (status === 'cancelled' || status === 'completed') return false;
+        if (!needle) return true;
+        return [
+          event.title,
+          event.venue?.name,
+          event.venue?.city,
+          ...(event.artists?.map((artist) => artist.name) ?? []),
+        ].some((value) => value?.toLocaleLowerCase('es-EC').includes(needle));
+      })
+      .sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime());
+  }, [debouncedSearch, eventScope, events, savedEventsQuery.data]);
 
   const eventsByDate = useMemo(() => {
     if (!effectiveEvents.length) return {};
@@ -102,10 +112,6 @@ export default function EventsScreen() {
     marked[selectedDate] = { ...marked[selectedDate], selected: true, selectedColor: '#2563eb' };
     return marked;
   }, [eventsByDate, selectedDate]);
-
-  const handleCreateEvent = useCallback(() => {
-    router.push('/createEvent');
-  }, [router]);
 
   const handleToggleSaved = useCallback((eventId: string) => {
     saveToggleMutation.mutate(eventId);
@@ -144,6 +150,21 @@ export default function EventsScreen() {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
         <Text style={styles.error}>No se pudieron cargar los eventos</Text>
+        <Text style={styles.errorHelper}>Comprueba tu conexión e inténtalo nuevamente.</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => {
+            if (eventScope === 'saved') {
+              void savedEventsQuery.refetch();
+            } else {
+              void refetch();
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Reintentar cargar eventos"
+        >
+          <Text style={styles.retryButtonText}>Reintentar</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -153,22 +174,20 @@ export default function EventsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Eventos cerca de ti</Text>
-        <TouchableOpacity style={styles.createBtn} onPress={handleCreateEvent} accessibilityRole="button" accessibilityLabel="Crear evento">
-          <Text style={styles.createBtnText}>+ Crear</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Search */}
       <View style={styles.searchContainer}>
         <TextInput
-          placeholder="Buscar por ciudad..."
-          value={cityFilter}
-          onChangeText={setCityFilter}
+          placeholder="Buscar eventos, artistas o ciudades"
+          value={searchFilter}
+          onChangeText={setSearchFilter}
           style={styles.searchInput}
           autoCapitalize="none"
           autoCorrect={false}
-          accessibilityLabel="Buscar eventos por ciudad"
+          accessibilityLabel="Buscar eventos, artistas o ciudades"
         />
+        {isFetching && !isLoading ? <ActivityIndicator size="small" color="#7c3aed" /> : null}
       </View>
 
       {/* View Mode Toggle */}
@@ -248,8 +267,8 @@ export default function EventsScreen() {
               data={selectedDateEvents}
               renderItem={renderEventItem}
               keyExtractor={keyExtractor}
-              scrollEnabled={false}
-              contentContainerStyle={styles.listContent}
+              style={styles.calendarList}
+              contentContainerStyle={styles.calendarListContent}
             />
           ) : (
             <View style={styles.empty}>
@@ -268,7 +287,11 @@ export default function EventsScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyText}>
-                {eventScope === 'saved' ? 'No se encontraron eventos guardados' : 'No se encontraron eventos'}
+                {debouncedSearch
+                  ? 'No encontramos eventos que coincidan con tu búsqueda'
+                  : eventScope === 'saved'
+                    ? 'No se encontraron eventos guardados'
+                    : 'No hay próximos eventos publicados'}
               </Text>
             </View>
           }
@@ -318,9 +341,13 @@ const styles = StyleSheet.create({
   searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff'
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
   },
   searchInput: {
+    flex: 1,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
@@ -362,6 +389,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12
   },
+  calendarList: {
+    flex: 1
+  },
+  calendarListContent: {
+    paddingTop: 12,
+    paddingBottom: 24
+  },
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -378,5 +412,24 @@ const styles = StyleSheet.create({
   error: {
     fontSize: 14,
     color: '#dc2626'
+  },
+  errorHelper: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 6,
+    textAlign: 'center'
+  },
+  retryButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: '#7c3aed',
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: '800'
   }
 });

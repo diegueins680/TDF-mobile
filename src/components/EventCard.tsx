@@ -2,6 +2,8 @@ import React, { memo } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 
+import { useAnalytics } from '../analytics/AnalyticsProvider';
+import { formatTicketMoney, isEventTicketPurchaseEligible } from '../lib/tickets';
 import type { SocialEvent } from '../types';
 
 type Props = {
@@ -14,6 +16,7 @@ type Props = {
 
 function EventCardComponent({ event, onPress, saved = false, onToggleSaved, saveDisabled = false }: Props) {
   const router = useRouter();
+  const analytics = useAnalytics();
 
   const handlePress = () => {
     if (onPress) {
@@ -28,6 +31,14 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
   const isSameDay = startDate.toDateString() === endDate.toDateString();
 
   const a11yLabel = `${event.title}, ${startDate.toLocaleDateString('es-EC')} ${startDate.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}${event.venue ? ` en ${event.venue.name}` : ''}`;
+  const hasTicketAction =
+    Boolean(event.ticketUrl) ||
+    isEventTicketPurchaseEligible(event);
+
+  const handleTicketPress = () => {
+    analytics.capture('ticket_cta_tapped', { event_id: String(event.id), source: 'event_card' });
+    router.push({ pathname: '/ticketCheckout', params: { eventId: String(event.id) } });
+  };
 
   return (
     <View style={styles.card}>
@@ -41,8 +52,8 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
 
           <View style={styles.meta}>
             <Text style={styles.date}>
-              {startDate.toLocaleDateString()} {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              {!isSameDay && ` - ${endDate.toLocaleDateString()}`}
+              {startDate.toLocaleDateString('es-EC')} {startDate.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
+              {!isSameDay && ` - ${endDate.toLocaleDateString('es-EC')}`}
             </Text>
             {event.venue && <Text style={styles.venue}>{event.venue.name}</Text>}
           </View>
@@ -58,7 +69,14 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
 
           <View style={styles.footer}>
             {typeof event.ticketPrice === 'number' && (
-              <Text style={styles.price}>${event.ticketPrice.toFixed(2)}</Text>
+              <View>
+                {event.ticketPrice > 0 ? <Text style={styles.priceEyebrow}>DESDE</Text> : null}
+                <Text style={styles.price}>
+                  {event.ticketPrice === 0
+                    ? 'Gratis'
+                    : formatTicketMoney(Math.round(event.ticketPrice * 100), 'USD')}
+                </Text>
+              </View>
             )}
             <View style={styles.stats}>
               <Text style={styles.stat}>{event.rsvpCount} asisten</Text>
@@ -66,6 +84,21 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
           </View>
         </View>
       </TouchableOpacity>
+
+      {hasTicketAction ? (
+        <View style={styles.ticketActionRow}>
+          <TouchableOpacity
+            style={styles.ticketButton}
+            onPress={handleTicketPress}
+            accessibilityRole="button"
+            accessibilityLabel={`Ver entradas para ${event.title}`}
+            accessibilityHint="Abre el checkout del evento"
+          >
+            <Text style={styles.ticketButtonText}>Ver entradas</Text>
+            <Text style={styles.ticketButtonArrow}>→</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {onToggleSaved && (
         <View style={styles.actions}>
@@ -147,9 +180,15 @@ const styles = StyleSheet.create({
     borderTopColor: '#f0f0f0'
   },
   price: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#2563eb'
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#6d28d9'
+  },
+  priceEyebrow: {
+    fontSize: 9,
+    letterSpacing: 0.7,
+    fontWeight: '800',
+    color: '#7c3aed'
   },
   stats: {
     flexDirection: 'row',
@@ -163,6 +202,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingBottom: 12,
     alignItems: 'flex-end'
+  },
+  ticketActionRow: {
+    paddingHorizontal: 12,
+    paddingBottom: 12
+  },
+  ticketButton: {
+    minHeight: 46,
+    borderRadius: 12,
+    backgroundColor: '#7c3aed',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8
+  },
+  ticketButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  ticketButtonArrow: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700'
   },
   saveButton: {
     borderWidth: 1,

@@ -3,6 +3,7 @@ import {
   listLiveBroadcastFeed,
   startLiveBroadcastSession,
 } from '../src/lib/liveBroadcastsRepository';
+import { normalizeApiError } from '../src/api/client';
 
 jest.mock('../src/api/liveBroadcasts', () => ({
   LiveBroadcasts: {
@@ -77,6 +78,22 @@ describe('live broadcasts repository', () => {
     await expect(listLiveBroadcastFeed('42', { preferRemote: true })).resolves.toMatchObject([
       { id: 'live-local-1' },
     ]);
+  });
+
+  it('still falls back after the API client localizes an Axios server error', async () => {
+    const normalizedError = normalizeApiError({
+      isAxiosError: true,
+      message: 'Request failed',
+      code: 'ERR_BAD_RESPONSE',
+      response: { status: 503, data: 'Service unavailable' },
+    });
+    mockApi.listByEvent.mockRejectedValue(normalizedError);
+
+    await expect(listLiveBroadcastFeed('42', { preferRemote: true })).resolves.toMatchObject([
+      { id: 'live-local-1' },
+    ]);
+
+    expect((normalizedError as { response?: { status?: number } }).response?.status).toBe(503);
   });
 
   it('starts remote sessions before using local fallback', async () => {

@@ -25,6 +25,8 @@ import { Social } from '../src/api/social';
 import { uploadMedia } from '../src/api/upload';
 import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard';
 import { EventMomentCard } from '../src/components/EventMomentCard';
+import { TicketPurchaseCard } from '../src/components/tickets/TicketPurchaseCard';
+import { isEventTicketPurchaseEligible } from '../src/lib/tickets';
 import {
   buildMomentActor,
   countMomentReactions,
@@ -43,12 +45,6 @@ import {
   type LiveBroadcastPublisherSession,
 } from '../src/lib/liveBroadcastPublishing';
 import {
-  getStripeCoreApiVersion,
-  initNativePaymentSheet,
-  initNativeStripe,
-  presentNativePaymentSheet,
-} from '../src/lib/nativeStripe';
-import {
   addMomentFeedComment,
   createMomentFeedItem,
   listMomentFeed,
@@ -66,7 +62,6 @@ import type {
   EventInvitationStatus,
   EventMoment,
   EventMomentReactionKind,
-  EventTicketTier,
   ID,
   RSVPStatus,
 } from '../src/types';
@@ -82,35 +77,12 @@ type ActiveLiveBroadcastRecord = {
 type CloseLiveBroadcastOptions = {
   updateState?: boolean;
 };
-type TicketPaymentResult =
-  | { status: 'paid'; orderId: string; quantity: number }
-  | { status: 'cancelled'; orderId: string; releasedReservation: boolean };
-
 const LIVE_QUALITY_OPTIONS: EventLiveBroadcastQuality[] = ['auto', '720p', '480p'];
-const STRIPE_MERCHANT_DISPLAY_NAME = 'TDF Records';
-const STRIPE_RETURN_URL = 'tdf://stripe-redirect';
-const STRIPE_MERCHANT_IDENTIFIER =
-  process.env.STRIPE_MERCHANT_IDENTIFIER?.trim() || process.env.EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER?.trim() || undefined;
 
 const parsePositivePartyId = (value: string | null | undefined): number | null => {
   if (!value || !/^\d+$/.test(value.trim())) return null;
   const parsed = Number.parseInt(value.trim(), 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-};
-
-const formatTicketMoney = (amountCents: number, currency: string): string =>
-  new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amountCents / 100);
-
-const ticketTierAvailability = (tier: EventTicketTier): number =>
-  Math.max(0, tier.quantityTotal - tier.quantitySold);
-
-const isTicketTierOnSale = (tier: EventTicketTier, now = Date.now()): boolean => {
-  if (!tier.active || ticketTierAvailability(tier) <= 0) return false;
-  const salesStart = tier.salesStart ? Date.parse(tier.salesStart) : null;
-  const salesEnd = tier.salesEnd ? Date.parse(tier.salesEnd) : null;
-  if (typeof salesStart === 'number' && Number.isFinite(salesStart) && now < salesStart) return false;
-  if (typeof salesEnd === 'number' && Number.isFinite(salesEnd) && now > salesEnd) return false;
-  return true;
 };
 
 export default function EventDetailScreen() {
@@ -139,10 +111,6 @@ export default function EventDetailScreen() {
   const [momentCaption, setMomentCaption] = useState('');
   const [momentMedia, setMomentMedia] = useState<DraftMomentMedia | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
-  const [selectedTicketTierId, setSelectedTicketTierId] = useState<string | null>(null);
-  const [ticketQuantity, setTicketQuantity] = useState('1');
-  const [ticketBuyerName, setTicketBuyerName] = useState(displayName ?? '');
-  const [ticketBuyerEmail, setTicketBuyerEmail] = useState('');
   const [selectedLiveArtistId, setSelectedLiveArtistId] = useState<string | null>(null);
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastDescription, setBroadcastDescription] = useState('');
@@ -150,7 +118,7 @@ export default function EventDetailScreen() {
   const [activeBroadcastId, setActiveBroadcastId] = useState<string | null>(null);
   const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
 
-  const { data: event, isLoading, isError } = useQuery({
+  const { data: event, isLoading, isError, refetch: refetchEvent } = useQuery({
     queryKey: ['event', eventId],
     queryFn: () => Events.getById(eventId as ID),
     enabled: Boolean(eventId),
@@ -159,13 +127,13 @@ export default function EventDetailScreen() {
   const rsvpQuery = useQuery({
     queryKey: ['event-rsvps', eventId],
     queryFn: () => Events.getRSVPs(eventId as ID),
-    enabled: Boolean(eventId),
+    enabled: Boolean(eventId && activeTab === 'details'),
   });
 
   const invitationsQuery = useQuery({
     queryKey: ['event-invitations', eventId],
     queryFn: () => Events.getInvitations(eventId as ID),
-    enabled: Boolean(eventId),
+    enabled: Boolean(eventId && showInviteModal),
   });
 
   const savedEventIdsQuery = useQuery({
@@ -179,22 +147,16 @@ export default function EventDetailScreen() {
     enabled: Boolean(eventId),
   });
 
-  const ticketOrdersQuery = useQuery({
-    queryKey: ['event-ticket-orders', eventId, normalizedPartyId],
-    queryFn: () => Events.listTicketOrders(eventId as ID, normalizedPartyId),
-    enabled: Boolean(eventId && normalizedPartyId),
-  });
-
   const momentsQuery = useQuery({
     queryKey: ['event-moments', eventId, shouldPreferRemoteMoments ? 'remote' : 'local'],
     queryFn: () => listMomentFeed(eventId as ID, { preferRemote: shouldPreferRemoteMoments }),
-    enabled: Boolean(eventId),
+    enabled: Boolean(eventId && activeTab === 'moments'),
   });
 
   const liveBroadcastsQuery = useQuery({
     queryKey: ['event-live-broadcasts', eventId, shouldPreferRemoteBroadcasts ? 'remote' : 'local'],
     queryFn: () => listLiveBroadcastFeed(eventId as ID, { preferRemote: shouldPreferRemoteBroadcasts }),
-    enabled: Boolean(eventId),
+    enabled: Boolean(eventId && activeTab === 'live'),
   });
 
   const followedLiveArtistIdsQuery = useQuery({
@@ -223,7 +185,7 @@ export default function EventDetailScreen() {
         .map((result) => (result.status === 'fulfilled' ? result.value : null))
         .filter((artistId): artistId is string => Boolean(artistId));
     },
-    enabled: Boolean(eventId && currentActor.partyId && event?.artists?.length),
+    enabled: Boolean(activeTab === 'live' && eventId && currentActor.partyId && event?.artists?.length),
   });
 
   const featuredMoments = useMemo(
@@ -281,38 +243,6 @@ export default function EventDetailScreen() {
 
     return () => clearInterval(interval);
   }, [activeBroadcastId, eventId, qc, shouldPreferRemoteBroadcasts]);
-
-  const availableTicketTiers = useMemo(
-    () => (ticketTiersQuery.data ?? []).filter((tier) => isTicketTierOnSale(tier)),
-    [ticketTiersQuery.data],
-  );
-  const selectedTicketTier = useMemo(
-    () =>
-      availableTicketTiers.find((tier) => tier.id === selectedTicketTierId) ??
-      availableTicketTiers[0] ??
-      null,
-    [availableTicketTiers, selectedTicketTierId],
-  );
-  const parsedTicketQuantity = Number.parseInt(ticketQuantity.trim(), 10);
-  const selectedTicketTotalCents =
-    selectedTicketTier && Number.isSafeInteger(parsedTicketQuantity) && parsedTicketQuantity > 0
-      ? selectedTicketTier.priceCents * parsedTicketQuantity
-      : 0;
-
-  useEffect(() => {
-    setTicketBuyerName((current) => (current.trim() ? current : displayName ?? ''));
-  }, [displayName]);
-
-  useEffect(() => {
-    if (availableTicketTiers.length === 0) {
-      setSelectedTicketTierId(null);
-      return;
-    }
-    if (selectedTicketTierId && availableTicketTiers.some((tier) => tier.id === selectedTicketTierId)) {
-      return;
-    }
-    setSelectedTicketTierId(availableTicketTiers[0].id);
-  }, [availableTicketTiers, selectedTicketTierId]);
 
   const rsvpMutation = useMutation({
     mutationFn: (status: RSVPStatus) => {
@@ -381,98 +311,6 @@ export default function EventDetailScreen() {
     },
     onError: () => {
       Alert.alert('Error', 'No pudimos actualizar tus eventos guardados.');
-    },
-  });
-
-  const purchaseTicketsMutation = useMutation<TicketPaymentResult>({
-    mutationFn: async () => {
-      if (!eventId) throw new Error('Event not found');
-      if (!normalizedPartyId) throw new Error('Guarda tu Party ID en tu perfil para comprar tickets.');
-      if (!selectedTicketTier) throw new Error('Selecciona un ticket disponible.');
-
-      const stripeApiVersion = await getStripeCoreApiVersion();
-      if (!stripeApiVersion) {
-        throw new Error('Los pagos con tarjeta requieren la build instalada de TDF Records; Expo Go no incluye Stripe nativo.');
-      }
-
-      const quantity = Number.parseInt(ticketQuantity.trim(), 10);
-      if (!Number.isSafeInteger(quantity) || quantity <= 0) {
-        throw new Error('Cantidad inválida.');
-      }
-      if (quantity > ticketTierAvailability(selectedTicketTier)) {
-        throw new Error('No hay suficientes tickets disponibles.');
-      }
-
-      const buyerName = ticketBuyerName.trim() || displayName || null;
-      const buyerEmail = ticketBuyerEmail.trim() || null;
-      const paymentIntent = await Events.createTicketPaymentSheet(
-        {
-          eventId,
-          tierId: selectedTicketTier.id,
-          quantity,
-          buyerPartyId: normalizedPartyId,
-          buyerName,
-          buyerEmail,
-        },
-        stripeApiVersion,
-      );
-
-      await initNativeStripe({
-        publishableKey: paymentIntent.paymentSheet.publishableKey,
-        merchantIdentifier: STRIPE_MERCHANT_IDENTIFIER,
-        urlScheme: 'tdf',
-        setReturnUrlSchemeOnAndroid: true,
-      });
-
-      const initResult = await initNativePaymentSheet({
-        merchantDisplayName: STRIPE_MERCHANT_DISPLAY_NAME,
-        customerId: paymentIntent.paymentSheet.customerId,
-        customerEphemeralKeySecret: paymentIntent.paymentSheet.ephemeralKeySecret,
-        paymentIntentClientSecret: paymentIntent.paymentSheet.paymentIntentClientSecret,
-        returnURL: STRIPE_RETURN_URL,
-        allowsDelayedPaymentMethods: false,
-        primaryButtonLabel: `Pagar ${formatTicketMoney(paymentIntent.amountCents, paymentIntent.currency)}`,
-        defaultBillingDetails: {
-          name: buyerName ?? undefined,
-          email: buyerEmail ?? undefined,
-        },
-      });
-      if (initResult.error) {
-        throw new Error(initResult.error.localizedMessage ?? initResult.error.message ?? 'No pudimos iniciar el pago.');
-      }
-
-      const presentResult = await presentNativePaymentSheet();
-      if (presentResult.error) {
-        if (presentResult.error.code === 'Canceled') {
-          const releasedReservation = await Events.updateTicketOrderStatus(eventId, paymentIntent.orderId, 'cancelled')
-            .then(() => true)
-            .catch(() => false);
-          return { status: 'cancelled', orderId: paymentIntent.orderId, releasedReservation };
-        }
-        throw new Error(presentResult.error.localizedMessage ?? presentResult.error.message ?? 'No pudimos completar el pago.');
-      }
-
-      return { status: 'paid', orderId: paymentIntent.orderId, quantity };
-    },
-    onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ['event-ticket-tiers', eventId] });
-      qc.invalidateQueries({ queryKey: ['event-ticket-orders', eventId, normalizedPartyId] });
-      qc.invalidateQueries({ queryKey: ['event', eventId] });
-      if (result.status === 'cancelled') {
-        Alert.alert(
-          'Pago cancelado',
-          result.releasedReservation
-            ? 'No se cobró la tarjeta y liberamos la reserva.'
-            : 'No se cobró la tarjeta. No pudimos liberar la reserva automáticamente.',
-        );
-        return;
-      }
-      setTicketQuantity('1');
-      Alert.alert('Compra enviada', `Pago confirmado. Orden #${result.orderId} por ${result.quantity} ticket(s).`);
-    },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : 'No pudimos procesar el pago.';
-      Alert.alert('Error', message);
     },
   });
 
@@ -747,7 +585,7 @@ export default function EventDetailScreen() {
   const handleOpenTickets = useCallback(() => {
     if (event?.ticketUrl) {
       Linking.openURL(event.ticketUrl).catch(() => {
-        Alert.alert('Error', 'Could not open ticket URL');
+        Alert.alert('No pudimos abrir la venta', 'Comprueba tu conexión e inténtalo otra vez.');
       });
     }
   }, [event?.ticketUrl]);
@@ -854,9 +692,9 @@ export default function EventDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <Text style={styles.error}>Missing event ID</Text>
+          <Text style={styles.error}>No encontramos este evento</Text>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Go Back</Text>
+            <Text style={styles.backButtonText}>Volver</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -874,9 +712,13 @@ export default function EventDetailScreen() {
   if (isError || !event) {
     return (
       <View style={styles.center}>
-        <Text style={styles.error}>Failed to load event</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
+        <Text style={styles.error}>No pudimos cargar el evento</Text>
+        <Text style={styles.text}>Comprueba tu conexión e inténtalo nuevamente.</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => void refetchEvent()} accessibilityRole="button">
+          <Text style={styles.backButtonText}>Reintentar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} accessibilityRole="button">
+          <Text style={styles.backButtonText}>Volver a eventos</Text>
         </TouchableOpacity>
       </View>
     );
@@ -900,33 +742,38 @@ export default function EventDetailScreen() {
     Boolean(selectedLiveArtist) &&
     !hasLivePublisher &&
     !startLiveBroadcastMutation.isPending;
-  const ticketOrders = ticketOrdersQuery.data ?? [];
-  const selectedTicketAvailability = selectedTicketTier ? ticketTierAvailability(selectedTicketTier) : 0;
-  const canBuySelectedTickets =
-    Boolean(normalizedPartyId) &&
-    Boolean(selectedTicketTier) &&
-    Number.isSafeInteger(parsedTicketQuantity) &&
-    parsedTicketQuantity > 0 &&
-    parsedTicketQuantity <= selectedTicketAvailability &&
-    !purchaseTicketsMutation.isPending;
-
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Text style={styles.backButtonText}>← Volver</Text>
         </TouchableOpacity>
 
         {event.imageUrl ? (
-          <Image source={{ uri: event.imageUrl }} style={styles.image} />
+          <Image
+            source={{ uri: event.imageUrl }}
+            style={styles.image}
+            accessibilityLabel={`Imagen de ${event.title}`}
+          />
         ) : (
           <View style={styles.imageFallback}>
             <MaterialCommunityIcons name="calendar-star" size={42} color="#2563eb" />
-            <Text style={styles.imageFallbackText}>Event spotlight</Text>
+            <Text style={styles.imageFallbackText}>Evento destacado</Text>
           </View>
         )}
 
         <Text style={styles.title}>{event.title}</Text>
+        <TicketPurchaseCard
+          tiers={ticketTiersQuery.data ?? []}
+          fallbackPrice={event.ticketPrice}
+          externalTicketUrl={event.ticketUrl}
+          canBuyInternally={isEventTicketPurchaseEligible(event)}
+          isLoading={ticketTiersQuery.isLoading}
+          isError={ticketTiersQuery.isError}
+          onBuy={() => router.push({ pathname: '/ticketCheckout', params: { eventId: String(event.id) } })}
+          onOpenExternal={handleOpenTickets}
+          onRetry={() => void ticketTiersQuery.refetch()}
+        />
         <View style={styles.tabSwitch}>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'details' && styles.tabButtonActive]}
@@ -957,20 +804,20 @@ export default function EventDetailScreen() {
         {activeTab === 'details' ? (
           <>
             <View style={styles.section}>
-              <Text style={styles.label}>When</Text>
+              <Text style={styles.label}>Fecha y hora</Text>
               <Text style={styles.text}>
-                {startDate.toLocaleDateString()} at{' '}
-                {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {startDate.toLocaleDateString('es-EC')} a las{' '}
+                {startDate.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
               </Text>
               <Text style={styles.text}>
-                to {endDate.toLocaleDateString()} at{' '}
-                {endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                Hasta el {endDate.toLocaleDateString('es-EC')} a las{' '}
+                {endDate.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
               </Text>
             </View>
 
             {event.venue ? (
               <View style={styles.section}>
-                <Text style={styles.label}>Where</Text>
+                <Text style={styles.label}>Lugar</Text>
                 <Text style={styles.text}>{event.venue.name}</Text>
                 <Text style={styles.text}>{event.venue.address}, {event.venue.city}</Text>
               </View>
@@ -978,7 +825,7 @@ export default function EventDetailScreen() {
 
             {event.artists && event.artists.length > 0 ? (
               <View style={styles.section}>
-                <Text style={styles.label}>Artists</Text>
+                <Text style={styles.label}>Artistas</Text>
                 {event.artists.map((artist) => (
                   <View key={artist.id} style={styles.artistItem}>
                     <Text style={styles.artistName}>{artist.name}</Text>
@@ -990,140 +837,13 @@ export default function EventDetailScreen() {
 
             {event.description ? (
               <View style={styles.section}>
-                <Text style={styles.label}>About</Text>
+                <Text style={styles.label}>Acerca del evento</Text>
                 <Text style={styles.text}>{event.description}</Text>
               </View>
             ) : null}
 
             <View style={styles.section}>
-              <Text style={styles.label}>Tickets</Text>
-              {ticketTiersQuery.isLoading ? (
-                <ActivityIndicator color="#2563eb" />
-              ) : availableTicketTiers.length === 0 ? (
-                <>
-                  {event.ticketPrice ? (
-                    <Text style={styles.price}>${event.ticketPrice.toFixed(2)}</Text>
-                  ) : (
-                    <Text style={styles.text}>Free</Text>
-                  )}
-                  {event.ticketUrl ? (
-                    <TouchableOpacity style={styles.ticketButton} onPress={handleOpenTickets}>
-                      <Text style={styles.ticketButtonText}>Abrir tickets</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text style={styles.helperText}>No hay tickets en venta para este evento.</Text>
-                  )}
-                </>
-              ) : (
-                <>
-                  <View style={styles.ticketTierList}>
-                    {availableTicketTiers.map((tier) => {
-                      const selected = selectedTicketTier?.id === tier.id;
-                      const available = ticketTierAvailability(tier);
-                      return (
-                        <TouchableOpacity
-                          key={tier.id}
-                          style={[styles.ticketTierCard, selected && styles.ticketTierCardActive]}
-                          onPress={() => setSelectedTicketTierId(tier.id)}
-                          disabled={purchaseTicketsMutation.isPending}
-                        >
-                          <View style={styles.ticketTierHeader}>
-                            <Text style={styles.ticketTierName}>{tier.name}</Text>
-                            <Text style={styles.ticketTierPrice}>
-                              {formatTicketMoney(tier.priceCents, tier.currency)}
-                            </Text>
-                          </View>
-                          {tier.description ? (
-                            <Text style={styles.ticketTierDescription}>{tier.description}</Text>
-                          ) : null}
-                          <Text style={styles.ticketTierMeta}>{available} disponibles</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  <View style={styles.ticketForm}>
-                    {!normalizedPartyId ? (
-                      <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para comprar tickets.</Text>
-                    ) : null}
-                    <View style={styles.ticketFormRow}>
-                      <View style={styles.ticketQuantityField}>
-                        <Text style={styles.ticketFieldLabel}>Cantidad</Text>
-                        <TextInput
-                          value={ticketQuantity}
-                          onChangeText={setTicketQuantity}
-                          style={styles.input}
-                          keyboardType="number-pad"
-                          editable={!purchaseTicketsMutation.isPending}
-                          maxLength={3}
-                        />
-                      </View>
-                      <View style={styles.ticketTotalBox}>
-                        <Text style={styles.ticketFieldLabel}>Total</Text>
-                        <Text style={styles.ticketTotalText}>
-                          {selectedTicketTier
-                            ? formatTicketMoney(selectedTicketTotalCents, selectedTicketTier.currency)
-                            : '--'}
-                        </Text>
-                      </View>
-                    </View>
-                    <TextInput
-                      placeholder="Nombre para la orden"
-                      value={ticketBuyerName}
-                      onChangeText={setTicketBuyerName}
-                      style={styles.input}
-                      editable={!purchaseTicketsMutation.isPending}
-                    />
-                    <TextInput
-                      placeholder="Email para recibo"
-                      value={ticketBuyerEmail}
-                      onChangeText={setTicketBuyerEmail}
-                      style={styles.input}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      editable={!purchaseTicketsMutation.isPending}
-                    />
-                    <TouchableOpacity
-                      style={[styles.ticketButton, !canBuySelectedTickets && styles.buttonDisabled]}
-                      onPress={() => purchaseTicketsMutation.mutate()}
-                      disabled={!canBuySelectedTickets}
-                    >
-                      <Text style={styles.ticketButtonText}>
-                        {purchaseTicketsMutation.isPending ? 'Abriendo pago...' : 'Pagar con tarjeta'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.ticketOrdersBox}>
-                    <Text style={styles.ticketOrdersTitle}>Mis órdenes</Text>
-                    {!normalizedPartyId ? (
-                      <Text style={styles.helperText}>Inicia con tu Party ID para ver tus órdenes.</Text>
-                    ) : ticketOrdersQuery.isLoading ? (
-                      <ActivityIndicator color="#2563eb" />
-                    ) : ticketOrders.length === 0 ? (
-                      <Text style={styles.helperText}>Todavía no tienes órdenes para este evento.</Text>
-                    ) : (
-                      ticketOrders.map((order) => (
-                        <View key={order.id} style={styles.ticketOrderRow}>
-                          <View>
-                            <Text style={styles.ticketOrderTitle}>Orden #{order.id}</Text>
-                            <Text style={styles.ticketOrderMeta}>
-                              {order.quantity} ticket(s) · {order.status}
-                            </Text>
-                          </View>
-                          <Text style={styles.ticketOrderAmount}>
-                            {formatTicketMoney(order.amountCents, order.currency)}
-                          </Text>
-                        </View>
-                      ))
-                    )}
-                  </View>
-                </>
-              )}
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Going? ({rsvpCount})</Text>
+              <Text style={styles.label}>¿Asistirás? ({rsvpCount})</Text>
               {!normalizedPartyId ? (
                 <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para confirmar asistencia.</Text>
               ) : null}
@@ -1135,7 +855,7 @@ export default function EventDetailScreen() {
                   disabled={rsvpMutation.isPending}
                 >
                   <Text style={[styles.rsvpButtonText, rsvpStatus === 'GOING' && styles.rsvpButtonTextActive]}>
-                    ✓ Going
+                    ✓ Voy
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1144,7 +864,7 @@ export default function EventDetailScreen() {
                   disabled={rsvpMutation.isPending}
                 >
                   <Text style={[styles.rsvpButtonText, rsvpStatus === 'INTERESTED' && styles.rsvpButtonTextActive]}>
-                    ♥ Interested
+                    ♥ Me interesa
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1153,7 +873,7 @@ export default function EventDetailScreen() {
                   disabled={rsvpMutation.isPending}
                 >
                   <Text style={[styles.rsvpButtonText, rsvpStatus === 'NOT_GOING' && styles.rsvpButtonTextActive]}>
-                    ✕ Not Going
+                    ✕ No iré
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1170,11 +890,11 @@ export default function EventDetailScreen() {
                 disabled={saveEventMutation.isPending}
               >
                 <Text style={[styles.saveEventButtonText, isSaved && styles.saveEventButtonTextActive]}>
-                  {saveEventMutation.isPending ? 'Guardando…' : isSaved ? 'Saved' : 'Save Event'}
+                  {saveEventMutation.isPending ? 'Guardando…' : isSaved ? 'Guardado' : 'Guardar evento'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.inviteButton} onPress={() => setShowInviteModal(true)}>
-                <Text style={styles.inviteButtonText}>Invite Friends</Text>
+                <Text style={styles.inviteButtonText}>Invitar amistades</Text>
               </TouchableOpacity>
             </View>
           </>

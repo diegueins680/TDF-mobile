@@ -5,6 +5,7 @@ const mockSetToken = jest.fn();
 const mockClearToken = jest.fn();
 const mockLoginRequest = jest.fn();
 const mockGoogleLoginRequest = jest.fn();
+const mockSignupRequest = jest.fn();
 const mockGoogleHasPlayServices = jest.fn();
 const mockGoogleSignIn = jest.fn();
 const mockGoogleSignOut = jest.fn();
@@ -29,6 +30,7 @@ jest.mock('../src/providers/AuthProvider', () => ({
 jest.mock('../src/api/auth', () => ({
   loginRequest: (...args: unknown[]) => mockLoginRequest(...args),
   googleLoginRequest: (...args: unknown[]) => mockGoogleLoginRequest(...args),
+  signupRequest: (...args: unknown[]) => mockSignupRequest(...args),
 }));
 
 jest.mock('../src/lib/authConfig', () => ({
@@ -50,6 +52,7 @@ jest.mock('../src/lib/nativeGoogleSignin', () => ({
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace }),
+  useLocalSearchParams: () => ({}),
 }));
 
 const AuthScreen = require('../app/auth').default;
@@ -91,13 +94,11 @@ describe('Auth screen', () => {
     render(<AuthScreen />);
 
     fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'demo-user');
-    fireEvent.changeText(screen.getByPlaceholderText(/tu password/i), 'demo-pass');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'demo-pass');
     expect(screen.getByDisplayValue('demo-user')).toBeTruthy();
     expect(screen.getByDisplayValue('demo-pass')).toBeTruthy();
 
-    const passwordButton = screen.getByText(/Entrar con password/i).parent;
-    if (!passwordButton) throw new Error('Password login button not found');
-    fireEvent.press(passwordButton);
+    fireEvent.press(screen.getByTestId('loginButton'));
 
     await waitFor(() => {
       expect(mockLoginRequest).toHaveBeenCalledWith({
@@ -107,8 +108,35 @@ describe('Auth screen', () => {
       expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42);
       expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');
     });
-    expect(await screen.findByText(/Party activa: 42/i)).toBeTruthy();
+    expect(await screen.findByText('Sesión iniciada.')).toBeTruthy();
   }, 10_000);
+
+  it('creates a fan account and stores the returned session', async () => {
+    mockSignupRequest.mockResolvedValue({
+      token: 'Bearer new-fan-token',
+      partyId: 88,
+      roles: ['Fan'],
+      modules: [],
+    });
+
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByText('Crear cuenta'));
+    fireEvent.changeText(screen.getByPlaceholderText('Tu nombre'), 'Ana');
+    fireEvent.changeText(screen.getByPlaceholderText('Tu apellido'), 'Paz');
+    fireEvent.changeText(screen.getByPlaceholderText('tu@correo.com'), 'ANA@example.com');
+    fireEvent.changeText(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password-seguro');
+    fireEvent.press(screen.getByTestId('signupButton'));
+
+    await waitFor(() => expect(mockSignupRequest).toHaveBeenCalledWith({
+      firstName: 'Ana',
+      lastName: 'Paz',
+      email: 'ana@example.com',
+      password: 'password-seguro',
+      roles: ['Fan'],
+    }));
+    expect(mockSetToken).toHaveBeenCalledWith('Bearer new-fan-token', 88);
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');
+  });
 
   it('submits Google login and stores the returned token', async () => {
     mockGoogleSignIn.mockResolvedValue({
@@ -146,7 +174,7 @@ describe('Auth screen', () => {
     );
     await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token', 77));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events'));
-    expect(screen.getByText(/Party activa: 77/i)).toBeTruthy();
+    expect(screen.getByText('Sesión con Google iniciada.')).toBeTruthy();
   });
 
   it('hides Google login when this build has no Google client id configured', async () => {
@@ -172,7 +200,7 @@ describe('Auth screen', () => {
 
     await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
     expect(screen.getByText(/Cargando sesión guardada…/i)).toBeTruthy();
-    expect(screen.queryByText(/Entrar con password/i)).toBeNull();
+    expect(screen.queryByTestId('loginButton')).toBeNull();
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
   });
 
@@ -195,7 +223,7 @@ describe('Auth screen', () => {
     await waitFor(() => expect(mockGoogleSignOut).toHaveBeenCalled());
     await waitFor(() => expect(mockClearToken).toHaveBeenCalled());
     expect(screen.getByText(/Sesión cerrada/i)).toBeTruthy();
-    expect(screen.queryByText(/Entrar con password/i)).toBeNull();
+    expect(screen.queryByTestId('loginButton')).toBeNull();
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
   });
 });

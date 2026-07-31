@@ -20,8 +20,9 @@ import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
 import { Venues } from '../src/api/venues';
 
-const { get } = jest.requireMock('../src/api/client') as {
+const { get, put } = jest.requireMock('../src/api/client') as {
   get: jest.Mock;
+  put: jest.Mock;
 };
 
 describe('Social list filter serialization', () => {
@@ -51,6 +52,47 @@ describe('Social list filter serialization', () => {
     await Events.list({ limit: 5, offset: 0, upcomingOnly: false });
 
     expect(get).toHaveBeenCalledWith('/social-events/events?limit=5&offset=0');
+  });
+
+  it('Events.list serializes the subscribed discovery scope', async () => {
+    get.mockResolvedValueOnce([]);
+
+    await Events.list({ scope: 'subscribed', upcomingOnly: false });
+
+    expect(get).toHaveBeenCalledWith('/social-events/events?scope=subscribed');
+  });
+
+  it('replaces country-aware city subscriptions with the backend DTO shape', async () => {
+    put.mockResolvedValueOnce([
+      {
+        eventCityId: '4',
+        eventCityName: 'Quito',
+        eventCityCountryCode: 'EC',
+        eventCityTimeZone: 'America/Guayaquil',
+        eventCitySubscribed: true,
+      },
+    ]);
+
+    const result = await Events.replaceCitySubscriptions([
+      { name: ' Quito ', countryCode: 'ec', timeZone: ' America/Guayaquil ' },
+    ]);
+
+    expect(put).toHaveBeenCalledWith('/social-events/me/city-subscriptions', {
+      eventCities: [
+        {
+          eventCityInputName: 'Quito',
+          eventCityInputCountryCode: 'EC',
+          eventCityInputTimeZone: 'America/Guayaquil',
+        },
+      ],
+    });
+    expect(result[0]).toEqual({
+      id: '4',
+      name: 'Quito',
+      countryCode: 'EC',
+      timeZone: 'America/Guayaquil',
+      subscribed: true,
+    });
   });
 
   it('ignores invalid numeric filters', async () => {

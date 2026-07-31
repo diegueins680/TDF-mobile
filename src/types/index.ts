@@ -195,12 +195,36 @@ export type SocialEvent = {
   ticketPrice?: number | null;
   currency?: string;
   ticketUrl?: string | null;
+  sources?: EventSource[];
   imageUrl?: string | null;
   isPublic: boolean;
   status?: 'planning' | 'announced' | 'on_sale' | 'live' | 'completed' | 'cancelled' | string;
   rsvpCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type EventSource = {
+  provider: string;
+  label: string;
+  url?: string | null;
+  priceCents?: number | null;
+  currency?: string | null;
+  status: string;
+};
+
+export type EventCity = {
+  id: string;
+  name: string;
+  countryCode: string;
+  timeZone?: string | null;
+  subscribed: boolean;
+};
+
+export type EventCityInput = {
+  name: string;
+  countryCode: string;
+  timeZone?: string | null;
 };
 
 export type SocialEventCreate = {

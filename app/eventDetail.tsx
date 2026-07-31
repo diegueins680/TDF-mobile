@@ -212,6 +212,17 @@ export default function EventDetailScreen() {
       null,
     [followedLiveArtists, selectedLiveArtistId],
   );
+  const externalTicketSources = useMemo(
+    () =>
+      (event?.sources ?? []).filter(
+        (source) =>
+          Boolean(source.url)
+          && !['cancelled', 'canceled', 'completed', 'missing', 'removed'].includes(
+            source.status.trim().toLowerCase(),
+          ),
+      ),
+    [event?.sources],
+  );
 
   useEffect(() => {
     if (!normalizedPartyId || !rsvpQuery.data) return;
@@ -582,13 +593,13 @@ export default function EventDetailScreen() {
     },
   });
 
-  const handleOpenTickets = useCallback(() => {
-    if (event?.ticketUrl) {
-      Linking.openURL(event.ticketUrl).catch(() => {
+  const handleOpenTicketUrl = useCallback((ticketUrl?: string | null) => {
+    if (ticketUrl) {
+      Linking.openURL(ticketUrl).catch(() => {
         Alert.alert('No pudimos abrir la venta', 'Comprueba tu conexión e inténtalo otra vez.');
       });
     }
-  }, [event?.ticketUrl]);
+  }, []);
 
   const handleOpenMomentMedia = useCallback((uri: string) => {
     Linking.openURL(uri).catch(() => {
@@ -772,9 +783,33 @@ export default function EventDetailScreen() {
           isLoading={ticketTiersQuery.isLoading}
           isError={ticketTiersQuery.isError}
           onBuy={() => router.push({ pathname: '/ticketCheckout', params: { eventId: String(event.id) } })}
-          onOpenExternal={handleOpenTickets}
+          onOpenExternal={() => handleOpenTicketUrl(event.ticketUrl)}
           onRetry={() => void ticketTiersQuery.refetch()}
         />
+        {externalTicketSources.length > 1 ? (
+          <View style={styles.ticketSourcesCard}>
+            <Text style={styles.ticketSourcesTitle}>Opciones de compra</Text>
+            <Text style={styles.ticketSourcesSubtitle}>
+              Este evento está disponible en varias plataformas.
+            </Text>
+            {externalTicketSources.map((source) => (
+              <TouchableOpacity
+                key={`${source.provider}:${source.url}`}
+                style={styles.ticketSourceButton}
+                onPress={() => handleOpenTicketUrl(source.url)}
+                accessibilityRole="link"
+                accessibilityLabel={`Comprar en ${source.label}`}
+              >
+                <Text style={styles.ticketSourceLabel}>{source.label}</Text>
+                <Text style={styles.ticketSourcePrice}>
+                  {typeof source.priceCents === 'number'
+                    ? `${source.currency ?? event.currency ?? 'USD'} ${(source.priceCents / 100).toFixed(2)}`
+                    : 'Ver entradas'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
         <View style={styles.tabSwitch}>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'details' && styles.tabButtonActive]}
@@ -1368,6 +1403,46 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   ticketButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  ticketSourcesCard: {
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: '#faf5ff',
+  },
+  ticketSourcesTitle: {
+    color: '#3b0764',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  ticketSourcesSubtitle: {
+    color: '#6b7280',
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  ticketSourceButton: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e9d5ff',
+  },
+  ticketSourceLabel: {
+    flex: 1,
+    color: '#4c1d95',
+    fontWeight: '800',
+  },
+  ticketSourcePrice: {
+    color: '#6d28d9',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   ticketTierList: {
     gap: 10,
   },

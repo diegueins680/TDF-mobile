@@ -1,5 +1,16 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Calendar } from 'react-native-calendars';
@@ -7,11 +18,12 @@ import { Calendar } from 'react-native-calendars';
 import { Events } from '../../src/api/events';
 import { EventCard } from '../../src/components/EventCard';
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
-import type { SocialEvent } from '../../src/types';
+import type { EventCityInput, SocialEvent } from '../../src/types';
 import { listSavedEventIds, toggleSavedEvent } from '../../src/lib/savedEvents';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
+type DiscoveryScope = 'subscribed' | 'all';
 
 const toLocalDateKey = (value: string | Date): string => {
   const date = value instanceof Date ? value : new Date(value);
@@ -28,13 +40,23 @@ export default function EventsScreen() {
   const qc = useQueryClient();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
+  const [discoveryScope, setDiscoveryScope] = useState<DiscoveryScope>('subscribed');
   const [selectedDate, setSelectedDate] = useState<string>(toLocalDateKey(new Date()));
   const [searchFilter, setSearchFilter] = useState('');
+  const [showCityModal, setShowCityModal] = useState(false);
+  const [draftCities, setDraftCities] = useState<EventCityInput[]>([]);
+  const [newCityName, setNewCityName] = useState('');
+  const [newCountryCode, setNewCountryCode] = useState('EC');
   const debouncedSearch = useDebouncedValue(searchFilter, 250);
 
   const { data: events, isLoading, isError, isFetching, refetch } = useQuery({
-    queryKey: ['events', 'buyer-upcoming'],
-    queryFn: () => Events.list({ upcomingOnly: true })
+    queryKey: ['events', 'buyer-upcoming', discoveryScope],
+    queryFn: () => Events.list({ upcomingOnly: true, scope: discoveryScope })
+  });
+
+  const citySubscriptionsQuery = useQuery({
+    queryKey: ['event-city-subscriptions'],
+    queryFn: Events.getCitySubscriptions,
   });
 
   const savedEventIdsQuery = useQuery({
@@ -61,6 +83,69 @@ export default function EventsScreen() {
       qc.invalidateQueries({ queryKey: ['saved-events'] });
     }
   });
+
+  const citySubscriptionsMutation = useMutation({
+    mutationFn: Events.replaceCitySubscriptions,
+    onSuccess: (cities) => {
+      setDraftCities(cities.map((city) => ({
+        name: city.name,
+        countryCode: city.countryCode,
+        timeZone: city.timeZone,
+      })));
+      setShowCityModal(false);
+      qc.invalidateQueries({ queryKey: ['event-city-subscriptions'] });
+      qc.invalidateQueries({ queryKey: ['events'] });
+    },
+    onError: (error) => {
+      Alert.alert(
+        'No pudimos guardar tus ciudades',
+        error instanceof Error ? error.message : 'Inténtalo nuevamente.',
+      );
+    },
+  });
+
+  const openCityModal = useCallback(() => {
+    if (citySubscriptionsQuery.isError) {
+      Alert.alert(
+        'No pudimos cargar tus ciudades',
+        'Comprueba tu conexión e inténtalo nuevamente.',
+      );
+      return;
+    }
+    if (citySubscriptionsQuery.isLoading) return;
+    setDraftCities((citySubscriptionsQuery.data ?? []).map((city) => ({
+      name: city.name,
+      countryCode: city.countryCode,
+      timeZone: city.timeZone,
+    })));
+    setShowCityModal(true);
+  }, [
+    citySubscriptionsQuery.data,
+    citySubscriptionsQuery.isError,
+    citySubscriptionsQuery.isLoading,
+  ]);
+
+  const addDraftCity = useCallback(() => {
+    const name = newCityName.trim();
+    const countryCode = newCountryCode.trim().toUpperCase();
+    if (!name) {
+      Alert.alert('Falta la ciudad', 'Escribe el nombre de la ciudad.');
+      return;
+    }
+    if (!/^[A-Z]{2}$/.test(countryCode)) {
+      Alert.alert('País inválido', 'Usa el código ISO de dos letras, por ejemplo EC, CO o MX.');
+      return;
+    }
+    const alreadyAdded = draftCities.some(
+      (city) =>
+        city.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase()
+        && city.countryCode.toUpperCase() === countryCode,
+    );
+    if (!alreadyAdded) {
+      setDraftCities((current) => [...current, { name, countryCode }]);
+    }
+    setNewCityName('');
+  }, [draftCities, newCityName, newCountryCode]);
 
   const effectiveEvents = useMemo(() => {
     const source = eventScope === 'saved' ? savedEventsQuery.data ?? [] : events ?? [];
@@ -174,6 +259,18 @@ export default function EventsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Eventos cerca de ti</Text>
+        <TouchableOpacity
+          style={[
+            styles.manageCitiesButton,
+            citySubscriptionsQuery.isLoading && styles.manageCitiesButtonDisabled,
+          ]}
+          onPress={openCityModal}
+          disabled={citySubscriptionsQuery.isLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Administrar ciudades suscritas"
+        >
+          <Text style={styles.manageCitiesButtonText}>Ciudades</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Search */}
@@ -191,6 +288,31 @@ export default function EventsScreen() {
       </View>
 
       {/* View Mode Toggle */}
+      <View style={styles.toggleContainer}>
+        <TouchableOpacity
+          style={[styles.toggleBtn, discoveryScope === 'subscribed' && styles.toggleBtnActive]}
+          onPress={() => setDiscoveryScope('subscribed')}
+          accessibilityRole="button"
+          accessibilityLabel="Ver eventos de mis ciudades"
+          accessibilityState={{ selected: discoveryScope === 'subscribed' }}
+        >
+          <Text style={[styles.toggleBtnText, discoveryScope === 'subscribed' && styles.toggleBtnTextActive]}>
+            Mis ciudades
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleBtn, discoveryScope === 'all' && styles.toggleBtnActive]}
+          onPress={() => setDiscoveryScope('all')}
+          accessibilityRole="button"
+          accessibilityLabel="Explorar eventos de todas las ciudades"
+          accessibilityState={{ selected: discoveryScope === 'all' }}
+        >
+          <Text style={[styles.toggleBtnText, discoveryScope === 'all' && styles.toggleBtnTextActive]}>
+            Explorar
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.toggleContainer}>
         <TouchableOpacity
           style={[styles.toggleBtn, eventScope === 'all' && styles.toggleBtnActive]}
@@ -291,12 +413,109 @@ export default function EventsScreen() {
                   ? 'No encontramos eventos que coincidan con tu búsqueda'
                   : eventScope === 'saved'
                     ? 'No se encontraron eventos guardados'
+                    : discoveryScope === 'subscribed'
+                      ? 'Añade ciudades para ver los eventos que ocurren cerca de ti'
                     : 'No hay próximos eventos publicados'}
               </Text>
+              {!debouncedSearch && eventScope === 'all' && discoveryScope === 'subscribed' ? (
+                <TouchableOpacity
+                  style={styles.emptyCitiesButton}
+                  onPress={openCityModal}
+                  disabled={citySubscriptionsQuery.isLoading}
+                >
+                  <Text style={styles.emptyCitiesButtonText}>Elegir ciudades</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           }
         />
       )}
+
+      <Modal
+        visible={showCityModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowCityModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.cityModal}>
+            <View style={styles.cityModalHeader}>
+              <View style={styles.cityModalTitleGroup}>
+                <Text style={styles.cityModalTitle}>Tus ciudades</Text>
+                <Text style={styles.cityModalSubtitle}>
+                  Importaremos eventos de estas ciudades cada seis horas.
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowCityModal(false)} accessibilityRole="button">
+                <Text style={styles.cityModalClose}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.cityList} keyboardShouldPersistTaps="handled">
+              {draftCities.map((city) => (
+                <View key={`${city.countryCode}:${city.name.toLocaleLowerCase()}`} style={styles.cityChip}>
+                  <View>
+                    <Text style={styles.cityChipName}>{city.name}</Text>
+                    <Text style={styles.cityChipCountry}>{city.countryCode}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setDraftCities((current) => current.filter(
+                      (candidate) =>
+                        candidate.name !== city.name || candidate.countryCode !== city.countryCode,
+                    ))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Quitar ${city.name}`}
+                  >
+                    <Text style={styles.cityRemove}>Quitar</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {draftCities.length === 0 ? (
+                <Text style={styles.cityEmpty}>Todavía no sigues ninguna ciudad.</Text>
+              ) : null}
+            </ScrollView>
+
+            <View style={styles.cityAddRow}>
+              <TextInput
+                style={[styles.cityInput, styles.cityNameInput]}
+                placeholder="Ciudad"
+                value={newCityName}
+                onChangeText={setNewCityName}
+                maxLength={120}
+                accessibilityLabel="Nombre de ciudad"
+              />
+              <TextInput
+                style={[styles.cityInput, styles.countryInput]}
+                placeholder="EC"
+                value={newCountryCode}
+                onChangeText={(value) => setNewCountryCode(value.toUpperCase().slice(0, 2))}
+                autoCapitalize="characters"
+                maxLength={2}
+                accessibilityLabel="Código de país"
+              />
+              <TouchableOpacity style={styles.cityAddButton} onPress={addDraftCity}>
+                <Text style={styles.cityAddButtonText}>Añadir</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.citySaveButton,
+                citySubscriptionsMutation.isPending && styles.citySaveButtonDisabled,
+              ]}
+              disabled={citySubscriptionsMutation.isPending}
+              onPress={() => citySubscriptionsMutation.mutate(draftCities)}
+              accessibilityRole="button"
+            >
+              {citySubscriptionsMutation.isPending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.citySaveButtonText}>Guardar ciudades</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -326,6 +545,21 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#1a1a1a'
+  },
+  manageCitiesButton: {
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#ede9fe'
+  },
+  manageCitiesButtonText: {
+    color: '#6d28d9',
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  manageCitiesButtonDisabled: {
+    opacity: 0.5
   },
   createBtn: {
     backgroundColor: '#2563eb',
@@ -407,7 +641,20 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#999'
+    color: '#6b7280',
+    textAlign: 'center'
+  },
+  emptyCitiesButton: {
+    minHeight: 42,
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: '#ede9fe'
+  },
+  emptyCitiesButtonText: {
+    color: '#6d28d9',
+    fontWeight: '800'
   },
   error: {
     fontSize: 14,
@@ -430,6 +677,122 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     color: '#fff',
+    fontWeight: '800'
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)'
+  },
+  cityModal: {
+    maxHeight: '82%',
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    gap: 16
+  },
+  cityModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12
+  },
+  cityModalTitleGroup: {
+    flex: 1
+  },
+  cityModalTitle: {
+    color: '#111827',
+    fontSize: 20,
+    fontWeight: '800'
+  },
+  cityModalSubtitle: {
+    color: '#6b7280',
+    fontSize: 13,
+    marginTop: 4
+  },
+  cityModalClose: {
+    color: '#6d28d9',
+    fontWeight: '700',
+    paddingVertical: 4
+  },
+  cityList: {
+    maxHeight: 280
+  },
+  cityChip: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    marginBottom: 8
+  },
+  cityChipName: {
+    color: '#111827',
+    fontSize: 15,
+    fontWeight: '700'
+  },
+  cityChipCountry: {
+    color: '#6b7280',
+    fontSize: 12,
+    marginTop: 2
+  },
+  cityRemove: {
+    color: '#dc2626',
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  cityEmpty: {
+    textAlign: 'center',
+    color: '#6b7280',
+    paddingVertical: 24
+  },
+  cityAddRow: {
+    flexDirection: 'row',
+    gap: 8
+  },
+  cityInput: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    color: '#111827'
+  },
+  cityNameInput: {
+    flex: 1
+  },
+  countryInput: {
+    width: 58,
+    textAlign: 'center'
+  },
+  cityAddButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: '#ede9fe',
+    paddingHorizontal: 12
+  },
+  cityAddButtonText: {
+    color: '#6d28d9',
+    fontWeight: '800'
+  },
+  citySaveButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#7c3aed'
+  },
+  citySaveButtonDisabled: {
+    opacity: 0.6
+  },
+  citySaveButtonText: {
+    color: '#fff',
+    fontSize: 15,
     fontWeight: '800'
   }
 });

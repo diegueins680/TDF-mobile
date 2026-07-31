@@ -21,7 +21,10 @@ import type {
   EventTicketPaymentIntent,
   EventTicketPaymentSheetParams,
   EventTicketPurchaseInput,
-  EventTicketTier
+  EventTicketTier,
+  EventCity,
+  EventCityInput,
+  EventSource
 } from '../types';
 import { assertNever } from '../lib/assertNever';
 import { normalizePartyId as normalizeIdentityPartyId } from '../lib/identity';
@@ -59,6 +62,24 @@ type BackendEventDTO = {
   eventUpdatedAt?: string | null;
   eventArtists?: BackendArtistDTO[];
   eventRsvps?: BackendRsvpDTO[];
+  eventSources?: BackendEventSourceDTO[] | null;
+};
+
+type BackendEventSourceDTO = {
+  eventSourceProvider: string;
+  eventSourceLabel: string;
+  eventSourceUrl?: string | null;
+  eventSourcePriceCents?: number | null;
+  eventSourceCurrency?: string | null;
+  eventSourceStatus: string;
+};
+
+type BackendEventCityDTO = {
+  eventCityId: string;
+  eventCityName: string;
+  eventCityCountryCode: string;
+  eventCityTimeZone?: string | null;
+  eventCitySubscribed: boolean;
 };
 
 type BackendRsvpDTO = {
@@ -338,11 +359,13 @@ export const Events = {
     offset?: number;
     artistId?: ID;
     venueId?: ID;
+    scope?: 'subscribed' | 'all';
   }): Promise<SocialEvent[]> => {
     const query = new URLSearchParams();
     const city = filters?.city?.trim();
     const startAfter = filters?.startAfter?.trim();
     if (city) query.append('city', city);
+    if (filters?.scope) query.append('scope', filters.scope);
     if (startAfter) query.append('start_after', startAfter);
     if (filters?.upcomingOnly && !startAfter) {
       query.append('start_after', new Date().toISOString());
@@ -379,6 +402,37 @@ export const Events = {
     const event = await get<BackendEventDTO>(`/social-events/events/${eventId}`);
     const venueMap = await loadVenueMapByIds([event.eventVenueId]);
     return mapBackendEventToFrontend(event, venueMap.get(String(normalizeVenueId(event.eventVenueId))));
+  },
+
+  listCities: async (filters?: { q?: string; country?: string }): Promise<EventCity[]> => {
+    const query = new URLSearchParams();
+    const q = filters?.q?.trim();
+    const country = filters?.country?.trim().toUpperCase();
+    if (q) query.append('q', q);
+    if (country) query.append('country', country);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    const cities = await get<BackendEventCityDTO[]>(`/social-events/cities${suffix}`);
+    return cities.map(mapBackendEventCity);
+  },
+
+  getCitySubscriptions: async (): Promise<EventCity[]> => {
+    const cities = await get<BackendEventCityDTO[]>('/social-events/me/city-subscriptions');
+    return cities.map(mapBackendEventCity);
+  },
+
+  replaceCitySubscriptions: async (cities: EventCityInput[]): Promise<EventCity[]> => {
+    const payload = {
+      eventCities: cities.map((city) => ({
+        eventCityInputName: city.name.trim(),
+        eventCityInputCountryCode: city.countryCode.trim().toUpperCase(),
+        eventCityInputTimeZone: city.timeZone?.trim() || null,
+      })),
+    };
+    const updated = await put<BackendEventCityDTO[]>(
+      '/social-events/me/city-subscriptions',
+      payload,
+    );
+    return updated.map(mapBackendEventCity);
   },
 
   create: async (body: SocialEventCreate): Promise<SocialEvent> => {
@@ -753,6 +807,7 @@ function mapBackendEventToFrontend(
   const artists = (e.eventArtists ?? []).map((artist) => mapBackendArtistToFrontend(artist));
   const createdAt = normalizeOptionalTimestamp(e.eventCreatedAt) ?? nowIso;
   const updatedAt = normalizeOptionalTimestamp(e.eventUpdatedAt) ?? createdAt;
+  const sources = (e.eventSources ?? []).map(mapBackendEventSource);
   return {
     id: e.eventId,
     title: e.eventTitle,
@@ -767,6 +822,7 @@ function mapBackendEventToFrontend(
     ticketPrice: normalizeTicketPrice(e.eventPriceCents),
     currency: normalizeCurrencyCode(e.eventCurrency),
     ticketUrl: e.eventTicketUrl ?? null,
+    sources,
     imageUrl: e.eventImageUrl ?? null,
     isPublic: typeof e.eventIsPublic === 'boolean' ? e.eventIsPublic : true,
     status: normalizeOptionalText(e.eventStatus)?.toLowerCase() ?? 'planning',
@@ -775,6 +831,27 @@ function mapBackendEventToFrontend(
       : 0,
     createdAt,
     updatedAt
+  };
+}
+
+function mapBackendEventSource(source: BackendEventSourceDTO): EventSource {
+  return {
+    provider: source.eventSourceProvider,
+    label: source.eventSourceLabel,
+    url: source.eventSourceUrl ?? null,
+    priceCents: source.eventSourcePriceCents ?? null,
+    currency: source.eventSourceCurrency ?? null,
+    status: source.eventSourceStatus,
+  };
+}
+
+function mapBackendEventCity(city: BackendEventCityDTO): EventCity {
+  return {
+    id: city.eventCityId,
+    name: city.eventCityName,
+    countryCode: city.eventCityCountryCode,
+    timeZone: city.eventCityTimeZone ?? null,
+    subscribed: city.eventCitySubscribed,
   };
 }
 

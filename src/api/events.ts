@@ -883,6 +883,7 @@ function toBackendTicketPriceCents(value: unknown): number | null {
 }
 
 function mapFrontendEventToBackend(body: SocialEventWrite) {
+  const currency = body.currency?.trim().toUpperCase();
   return {
     eventTitle: body.title,
     eventDescription: body.description,
@@ -890,6 +891,7 @@ function mapFrontendEventToBackend(body: SocialEventWrite) {
     eventEnd: body.endTime,
     eventVenueId: normalizeBackendVenueId(body.venueId),
     eventPriceCents: toBackendTicketPriceCents(body.ticketPrice),
+    ...(currency ? { eventCurrency: currency } : {}),
     eventCapacity: null,
     eventTicketUrl: body.ticketUrl ?? null,
     eventImageUrl: body.imageUrl ?? null,
@@ -932,6 +934,12 @@ function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): Soci
       : patch.imageUrl ?? existing.imageUrl ?? undefined
     : existing.imageUrl ?? undefined;
 
+  const mergedCurrency = hasOwn(patch, 'currency')
+    ? patch.currency === null
+      ? undefined
+      : patch.currency ?? existing.currency ?? undefined
+    : existing.currency ?? undefined;
+
   return {
     title: patch.title ?? existing.title,
     description: mergedDescription,
@@ -940,6 +948,7 @@ function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): Soci
     venueId: mergedVenueId,
     artistIds: patch.artistIds ?? existing.artistIds,
     ticketPrice: mergedTicketPrice,
+    currency: mergedCurrency,
     ticketUrl: mergedTicketUrl,
     imageUrl: mergedImageUrl,
     isPublic: patch.isPublic ?? existing.isPublic,

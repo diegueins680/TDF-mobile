@@ -37,16 +37,16 @@ export default function EditArtistProfileScreen() {
 
   const updateMutation = useMutation({
     mutationFn: (body: Parameters<typeof Artists.update>[1]) => {
-      if (!artistId) throw new Error('Artist not found');
+      if (!artistId) throw new Error('Artista no encontrado');
       return Artists.update(artistId, body);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['artist', artistId] });
-      Alert.alert('Success', 'Profile updated!');
+      Alert.alert('Listo', 'Perfil actualizado');
       router.back();
     },
     onError: (err) => {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update profile');
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo actualizar el perfil');
     }
   });
 
@@ -71,7 +71,7 @@ export default function EditArtistProfileScreen() {
 
   const handleUpdateProfile = useCallback(async () => {
     if (!name.trim()) {
-      Alert.alert('Validation', 'Artist name is required');
+      Alert.alert('Validación', 'El nombre artístico es obligatorio');
       return;
     }
 
@@ -89,9 +89,9 @@ export default function EditArtistProfileScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.error}>Missing artist ID</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Go Back</Text>
+          <Text style={styles.error}>Falta el ID del artista</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} accessibilityRole="button">
+            <Text style={styles.backButtonText}>Volver</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -102,7 +102,7 @@ export default function EditArtistProfileScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color="#2563eb" accessibilityLabel="Cargando artista" />
         </View>
       </SafeAreaView>
     );
@@ -112,9 +112,9 @@ export default function EditArtistProfileScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.error}>Failed to load artist</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Go Back</Text>
+          <Text style={styles.error}>No se pudo cargar el artista</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()} accessibilityRole="button">
+            <Text style={styles.backButtonText}>Volver</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -124,23 +124,27 @@ export default function EditArtistProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Edit Artist Profile</Text>
+        <Text accessibilityRole="header" style={styles.title}>Editar perfil de artista</Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Artist Name *</Text>
+          <Text style={styles.label}>Nombre artístico *</Text>
           <TextInput
-            placeholder="Your artist name"
+            placeholder="Tu nombre artístico"
+            accessibilityLabel="Nombre artístico, obligatorio"
             value={name}
             onChangeText={setName}
             style={styles.input}
             placeholderTextColor="#999"
+            autoCapitalize="words"
+            returnKeyType="next"
           />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Bio</Text>
+          <Text style={styles.label}>Biografía</Text>
           <TextInput
-            placeholder="Tell us about yourself..."
+            placeholder="Cuéntanos sobre ti..."
+            accessibilityLabel="Biografía"
             value={bio}
             onChangeText={setBio}
             style={[styles.input, styles.bioInput]}
@@ -154,21 +158,28 @@ export default function EditArtistProfileScreen() {
           <Text style={styles.label}>Image URL</Text>
           <TextInput
             placeholder="https://..."
+            accessibilityLabel="URL de imagen"
             value={imageUrl}
             onChangeText={setImageUrl}
             style={styles.input}
             placeholderTextColor="#999"
+            keyboardType="url"
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Genres</Text>
+          <Text style={styles.label}>Géneros</Text>
           <TouchableOpacity
             style={styles.genreSelectButton}
             onPress={() => setShowGenreSelect(!showGenreSelect)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showGenreSelect }}
+            accessibilityLabel="Seleccionar géneros"
           >
             <Text style={styles.genreSelectButtonText}>
-              {selectedGenres.length > 0 ? `${selectedGenres.length} selected` : 'Select genres...'}
+              {selectedGenres.length > 0 ? `${selectedGenres.length} seleccionados` : 'Seleccionar géneros...'}
             </Text>
           </TouchableOpacity>
 
@@ -182,6 +193,9 @@ export default function EditArtistProfileScreen() {
                     selectedGenres.includes(genre) && styles.genreOptionSelected
                   ]}
                   onPress={() => handleToggleGenre(genre)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selectedGenres.includes(genre) }}
+                  accessibilityLabel={genre}
                 >
                   <Text
                     style={[
@@ -206,13 +220,16 @@ export default function EditArtistProfileScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Instagram Handle</Text>
+          <Text style={styles.label}>Usuario de Instagram</Text>
           <TextInput
             placeholder="@username"
+            accessibilityLabel="Usuario de Instagram"
             value={instagramHandle}
             onChangeText={setInstagramHandle}
             style={styles.input}
             placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
 
@@ -220,10 +237,14 @@ export default function EditArtistProfileScreen() {
           <Text style={styles.label}>Spotify URL</Text>
           <TextInput
             placeholder="https://open.spotify.com/artist/..."
+            accessibilityLabel="URL de Spotify"
             value={spotifyUrl}
             onChangeText={setSpotifyUrl}
             style={styles.input}
             placeholderTextColor="#999"
+            keyboardType="url"
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
 
@@ -231,11 +252,13 @@ export default function EditArtistProfileScreen() {
           style={styles.updateButton}
           onPress={handleUpdateProfile}
           disabled={updateMutation.isPending}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: updateMutation.isPending }}
         >
           {updateMutation.isPending ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.updateButtonText}>Update Profile</Text>
+            <Text style={styles.updateButtonText}>Actualizar perfil</Text>
           )}
         </TouchableOpacity>
       </ScrollView>

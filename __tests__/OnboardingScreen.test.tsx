@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 const mockReplace = jest.fn();
 const mockSetOnboardingSeen: jest.Mock<Promise<void>, [boolean]> = jest.fn((_seen: boolean) =>
@@ -60,5 +61,16 @@ describe('Onboarding screen', () => {
     fireEvent.press(loginButton);
     expect(mockReplace).toHaveBeenCalledWith('/auth');
     expect(screen.queryByText(/Configurar perfil|Ver eventos/i)).toBeNull();
+  });
+
+  it('exposes named button controls with mobile-size touch targets', () => {
+    render(<OnboardingScreen />);
+
+    expect(StyleSheet.flatten(screen.getByRole('button', { name: /Ingresar con una cuenta existente/i }).props.style)).toMatchObject({
+      minHeight: 44,
+      minWidth: 44,
+    });
+    expect(StyleSheet.flatten(screen.getByRole('button', { name: /Crear cuenta/i }).props.style)).toMatchObject({ minHeight: 48 });
+    expect(StyleSheet.flatten(screen.getByRole('button', { name: /Ya tengo cuenta/i }).props.style)).toMatchObject({ minHeight: 44 });
   });
 });

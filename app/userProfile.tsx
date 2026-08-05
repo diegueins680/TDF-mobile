@@ -12,19 +12,39 @@ import type { ID, SocialEvent } from '../src/types';
 import { normalizePartyId } from '../src/lib/identity';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, unsaveEvent } from '../src/lib/savedEvents';
+import { formatTicketMoney } from '../src/lib/tickets';
+import { useAppTheme, type ThemePreference } from '../src/theme/ThemeProvider';
+
+const THEME_OPTIONS: ReadonlyArray<{ value: ThemePreference; label: string }> = [
+  { value: 'system', label: 'Sistema' },
+  { value: 'light', label: 'Claro' },
+  { value: 'dark', label: 'Oscuro' },
+];
 
 export default function UserProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { partyId, displayName, setIdentity, clearIdentity, loading } = useUserSettings();
+  const { preference: themePreference, setPreference: setThemePreference } = useAppTheme();
+  const {
+    partyId, displayName, setIdentity, clearIdentity, loading,
+    locale, currency, timezone, countryCode, supportedLocales, supportedCurrencies,
+    setRegionalPreferences,
+  } = useUserSettings();
   const [activeTab, setActiveTab] = useState<'artist' | 'events' | 'saved'>('artist');
   const [draftPartyId, setDraftPartyId] = useState(partyId ?? '');
   const [draftName, setDraftName] = useState(displayName ?? '');
+  const [draftTimezone, setDraftTimezone] = useState(timezone);
+  const [draftCountryCode, setDraftCountryCode] = useState(countryCode ?? '');
 
   useEffect(() => {
     setDraftPartyId(partyId ?? '');
     setDraftName(displayName ?? '');
   }, [partyId, displayName]);
+
+  useEffect(() => {
+    setDraftTimezone(timezone);
+    setDraftCountryCode(countryCode ?? '');
+  }, [countryCode, timezone]);
 
   // Query user's artist profile
   const artistQuery = useQuery({
@@ -129,6 +149,11 @@ export default function UserProfileScreen() {
     setDraftName('');
   }, [clearIdentity]);
 
+  const handleSaveRegion = useCallback(() => {
+    setRegionalPreferences({ timezone: draftTimezone, countryCode: draftCountryCode });
+    Alert.alert('Guardado', 'Actualizamos tus preferencias regionales.');
+  }, [draftCountryCode, draftTimezone, setRegionalPreferences]);
+
   const headerName = draftName || displayName || 'Tu perfil';
   const headerSubtitle = partyId ? `Party ID: ${partyId}` : 'Agrega tu Party ID para RSVP e invitaciones';
 
@@ -151,12 +176,12 @@ export default function UserProfileScreen() {
         <View style={styles.eventHeader}>
           <Text style={styles.eventTitle}>{item.title}</Text>
           {item.ticketPrice && (
-            <Text style={styles.eventPrice}>${item.ticketPrice.toFixed(2)}</Text>
+            <Text style={styles.eventPrice}>{formatTicketMoney(Math.round(item.ticketPrice * 100), item.currency ?? currency, locale)}</Text>
           )}
         </View>
         <Text style={styles.eventDateTime}>
-          {new Date(item.startTime).toLocaleDateString()} a las{' '}
-          {new Date(item.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {new Date(item.startTime).toLocaleDateString(locale, { timeZone: timezone })}{' '}
+          {new Date(item.startTime).toLocaleTimeString(locale, { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}
         </Text>
         {item.venue && (
           <Text style={styles.eventVenue}>{item.venue.name}</Text>
@@ -174,6 +199,7 @@ export default function UserProfileScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
       )}
     </View>
   );
@@ -219,6 +245,46 @@ export default function UserProfileScreen() {
             )}
           </View>
           <Text style={styles.helperText}>Usaremos estos datos en RSVP, invitaciones y vCard.</Text>
+        </View>
+
+        <View style={styles.identityCard}>
+          <Text style={styles.sectionTitle}>Idioma y región</Text>
+          <Text style={styles.helperText}>Apariencia</Text>
+          <View style={styles.optionRow} accessibilityRole="radiogroup">
+            {THEME_OPTIONS.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[styles.optionButton, themePreference === option.value && styles.optionButtonActive]}
+                onPress={() => setThemePreference(option.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: themePreference === option.value }}
+                accessibilityLabel={`Tema ${option.label.toLocaleLowerCase()}`}
+              >
+                <Text style={[styles.optionButtonText, themePreference === option.value && styles.optionButtonTextActive]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.helperText}>Idioma</Text>
+          <View style={styles.optionRow}>
+            {supportedLocales.map((value) => (
+              <TouchableOpacity key={value} style={[styles.optionButton, locale === value && styles.optionButtonActive]} onPress={() => setRegionalPreferences({ locale: value })}>
+                <Text style={[styles.optionButtonText, locale === value && styles.optionButtonTextActive]}>{value.toUpperCase()}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.helperText}>Moneda preferida</Text>
+          <View style={styles.optionRow}>
+            {supportedCurrencies.map((value) => (
+              <TouchableOpacity key={value} style={[styles.optionButton, currency === value && styles.optionButtonActive]} onPress={() => setRegionalPreferences({ currency: value })}>
+                <Text style={[styles.optionButtonText, currency === value && styles.optionButtonTextActive]}>{value}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput placeholder="Zona horaria IANA, por ejemplo Europe/Berlin" value={draftTimezone} onChangeText={setDraftTimezone} autoCapitalize="none" style={styles.input} />
+          <TextInput placeholder="Código de país ISO (opcional)" value={draftCountryCode} onChangeText={(value) => setDraftCountryCode(value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())} autoCapitalize="characters" style={styles.input} />
+          <TouchableOpacity style={styles.saveButton} onPress={handleSaveRegion}><Text style={styles.saveButtonText}>Guardar preferencias</Text></TouchableOpacity>
         </View>
 
         <TouchableOpacity
@@ -376,6 +442,11 @@ const styles = StyleSheet.create({
   clearButton: { backgroundColor: '#f3f4f6', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center' },
   clearButtonText: { color: '#111827', fontWeight: '700' },
   helperText: { fontSize: 12, color: '#6b7280' },
+  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  optionButton: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, paddingVertical: 7, paddingHorizontal: 12 },
+  optionButtonActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  optionButtonText: { color: '#374151', fontWeight: '700', fontSize: 12 },
+  optionButtonTextActive: { color: '#fff' },
   tabContainer: { flexDirection: 'row', gap: 8, marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   tab: { flex: 1, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: '#2563eb' },

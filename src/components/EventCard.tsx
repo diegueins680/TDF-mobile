@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { useAnalytics } from '../analytics/AnalyticsProvider';
 import { formatTicketMoney, isEventTicketPurchaseEligible } from '../lib/tickets';
 import type { SocialEvent } from '../types';
+import { useUserSettings } from '../providers/UserSettingsProvider';
 
 type Props = {
   event: SocialEvent;
@@ -17,6 +18,7 @@ type Props = {
 function EventCardComponent({ event, onPress, saved = false, onToggleSaved, saveDisabled = false }: Props) {
   const router = useRouter();
   const analytics = useAnalytics();
+  const { locale, timezone } = useUserSettings();
 
   const handlePress = () => {
     if (onPress) {
@@ -28,9 +30,11 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
 
   const startDate = new Date(event.startTime);
   const endDate = new Date(event.endTime);
-  const isSameDay = startDate.toDateString() === endDate.toDateString();
+  const dateOptions: Intl.DateTimeFormatOptions = { timeZone: timezone };
+  const timeOptions: Intl.DateTimeFormatOptions = { timeZone: timezone, hour: '2-digit', minute: '2-digit' };
+  const isSameDay = startDate.toLocaleDateString(locale, dateOptions) === endDate.toLocaleDateString(locale, dateOptions);
 
-  const a11yLabel = `${event.title}, ${startDate.toLocaleDateString('es-EC')} ${startDate.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}${event.venue ? ` en ${event.venue.name}` : ''}`;
+  const a11yLabel = `${event.title}, ${startDate.toLocaleDateString(locale, dateOptions)} ${startDate.toLocaleTimeString(locale, timeOptions)}${event.venue ? ` en ${event.venue.name}` : ''}`;
   const hasTicketAction =
     Boolean(event.ticketUrl) ||
     isEventTicketPurchaseEligible(event);
@@ -52,8 +56,8 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
 
           <View style={styles.meta}>
             <Text style={styles.date}>
-              {startDate.toLocaleDateString('es-EC')} {startDate.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
-              {!isSameDay && ` - ${endDate.toLocaleDateString('es-EC')}`}
+              {startDate.toLocaleDateString(locale, dateOptions)} {startDate.toLocaleTimeString(locale, timeOptions)}
+              {!isSameDay && ` - ${endDate.toLocaleDateString(locale, dateOptions)}`}
             </Text>
             {event.venue && <Text style={styles.venue}>{event.venue.name}</Text>}
           </View>
@@ -74,7 +78,7 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
                 <Text style={styles.price}>
                   {event.ticketPrice === 0
                     ? 'Gratis'
-                    : formatTicketMoney(Math.round(event.ticketPrice * 100), event.currency ?? 'USD')}
+                    : formatTicketMoney(Math.round(event.ticketPrice * 100), event.currency ?? 'USD', locale)}
                 </Text>
               </View>
             )}

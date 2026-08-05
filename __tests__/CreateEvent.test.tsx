@@ -39,6 +39,10 @@ jest.mock('../src/api/artists', () => ({
   },
 }));
 
+jest.mock('../src/providers/UserSettingsProvider', () => ({
+  useUserSettings: () => ({ currency: 'USD' }),
+}));
+
 describe('CreateEvent screen', () => {
   const useQuery = jest.mocked(require('@tanstack/react-query').useQuery as jest.Mock);
   let alertSpy: jest.SpiedFunction<typeof Alert.alert>;

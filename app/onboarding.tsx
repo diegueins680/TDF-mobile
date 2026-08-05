@@ -1,7 +1,8 @@
-import { useEffect, type ComponentType, useRef } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View, type ViewProps } from 'react-native';
+import { useEffect, useState, type ComponentType, useRef } from 'react';
+import { AccessibilityInfo, Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View, type ViewProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import type { Href } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -40,14 +41,34 @@ const AnimatedView = Animated.createAnimatedComponent(View) as ComponentType<Ani
 export default function OnboardingScreen() {
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
 
   useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (active) setReduceMotionEnabled(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotionEnabled);
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    fadeAnim.stopAnimation();
+    if (reduceMotionEnabled) {
+      fadeAnim.setValue(1);
+      return;
+    }
+    fadeAnim.setValue(0);
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 500,
       useNativeDriver: true
     }).start();
-  }, [fadeAnim]);
+    return () => fadeAnim.stopAnimation();
+  }, [fadeAnim, reduceMotionEnabled]);
 
   const complete = (path: Href) => {
     void setOnboardingSeen(true);
@@ -56,9 +77,15 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.page}>
+      <StatusBar style="light" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <TouchableOpacity style={styles.skip} onPress={() => complete('/auth')}>
+          <TouchableOpacity
+            style={styles.skip}
+            onPress={() => complete('/auth')}
+            accessibilityRole="button"
+            accessibilityLabel="Ingresar con una cuenta existente"
+          >
             <Text style={styles.skipText}>Ingresar</Text>
           </TouchableOpacity>
           <AnimatedView
@@ -78,7 +105,7 @@ export default function OnboardingScreen() {
             ]}
           >
             <Text style={styles.kicker}>TDF Mobile</Text>
-            <Text style={styles.title}>Tu acceso a la comunidad musical</Text>
+            <Text accessibilityRole="header" style={styles.title}>Tu acceso a la comunidad musical</Text>
             <Text style={styles.subtitle}>
               Una interfaz mínima para descubrir eventos, seguir artistas y entrar a sus clubes de fans.
             </Text>
@@ -115,10 +142,15 @@ export default function OnboardingScreen() {
             testID="goToLoginButton"
             style={styles.primaryButton}
             onPress={() => complete({ pathname: '/auth', params: { mode: 'signup' } })}
+            accessibilityRole="button"
           >
             <Text style={styles.primaryText}>Crear cuenta</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => complete('/auth')}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => complete('/auth')}
+            accessibilityRole="button"
+          >
             <Text style={styles.secondaryText}>Ya tengo cuenta</Text>
           </TouchableOpacity>
         </View>
@@ -223,6 +255,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: '#2563eb',
+    minHeight: 48,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center'
@@ -235,6 +268,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     borderWidth: 1,
     borderColor: '#334155',
+    minHeight: 44,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center'
@@ -255,7 +289,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 14,
     right: 14,
-    zIndex: 2
+    zIndex: 2,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8
   },
   skipText: {
     color: '#cbd5e1',

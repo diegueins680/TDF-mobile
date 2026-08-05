@@ -3,6 +3,7 @@ import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import type { ArtistProfile } from '../types';
+import { useAppTheme } from '../theme/ThemeProvider';
 
 type Props = {
   artist: ArtistProfile;
@@ -11,6 +12,7 @@ type Props = {
 
 function ArtistCardComponent({ artist, onPress }: Props) {
   const router = useRouter();
+  const { colors } = useAppTheme();
 
   const handlePress = () => {
     if (onPress) {
@@ -21,23 +23,33 @@ function ArtistCardComponent({ artist, onPress }: Props) {
   };
 
   return (
-    <TouchableOpacity style={styles.card} onPress={handlePress}>
+    <TouchableOpacity
+      style={[styles.card, { backgroundColor: colors.surface }]}
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`Ver perfil de ${artist.name}`}
+      accessibilityHint="Abre el perfil del artista"
+    >
       {artist.imageUrl && (
-        <Image source={{ uri: artist.imageUrl }} style={styles.image} />
+        <Image
+          source={{ uri: artist.imageUrl }}
+          style={[styles.image, { backgroundColor: colors.canvas }]}
+          accessible={false}
+        />
       )}
       
       <View style={styles.content}>
-        <Text style={styles.name}>{artist.name}</Text>
+        <Text style={[styles.name, { color: colors.textPrimary }]}>{artist.name}</Text>
         
         {artist.bio && (
-          <Text style={styles.bio} numberOfLines={2}>{artist.bio}</Text>
+          <Text style={[styles.bio, { color: colors.textSecondary }]} numberOfLines={2}>{artist.bio}</Text>
         )}
 
         {artist.genres && artist.genres.length > 0 && (
           <View style={styles.genres}>
             {artist.genres.slice(0, 3).map((genre, idx) => (
-              <View key={idx} style={styles.genreTag}>
-                <Text style={styles.genreText}>{genre}</Text>
+              <View key={idx} style={[styles.genreTag, { backgroundColor: colors.selected }]}>
+                <Text style={[styles.genreText, { color: colors.textSecondary }]}>{genre}</Text>
               </View>
             ))}
           </View>

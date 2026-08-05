@@ -26,7 +26,7 @@ import { uploadMedia } from '../src/api/upload';
 import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard';
 import { EventMomentCard } from '../src/components/EventMomentCard';
 import { TicketPurchaseCard } from '../src/components/tickets/TicketPurchaseCard';
-import { isEventTicketPurchaseEligible } from '../src/lib/tickets';
+import { formatTicketMoney, isEventTicketPurchaseEligible } from '../src/lib/tickets';
 import {
   buildMomentActor,
   countMomentReactions,
@@ -91,7 +91,8 @@ export default function EventDetailScreen() {
   const qc = useQueryClient();
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: authPartyId } = useAuth();
-  const { partyId: settingsPartyId, displayName } = useUserSettings();
+  const { partyId: settingsPartyId, displayName, locale, timezone, currency } = useUserSettings();
+  const displayCurrency = currency || process.env.EXPO_PUBLIC_DEFAULT_CURRENCY || 'USD';
   const normalizedPartyId = resolvePartyId(authPartyId, settingsPartyId);
   const currentActor = useMemo(
     () => buildMomentActor({ partyId: normalizedPartyId, displayName }),
@@ -777,7 +778,7 @@ export default function EventDetailScreen() {
         <TicketPurchaseCard
           tiers={ticketTiersQuery.data ?? []}
           fallbackPrice={event.ticketPrice}
-          fallbackCurrency={event.currency}
+          fallbackCurrency={event.currency ?? displayCurrency}
           externalTicketUrl={event.ticketUrl}
           canBuyInternally={isEventTicketPurchaseEligible(event)}
           isLoading={ticketTiersQuery.isLoading}
@@ -803,7 +804,7 @@ export default function EventDetailScreen() {
                 <Text style={styles.ticketSourceLabel}>{source.label}</Text>
                 <Text style={styles.ticketSourcePrice}>
                   {typeof source.priceCents === 'number'
-                    ? `${source.currency ?? event.currency ?? 'USD'} ${(source.priceCents / 100).toFixed(2)}`
+                    ? formatTicketMoney(source.priceCents, source.currency ?? event.currency ?? displayCurrency, locale)
                     : 'Ver entradas'}
                 </Text>
               </TouchableOpacity>
@@ -842,12 +843,12 @@ export default function EventDetailScreen() {
             <View style={styles.section}>
               <Text style={styles.label}>Fecha y hora</Text>
               <Text style={styles.text}>
-                {startDate.toLocaleDateString('es-EC')} a las{' '}
-                {startDate.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
+                {startDate.toLocaleDateString(locale, { timeZone: timezone })} {' '}
+                {startDate.toLocaleTimeString(locale, { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}
               </Text>
               <Text style={styles.text}>
-                Hasta el {endDate.toLocaleDateString('es-EC')} a las{' '}
-                {endDate.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}
+                Hasta el {endDate.toLocaleDateString(locale, { timeZone: timezone })} {' '}
+                {endDate.toLocaleTimeString(locale, { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}
               </Text>
             </View>
 
@@ -1186,10 +1187,21 @@ export default function EventDetailScreen() {
         )}
       </ScrollView>
 
-      <Modal visible={showMomentComposer} transparent animationType="slide">
+      <Modal
+        visible={showMomentComposer}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMomentComposer(false)}
+        accessibilityViewIsModal
+      >
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowMomentComposer(false)}>
+            <TouchableOpacity
+              style={styles.modalHeaderAction}
+              onPress={() => setShowMomentComposer(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar compositor de momento"
+            >
               <Text style={styles.modalClose}>Cerrar</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Compartir momento</Text>
@@ -1229,6 +1241,7 @@ export default function EventDetailScreen() {
             <View style={styles.inputGroup}>
               <TextInput
                 placeholder="Agrega contexto, lineup o una vibra rápida"
+                accessibilityLabel="Descripción del momento"
                 value={momentCaption}
                 onChangeText={setMomentCaption}
                 style={[styles.input, styles.inputMultiline]}
@@ -1242,6 +1255,8 @@ export default function EventDetailScreen() {
                 ]}
                 onPress={() => createMomentMutation.mutate()}
                 disabled={!momentMedia || createMomentMutation.isPending}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !momentMedia || createMomentMutation.isPending }}
               >
                 <Text style={styles.primaryButtonText}>
                   {createMomentMutation.isPending ? 'Publicando…' : 'Publicar momento'}
@@ -1252,13 +1267,24 @@ export default function EventDetailScreen() {
         </SafeAreaView>
       </Modal>
 
-      <Modal visible={showInviteModal} transparent animationType="slide">
+      <Modal
+        visible={showInviteModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowInviteModal(false)}
+        accessibilityViewIsModal
+      >
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowInviteModal(false)}>
-              <Text style={styles.modalClose}>Close</Text>
+            <TouchableOpacity
+              style={styles.modalHeaderAction}
+              onPress={() => setShowInviteModal(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar invitaciones"
+            >
+              <Text style={styles.modalClose}>Cerrar</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Invite Friends</Text>
+            <Text style={styles.modalTitle}>Invitar amigos</Text>
             <View style={{ width: 60 }} />
           </View>
           <View style={styles.modalContent}>
@@ -1271,6 +1297,7 @@ export default function EventDetailScreen() {
             <View style={styles.inputGroup}>
               <TextInput
                 placeholder="Party ID del invitado"
+                accessibilityLabel="Party ID del invitado"
                 value={inviteeId}
                 onChangeText={setInviteeId}
                 style={styles.input}
@@ -1278,6 +1305,7 @@ export default function EventDetailScreen() {
               />
               <TextInput
                 placeholder="Mensaje (opcional)"
+                accessibilityLabel="Mensaje opcional"
                 value={inviteMessage}
                 onChangeText={setInviteMessage}
                 style={[styles.input, styles.inputMultiline]}
@@ -1287,6 +1315,8 @@ export default function EventDetailScreen() {
                 style={[styles.primaryButton, invitationMutation.isPending && styles.buttonDisabled]}
                 onPress={() => invitationMutation.mutate()}
                 disabled={invitationMutation.isPending}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: invitationMutation.isPending }}
               >
                 <Text style={styles.primaryButtonText}>
                   {invitationMutation.isPending ? 'Enviando…' : 'Enviar invitación'}
@@ -1813,6 +1843,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  modalHeaderAction: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
   modalClose: { fontSize: 14, color: '#2563eb', fontWeight: '600' },
   modalTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
   modalContent: { flex: 1, paddingHorizontal: 16, paddingVertical: 12, gap: 12 },

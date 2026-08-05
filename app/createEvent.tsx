@@ -11,6 +11,7 @@ import { Venues } from '../src/api/venues';
 import { Artists } from '../src/api/artists';
 import type { ID, ArtistProfile, Venue } from '../src/types';
 import { normalizeRouteParam } from '../src/lib/routeParams';
+import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
 const hasSameId = (left: ID | null | undefined, right: ID | null | undefined): boolean =>
   left != null && right != null && String(left) === String(right);
@@ -19,6 +20,7 @@ export default function CreateEventScreen() {
   const { venueId: rawVenueId } = useLocalSearchParams<{ venueId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const { currency } = useUserSettings();
   const routeVenueId = useMemo(() => normalizeRouteParam(rawVenueId), [rawVenueId]);
 
   const [title, setTitle] = useState('');
@@ -226,14 +228,17 @@ export default function CreateEventScreen() {
       venueId,
       artistIds,
       ticketPrice: parsedPrice,
+      currency,
       ticketUrl: ticketUrl.trim() || undefined,
       isPublic
     });
-  }, [title, description, venueId, artistIds, startInput, endInput, ticketPrice, ticketUrl, isPublic, createMutation, parseDateInput]);
+  }, [title, description, venueId, artistIds, startInput, endInput, ticketPrice, ticketUrl, isPublic, currency, createMutation, parseDateInput]);
 
   const renderVenueItem = useCallback(({ item }: { item: Venue }) => (
     <TouchableOpacity
       style={styles.modalItem}
+      accessibilityRole="button"
+      accessibilityLabel={`Seleccionar ${item.name}`}
       onPress={() => {
         setVenueId(item.id);
         setSelectedVenueSnapshot(item);
@@ -249,6 +254,9 @@ export default function CreateEventScreen() {
     <TouchableOpacity
       style={[styles.modalItem, artistIds.some((id) => hasSameId(id, item.id)) && styles.modalItemSelected]}
       onPress={() => toggleArtist(item.id)}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: artistIds.some((id) => hasSameId(id, item.id)) }}
+      accessibilityLabel={item.name}
     >
       <Text style={styles.modalItemTitle}>{item.name}</Text>
       {item.genres && <Text style={styles.modalItemSubtitle}>{item.genres.join(', ')}</Text>}
@@ -403,7 +411,7 @@ export default function CreateEventScreen() {
         <Text style={styles.sectionTitle}>Entradas</Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Precio (USD)</Text>
+          <Text style={styles.label}>Precio ({currency})</Text>
           <TextInput
             placeholder="0.00"
             value={ticketPrice}
@@ -418,10 +426,14 @@ export default function CreateEventScreen() {
           <Text style={styles.label}>URL de entradas</Text>
           <TextInput
             placeholder="https://..."
+            accessibilityLabel="URL de entradas"
             value={ticketUrl}
             onChangeText={setTicketUrl}
             style={styles.input}
             placeholderTextColor="#999"
+            keyboardType="url"
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
 
@@ -429,6 +441,9 @@ export default function CreateEventScreen() {
           <TouchableOpacity
             style={styles.checkbox}
             onPress={() => setIsPublic(!isPublic)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: isPublic }}
+            accessibilityLabel="Hacer evento público"
           >
             <View style={[styles.checkboxBox, isPublic && styles.checkboxBoxChecked]} />
             <Text style={styles.checkboxLabel}>Hacer evento público</Text>
@@ -439,6 +454,8 @@ export default function CreateEventScreen() {
           style={styles.createButton}
           onPress={handleCreateEvent}
           disabled={createMutation.isPending}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: createMutation.isPending }}
         >
           {createMutation.isPending ? (
             <ActivityIndicator color="#fff" />
@@ -449,20 +466,37 @@ export default function CreateEventScreen() {
       </ScrollView>
 
       {/* Venue Modal */}
-      <Modal visible={showVenueModal} transparent animationType="slide">
+      <Modal
+        visible={showVenueModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowVenueModal(false)}
+        accessibilityViewIsModal
+      >
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowVenueModal(false)}>
+            <TouchableOpacity
+              style={styles.modalHeaderAction}
+              onPress={() => setShowVenueModal(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar selector de lugar"
+            >
               <Text style={styles.modalClose}>Cancelar</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Seleccionar lugar</Text>
-            <TouchableOpacity onPress={handleCreateVenue}>
+            <TouchableOpacity
+              style={styles.modalHeaderAction}
+              onPress={handleCreateVenue}
+              accessibilityRole="button"
+              accessibilityLabel="Crear un lugar nuevo"
+            >
               <Text style={styles.modalCreate}>+ Nuevo</Text>
             </TouchableOpacity>
           </View>
 
           <TextInput
             placeholder="Buscar lugares…"
+            accessibilityLabel="Buscar lugares"
             value={venueSearch}
             onChangeText={setVenueSearch}
             style={styles.modalSearchInput}
@@ -485,20 +519,37 @@ export default function CreateEventScreen() {
       </Modal>
 
       {/* Artist Modal */}
-      <Modal visible={showArtistModal} transparent animationType="slide">
+      <Modal
+        visible={showArtistModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowArtistModal(false)}
+        accessibilityViewIsModal
+      >
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowArtistModal(false)}>
+            <TouchableOpacity
+              style={styles.modalHeaderAction}
+              onPress={() => setShowArtistModal(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar selector de artistas"
+            >
               <Text style={styles.modalClose}>Listo</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Seleccionar artistas</Text>
-            <TouchableOpacity onPress={handleCreateArtist}>
+            <TouchableOpacity
+              style={styles.modalHeaderAction}
+              onPress={handleCreateArtist}
+              accessibilityRole="button"
+              accessibilityLabel="Crear un artista nuevo"
+            >
               <Text style={styles.modalCreate}>+ Nuevo</Text>
             </TouchableOpacity>
           </View>
 
           <TextInput
             placeholder="Buscar artistas…"
+            accessibilityLabel="Buscar artistas"
             value={artistSearch}
             onChangeText={setArtistSearch}
             style={styles.modalSearchInput}
@@ -544,6 +595,7 @@ const styles = StyleSheet.create({
   createButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   modal: { flex: 1, backgroundColor: '#fff' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  modalHeaderAction: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
   modalClose: { fontSize: 14, color: '#2563eb', fontWeight: '600' },
   modalCreate: { fontSize: 14, color: '#16a34a', fontWeight: '600' },
   modalTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },

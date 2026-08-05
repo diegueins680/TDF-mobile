@@ -20,33 +20,36 @@ import { EventCard } from '../../src/components/EventCard';
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import type { EventCityInput, SocialEvent } from '../../src/types';
 import { listSavedEventIds, toggleSavedEvent } from '../../src/lib/savedEvents';
+import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
 type DiscoveryScope = 'subscribed' | 'all';
 
-const toLocalDateKey = (value: string | Date): string => {
+const toLocalDateKey = (value: string | Date, timeZone: string): string => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
     return typeof value === 'string' ? value.split('T')[0] ?? '' : '';
   }
-  const year = String(date.getFullYear());
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value ?? '';
+  const month = parts.find((part) => part.type === 'month')?.value ?? '';
+  const day = parts.find((part) => part.type === 'day')?.value ?? '';
   return `${year}-${month}-${day}`;
 };
 
 export default function EventsScreen() {
   const qc = useQueryClient();
+  const { locale, timezone, countryCode } = useUserSettings();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
   const [discoveryScope, setDiscoveryScope] = useState<DiscoveryScope>('subscribed');
-  const [selectedDate, setSelectedDate] = useState<string>(toLocalDateKey(new Date()));
+  const [selectedDate, setSelectedDate] = useState<string>(() => toLocalDateKey(new Date(), timezone));
   const [searchFilter, setSearchFilter] = useState('');
   const [showCityModal, setShowCityModal] = useState(false);
   const [draftCities, setDraftCities] = useState<EventCityInput[]>([]);
   const [newCityName, setNewCityName] = useState('');
-  const [newCountryCode, setNewCountryCode] = useState('EC');
+  const [newCountryCode, setNewCountryCode] = useState(countryCode ?? 'US');
   const debouncedSearch = useDebouncedValue(searchFilter, 250);
 
   const { data: events, isLoading, isError, isFetching, refetch } = useQuery({
@@ -149,7 +152,7 @@ export default function EventsScreen() {
 
   const effectiveEvents = useMemo(() => {
     const source = eventScope === 'saved' ? savedEventsQuery.data ?? [] : events ?? [];
-    const needle = debouncedSearch.trim().toLocaleLowerCase('es-EC');
+    const needle = debouncedSearch.trim().toLocaleLowerCase(locale);
     return source
       .filter((event) => {
         if (!event.isPublic) return false;
@@ -161,23 +164,23 @@ export default function EventsScreen() {
           event.venue?.name,
           event.venue?.city,
           ...(event.artists?.map((artist) => artist.name) ?? []),
-        ].some((value) => value?.toLocaleLowerCase('es-EC').includes(needle));
+        ].some((value) => value?.toLocaleLowerCase(locale).includes(needle));
       })
       .sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime());
-  }, [debouncedSearch, eventScope, events, savedEventsQuery.data]);
+  }, [debouncedSearch, eventScope, events, locale, savedEventsQuery.data]);
 
   const eventsByDate = useMemo(() => {
     if (!effectiveEvents.length) return {};
     
     const grouped: Record<string, SocialEvent[]> = {};
     effectiveEvents.forEach(event => {
-      const date = toLocalDateKey(event.startTime);
+      const date = toLocalDateKey(event.startTime, timezone);
       if (!date) return;
       if (!grouped[date]) grouped[date] = [];
       grouped[date].push(event);
     });
     return grouped;
-  }, [effectiveEvents]);
+  }, [effectiveEvents, timezone]);
 
   const selectedDateEvents = useMemo(() => {
     return eventsByDate[selectedDate] || [];
@@ -436,6 +439,7 @@ export default function EventsScreen() {
         animationType="slide"
         transparent
         onRequestClose={() => setShowCityModal(false)}
+        accessibilityViewIsModal
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.cityModal}>
@@ -446,7 +450,12 @@ export default function EventsScreen() {
                   Importaremos eventos de estas ciudades cada seis horas.
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setShowCityModal(false)} accessibilityRole="button">
+              <TouchableOpacity
+                onPress={() => setShowCityModal(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Cerrar selector de ciudades"
+                hitSlop={8}
+              >
                 <Text style={styles.cityModalClose}>Cerrar</Text>
               </TouchableOpacity>
             </View>

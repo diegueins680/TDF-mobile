@@ -36,6 +36,16 @@ function renderUserSettingsProvider() {
   });
 }
 
+function expectLastStoredIdentity(partyId: string, displayName: string) {
+  const lastCall = jest.mocked(AsyncStorage.setItem).mock.calls.at(-1);
+  expect(lastCall?.[0]).toBe('tdf-user-settings');
+  const stored = JSON.parse(lastCall?.[1] ?? '{}') as Record<string, unknown>;
+  expect(stored).toMatchObject({ partyId, displayName });
+  expect(stored.locale).toEqual(expect.any(String));
+  expect(stored.currency).toEqual(expect.any(String));
+  expect(stored.timezone).toEqual(expect.any(String));
+}
+
 describe('UserSettingsProvider', () => {
   const getItemMock = jest.mocked(AsyncStorage.getItem);
   const setItemMock = jest.mocked(AsyncStorage.setItem);
@@ -104,10 +114,7 @@ describe('UserSettingsProvider', () => {
 
     expect(result.current.partyId).toBe('123');
     expect(result.current.displayName).toBe('New Name');
-    expect(setItemMock).toHaveBeenCalledWith(
-      'tdf-user-settings',
-      JSON.stringify({ partyId: '123', displayName: 'New Name' }),
-    );
+    expectLastStoredIdentity('123', 'New Name');
   });
 
   it('keeps in-memory defaults when reading storage fails', async () => {
@@ -136,12 +143,7 @@ describe('UserSettingsProvider', () => {
       result.current.setIdentity('456');
     });
 
-    await waitFor(() =>
-      expect(setItemMock).toHaveBeenLastCalledWith(
-        'tdf-user-settings',
-        JSON.stringify({ partyId: '456', displayName: 'Existing Name' }),
-      )
-    );
+    await waitFor(() => expectLastStoredIdentity('456', 'Existing Name'));
 
     expect(result.current.partyId).toBe('456');
     expect(result.current.displayName).toBe('Existing Name');
@@ -157,12 +159,7 @@ describe('UserSettingsProvider', () => {
       result.current.setIdentity('456');
     });
 
-    await waitFor(() =>
-      expect(setItemMock).toHaveBeenLastCalledWith(
-        'tdf-user-settings',
-        JSON.stringify({ partyId: '456', displayName: 'Fresh Name' }),
-      )
-    );
+    await waitFor(() => expectLastStoredIdentity('456', 'Fresh Name'));
 
     expect(result.current.partyId).toBe('456');
     expect(result.current.displayName).toBe('Fresh Name');

@@ -1,22 +1,24 @@
 import React, { useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { useAppTheme } from '../theme/ThemeProvider';
+
 const monthNames = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
 ];
 
-const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const weekdayLabels = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
 
 const BOOKING_URL = 'https://cal.com/YOUR_HANDLE/domo-rental';
 
@@ -33,6 +35,7 @@ type CalendarCell = {
 };
 
 export default function CalendarScreen() {
+  const { colors } = useAppTheme();
   const now = useMemo(() => new Date(), []);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -68,7 +71,10 @@ export default function CalendarScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16 }}>
+    <ScrollView
+      style={{ backgroundColor: colors.canvas }}
+      contentContainerStyle={{ padding: 16 }}
+    >
       <View
         style={{
           flexDirection: 'row',
@@ -77,21 +83,33 @@ export default function CalendarScreen() {
           marginBottom: 12,
         }}
       >
-        <Pressable onPress={() => handleNavigateMonth(-1)}>
-          <Text>◀</Text>
+        <Pressable
+          onPress={() => handleNavigateMonth(-1)}
+          accessibilityRole="button"
+          accessibilityLabel="Mes anterior"
+          hitSlop={8}
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ color: colors.actionPrimary, fontSize: 18 }} accessible={false}>◀</Text>
         </Pressable>
-        <Text style={{ fontSize: 20, fontWeight: '600' }}>
+        <Text accessibilityRole="header" style={{ fontSize: 20, fontWeight: '600', color: colors.textPrimary }}>
           {monthNames[month]} {year}
         </Text>
-        <Pressable onPress={() => handleNavigateMonth(1)}>
-          <Text>▶</Text>
+        <Pressable
+          onPress={() => handleNavigateMonth(1)}
+          accessibilityRole="button"
+          accessibilityLabel="Mes siguiente"
+          hitSlop={8}
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ color: colors.actionPrimary, fontSize: 18 }} accessible={false}>▶</Text>
         </Pressable>
       </View>
 
       <View style={{ flexDirection: 'row', marginBottom: 6 }}>
         {weekdayLabels.map((label) => (
           <View key={label} style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ fontWeight: '600', opacity: 0.7 }}>{label}</Text>
+            <Text style={{ fontWeight: '600', color: colors.textSecondary }}>{label}</Text>
           </View>
         ))}
       </View>
@@ -110,10 +128,10 @@ export default function CalendarScreen() {
               style={{
                 width: '14.2857%',
                 borderWidth: 1,
-                borderColor: '#e5e7eb',
+                borderColor: colors.border,
                 minHeight: 64,
                 padding: 6,
-                backgroundColor: isToday ? '#f0f9ff' : '#fff',
+                backgroundColor: isToday ? colors.selected : colors.surface,
               }}
             >
               <Text
@@ -122,6 +140,7 @@ export default function CalendarScreen() {
                   fontSize: 12,
                   fontWeight: '600',
                   opacity: cell.day ? 1 : 0,
+                  color: colors.textPrimary,
                 }}
               >
                 {cell.day ?? ''}
@@ -134,15 +153,20 @@ export default function CalendarScreen() {
       <View style={{ marginTop: 16, alignItems: 'flex-end' }}>
         <Pressable
           onPress={handleBookingPress}
+          accessibilityRole="link"
+          accessibilityLabel="Solicitar una fecha para el Domo"
+          accessibilityHint="Abre el sitio externo de reservas"
           style={{
+            minHeight: 44,
+            justifyContent: 'center',
             paddingVertical: 8,
             paddingHorizontal: 12,
             borderWidth: 1,
-            borderColor: '#111',
+            borderColor: colors.actionPrimary,
             borderRadius: 8,
           }}
         >
-          <Text>Solicitar fecha</Text>
+          <Text style={{ color: colors.actionPrimary, fontWeight: '600' }}>Solicitar fecha</Text>
         </Pressable>
       </View>
     </ScrollView>

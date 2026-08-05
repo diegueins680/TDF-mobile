@@ -15,6 +15,10 @@ jest.mock('../src/analytics/AnalyticsProvider', () => ({
   useAnalytics: () => ({ capture: mockCapture }),
 }));
 
+jest.mock('../src/providers/UserSettingsProvider', () => ({
+  useUserSettings: () => ({ locale: 'en', timezone: 'UTC' }),
+}));
+
 const event: SocialEvent = {
   id: '42',
   title: 'TDF Showcase',

@@ -235,6 +235,7 @@ export type SocialEventCreate = {
   venueId: ID;
   artistIds: ID[];
   ticketPrice?: number;
+  currency?: string;
   ticketUrl?: string;
   imageUrl?: string;
   isPublic?: boolean;
@@ -248,6 +249,7 @@ export type SocialEventUpdate = {
   venueId?: ID | null;
   artistIds?: ID[];
   ticketPrice?: number | null;
+  currency?: string | null;
   ticketUrl?: string | null;
   imageUrl?: string | null;
   isPublic?: boolean;

@@ -1,12 +1,23 @@
-import { Stack } from 'expo-router';
+import { useEffect } from 'react';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { AppProviders } from '../src/providers/AppProviders';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
+import { useAppTheme } from '../src/theme/ThemeProvider';
 
-export default function RootLayout() {
+function RootNavigator() {
+  const { colorScheme } = useAppTheme();
+  const analytics = useAnalytics();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    analytics.screen(pathname, { screen_path: pathname, automatic: true });
+  }, [analytics, pathname]);
+
   return (
-    <AppProviders>
-      <StatusBar style="dark" />
+    <>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="auth" />
@@ -14,6 +25,14 @@ export default function RootLayout() {
         <Stack.Screen name="about" />
         <Stack.Screen name="input-list/[id]" />
       </Stack>
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AppProviders>
+      <RootNavigator />
     </AppProviders>
   );
 }

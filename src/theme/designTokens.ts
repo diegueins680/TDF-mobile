@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 /**
  * TDF Design Tokens
  *
@@ -64,7 +66,9 @@ export const shadows = {
 } as const;
 
 export const typography = {
-  fontFamily: 'Inter, system-ui, sans-serif',
+  // React Native accepts one installed family rather than a CSS fallback list.
+  // Until Inter is bundled, use each platform's deterministic system face.
+  fontFamily: Platform.select({ ios: 'System', android: 'sans-serif', default: 'system-ui' }),
   sizes: {
     xs: 10,
     sm: 12,

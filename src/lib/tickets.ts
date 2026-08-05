@@ -64,26 +64,29 @@ export const ticketTierSaleStateLabel = (
   return 'No disponible';
 };
 
-export const formatTicketMoney = (amountCents: number, currency: string): string => {
+const deviceLocale = () => Intl.DateTimeFormat().resolvedOptions().locale || 'en';
+const deviceTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+export const formatTicketMoney = (amountCents: number, currency: string, locale = deviceLocale()): string => {
   const safeAmount = Number.isFinite(amountCents) ? amountCents : 0;
   const normalizedCurrency = currency.trim().toUpperCase() || 'USD';
 
   try {
-    return new Intl.NumberFormat('es-EC', {
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: normalizedCurrency,
-      minimumFractionDigits: 2,
     }).format(safeAmount / 100);
   } catch {
     return `${normalizedCurrency} ${(safeAmount / 100).toFixed(2)}`;
   }
 };
 
-export const formatTicketDateTime = (value: Date | string): string => {
+export const formatTicketDateTime = (value: Date | string, locale = deviceLocale(), timezone = deviceTimezone()): string => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '';
 
-  return date.toLocaleString('es-EC', {
+  return date.toLocaleString(locale, {
+    timeZone: timezone,
     weekday: 'short',
     day: 'numeric',
     month: 'short',

@@ -34,5 +34,5 @@
 
 ## Configuration & Environment
 - `src/lib/api.ts` consumes `EXPO_PUBLIC_API_BASE`, defaulting to `http://localhost:8080`; override per environment.
-- Set `EXPO_PUBLIC_TZ` to change the default timezone (`America/Guayaquil`) consumed by `src/lib/time.ts`.
+- Set `EXPO_PUBLIC_TZ` to override the detected device timezone; the fallback is `UTC`.
 - Never commit secrets or tokens; rely on Expo CLI `.env` files or EAS environment variables for sensitive data.

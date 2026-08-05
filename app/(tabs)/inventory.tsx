@@ -1,16 +1,19 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   FlatList,
   Image,
   Modal,
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  findNodeHandle,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -87,8 +90,16 @@ export default function InventoryScreen() {
     ciConditionIn: '',
     ciNotes: ''
   });
+  const editHeadingRef = useRef<Text>(null);
+  const checkoutHeadingRef = useRef<Text>(null);
+  const checkinHeadingRef = useRef<Text>(null);
   const hasToken = Boolean(token?.trim());
   const canUseInventory = !loading && hasToken;
+
+  const focusModalHeading = useCallback((heading: Text | null) => {
+    const handle = findNodeHandle(heading);
+    if (handle != null) AccessibilityInfo.setAccessibilityFocus(handle);
+  }, []);
 
   const assetsQuery = useQuery({
     queryKey: ['inventory'],
@@ -352,6 +363,9 @@ export default function InventoryScreen() {
                 style={[styles.primaryBtn, !canUseInventory && styles.primaryBtnDisabled]}
                 onPress={() => openCheckout(item)}
                 disabled={!canUseInventory}
+                accessibilityRole="button"
+                accessibilityLabel={`Registrar check-out de ${item.name}`}
+                accessibilityState={{ disabled: !canUseInventory }}
               >
                 <Text style={styles.primaryBtnText}>Check-out</Text>
               </TouchableOpacity>
@@ -360,6 +374,9 @@ export default function InventoryScreen() {
                 style={[styles.primaryBtn, styles.dangerBtn, !canUseInventory && styles.primaryBtnDisabled]}
                 onPress={() => openCheckin(item)}
                 disabled={!canUseInventory}
+                accessibilityRole="button"
+                accessibilityLabel={`Registrar retorno de ${item.name}`}
+                accessibilityState={{ disabled: !canUseInventory }}
               >
                 <Text style={styles.primaryBtnText}>Registrar retorno</Text>
               </TouchableOpacity>
@@ -369,6 +386,8 @@ export default function InventoryScreen() {
             <TouchableOpacity
               style={[styles.ghostBtn, styles.secondaryActionBtn]}
               onPress={() => setSearch(item.name)}
+              accessibilityRole="button"
+              accessibilityLabel={`Filtrar equipo similar a ${item.name}`}
             >
               <Text style={styles.ghostBtnText}>Filtrar similares</Text>
             </TouchableOpacity>
@@ -376,6 +395,8 @@ export default function InventoryScreen() {
               <TouchableOpacity
                 style={[styles.ghostBtn, styles.secondaryActionBtn]}
                 onPress={() => openEdit(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Editar ${item.name}`}
               >
                 <Text style={styles.ghostBtnText}>Editar</Text>
               </TouchableOpacity>
@@ -628,10 +649,23 @@ export default function InventoryScreen() {
         }
       />
 
-      <Modal visible={!!editAsset} animationType="slide" transparent onRequestClose={closeEdit}>
+      <Modal
+        visible={!!editAsset}
+        animationType="slide"
+        transparent
+        onRequestClose={closeEdit}
+        onShow={() => focusModalHeading(editHeadingRef.current)}
+        accessibilityViewIsModal
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.sectionTitle}>Editar equipo</Text>
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalCard}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text ref={editHeadingRef} style={styles.sectionTitle} accessibilityRole="header">
+              Editar equipo
+            </Text>
             <Text style={styles.subheader}>
               {editAsset ? editAsset.name : ''} · {editAsset?.category}
             </Text>
@@ -641,6 +675,7 @@ export default function InventoryScreen() {
 
             <TextInput
               placeholder="Nombre"
+              accessibilityLabel="Nombre del equipo"
               value={editForm.name}
               onChangeText={(text) => setEditForm((prev) => ({ ...prev, name: text }))}
               style={styles.input}
@@ -648,12 +683,17 @@ export default function InventoryScreen() {
             />
             <TextInput
               placeholder="Categoría"
+              accessibilityLabel="Categoría del equipo"
               value={editForm.category}
               onChangeText={(text) => setEditForm((prev) => ({ ...prev, category: text }))}
               style={styles.input}
             />
             <Text style={styles.label}>Estado</Text>
-            <View style={[styles.segmentRow, styles.segmentWrap]}>
+            <View
+              style={[styles.segmentRow, styles.segmentWrap]}
+              accessibilityRole="radiogroup"
+              accessibilityLabel="Estado del equipo"
+            >
               {STATUS_OPTIONS.map((opt) => {
                 const active = editForm.status === opt.value;
                 return (
@@ -661,6 +701,8 @@ export default function InventoryScreen() {
                     key={opt.value}
                     style={[styles.segment, styles.segmentTight, active && styles.segmentActive]}
                     onPress={() => setEditForm((prev) => ({ ...prev, status: opt.value }))}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: active }}
                   >
                     <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
                       {opt.label}
@@ -671,6 +713,8 @@ export default function InventoryScreen() {
             </View>
             <TextInput
               placeholder="Ubicación (ID de sala opcional)"
+              accessibilityLabel="Ubicación"
+              accessibilityHint="ID de sala opcional."
               value={editForm.location}
               onChangeText={(text) => setEditForm((prev) => ({ ...prev, location: text }))}
               style={styles.input}
@@ -678,10 +722,14 @@ export default function InventoryScreen() {
             />
             <TextInput
               placeholder="URL de foto (opcional)"
+              accessibilityLabel="URL de la foto"
+              accessibilityHint="Campo opcional."
               value={editForm.photoUrl}
               onChangeText={(text) => setEditForm((prev) => ({ ...prev, photoUrl: text }))}
               style={styles.input}
               autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
             />
             {editForm.photoUrl.trim() || editLocalImage ? (
               <View style={styles.previewBox}>
@@ -695,6 +743,8 @@ export default function InventoryScreen() {
                     <TouchableOpacity
                       style={styles.ghostBtn}
                       onPress={() => setEditLocalImage(null)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Quitar foto seleccionada"
                     >
                       <Text style={styles.ghostBtnText}>Quitar foto</Text>
                     </TouchableOpacity>
@@ -704,16 +754,31 @@ export default function InventoryScreen() {
             ) : null}
 
             <View style={styles.metaRow}>
-              <TouchableOpacity style={styles.ghostBtn} onPress={() => pickEditImage('camera')}>
+              <TouchableOpacity
+                style={styles.ghostBtn}
+                onPress={() => pickEditImage('camera')}
+                accessibilityRole="button"
+                accessibilityLabel="Tomar foto del equipo"
+              >
                 <Text style={styles.ghostBtnText}>Tomar foto</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.ghostBtn} onPress={() => pickEditImage('library')}>
+              <TouchableOpacity
+                style={styles.ghostBtn}
+                onPress={() => pickEditImage('library')}
+                accessibilityRole="button"
+                accessibilityLabel="Elegir foto del equipo desde la galería"
+              >
                 <Text style={styles.ghostBtnText}>Desde galería</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.ghostBtn} onPress={closeEdit}>
+              <TouchableOpacity
+                style={styles.ghostBtn}
+                onPress={closeEdit}
+                accessibilityRole="button"
+                accessibilityLabel="Cancelar edición"
+              >
                 <Text style={styles.ghostBtnText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -722,13 +787,19 @@ export default function InventoryScreen() {
                   void submitEdit();
                 }}
                 disabled={updateMutation.isPending || editUploading}
+                accessibilityRole="button"
+                accessibilityLabel="Actualizar equipo"
+                accessibilityState={{
+                  disabled: updateMutation.isPending || editUploading,
+                  busy: updateMutation.isPending || editUploading,
+                }}
               >
                 <Text style={styles.primaryBtnText}>
                   {updateMutation.isPending || editUploading ? 'Guardando…' : 'Actualizar'}
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -737,15 +808,27 @@ export default function InventoryScreen() {
         animationType="slide"
         transparent
         onRequestClose={closeCheckout}
+        onShow={() => focusModalHeading(checkoutHeadingRef.current)}
+        accessibilityViewIsModal
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.sectionTitle}>Check-out</Text>
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalCard}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text ref={checkoutHeadingRef} style={styles.sectionTitle} accessibilityRole="header">
+              Check-out
+            </Text>
             <Text style={styles.subheader}>
               {checkoutAsset ? checkoutAsset.name : ''} · {checkoutAsset?.category}
             </Text>
 
-            <View style={styles.segmentRow}>
+            <View
+              style={styles.segmentRow}
+              accessibilityRole="radiogroup"
+              accessibilityLabel="Destino del préstamo"
+            >
               {TARGET_KINDS.map((kind) => {
                 const active = checkoutForm.coTargetKind === kind;
                 return (
@@ -761,6 +844,8 @@ export default function InventoryScreen() {
                         coTargetSession: ''
                       }))
                     }
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: active }}
                   >
                     <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
                       {kind === 'party' ? 'Cliente' : kind === 'room' ? 'Sala' : 'Sesión'}
@@ -773,6 +858,7 @@ export default function InventoryScreen() {
             {checkoutForm.coTargetKind === 'party' ? (
               <TextInput
                 placeholder="Cliente / banda"
+                accessibilityLabel="Cliente o banda"
                 value={checkoutForm.coTargetParty ?? ''}
                 onChangeText={(text) =>
                   setCheckoutForm((prev) => ({ ...prev, coTargetParty: text }))
@@ -784,6 +870,7 @@ export default function InventoryScreen() {
             {checkoutForm.coTargetKind === 'room' ? (
               <TextInput
                 placeholder="ID de sala"
+                accessibilityLabel="ID de sala"
                 value={checkoutForm.coTargetRoom ?? ''}
                 onChangeText={(text) => setCheckoutForm((prev) => ({ ...prev, coTargetRoom: text }))}
                 style={styles.input}
@@ -794,6 +881,7 @@ export default function InventoryScreen() {
             {checkoutForm.coTargetKind === 'session' ? (
               <TextInput
                 placeholder="ID de sesión"
+                accessibilityLabel="ID de sesión"
                 value={checkoutForm.coTargetSession ?? ''}
                 onChangeText={(text) =>
                   setCheckoutForm((prev) => ({ ...prev, coTargetSession: text }))
@@ -805,6 +893,8 @@ export default function InventoryScreen() {
 
             <TextInput
               placeholder="Fecha límite (ISO opcional)"
+              accessibilityLabel="Fecha límite"
+              accessibilityHint="Campo opcional en formato ISO."
               value={checkoutForm.coDueAt ?? ''}
               onChangeText={(text) => setCheckoutForm((prev) => ({ ...prev, coDueAt: text }))}
               style={styles.input}
@@ -812,6 +902,7 @@ export default function InventoryScreen() {
             />
             <TextInput
               placeholder="Condición de salida"
+              accessibilityLabel="Condición de salida"
               value={checkoutForm.coConditionOut ?? ''}
               onChangeText={(text) =>
                 setCheckoutForm((prev) => ({ ...prev, coConditionOut: text }))
@@ -820,6 +911,7 @@ export default function InventoryScreen() {
             />
             <TextInput
               placeholder="Notas"
+              accessibilityLabel="Notas del préstamo"
               value={checkoutForm.coNotes ?? ''}
               onChangeText={(text) => setCheckoutForm((prev) => ({ ...prev, coNotes: text }))}
               style={[styles.input, { height: 80 }]}
@@ -827,20 +919,31 @@ export default function InventoryScreen() {
             />
 
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.ghostBtn} onPress={closeCheckout}>
+              <TouchableOpacity
+                style={styles.ghostBtn}
+                onPress={closeCheckout}
+                accessibilityRole="button"
+                accessibilityLabel="Cancelar check-out"
+              >
                 <Text style={styles.ghostBtnText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.primaryBtn, styles.primaryBtnCompact]}
                 onPress={submitCheckout}
                 disabled={checkoutMutation.isPending}
+                accessibilityRole="button"
+                accessibilityLabel="Confirmar check-out"
+                accessibilityState={{
+                  disabled: checkoutMutation.isPending,
+                  busy: checkoutMutation.isPending,
+                }}
               >
                 <Text style={styles.primaryBtnText}>
                   {checkoutMutation.isPending ? 'Guardando…' : 'Confirmar'}
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -849,14 +952,23 @@ export default function InventoryScreen() {
         animationType="slide"
         transparent
         onRequestClose={closeCheckin}
+        onShow={() => focusModalHeading(checkinHeadingRef.current)}
+        accessibilityViewIsModal
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.sectionTitle}>Check-in</Text>
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.modalCard}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text ref={checkinHeadingRef} style={styles.sectionTitle} accessibilityRole="header">
+              Check-in
+            </Text>
             <Text style={styles.subheader}>{checkinAsset ? checkinAsset.name : ''}</Text>
 
             <TextInput
               placeholder="Condición de retorno"
+              accessibilityLabel="Condición de retorno"
               value={checkinForm.ciConditionIn ?? ''}
               onChangeText={(text) =>
                 setCheckinForm((prev) => ({ ...prev, ciConditionIn: text }))
@@ -865,6 +977,7 @@ export default function InventoryScreen() {
             />
             <TextInput
               placeholder="Notas"
+              accessibilityLabel="Notas del retorno"
               value={checkinForm.ciNotes ?? ''}
               onChangeText={(text) => setCheckinForm((prev) => ({ ...prev, ciNotes: text }))}
               style={[styles.input, { height: 80 }]}
@@ -872,20 +985,31 @@ export default function InventoryScreen() {
             />
 
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.ghostBtn} onPress={closeCheckin}>
+              <TouchableOpacity
+                style={styles.ghostBtn}
+                onPress={closeCheckin}
+                accessibilityRole="button"
+                accessibilityLabel="Cancelar check-in"
+              >
                 <Text style={styles.ghostBtnText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.primaryBtn, styles.primaryBtnCompact]}
                 onPress={submitCheckin}
                 disabled={checkinMutation.isPending}
+                accessibilityRole="button"
+                accessibilityLabel="Registrar check-in"
+                accessibilityState={{
+                  disabled: checkinMutation.isPending,
+                  busy: checkinMutation.isPending,
+                }}
               >
                 <Text style={styles.primaryBtnText}>
                   {checkinMutation.isPending ? 'Guardando…' : 'Registrar'}
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -937,17 +1061,20 @@ const styles = StyleSheet.create({
   secondaryActions: { justifyContent: 'flex-start' },
   secondaryActionBtn: { flex: 1 },
   primaryBtn: {
+    minHeight: 44,
     backgroundColor: '#2563eb',
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
     flex: 1
   },
   primaryBtnCompact: { flex: 0 },
   primaryBtnDisabled: { opacity: 0.6 },
   primaryBtnText: { color: '#fff', fontWeight: '700' },
   ghostBtn: {
+    minHeight: 44,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 10,
@@ -1006,15 +1133,23 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     gap: 10
   },
+  modalScroll: {
+    maxHeight: '92%',
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
   segmentRow: { flexDirection: 'row', gap: 8 },
   segment: {
     flex: 1,
+    minHeight: 44,
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#cbd5e1',
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   segmentWrap: { flexWrap: 'wrap' },
   segmentTight: { minWidth: '45%' },

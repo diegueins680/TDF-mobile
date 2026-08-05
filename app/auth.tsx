@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -22,7 +22,9 @@ import {
 } from '../src/lib/authConfig';
 import { loadNativeGoogleSignin, type NativeGoogleSigninModule } from '../src/lib/nativeGoogleSignin';
 import { MOBILE_LANDING_ROUTE } from '../src/navigation/mobileSurface';
+import FormField from '../src/components/FormField';
 import { useAuth } from '../src/providers/AuthProvider';
+import { useAppTheme } from '../src/theme/ThemeProvider';
 
 const readErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
@@ -33,6 +35,8 @@ const readErrorMessage = (error: unknown, fallback: string) => {
 };
 
 export default function AuthScreen() {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string | string[]; returnTo?: string | string[] }>();
   const { token, loading, setToken, clearToken } = useAuth();
@@ -47,6 +51,9 @@ export default function AuthScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
+  const lastNameInputRef = useRef<TextInput>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (__DEV__) {
@@ -68,6 +75,12 @@ export default function AuthScreen() {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim()) &&
     password.trim().length >= 8 &&
     !isSignupSubmitting;
+  const signupEmailError = signupEmail.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim())
+    ? 'Ingresa un correo electrónico válido.'
+    : null;
+  const signupPasswordError = mode === 'signup' && password.length > 0 && password.trim().length < 8
+    ? 'La contraseña debe tener al menos 8 caracteres.'
+    : null;
   const isGoogleLoginAvailable =
     Platform.OS !== 'web' &&
     Boolean(googleSigninModule) &&
@@ -269,41 +282,46 @@ export default function AuthScreen() {
               {mode === 'signup' ? (
                 <>
                   <View style={styles.nameRow}>
-                    <View style={styles.nameField}>
-                      <Text style={styles.label}>Nombre</Text>
-                      <TextInput
-                        value={firstName}
-                        onChangeText={(value) => {
-                          setFirstName(value);
-                          setErrorMessage(null);
-                        }}
-                        placeholder="Tu nombre"
-                        autoCapitalize="words"
-                        autoComplete="given-name"
-                        textContentType="givenName"
-                        style={styles.input}
-                        maxLength={80}
-                      />
-                    </View>
-                    <View style={styles.nameField}>
-                      <Text style={styles.label}>Apellido <Text style={styles.optionalText}>(opcional)</Text></Text>
-                      <TextInput
-                        value={lastName}
-                        onChangeText={(value) => {
-                          setLastName(value);
-                          setErrorMessage(null);
-                        }}
-                        placeholder="Tu apellido"
-                        autoCapitalize="words"
-                        autoComplete="family-name"
-                        textContentType="familyName"
-                        style={styles.input}
-                        maxLength={80}
-                      />
-                    </View>
+                    <FormField
+                      label="Nombre"
+                      containerStyle={styles.nameField}
+                      value={firstName}
+                      onChangeText={(value) => {
+                        setFirstName(value);
+                        setErrorMessage(null);
+                      }}
+                      placeholder="Tu nombre"
+                      autoCapitalize="words"
+                      autoComplete="given-name"
+                      textContentType="givenName"
+                      maxLength={80}
+                      returnKeyType="next"
+                      blurOnSubmit={false}
+                      onSubmitEditing={() => lastNameInputRef.current?.focus()}
+                    />
+                    <FormField
+                      ref={lastNameInputRef}
+                      label="Apellido"
+                      optional
+                      containerStyle={styles.nameField}
+                      value={lastName}
+                      onChangeText={(value) => {
+                        setLastName(value);
+                        setErrorMessage(null);
+                      }}
+                      placeholder="Tu apellido"
+                      autoCapitalize="words"
+                      autoComplete="family-name"
+                      textContentType="familyName"
+                      maxLength={80}
+                      returnKeyType="next"
+                      blurOnSubmit={false}
+                      onSubmitEditing={() => emailInputRef.current?.focus()}
+                    />
                   </View>
-                  <Text style={styles.label}>Correo electrónico</Text>
-                  <TextInput
+                  <FormField
+                    ref={emailInputRef}
+                    label="Correo electrónico"
                     value={signupEmail}
                     onChangeText={(value) => {
                       setSignupEmail(value);
@@ -315,33 +333,37 @@ export default function AuthScreen() {
                     autoComplete="email"
                     textContentType="emailAddress"
                     keyboardType="email-address"
-                    style={styles.input}
                     maxLength={254}
+                    error={signupEmailError}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => passwordInputRef.current?.focus()}
                   />
                 </>
               ) : (
-                <>
-                  <Text style={styles.label}>Usuario o correo</Text>
-                  <TextInput
-                    testID="usernameInput"
-                    value={username}
-                    onChangeText={(value) => {
-                      setUsername(value);
-                      setErrorMessage(null);
-                    }}
-                    placeholder="usuario o correo"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="username"
-                    textContentType="username"
-                    style={styles.input}
-                  />
-                </>
+                <FormField
+                  testID="usernameInput"
+                  label="Usuario o correo"
+                  value={username}
+                  onChangeText={(value) => {
+                    setUsername(value);
+                    setErrorMessage(null);
+                  }}
+                  placeholder="usuario o correo"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="username"
+                  textContentType="username"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => passwordInputRef.current?.focus()}
+                />
               )}
 
-              <Text style={styles.label}>Contraseña</Text>
-              <TextInput
+              <FormField
+                ref={passwordInputRef}
                 testID="passwordInput"
+                label="Contraseña"
                 value={password}
                 onChangeText={(value) => {
                   setPassword(value);
@@ -353,7 +375,9 @@ export default function AuthScreen() {
                 autoComplete={mode === 'signup' ? 'new-password' : 'password'}
                 textContentType={mode === 'signup' ? 'newPassword' : 'password'}
                 secureTextEntry
-                style={styles.input}
+                error={signupPasswordError}
+                accessibilityHint={mode === 'signup' ? 'Usa al menos 8 caracteres.' : undefined}
+                returnKeyType="done"
                 onSubmitEditing={() => {
                   if (mode === 'signup') {
                     void handleSignup();
@@ -377,9 +401,14 @@ export default function AuthScreen() {
                   }
                 }}
                 disabled={!(mode === 'signup' ? canSubmitSignup : canSubmitPassword)}
+                accessibilityRole="button"
+                accessibilityState={{
+                  disabled: !(mode === 'signup' ? canSubmitSignup : canSubmitPassword),
+                  busy: isPasswordSubmitting || isSignupSubmitting,
+                }}
               >
                 {isPasswordSubmitting || isSignupSubmitting ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={colors.actionPrimaryContrast} />
                 ) : (
                   <Text style={styles.primaryButtonText}>
                     {mode === 'signup' ? 'Crear cuenta y continuar' : 'Ingresar'}
@@ -401,9 +430,11 @@ export default function AuthScreen() {
                       void handleGoogleLogin();
                     }}
                     disabled={isGoogleSubmitting}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: isGoogleSubmitting, busy: isGoogleSubmitting }}
                   >
                     {isGoogleSubmitting ? (
-                      <ActivityIndicator color="#111827" />
+                      <ActivityIndicator color={colors.textPrimary} />
                     ) : (
                       <Text style={styles.secondaryButtonText}>Continuar con Google</Text>
                     )}
@@ -412,7 +443,15 @@ export default function AuthScreen() {
                 </>
               ) : null}
 
-              {errorMessage ? <Text style={styles.errorText} accessibilityRole="alert">{errorMessage}</Text> : null}
+              {errorMessage ? (
+                <Text
+                  style={styles.errorText}
+                  accessibilityRole="alert"
+                  accessibilityLiveRegion="assertive"
+                >
+                  {errorMessage}
+                </Text>
+              ) : null}
             </View>
           ) : null}
 
@@ -420,7 +459,7 @@ export default function AuthScreen() {
             <Text style={styles.label}>Estado de sesión</Text>
             {loading ? (
               <View style={styles.loadingRow}>
-                <ActivityIndicator color="#2563eb" />
+                <ActivityIndicator color={colors.actionPrimary} />
                 <Text style={styles.statusText}>Cargando sesión guardada…</Text>
               </View>
             ) : (
@@ -428,13 +467,19 @@ export default function AuthScreen() {
                 <Text style={styles.statusText}>
                   Sesión: {hasToken ? 'Activa' : 'No iniciada'}
                 </Text>
-                {feedbackMessage ? <Text style={styles.successText}>{feedbackMessage}</Text> : null}
+                {feedbackMessage ? (
+                  <Text style={styles.successText} accessibilityLiveRegion="polite">
+                    {feedbackMessage}
+                  </Text>
+                ) : null}
                 <TouchableOpacity
                   style={[styles.ghostButton, !hasToken && styles.buttonDisabled]}
                   onPress={() => {
                     void handleClearSession();
                   }}
                   disabled={!hasToken}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !hasToken }}
                 >
                   <Text style={styles.ghostButtonText}>Cerrar sesión</Text>
                 </TouchableOpacity>
@@ -447,82 +492,78 @@ export default function AuthScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   flex: { flex: 1 },
-  page: { flex: 1, backgroundColor: '#f8fafc' },
+  page: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: 16, gap: 12 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 14,
     gap: 10
   },
-  title: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
-  subtitle: { color: '#475569', lineHeight: 20 },
-  meta: { color: '#1d4ed8', fontSize: 12, fontWeight: '600' },
-  label: { fontWeight: '700', color: '#0f172a' },
-  optionalText: { color: '#64748b', fontSize: 12, fontWeight: '500' },
+  title: { fontSize: 22, fontWeight: '800', color: colors.textPrimary },
+  subtitle: { color: colors.textSecondary, lineHeight: 20 },
+  meta: { color: colors.actionPrimary, fontSize: 12, fontWeight: '600' },
+  label: { fontWeight: '700', color: colors.textPrimary },
   modeSwitch: {
     flexDirection: 'row',
     gap: 6,
     padding: 4,
     borderRadius: 12,
-    backgroundColor: '#f1f5f9'
+    backgroundColor: colors.surface,
   },
   modeButton: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 44,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center'
   },
   modeButtonActive: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
-    borderColor: '#ddd6fe'
+    borderColor: colors.actionPrimary,
   },
-  modeButtonText: { color: '#64748b', fontSize: 13, fontWeight: '700' },
-  modeButtonTextActive: { color: '#6d28d9' },
-  nameRow: { flexDirection: 'row', gap: 10 },
-  nameField: { flex: 1, gap: 7 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    backgroundColor: '#fff'
-  },
+  modeButtonText: { color: colors.textSecondary, fontSize: 13, fontWeight: '700' },
+  modeButtonTextActive: { color: colors.actionPrimary },
+  nameRow: { gap: 10 },
+  nameField: { flex: 1 },
   primaryButton: {
-    backgroundColor: '#7c3aed',
+    minHeight: 48,
+    backgroundColor: colors.actionPrimary,
     paddingVertical: 12,
     borderRadius: 10,
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  primaryButtonText: { color: '#fff', fontWeight: '700' },
+  primaryButtonText: { color: colors.actionPrimaryContrast, fontWeight: '700' },
   secondaryButton: {
-    backgroundColor: '#f8fafc',
+    minHeight: 48,
+    backgroundColor: colors.canvas,
     paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    alignItems: 'center'
-  },
-  secondaryButtonText: { color: '#111827', fontWeight: '700' },
-  ghostButton: {
+    borderColor: colors.border,
     alignItems: 'center',
-    paddingVertical: 8
+    justifyContent: 'center',
   },
-  ghostButtonText: { color: '#1d4ed8', fontWeight: '700' },
+  secondaryButtonText: { color: colors.textPrimary, fontWeight: '700' },
+  ghostButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  ghostButtonText: { color: colors.actionPrimary, fontWeight: '700' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  statusText: { color: '#334155' },
-  successText: { color: '#166534', fontSize: 12, lineHeight: 18 },
-  errorText: { color: '#b91c1c', fontSize: 12, lineHeight: 18 },
-  helperText: { color: '#475569', fontSize: 12, lineHeight: 18 },
+  statusText: { color: colors.textSecondary },
+  successText: { color: colors.success, fontSize: 12, lineHeight: 18 },
+  errorText: { color: colors.danger, fontSize: 12, lineHeight: 18 },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  divider: { flex: 1, height: 1, backgroundColor: '#e2e8f0' },
-  dividerText: { color: '#64748b', fontSize: 12, fontWeight: '700' },
+  divider: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
   buttonDisabled: { opacity: 0.5 }
 });

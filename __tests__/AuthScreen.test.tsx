@@ -27,6 +27,30 @@ jest.mock('../src/providers/AuthProvider', () => ({
   })),
 }));
 
+jest.mock('../src/theme/ThemeProvider', () => {
+  return {
+    useAppTheme: () => ({
+      colorScheme: 'light',
+      preference: 'system',
+      colors: {
+        canvas: '#f8fafc',
+        surface: '#f1f5f9',
+        surfaceRaised: '#ffffff',
+        textPrimary: '#0f172a',
+        textSecondary: '#475569',
+        border: '#94949a',
+        actionPrimary: '#7c3aed',
+        actionPrimaryPressed: '#6d28d9',
+        actionPrimaryContrast: '#ffffff',
+        selected: '#ede9fe',
+        danger: '#b91c1c',
+        success: '#166534',
+      },
+      setPreference: jest.fn(),
+    }),
+  };
+});
+
 jest.mock('../src/api/auth', () => ({
   loginRequest: (...args: unknown[]) => mockLoginRequest(...args),
   googleLoginRequest: (...args: unknown[]) => mockGoogleLoginRequest(...args),
@@ -110,6 +134,31 @@ describe('Auth screen', () => {
     });
     expect(await screen.findByText('Sesión iniciada.')).toBeTruthy();
   }, 10_000);
+
+  it('exposes associated field labels, input guidance, and validation errors', async () => {
+    render(<AuthScreen />);
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
+
+    expect(screen.getByLabelText('Usuario o correo')).toBeTruthy();
+    expect(screen.getByLabelText('Contraseña')).toBeTruthy();
+    expect(screen.getByTestId('loginButton').props.accessibilityState).toEqual({
+      disabled: false,
+      busy: false,
+    });
+
+    fireEvent.press(screen.getByText('Crear cuenta'));
+    const emailInput = screen.getByLabelText('Correo electrónico');
+    const passwordInput = screen.getByLabelText('Contraseña');
+
+    expect(emailInput).toBeTruthy();
+    expect(passwordInput.props.accessibilityHint).toBe('Usa al menos 8 caracteres.');
+
+    fireEvent.changeText(emailInput, 'correo-invalido');
+    fireEvent.changeText(passwordInput, 'corta');
+
+    expect(screen.getByText('Ingresa un correo electrónico válido.').props.accessibilityRole).toBe('alert');
+    expect(screen.getByText('La contraseña debe tener al menos 8 caracteres.').props.accessibilityRole).toBe('alert');
+  });
 
   it('creates a fan account and stores the returned session', async () => {
     mockSignupRequest.mockResolvedValue({

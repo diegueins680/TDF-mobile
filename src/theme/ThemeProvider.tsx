@@ -29,6 +29,7 @@ export const semanticColors = {
     actionPrimaryContrast: '#ffffff',
     selected: '#ede9fe',
     danger: '#b91c1c',
+    success: '#166534',
   },
   dark: {
     canvas: palette.backgroundDark,
@@ -42,6 +43,7 @@ export const semanticColors = {
     actionPrimaryContrast: '#111113',
     selected: '#2e1065',
     danger: '#fda4af',
+    success: '#86efac',
   },
 } as const;
 

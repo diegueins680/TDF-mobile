@@ -28,6 +28,7 @@ import type {
 } from '../../src/types';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { uploadImage } from '../../src/api/upload';
+import { useAppTheme } from '../../src/theme/ThemeProvider';
 
 const TARGET_KINDS: AssetCheckoutRequest['coTargetKind'][] = ['party', 'room', 'session'];
 const STATUS_OPTIONS: { value: string; label: string }[] = [
@@ -42,6 +43,15 @@ function toStringId(value: Asset['assetId']): string {
 }
 
 export default function InventoryScreen() {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const themedInputProps = useMemo(
+    () => ({
+      placeholderTextColor: colors.textSecondary,
+      selectionColor: colors.actionPrimary,
+    }),
+    [colors],
+  );
   const qc = useQueryClient();
   const { token, loading } = useAuth();
   const [localImage, setLocalImage] = useState<{ uri: string; mime?: string; name?: string } | null>(
@@ -347,7 +357,12 @@ export default function InventoryScreen() {
           </View>
 
           {item.photoUrl ? (
-            <Image source={{ uri: item.photoUrl }} style={styles.assetImage} resizeMode="cover" />
+            <Image
+              source={{ uri: item.photoUrl }}
+              style={styles.assetImage}
+              resizeMode="cover"
+              accessibilityLabel={`Foto de ${item.name}`}
+            />
           ) : null}
 
           <View style={styles.metaRow}>
@@ -378,7 +393,7 @@ export default function InventoryScreen() {
                 accessibilityLabel={`Registrar retorno de ${item.name}`}
                 accessibilityState={{ disabled: !canUseInventory }}
               >
-                <Text style={styles.primaryBtnText}>Registrar retorno</Text>
+                <Text style={[styles.primaryBtnText, styles.dangerBtnText]}>Registrar retorno</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -405,7 +420,7 @@ export default function InventoryScreen() {
         </View>
       );
     },
-    [canUseInventory, openCheckout, openCheckin, openEdit, setSearch]
+    [canUseInventory, openCheckout, openCheckin, openEdit, setSearch, styles]
   );
 
   const selectImage = useCallback(async (mode: 'camera' | 'library') => {
@@ -512,12 +527,14 @@ export default function InventoryScreen() {
 
             {feedback ? (
               <View style={styles.feedback}>
-                <Text style={styles.feedbackText}>{feedback}</Text>
+                <Text style={styles.feedbackText} accessibilityLiveRegion="polite">
+                  {feedback}
+                </Text>
               </View>
             ) : null}
             {assetsQuery.isError ? (
               <View style={styles.errorBox}>
-                <Text style={styles.errorText}>
+                <Text style={styles.errorText} accessibilityRole="alert">
                   {canUseInventory ? 'No pudimos cargar el inventario.' : 'Acceso restringido para cargar inventario.'}
                 </Text>
               </View>
@@ -529,24 +546,33 @@ export default function InventoryScreen() {
                 <Text style={styles.helperText}>Inicia sesión antes de crear o editar equipos.</Text>
               ) : null}
               <TextInput
+                {...themedInputProps}
                 placeholder="Nombre del equipo"
+                accessibilityLabel="Nombre del equipo"
                 value={createForm.name}
                 onChangeText={(text) => setCreateForm((prev) => ({ ...prev, name: text }))}
                 style={styles.input}
                 autoCapitalize="sentences"
               />
               <TextInput
+                {...themedInputProps}
                 placeholder="Categoría (ej. micrófono, interfaz…)"
+                accessibilityLabel="Categoría del equipo"
                 value={createForm.category}
                 onChangeText={(text) => setCreateForm((prev) => ({ ...prev, category: text }))}
                 style={styles.input}
               />
               <TextInput
+                {...themedInputProps}
                 placeholder="URL de foto (opcional)"
+                accessibilityLabel="URL de la foto"
+                accessibilityHint="Campo opcional."
                 value={createForm.photoUrl}
                 onChangeText={(text) => setCreateForm((prev) => ({ ...prev, photoUrl: text }))}
                 style={styles.input}
                 autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
               />
               {createForm.photoUrl.trim() || localImage ? (
                 <View style={styles.previewBox}>
@@ -554,6 +580,7 @@ export default function InventoryScreen() {
                     source={{ uri: localImage?.uri ?? createForm.photoUrl.trim() }}
                     style={styles.previewImage}
                     resizeMode="cover"
+                    accessibilityLabel="Vista previa de la foto del equipo"
                   />
                   <View style={styles.previewActions}>
                     {localImage ? (
@@ -563,6 +590,8 @@ export default function InventoryScreen() {
                           setLocalImage(null);
                           setCreateForm((prev) => ({ ...prev, photoUrl: '' }));
                         }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Quitar foto seleccionada"
                       >
                         <Text style={styles.ghostBtnText}>Quitar foto</Text>
                       </TouchableOpacity>
@@ -575,6 +604,9 @@ export default function InventoryScreen() {
                   style={[styles.ghostBtn, !canUseInventory && styles.primaryBtnDisabled]}
                   onPress={() => pickCreateImage('camera')}
                   disabled={!canUseInventory}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tomar foto del equipo"
+                  accessibilityState={{ disabled: !canUseInventory }}
                 >
                   <Text style={styles.ghostBtnText}>Tomar foto</Text>
                 </TouchableOpacity>
@@ -582,6 +614,9 @@ export default function InventoryScreen() {
                   style={[styles.ghostBtn, !canUseInventory && styles.primaryBtnDisabled]}
                   onPress={() => pickCreateImage('library')}
                   disabled={!canUseInventory}
+                  accessibilityRole="button"
+                  accessibilityLabel="Elegir foto del equipo desde la galería"
+                  accessibilityState={{ disabled: !canUseInventory }}
                 >
                   <Text style={styles.ghostBtnText}>Desde galería</Text>
                 </TouchableOpacity>
@@ -592,6 +627,11 @@ export default function InventoryScreen() {
                   void submitCreate();
                 }}
                 disabled={!canCreate}
+                accessibilityRole="button"
+                accessibilityState={{
+                  disabled: !canCreate,
+                  busy: createMutation.isPending || uploading,
+                }}
               >
                 <Text style={styles.primaryBtnText}>
                   {createMutation.isPending ? 'Guardando…' : 'Añadir al inventario'}
@@ -602,7 +642,9 @@ export default function InventoryScreen() {
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Equipo</Text>
               <TextInput
+                {...themedInputProps}
                 placeholder="Buscar por nombre, categoría o estado…"
+                accessibilityLabel="Buscar en el inventario"
                 value={search}
                 onChangeText={setSearch}
                 style={styles.input}
@@ -619,6 +661,9 @@ export default function InventoryScreen() {
                     }
                   }}
                   disabled={!canUseInventory}
+                  accessibilityRole="button"
+                  accessibilityLabel="Actualizar inventario"
+                  accessibilityState={{ disabled: !canUseInventory }}
                 >
                   <Text style={[styles.muted, { fontWeight: '700' }]}>Actualizar</Text>
                 </TouchableOpacity>
@@ -629,12 +674,12 @@ export default function InventoryScreen() {
         ListEmptyComponent={
           loading ? (
             <View style={styles.empty}>
-              <ActivityIndicator />
+              <ActivityIndicator color={colors.actionPrimary} />
               <Text style={styles.muted}>Cargando acceso…</Text>
             </View>
           ) : assetsQuery.isLoading ? (
             <View style={styles.empty}>
-              <ActivityIndicator />
+              <ActivityIndicator color={colors.actionPrimary} />
               <Text style={styles.muted}>Cargando inventario…</Text>
             </View>
           ) : !canUseInventory ? (
@@ -674,6 +719,7 @@ export default function InventoryScreen() {
             </Text>
 
             <TextInput
+                {...themedInputProps}
               placeholder="Nombre"
               accessibilityLabel="Nombre del equipo"
               value={editForm.name}
@@ -682,6 +728,7 @@ export default function InventoryScreen() {
               autoCapitalize="sentences"
             />
             <TextInput
+                {...themedInputProps}
               placeholder="Categoría"
               accessibilityLabel="Categoría del equipo"
               value={editForm.category}
@@ -712,6 +759,7 @@ export default function InventoryScreen() {
               })}
             </View>
             <TextInput
+                {...themedInputProps}
               placeholder="Ubicación (ID de sala opcional)"
               accessibilityLabel="Ubicación"
               accessibilityHint="ID de sala opcional."
@@ -721,6 +769,7 @@ export default function InventoryScreen() {
               autoCapitalize="none"
             />
             <TextInput
+                {...themedInputProps}
               placeholder="URL de foto (opcional)"
               accessibilityLabel="URL de la foto"
               accessibilityHint="Campo opcional."
@@ -737,6 +786,7 @@ export default function InventoryScreen() {
                   source={{ uri: editLocalImage?.uri ?? editForm.photoUrl.trim() }}
                   style={styles.previewImage}
                   resizeMode="cover"
+                  accessibilityLabel="Vista previa de la foto actualizada del equipo"
                 />
                 <View style={styles.previewActions}>
                   {editLocalImage ? (
@@ -857,6 +907,7 @@ export default function InventoryScreen() {
 
             {checkoutForm.coTargetKind === 'party' ? (
               <TextInput
+                {...themedInputProps}
                 placeholder="Cliente / banda"
                 accessibilityLabel="Cliente o banda"
                 value={checkoutForm.coTargetParty ?? ''}
@@ -869,6 +920,7 @@ export default function InventoryScreen() {
 
             {checkoutForm.coTargetKind === 'room' ? (
               <TextInput
+                {...themedInputProps}
                 placeholder="ID de sala"
                 accessibilityLabel="ID de sala"
                 value={checkoutForm.coTargetRoom ?? ''}
@@ -880,6 +932,7 @@ export default function InventoryScreen() {
 
             {checkoutForm.coTargetKind === 'session' ? (
               <TextInput
+                {...themedInputProps}
                 placeholder="ID de sesión"
                 accessibilityLabel="ID de sesión"
                 value={checkoutForm.coTargetSession ?? ''}
@@ -892,6 +945,7 @@ export default function InventoryScreen() {
             ) : null}
 
             <TextInput
+                {...themedInputProps}
               placeholder="Fecha límite (ISO opcional)"
               accessibilityLabel="Fecha límite"
               accessibilityHint="Campo opcional en formato ISO."
@@ -901,6 +955,7 @@ export default function InventoryScreen() {
               autoCapitalize="none"
             />
             <TextInput
+                {...themedInputProps}
               placeholder="Condición de salida"
               accessibilityLabel="Condición de salida"
               value={checkoutForm.coConditionOut ?? ''}
@@ -910,6 +965,7 @@ export default function InventoryScreen() {
               style={styles.input}
             />
             <TextInput
+                {...themedInputProps}
               placeholder="Notas"
               accessibilityLabel="Notas del préstamo"
               value={checkoutForm.coNotes ?? ''}
@@ -967,6 +1023,7 @@ export default function InventoryScreen() {
             <Text style={styles.subheader}>{checkinAsset ? checkinAsset.name : ''}</Text>
 
             <TextInput
+                {...themedInputProps}
               placeholder="Condición de retorno"
               accessibilityLabel="Condición de retorno"
               value={checkinForm.ciConditionIn ?? ''}
@@ -976,6 +1033,7 @@ export default function InventoryScreen() {
               style={styles.input}
             />
             <TextInput
+                {...themedInputProps}
               placeholder="Notas"
               accessibilityLabel="Notas del retorno"
               value={checkinForm.ciNotes ?? ''}
@@ -1016,53 +1074,56 @@ export default function InventoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#f8fafc' },
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
+  page: { flex: 1, backgroundColor: colors.canvas },
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 32,
     paddingBottom: 32,
     gap: 12,
   },
-  header: { fontSize: 26, fontWeight: '800', color: '#0f172a' },
-  subheader: { color: '#475569', lineHeight: 20 },
-  helperText: { color: '#475569', lineHeight: 18 },
+  header: { fontSize: 26, fontWeight: '800', color: colors.textPrimary },
+  subheader: { color: colors.textSecondary, lineHeight: 20 },
+  helperText: { color: colors.textSecondary, lineHeight: 18 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surfaceRaised,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.borderSubtle,
     gap: 10
   },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
-  label: { color: '#0f172a', fontWeight: '700' },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  label: { color: colors.textPrimary, fontWeight: '700' },
   input: {
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10
+    paddingVertical: 10,
+    backgroundColor: colors.surfaceRaised,
+    color: colors.textPrimary,
   },
   previewBox: {
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.borderSubtle,
     borderRadius: 10,
     overflow: 'hidden',
     height: 140
   },
   previewImage: { width: '100%', height: '100%' },
   assetHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  assetTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
-  muted: { color: '#64748b' },
+  assetTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  muted: { color: colors.textSecondary },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-  meta: { color: '#475569', fontSize: 13 },
+  meta: { color: colors.textSecondary, fontSize: 13 },
   actionsRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   secondaryActions: { justifyContent: 'flex-start' },
   secondaryActionBtn: { flex: 1 },
   primaryBtn: {
     minHeight: 44,
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.actionPrimary,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 10,
@@ -1072,62 +1133,64 @@ const styles = StyleSheet.create({
   },
   primaryBtnCompact: { flex: 0 },
   primaryBtnDisabled: { opacity: 0.6 },
-  primaryBtnText: { color: '#fff', fontWeight: '700' },
+  primaryBtnText: { color: colors.actionPrimaryContrast, fontWeight: '700' },
   ghostBtn: {
     minHeight: 44,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#f8fafc'
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceMuted,
   },
-  ghostBtnText: { color: '#0f172a', fontWeight: '600' },
+  ghostBtnText: { color: colors.textPrimary, fontWeight: '600' },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#e2e8f0'
+    borderColor: colors.borderSubtle,
   },
-  badgeOk: { backgroundColor: '#ecfeff', borderColor: '#a5f3fc' },
-  badgeWarning: { backgroundColor: '#fff7ed', borderColor: '#fed7aa' },
-  badgeText: { fontWeight: '700', color: '#0f172a' },
+  badgeOk: { backgroundColor: colors.infoSurface, borderColor: colors.infoBorder },
+  badgeWarning: { backgroundColor: colors.warningSurface, borderColor: colors.warningBorder },
+  badgeText: { fontWeight: '700', color: colors.textPrimary },
   assetImage: { width: '100%', height: 160, borderRadius: 10 },
   previewActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
   empty: { alignItems: 'center', padding: 20, gap: 8 },
   feedback: {
-    backgroundColor: '#ecfeff',
-    borderColor: '#a5f3fc',
+    backgroundColor: colors.infoSurface,
+    borderColor: colors.infoBorder,
     borderWidth: 1,
     padding: 12,
     borderRadius: 10
   },
-  feedbackText: { color: '#0f172a' },
+  feedbackText: { color: colors.textPrimary },
   errorBox: {
-    backgroundColor: '#fef2f2',
-    borderColor: '#fecdd3',
+    backgroundColor: colors.dangerSurface,
+    borderColor: colors.dangerBorder,
     borderWidth: 1,
     padding: 12,
     borderRadius: 10
   },
-  errorText: { color: '#b91c1c', fontWeight: '600' },
+  errorText: { color: colors.danger, fontWeight: '600' },
   authHint: {
     marginTop: 6,
     alignSelf: 'flex-start',
-    backgroundColor: '#e0f2fe',
+    backgroundColor: colors.infoSurface,
+    borderWidth: 1,
+    borderColor: colors.infoBorder,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 10
   },
-  authHintText: { color: '#0f172a', fontWeight: '600' },
+  authHintText: { color: colors.textPrimary, fontWeight: '600' },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end'
   },
   modalCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surfaceRaised,
     padding: 16,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
@@ -1135,7 +1198,7 @@ const styles = StyleSheet.create({
   },
   modalScroll: {
     maxHeight: '92%',
-    backgroundColor: '#fff',
+    backgroundColor: colors.surfaceRaised,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },
@@ -1147,14 +1210,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   segmentWrap: { flexWrap: 'wrap' },
   segmentTight: { minWidth: '45%' },
-  segmentActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  segmentText: { color: '#0f172a', fontWeight: '600' },
-  segmentTextActive: { color: '#fff' },
-  dangerBtn: { backgroundColor: '#dc2626' }
+  segmentActive: { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary },
+  segmentText: { color: colors.textPrimary, fontWeight: '600' },
+  segmentTextActive: { color: colors.actionPrimaryContrast },
+  dangerBtn: { backgroundColor: colors.dangerAction },
+  dangerBtnText: { color: colors.dangerActionContrast },
 });

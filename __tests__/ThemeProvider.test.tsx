@@ -30,6 +30,9 @@ describe('AppThemeProvider', () => {
     await waitFor(() => expect(result.current.preference).toBe('dark'));
     expect(result.current.colorScheme).toBe('dark');
     expect(result.current.colors.actionPrimaryContrast).toBe('#111113');
+    expect(result.current.colors.surfaceRaised).toBe('#1b1b26');
+    expect(result.current.colors.dangerSurface).toBe('#450a0a');
+    expect(result.current.colors.warningBorder).toBe('#fb923c');
 
     act(() => result.current.setPreference('light'));
 
@@ -37,5 +40,7 @@ describe('AppThemeProvider', () => {
       expect(setItemMock).toHaveBeenLastCalledWith('tdf-mobile/theme-preference', 'light');
     });
     expect(result.current.colors.actionPrimary).toBe('#7c3aed');
+    expect(result.current.colors.surfaceRaised).toBe('#ffffff');
+    expect(result.current.colors.infoBorder).toBe('#0e7490');
   });
 });

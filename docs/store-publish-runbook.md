@@ -15,11 +15,11 @@
 | 2 | **Release check** — lint, typecheck, release script, Expo config. | tdf-label-release | `npm run release:check` (must exit 0) |
 | 3 | **Expo Doctor** — catch native-module / SDK mismatches. | tdf-label-release | `npx expo-doctor` (must exit 0) |
 | 4 | **Detox regression** — both login paths PASS on `ios.sim.release`. | tdf-label-release | `npx detox test --configuration ios.sim.release e2e/firstTest.e2e.js` (must exit 0) |
-| 5 | **iOS production build** — EAS cloud build with `autoIncrement`. | tdf-label-cto / operator | `npx eas build --platform ios --profile production` → wait for `FINISHED` |
-| 6 | **Android production build** — EAS cloud build with `autoIncrement`. | tdf-label-cto / operator | `npx eas build --platform android --profile production` → wait for `FINISHED` |
+| 5 | **iOS production build** — EAS cloud build with `autoIncrement`. | tdf-label-cto / operator | `npx eas-cli@latest build --platform ios --profile production` → wait for `FINISHED` |
+| 6 | **Android production build** — EAS cloud build with `autoIncrement`. | tdf-label-cto / operator | `npx eas-cli@latest build --platform android --profile production` → wait for `FINISHED` |
 | 7 | **Screenshot capture** — fresh App Store + Google Play screenshots from RC builds. | tdf-label-cto / operator | Manual; archive to `evidence/store-screenshots-YYYY-MM-DD/` |
-| 8 | **iOS submit** — EAS submit to App Store Connect (`ascAppId: 6754828747`). | tdf-label-cto / operator | `npx eas submit --platform ios --profile production --latest` |
-| 9 | **Android submit** — EAS submit to Google Play internal track (draft). | tdf-label-cto / operator | `npx eas submit --platform android --profile production --latest` |
+| 8 | **iOS submit** — EAS submit to App Store Connect (`ascAppId: 6754828747`). | tdf-label-cto / operator | `npx eas-cli@latest submit --platform ios --profile production --latest` |
+| 9 | **Android submit** — EAS submit to Google Play internal track (draft). | tdf-label-cto / operator | `npx eas-cli@latest submit --platform android --profile production --latest` |
 | 10 | **Post-submit verification** — confirm builds appear in App Store Connect + Play Console. | tdf-label-release | Web console check; screenshot evidence appended to `tdf-label-release.md` |
 
 ---
@@ -31,7 +31,7 @@ Resolve these **before** Step 5:
 | Blocker | Status | Fix |
 |---------|--------|-----|
 | `CORESIMULATOR_DEADLOCK` | ❌ ACTIVE — host reboot required | Host has NOT been rebooted for 3+ days; `simctl install` hangs indefinitely. Reboot host, then verify `simctl install` completes in <30s. |
-| `EAS_IOS_CREDENTIALS_MISSING` | ❌ ACTIVE | Operator runs `npx eas credentials:configure-build --platform ios --profile preview` interactively. Apple ID login → generate Distribution Certificate + Provisioning Profile for `com.tdfrecords.app`. Verify with `npx eas build --profile preview --platform ios`. |
+| `EAS_IOS_CREDENTIALS_MISSING` | ❌ ACTIVE | Operator runs `npx eas-cli@latest credentials:configure-build --platform ios --profile preview` interactively. Apple ID login → generate Distribution Certificate + Provisioning Profile for `com.tdfrecords.app`. Verify with `npx eas-cli@latest build --profile preview --platform ios`. |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT` | ❌ ACTIVE | Create Play Console service account + JSON key; add to EAS secrets for Android submission. |
 | Physical-device Google OAuth | ⏸️ WAIVED until operator action | Operator review with `.ipa` install. Not blocking simulator testing version. |
 

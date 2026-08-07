@@ -11,7 +11,7 @@ Create a Google Play Console service account, download its JSON key, and add it 
 - Google Play Console account with admin access
 - Billing profile set up in Play Console (required for API access)
 - EAS CLI installed locally (`npm install -g eas-cli`)
-- Expo account logged in (`npx eas login`)
+- Expo account logged in (`npx eas-cli@latest login`)
 
 ---
 
@@ -73,16 +73,16 @@ Create a Google Play Console service account, download its JSON key, and add it 
 
 ## Step 5 — Add JSON Key to EAS Secrets
 **Owner:** Operator  
-**Verification:** `npx eas secret:list` shows `GOOGLE_SERVICE_ACCOUNT_KEY`
+**Verification:** `npx eas-cli@latest secret:list` shows `GOOGLE_SERVICE_ACCOUNT_KEY`
 
 1. From `tdf-mobile/` directory:
    ```bash
    cd /Users/diegosaa/GitHub/tdf-app/tdf-mobile
-   npx eas secret:create --name GOOGLE_SERVICE_ACCOUNT_KEY --value-file secrets/tdf-label-release-*.json --scope project
+   npx eas-cli@latest secret:create --name GOOGLE_SERVICE_ACCOUNT_KEY --value-file secrets/tdf-label-release-*.json --scope project
    ```
 2. Confirm the secret was created:
    ```bash
-   npx eas secret:list
+   npx eas-cli@latest secret:list
    ```
 3. You should see:
    - Name: `GOOGLE_SERVICE_ACCOUNT_KEY`
@@ -95,7 +95,7 @@ Create a Google Play Console service account, download its JSON key, and add it 
 
 1. Trigger a non-interactive Android build:
    ```bash
-   npx eas build --profile preview --platform android --non-interactive
+   npx eas-cli@latest build --profile preview --platform android --non-interactive
    ```
 2. In the build logs, look for:
    - `Using Google Service Account for submission`
@@ -122,8 +122,8 @@ If the service account key is compromised:
 2. Create a new key (Step 4)
 3. Update the EAS secret:
    ```bash
-   npx eas secret:delete GOOGLE_SERVICE_ACCOUNT_KEY
-   npx eas secret:create --name GOOGLE_SERVICE_ACCOUNT_KEY --value-file secrets/<new-key>.json --scope project
+   npx eas-cli@latest secret:delete GOOGLE_SERVICE_ACCOUNT_KEY
+   npx eas-cli@latest secret:create --name GOOGLE_SERVICE_ACCOUNT_KEY --value-file secrets/<new-key>.json --scope project
    ```
 
 ## Troubleshooting
@@ -132,7 +132,7 @@ If the service account key is compromised:
 |---------|-------|-----|
 | "API access is not enabled" in Play Console | Billing not verified | Complete billing verification or escalate to tdf-label-ceo |
 | "Permission denied" during EAS submit | Service account lacks Release Manager role | Revisit Step 3, ensure Release to production is granted |
-| `eas secret:create` fails with "already exists" | Secret was created previously | Run `npx eas secret:delete GOOGLE_SERVICE_ACCOUNT_KEY` first, then re-create |
+| `eas secret:create` fails with "already exists" | Secret was created previously | Run `npx eas-cli@latest secret:delete GOOGLE_SERVICE_ACCOUNT_KEY` first, then re-create |
 | JSON key file not found | Downloaded to wrong location | Check `~/Downloads/` and move to `tdf-mobile/secrets/` |
 
 ## Revision History

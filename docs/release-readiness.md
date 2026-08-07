@@ -48,7 +48,7 @@
 - **EAS ios-simulator build** — ✅ VERIFIED (2026-05-13): Build `8d91fabe-a01c-41d1-bc6b-b55dc9c689e9` FINISHED; artifact contains `GoogleSignIn.bundle`, correct URL scheme, and renders Google button. Both Detox tests PASS without Metro.
 
 **Immediate next action:**
-1. **operator/CTO**: Configure EAS iOS signing credentials and run `npx eas build --profile preview --platform ios` to produce `.ipa` for physical device manual test (`docs/google-oauth-manual-test.md`).
+1. **operator/CTO**: Configure EAS iOS signing credentials and run `npx eas-cli@latest build --profile preview --platform ios` to produce `.ipa` for physical device manual test (`docs/google-oauth-manual-test.md`).
 2. **tdf-label-release**: Monitor EAS build queue health; keep `.detoxrc.js` pointed at EAS artifact path for CI consistency.
 
 ## Decision Record — Physical Device Google OAuth Ship Gate
@@ -66,8 +66,8 @@
 `Shipping decision: TESTING VERSION READY`
 
 **Exact build commands:**
-- `ios-simulator` (credential-free): `cd tdf-mobile && npx eas build --profile ios-simulator --platform ios --non-interactive` — **VERIFIED** (Build ID `8d91fabe-a01c-41d1-bc6b-b55dc9c689e9`).
-- `preview` (physical device): `cd tdf-mobile && npx eas build --platform ios --profile preview` — **BLOCKED on missing iOS signing credentials.**
+- `ios-simulator` (credential-free): `cd tdf-mobile && npx eas-cli@latest build --profile ios-simulator --platform ios --non-interactive` — **VERIFIED** (Build ID `8d91fabe-a01c-41d1-bc6b-b55dc9c689e9`).
+- `preview` (physical device): `cd tdf-mobile && npx eas-cli@latest build --platform ios --profile preview` — **BLOCKED on missing iOS signing credentials.**
 
 **Before production release:** Execute `docs/google-oauth-manual-test.md` on physical iOS device to verify full web-sign-in → callback → post-login flow.
 

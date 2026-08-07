@@ -63,7 +63,7 @@ npx eas-cli@latest submit --platform android --profile production --latest
 
 > **How to reproduce this baseline:**
 > ```bash
-> cd tdf-mobile && npx eas build --profile ios-simulator --platform ios --non-interactive
+> cd tdf-mobile && npx eas-cli@latest build --profile ios-simulator --platform ios --non-interactive
 > ```
 > Then run: `npx detox test --configuration ios.sim.release`
 

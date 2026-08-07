@@ -3,7 +3,8 @@ export const MOBILE_LANDING_ROUTE = '/(tabs)/events' as const;
 export const NEW_USER_VISIBLE_TABS = [
   { name: 'events', title: 'Eventos', icon: 'calendar-star' },
   { name: 'social', title: 'Seguir', icon: 'account-heart' },
-  { name: 'vcard', title: 'vCard', icon: 'card-account-details' },
+  { name: 'more', title: 'Explorar', icon: 'compass-outline' },
+  { name: 'create', title: 'Crear', icon: 'plus-circle-outline' },
   { name: 'profile', title: 'Perfil', icon: 'account-circle' },
 ] as const;
 
@@ -12,8 +13,8 @@ export const HIDDEN_INTERNAL_TABS = [
   'bookings',
   'pipelines',
   'about',
-  'create',
   'inventory',
+  'vcard',
 ] as const;
 
 export const NEW_USER_ALLOWED_FEATURES = [
@@ -24,4 +25,6 @@ export const NEW_USER_ALLOWED_FEATURES = [
   'Seguir',
   'Video streaming',
   'Club de fans',
+  'Explorar funciones autorizadas',
+  'Creación rápida autorizada',
 ] as const;

@@ -209,6 +209,25 @@ describe('AuthProvider', () => {
     expect(result.current.partyId).toBe('42');
   });
 
+  it('hydrates normalized roles, modules, and feature flags from the authoritative session endpoint', async () => {
+    getSecureItemMock.mockResolvedValueOnce('Bearer saved-token');
+    getMock.mockResolvedValueOnce({
+      partyId: 42,
+      roles: ['ReadOnly', ' readonly ', 'Customer'],
+      modules: ['Catalog', ' CRM ', 'catalog'],
+      featureFlags: ['EVENT_DISCOVERY_ENABLED', ' event_discovery_enabled '],
+    } as never);
+
+    const { result } = renderAuthProvider();
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.roles).toEqual(['readonly', 'customer']);
+    expect(result.current.modules).toEqual(['catalog', 'crm']);
+    expect(result.current.featureFlags).toEqual(['event_discovery_enabled']);
+    expect(result.current.session?.partyId).toBe('42');
+  });
+
   it('migrates a legacy async-storage token into secure storage', async () => {
     getLegacyItemMock.mockResolvedValueOnce('legacy-token');
     getMock.mockResolvedValueOnce({ partyId: 88 } as never);

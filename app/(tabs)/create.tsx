@@ -1,103 +1,126 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useMemo } from 'react';
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { palette, radii } from '../../src/theme/designTokens';
+import { type Href, useRouter } from 'expo-router';
 
-const typography = {
-  sizes: {
-    md: 15,
-    lg: 18,
-  },
-  weights: {
-    semibold: '600' as const,
-    bold: '700' as const,
-  },
+import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
+import {
+  evaluateFeatureAccess,
+  featureLabel,
+  resolveMobileDestination,
+  type FeatureAction,
+} from '../../src/features/featureRegistry';
+import { mobileFeatureRegistry } from '../../src/features/generatedFeatureRegistry';
+import { useAuth } from '../../src/providers/AuthProvider';
+import { useUserSettings } from '../../src/providers/UserSettingsProvider';
+import { useAppTheme } from '../../src/theme/ThemeProvider';
+import { recordFeatureVisit } from '../../src/api/navigationPreferences';
+
+type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
+const ICONS: Record<string, IconName> = {
+  event: 'calendar-star',
+  people: 'account-plus-outline',
+  calendar: 'calendar-plus',
+  releases: 'album',
+  ddex: 'file-upload-outline',
 };
 
-export default function CreateSheet() {
+export default function QuickCreateScreen() {
   const router = useRouter();
+  const analytics = useAnalytics();
+  const { token, roles, modules, featureFlags } = useAuth();
+  const { locale } = useUserSettings();
+  const { colors } = useAppTheme();
 
-  const options = [
-    { label: 'Nueva reserva', icon: 'calendar-plus' as const, route: '/bookings' as const },
-    { label: 'Nuevo evento', icon: 'calendar-star' as const, route: '/events' as const },
-    { label: 'Nuevo contacto', icon: 'account-plus' as const, route: '/parties' as const },
-    { label: 'Nueva orden', icon: 'cart-plus' as const, route: '/bookings' as const },
-  ];
+  const actions = useMemo(() => mobileFeatureRegistry.flatMap((feature) => {
+    if (!feature.quickCreate) return [];
+    const action = feature.quickCreate.action as FeatureAction;
+    const decision = evaluateFeatureAccess(feature, {
+      authenticated: Boolean(token), roles, modules, featureFlags,
+    }, action);
+    return decision.state === 'concealed' ? [] : [{ feature, action, decision }];
+  }), [featureFlags, modules, roles, token]);
+
+  const openAction = async (entry: (typeof actions)[number]) => {
+    const { feature, action, decision } = entry;
+    if (decision.state === 'locked') {
+      analytics.capture('quick_create_locked_selected', { feature_id: feature.id, action, platform: 'mobile' });
+      router.push({ pathname: '/access-requests/new', params: { feature: feature.id, action } } as Href);
+      return;
+    }
+
+    const configured = feature.quickCreate?.mobileDestination;
+    const destination = configured
+      ? { kind: configured.startsWith('https://') ? 'web' as const : 'native' as const, value: configured }
+      : resolveMobileDestination(feature);
+    if (!destination) {
+      analytics.capture('feature_destination_unresolved', { feature_id: feature.id, action, platform: 'mobile' });
+      return;
+    }
+    analytics.capture('quick_create_selected', { feature_id: feature.id, action, platform: 'mobile' });
+    void recordFeatureVisit(feature.id).catch(() => undefined);
+    if (destination.kind === 'web') await Linking.openURL(destination.value);
+    else router.push(destination.value as Href);
+  };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
-        <Text style={styles.title}>Crear nuevo</Text>
-        {options.map((opt) => (
-          <TouchableOpacity
-            key={opt.label}
-            style={styles.option}
-            onPress={() => router.push(opt.route)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.iconBox}>
-              <MaterialCommunityIcons name={opt.icon} size={22} color={palette.primary} />
-            </View>
-            <Text style={styles.optionLabel}>{opt.label}</Text>
-            <MaterialCommunityIcons name="chevron-right" size={20} color={palette.textSecondary} />
-          </TouchableOpacity>
-        ))}
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.canvas }]}>
+      <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>
+        {locale.startsWith('en') ? 'Quick create' : 'Creación rápida'}
+      </Text>
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+        {locale.startsWith('en')
+          ? 'Only actions you can request or legitimately start are shown.'
+          : 'Solo se muestran acciones que puedes solicitar o iniciar legítimamente.'}
+      </Text>
+      <View style={styles.actions}>
+        {actions.map((entry) => {
+          const locked = entry.decision.state === 'locked';
+          return (
+            <TouchableOpacity
+              key={`${entry.feature.id}:${entry.action}`}
+              accessibilityRole="button"
+              accessibilityLabel={`${featureLabel(entry.feature, locale)}${locked ? (locale.startsWith('en') ? ', locked' : ', bloqueada') : ''}`}
+              accessibilityHint={locked
+                ? (locale.startsWith('en') ? 'Opens an internal access request' : 'Abre una solicitud interna de acceso')
+                : (locale.startsWith('en') ? 'Starts this action' : 'Inicia esta acción')}
+              onPress={() => void openAction(entry)}
+              style={[styles.action, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={[styles.icon, { backgroundColor: colors.selected }]}>
+                <MaterialCommunityIcons
+                  name={ICONS[entry.feature.icon] ?? 'plus-circle-outline'}
+                  size={26}
+                  color={locked ? colors.textSecondary : colors.actionPrimary}
+                />
+              </View>
+              <View style={styles.text}>
+                <Text style={[styles.label, { color: colors.textPrimary }]}>
+                  {entry.feature.quickCreate?.label[locale.startsWith('en') ? 'en' : 'es'] ?? featureLabel(entry.feature, locale)}
+                </Text>
+                <Text style={[styles.detail, { color: colors.textSecondary }]}>
+                  {locked
+                    ? (locale.startsWith('en') ? 'Permission required · Request access' : 'Permiso requerido · Solicitar acceso')
+                    : entry.feature.description[locale.startsWith('en') ? 'en' : 'es']}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name={locked ? 'lock-outline' : 'chevron-right'} size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          );
+        })}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: palette.background,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 36,
-    gap: 4,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: '#e4e4e7',
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.weights.bold,
-    color: palette.text,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.surface,
-  },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.md,
-    backgroundColor: '#f5f3ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  optionLabel: {
-    flex: 1,
-    fontSize: typography.sizes.md,
-    fontWeight: typography.weights.semibold,
-    color: '#27272a',
-  },
+  container: { flexGrow: 1, padding: 20, paddingBottom: 36 },
+  title: { fontSize: 28, fontWeight: '800' },
+  subtitle: { fontSize: 14, lineHeight: 20, marginTop: 6 },
+  actions: { marginTop: 20, gap: 10 },
+  action: { minHeight: 72, borderWidth: 1, borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  icon: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  text: { flex: 1, gap: 3 },
+  label: { fontSize: 16, fontWeight: '700' },
+  detail: { fontSize: 13, lineHeight: 18 },
 });

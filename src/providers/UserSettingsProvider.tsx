@@ -36,12 +36,12 @@ type UserSettingsContextValue = {
 const STORAGE_KEY = 'tdf-user-settings';
 const resolvedIntl = Intl.DateTimeFormat().resolvedOptions();
 const detectedLocaleParts = (resolvedIntl.locale || 'en').split(/[-_]/);
-const detectedLanguage = detectedLocaleParts[0]?.toLowerCase() ?? 'en';
+const configuredLocale = process.env.EXPO_PUBLIC_DEFAULT_LOCALE?.trim().toLowerCase() || 'es';
 const configuredCurrency = process.env.EXPO_PUBLIC_DEFAULT_CURRENCY?.trim().toUpperCase() ?? 'USD';
 const EMPTY_SETTINGS: UserSettings = {
   partyId: null,
   displayName: null,
-  locale: SUPPORTED_LOCALES.includes(detectedLanguage as (typeof SUPPORTED_LOCALES)[number]) ? detectedLanguage : 'en',
+  locale: SUPPORTED_LOCALES.includes(configuredLocale as (typeof SUPPORTED_LOCALES)[number]) ? configuredLocale : 'es',
   currency: SUPPORTED_CURRENCIES.includes(configuredCurrency as (typeof SUPPORTED_CURRENCIES)[number])
     ? configuredCurrency
     : 'USD',

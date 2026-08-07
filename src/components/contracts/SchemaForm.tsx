@@ -7,7 +7,7 @@ export type SchemaFormProps = {
 
 export default function SchemaForm({
   title = 'Schema form',
-  description = 'A mobile-friendly contract form has not been implemented yet.'
+  description = 'A mobile-friendly contract form has not been implemented yet.',
 }: SchemaFormProps) {
   return (
     <View style={styles.card}>
@@ -24,16 +24,16 @@ const styles = StyleSheet.create({
     borderColor: '#cbd5e1',
     backgroundColor: '#fff',
     padding: 16,
-    gap: 8
+    gap: 8,
   },
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#0f172a'
+    color: '#0f172a',
   },
   description: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#475569'
-  }
+    color: '#475569',
+  },
 });

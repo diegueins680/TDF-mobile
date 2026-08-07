@@ -1,4 +1,4 @@
-import { API_BASE } from '../../src/lib/api';
+import { API_BASE } from '../lib/api';
 
 export type ContractPayload = Record<string, unknown>;
 export type ContractResponse = Record<string, unknown>;

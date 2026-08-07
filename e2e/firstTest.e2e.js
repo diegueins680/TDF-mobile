@@ -5,6 +5,11 @@ describe('Login Screen', () => {
   });
 
   it('should complete username/password login flow', async () => {
+    const testUsername = process.env.TDF_E2E_USERNAME;
+    const testPassword = process.env.TDF_E2E_PASSWORD;
+    if (!testUsername || !testPassword) {
+      throw new Error('Set TDF_E2E_USERNAME and TDF_E2E_PASSWORD to an isolated, non-production fixture.');
+    }
     // If already logged in, pass immediately.
     try {
       await waitFor(element(by.id('partiesScreen'))).toBeVisible().withTimeout(10000);
@@ -20,8 +25,8 @@ describe('Login Screen', () => {
       // onboarding already seen or not visible — proceed with login fields
     }
     await waitFor(element(by.id('usernameInput'))).toBeVisible().withTimeout(15000);
-    await element(by.id('usernameInput')).replaceText('tdf-owner');
-    await element(by.id('passwordInput')).replaceText('TDFowner2025!');
+    await element(by.id('usernameInput')).replaceText(testUsername);
+    await element(by.id('passwordInput')).replaceText(testPassword);
     await device.disableSynchronization();
     await element(by.id('loginButton')).tap();
     await device.takeScreenshot('after-login');

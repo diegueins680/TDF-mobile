@@ -55,12 +55,6 @@ export default function AuthScreen() {
   const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
 
-  useEffect(() => {
-    if (__DEV__) {
-      setUsername('tdf-owner');
-      setPassword('TDFowner2025!');
-    }
-  }, []);
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
   const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
@@ -127,7 +121,10 @@ export default function AuthScreen() {
         password
       });
 
-      setToken(session.token, session.partyId ?? null);
+      setToken(session.token, session.partyId ?? null, {
+        roles: session.roles ?? [],
+        modules: session.modules ?? [],
+      });
       setPassword('');
       setFeedbackMessage('Sesión iniciada.');
       router.replace(returnTo);
@@ -152,7 +149,10 @@ export default function AuthScreen() {
         password,
         roles: ['Fan'],
       });
-      setToken(session.token, session.partyId ?? null);
+      setToken(session.token, session.partyId ?? null, {
+        roles: session.roles ?? [],
+        modules: session.modules ?? [],
+      });
       setPassword('');
       setFeedbackMessage('Cuenta creada. Ya puedes elegir tus entradas.');
       router.replace(returnTo);
@@ -191,7 +191,10 @@ export default function AuthScreen() {
       }
 
       const session = await googleLoginRequest({ idToken: response.data.idToken });
-      setToken(session.token, session.partyId ?? null);
+      setToken(session.token, session.partyId ?? null, {
+        roles: session.roles ?? [],
+        modules: session.modules ?? [],
+      });
       setPassword('');
       setFeedbackMessage('Sesión con Google iniciada.');
       router.replace(returnTo);

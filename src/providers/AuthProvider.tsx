@@ -2,15 +2,35 @@ import { PropsWithChildren, createContext, useCallback, useContext, useEffect, u
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
+import { AppState } from 'react-native';
 
 import { setAuthToken, getAuthToken, get, normalizeAuthToken } from '../api/client';
+
+export type AuthSessionSnapshot = {
+  partyId: string | null;
+  username: string | null;
+  displayName: string | null;
+  roles: string[];
+  modules: string[];
+  featureFlags: string[];
+};
 
 type AuthContextValue = {
   token: string | null;
   partyId: string | null;
+  session: AuthSessionSnapshot | null;
+  roles: string[];
+  modules: string[];
+  featureFlags: string[];
   loading: boolean;
-  setToken: (next: string | null, nextPartyId?: string | number | null) => void;
+  setToken: (
+    next: string | null,
+    nextPartyId?: string | number | null,
+    nextSession?: Partial<AuthSessionSnapshot> | null,
+  ) => void;
   clearToken: () => void;
+  refreshSession: () => Promise<void>;
 };
 
 const SECURE_STORAGE_KEY = 'tdf-auth-token';
@@ -25,6 +45,11 @@ const normalizeToken = (value: string | null | undefined): string | null => {
 type SessionSnapshot = {
   partyId?: string | number | null;
   id?: string | number | null;
+  username?: string | null;
+  displayName?: string | null;
+  roles?: unknown;
+  modules?: unknown;
+  featureFlags?: unknown;
 };
 
 const normalizePartyId = (value: string | number | null | undefined): string | null => {
@@ -43,6 +68,33 @@ const normalizePartyId = (value: string | number | null | undefined): string | n
 const readPartyId = (value: SessionSnapshot | null | undefined): string | null => {
   return normalizePartyId(value?.partyId ?? value?.id ?? null);
 };
+
+const normalizeStringList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((entry) => {
+    if (typeof entry !== 'string') return [];
+    const normalized = entry.trim().toLowerCase();
+    if (!normalized || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [normalized];
+  });
+};
+
+const normalizeOptionalText = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() ? value.trim() : null;
+
+const normalizeSessionSnapshot = (
+  value: SessionSnapshot | Partial<AuthSessionSnapshot> | null | undefined,
+  fallbackPartyId: string | null = null,
+): AuthSessionSnapshot => ({
+  partyId: readPartyId(value as SessionSnapshot) ?? fallbackPartyId,
+  username: normalizeOptionalText(value?.username),
+  displayName: normalizeOptionalText(value?.displayName),
+  roles: normalizeStringList(value?.roles),
+  modules: normalizeStringList(value?.modules),
+  featureFlags: normalizeStringList(value?.featureFlags),
+});
 
 const readSecureToken = async (): Promise<string | null> => {
   try {
@@ -86,6 +138,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const [token, setTokenState] = useState<string | null>(normalizeToken(getAuthToken()));
   const [partyId, setPartyIdState] = useState<string | null>(null);
+  const [session, setSessionState] = useState<AuthSessionSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const isMountedRef = useRef(true);
   const profileLookupIdRef = useRef(0);
@@ -113,6 +166,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     appliedTokenRef.current = next;
     setPartyIdState(null);
+    setSessionState(null);
     queryClient.clear();
   }, [queryClient, syncTokenState]);
 
@@ -148,16 +202,50 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     try {
-      const session = await get<SessionSnapshot>('/session');
+      const sessionValue = await get<SessionSnapshot>('/session');
       if (isMountedRef.current && lookupId === profileLookupIdRef.current) {
-        setPartyIdState(readPartyId(session) ?? fallbackPartyId ?? null);
+        const normalizedSession = normalizeSessionSnapshot(sessionValue, fallbackPartyId ?? null);
+        setPartyIdState(normalizedSession.partyId);
+        setSessionState(normalizedSession);
       }
-    } catch (_) {
+    } catch (error) {
       if (isMountedRef.current && lookupId === profileLookupIdRef.current) {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          authVersionRef.current += 1;
+          applyAuthState(null);
+          await persistStoredToken(null);
+          return;
+        }
         setPartyIdState(fallbackPartyId ?? null);
+        setSessionState((current) => current ?? normalizeSessionSnapshot(null, fallbackPartyId ?? null));
       }
     }
-  }, []);
+  }, [applyAuthState, persistStoredToken]);
+
+  const refreshSession = useCallback(async () => {
+    await refreshPartyId(token, partyId);
+  }, [partyId, refreshPartyId, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    let lastRefreshAt = 0;
+    const refreshIfNeeded = () => {
+      const now = Date.now();
+      if (now - lastRefreshAt < 60_000) return;
+      lastRefreshAt = now;
+      void refreshPartyId(token, partyId);
+    };
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshIfNeeded();
+    });
+    const interval = setInterval(() => {
+      if (AppState.currentState === 'active') refreshIfNeeded();
+    }, 5 * 60_000);
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [partyId, refreshPartyId, token]);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,7 +306,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, [applyAuthState, persistStoredToken, refreshPartyId]);
 
-  const setToken = useCallback((next: string | null, nextPartyId?: string | number | null) => {
+  const setToken = useCallback((
+    next: string | null,
+    nextPartyId?: string | number | null,
+    nextSession?: Partial<AuthSessionSnapshot> | null,
+  ) => {
     authVersionRef.current += 1;
     profileLookupIdRef.current += 1;
     const normalized = normalizeToken(next);
@@ -228,6 +320,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     if (normalized === null || normalizedPartyId !== null) {
       setPartyIdState(normalizedPartyId);
+    }
+    if (normalized && nextSession) {
+      setSessionState(normalizeSessionSnapshot(nextSession, normalizedPartyId));
     }
 
     void persistStoredToken(normalized);
@@ -240,8 +335,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const clearToken = useCallback(() => setToken(null), [setToken]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ token, partyId, loading, setToken, clearToken }),
-    [token, partyId, loading, setToken, clearToken]
+    () => ({
+      token,
+      partyId,
+      session,
+      roles: session?.roles ?? [],
+      modules: session?.modules ?? [],
+      featureFlags: session?.featureFlags ?? [],
+      loading,
+      setToken,
+      clearToken,
+      refreshSession,
+    }),
+    [token, partyId, session, loading, setToken, clearToken, refreshSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

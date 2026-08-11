@@ -561,6 +561,204 @@ export interface paths {
         patch: operations["updateCourseRegistrationStatus"];
         trace?: never;
     };
+    "/admin/artists/enrichment/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect artist enrichment inventory and review queues */
+        get: operations["getArtistEnrichmentOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/artists/enrichment/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List artist enrichment runs */
+        get: operations["listArtistEnrichmentRuns"];
+        put?: never;
+        /** Start or safely resume artist enrichment */
+        post: operations["runArtistEnrichment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/artists/enrichment/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Checkpoint an external enrichment run */
+        patch: operations["updateArtistEnrichmentRun"];
+        trace?: never;
+    };
+    "/admin/artists/enrichment/artists/{artistId}/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artistId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rerun enrichment for one artist */
+        post: operations["rerunArtistEnrichment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/artists/enrichment/suggestions/{suggestionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestionId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Approve, edit, or reject one field suggestion */
+        patch: operations["decideArtistEnrichmentSuggestion"];
+        trace?: never;
+    };
+    "/admin/artists/enrichment/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Persist field-level research provenance */
+        post: operations["createArtistResearchSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/artists/enrichment/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an idempotent field suggestion */
+        post: operations["createArtistEnrichmentSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/artists/enrichment/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register a validated Google Drive artist image derivative */
+        post: operations["createArtistMediaAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/artists/enrichment/suggestion-sets/{artistId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artistId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Approve or reject all pending suggestions for one artist */
+        patch: operations["decideArtistEnrichmentSuggestionSet"];
+        trace?: never;
+    };
+    "/admin/artists/enrichment/identity-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Persist an idempotent externally researched identity candidate */
+        post: operations["createArtistIdentityCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/artists/enrichment/identity-candidates/{candidateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidateId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Resolve an ambiguous artist identity candidate */
+        patch: operations["decideArtistIdentityCandidate"];
+        trace?: never;
+    };
     "/fans/artists": {
         parameters: {
             query?: never;
@@ -1131,6 +1329,263 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/operations/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get organization-scoped operational KPIs */
+        get: operations["getOperationsMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/work-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search and filter the operational inbox */
+        get: operations["listOperationsWorkItems"];
+        put?: never;
+        /** Create a manual correlated or explicitly uncorrelated work item */
+        post: operations["createOperationsWorkItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/work-items/{workItemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an authorized work-item thread */
+        get: operations["getOperationsWorkItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/work-items/{workItemId}/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark shared first-seen state without mutating the source entity */
+        patch: operations["markOperationsWorkItemSeen"];
+        trace?: never;
+    };
+    "/operations/work-items/{workItemId}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Apply an audited lifecycle transition only */
+        patch: operations["transitionOperationsWorkItem"];
+        trace?: never;
+    };
+    "/operations/work-items/{workItemId}/assignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Assign a scoped staff member or team */
+        patch: operations["assignOperationsWorkItem"];
+        trace?: never;
+    };
+    "/operations/work-items/{workItemId}/priority": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Override recommended priority with a required reason */
+        patch: operations["prioritizeOperationsWorkItem"];
+        trace?: never;
+    };
+    "/operations/work-items/{workItemId}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add an internal note with scoped mentions */
+        post: operations["addOperationsWorkItemNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request a consequential action requiring a second person */
+        post: operations["createOperationsApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/approvals/{approvalId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Approve or reject with a distinct authorized person */
+        patch: operations["decideOperationsApproval"];
+        trace?: never;
+    };
+    "/operations/integration-failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the admin-visible provider and dead-letter failure queue */
+        get: operations["listOperationsIntegrationFailures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/integration-failures/{failureId}/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Audit and schedule an idempotent manual replay */
+        post: operations["replayOperationsIntegrationFailure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Replay missed authorized real-time effects and provide bounded polling fallback */
+        get: operations["listOperationsStreamEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/saved-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List personal and shared operational views */
+        get: operations["listOperationsSavedViews"];
+        put?: never;
+        /** Persist or replace an operational view */
+        post: operations["createOperationsSavedView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/operations/push-subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register an encrypted staff push token */
+        post: operations["createOperationsPushSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1420,9 +1875,11 @@ export interface components {
             /** Format: int64 */
             apArtistId?: number;
             apDisplayName?: string;
+            apOfficialName?: string | null;
             apSlug?: string | null;
             apBio?: string | null;
             apCity?: string | null;
+            apCountry?: string | null;
             /** Format: uri */
             apHeroImageUrl?: string | null;
             apSpotifyArtistId?: string | null;
@@ -1437,6 +1894,28 @@ export interface components {
             apFeaturedVideoUrl?: string | null;
             apGenres?: string | null;
             apHighlights?: string | null;
+            /** Format: uri */
+            apInstagramUrl?: string | null;
+            /** @description JSON object containing additional official social URLs. */
+            apSocialLinks?: string | null;
+            /** @description JSON array of corroborated relevant releases. */
+            apDiscography?: string | null;
+            apAchievements?: string | null;
+            /** Format: uri */
+            apHeroOriginalUrl?: string | null;
+            /** Format: uri */
+            apHeroSquareUrl?: string | null;
+            /** Format: uri */
+            apHeroLandscapeUrl?: string | null;
+            /** @description JSON responsive AVIF/WebP source set. */
+            apHeroResponsiveUrls?: string | null;
+            apHeroFocalPoint?: string | null;
+            /** Format: date-time */
+            apLastVerifiedAt?: string | null;
+            /** Format: double */
+            apConfidence?: number | null;
+            /** @enum {string} */
+            apReviewStatus?: "unverified" | "pending" | "verified" | "rejected" | "ambiguous";
             /**
              * Format: int64
              * @description Total followers captured in the Fan Hub.
@@ -1444,6 +1923,305 @@ export interface components {
             apFollowerCount?: number;
             /** @description Whether this artist is already assigned to a user account. */
             apHasUserAccount?: boolean;
+        };
+        ArtistEnrichmentRunRequest: {
+            /** @enum {string} */
+            aerrMode: "dry_run" | "production";
+            /** Format: int64 */
+            aerrArtistId?: number | null;
+            aerrResumeRunKey?: string | null;
+            aerrBatchSize?: number | null;
+            aerrStaleDays?: number | null;
+        };
+        ArtistEnrichmentRunUpdate: {
+            /** @enum {string} */
+            aeruStatus?: "running" | "completed" | "failed" | "cancelled" | "blocked";
+            aeruPhase?: string;
+            aeruCheckpoint?: string;
+            aeruCounters?: string;
+            aeruErrorSummary?: string;
+        };
+        ArtistEnrichmentRun: {
+            /** Format: int64 */
+            aerId: number;
+            aerRunKey: string;
+            /** @enum {string} */
+            aerMode: "dry_run" | "production";
+            aerScope: string;
+            /** Format: int64 */
+            aerRequestedArtistId?: number | null;
+            /** @enum {string} */
+            aerStatus: "running" | "completed" | "failed" | "cancelled" | "blocked";
+            aerPhase: string;
+            aerCheckpoint?: string | null;
+            aerCounters?: string | null;
+            aerErrorSummary?: string | null;
+            /** Format: date-time */
+            aerStartedAt: string;
+            /** Format: date-time */
+            aerHeartbeatAt: string;
+            /** Format: date-time */
+            aerFinishedAt?: string | null;
+        };
+        ArtistEnrichmentDecision: {
+            /** @enum {string} */
+            aedDecision: "approve" | "reject";
+            /** @description Edited field value for suggestions; for identity approval, an existing artist party ID or `new` to explicitly create a distinct profile. */
+            aedEditedValue?: string | null;
+            aedNote?: string | null;
+        };
+        ArtistEnrichmentSuggestion: {
+            /** Format: int64 */
+            aesId: number;
+            /** Format: int64 */
+            aesArtistId?: number | null;
+            /** Format: int64 */
+            aesInventoryReferenceId?: number | null;
+            aesArtistName?: string | null;
+            aesFieldName: string;
+            aesCurrentValue?: string | null;
+            aesProposedValue?: string | null;
+            /** Format: double */
+            aesConfidence: number;
+            /** @enum {string} */
+            aesStatus: "pending" | "approved" | "rejected" | "superseded" | "auto_applied";
+            aesAutoPublish: boolean;
+            aesEvidence: string;
+            /** Format: date-time */
+            aesCreatedAt: string;
+            /** Format: date-time */
+            aesUpdatedAt: string;
+            /** Format: date-time */
+            aesDecidedAt?: string | null;
+            /** Format: int64 */
+            aesDecidedBy?: number | null;
+            aesDecisionNote?: string | null;
+        };
+        ArtistEnrichmentSuggestionCreate: {
+            /** Format: int64 */
+            aescArtistId?: number | null;
+            /** Format: int64 */
+            aescInventoryReferenceId?: number | null;
+            aescFieldName: string;
+            aescCurrentValue?: string | null;
+            aescProposedValue?: string | null;
+            /** Format: double */
+            aescConfidence: number;
+            aescAutoPublish?: boolean | null;
+            aescEvidence: string;
+        };
+        ArtistInventoryReference: {
+            /** Format: int64 */
+            airId: number;
+            airSourceType: string;
+            airSourceRecordId: string;
+            airOriginalName: string;
+            airNormalizedName: string;
+            /** Format: int64 */
+            airArtistId?: number | null;
+            /** Format: int64 */
+            airSocialArtistId?: number | null;
+            /** @description JSON array retaining original spellings. */
+            airAliases?: string | null;
+            airEvidence?: string | null;
+            /** Format: double */
+            airConfidence?: number | null;
+            airDisposition: string;
+            /** Format: date-time */
+            airFirstSeenAt: string;
+            /** Format: date-time */
+            airLastSeenAt: string;
+        };
+        ArtistResearchSourceCreate: {
+            /** Format: int64 */
+            arscArtistId?: number | null;
+            /** Format: int64 */
+            arscInventoryReferenceId?: number | null;
+            /** Format: uri */
+            arscSourceUrl: string;
+            arscSourceType: string;
+            /** Format: date-time */
+            arscRetrievedAt?: string | null;
+            /** @description Comma-separated field names supported by this source. */
+            arscSupportedFields: string;
+            arscAttribution?: string | null;
+            arscContentHash?: string | null;
+        };
+        ArtistResearchSource: {
+            /** Format: int64 */
+            arsId: number;
+            /** Format: int64 */
+            arsArtistId?: number | null;
+            /** Format: int64 */
+            arsInventoryReferenceId?: number | null;
+            /** Format: uri */
+            arsSourceUrl: string;
+            arsSourceType: string;
+            /** Format: date-time */
+            arsRetrievedAt: string;
+            arsSupportedFields: string;
+            arsAttribution?: string | null;
+            arsContentHash?: string | null;
+        };
+        ArtistFieldChange: {
+            /** Format: int64 */
+            afcId: number;
+            /** Format: int64 */
+            afcArtistId: number;
+            /** Format: int64 */
+            afcSuggestionId?: number | null;
+            afcFieldName: string;
+            afcPreviousValue?: string | null;
+            afcNewValue?: string | null;
+            afcEvidence: string;
+            /** Format: double */
+            afcConfidence: number;
+            afcActor: string;
+            /** Format: date-time */
+            afcChangedAt: string;
+        };
+        ArtistProfileEnrichment: {
+            /** Format: int64 */
+            apeArtistId: number;
+            apeArtistName: string;
+            apeOfficialName?: string | null;
+            apeCountry?: string | null;
+            /** Format: uri */
+            apeInstagramUrl?: string | null;
+            apeSocialLinks?: string | null;
+            apeDiscography?: string | null;
+            apeAchievements?: string | null;
+            /** Format: uri */
+            apeHeroOriginalUrl?: string | null;
+            /** Format: uri */
+            apeHeroSquareUrl?: string | null;
+            /** Format: uri */
+            apeHeroLandscapeUrl?: string | null;
+            apeHeroResponsiveUrls?: string | null;
+            apeHeroFocalPoint?: string | null;
+            /** Format: date-time */
+            apeLastVerifiedAt?: string | null;
+            /** Format: double */
+            apeConfidence?: number | null;
+            /** @enum {string} */
+            apeReviewStatus: "unverified" | "pending" | "verified" | "rejected" | "ambiguous";
+            apeMissingFields: string[];
+            apeBrokenFields: string[];
+        };
+        ArtistIdentityCandidate: {
+            /** Format: int64 */
+            aicId: number;
+            /** Format: int64 */
+            aicInventoryReferenceId: number;
+            /** Format: int64 */
+            aicArtistId?: number | null;
+            aicProvider: string;
+            aicExternalId?: string | null;
+            /** Format: uri */
+            aicCandidateUrl?: string | null;
+            aicEvidence: string;
+            /** Format: double */
+            aicConfidence: number;
+            /** @enum {string} */
+            aicStatus: "pending" | "approved" | "rejected" | "superseded";
+            /** Format: date-time */
+            aicCreatedAt: string;
+            /** Format: date-time */
+            aicUpdatedAt: string;
+            /** Format: date-time */
+            aicDecidedAt?: string | null;
+            /** Format: int64 */
+            aicDecidedBy?: number | null;
+            aicDecisionNote?: string | null;
+        };
+        ArtistIdentityCandidateCreate: {
+            /** Format: int64 */
+            aiccInventoryReferenceId: number;
+            /** Format: int64 */
+            aiccArtistId?: number | null;
+            aiccProvider: string;
+            aiccExternalId?: string | null;
+            /** Format: uri */
+            aiccCandidateUrl?: string | null;
+            aiccEvidence: string;
+            /** Format: double */
+            aiccConfidence: number;
+        };
+        ArtistMediaAssetCreate: {
+            /** Format: int64 */
+            amacArtistId: number;
+            /** @enum {string} */
+            amacAssetKind: "original" | "square" | "landscape" | "responsive";
+            /** Format: uri */
+            amacSourceUrl: string;
+            amacSourceAttribution: string;
+            /** Format: date-time */
+            amacRetrievedAt?: string | null;
+            amacSourceContentHash: string;
+            amacSourceWidth: number;
+            amacSourceHeight: number;
+            /** @enum {string} */
+            amacSourceMimeType: "image/jpeg" | "image/png" | "image/avif" | "image/webp";
+            /** Format: int64 */
+            amacSourceByteSize: number;
+            amacContentHash: string;
+            amacWidth: number;
+            amacHeight: number;
+            /** @enum {string} */
+            amacMimeType: "image/avif" | "image/webp";
+            /** Format: int64 */
+            amacByteSize: number;
+            /** @enum {string} */
+            amacRightsStatus: "authorized" | "licensed";
+            amacDriveFileId: string;
+            /** Format: uri */
+            amacPublicUrl: string;
+            /** Format: int64 */
+            amacParentAssetId?: number | null;
+            amacFocalPoint?: string | null;
+        };
+        ArtistMediaAsset: {
+            /** Format: int64 */
+            amaId: number;
+            /** Format: int64 */
+            amaArtistId: number;
+            amaAssetKind: string;
+            /** Format: uri */
+            amaSourceUrl: string;
+            amaSourceAttribution: string;
+            /** Format: date-time */
+            amaRetrievedAt: string;
+            amaSourceContentHash: string;
+            amaSourceWidth: number;
+            amaSourceHeight: number;
+            amaSourceMimeType: string;
+            /** Format: int64 */
+            amaSourceByteSize: number;
+            amaContentHash: string;
+            amaWidth: number;
+            amaHeight: number;
+            amaMimeType: string;
+            /** Format: int64 */
+            amaByteSize: number;
+            amaRightsStatus: string;
+            amaDriveFileId: string;
+            /** Format: uri */
+            amaPublicUrl: string;
+            /** Format: int64 */
+            amaParentAssetId?: number | null;
+            amaFocalPoint?: string | null;
+            /** Format: date-time */
+            amaCreatedAt: string;
+        };
+        ArtistEnrichmentOverview: {
+            aeoProfiles: components["schemas"]["ArtistProfileEnrichment"][];
+            aeoInventory: components["schemas"]["ArtistInventoryReference"][];
+            aeoSources: components["schemas"]["ArtistResearchSource"][];
+            aeoSuggestions: components["schemas"]["ArtistEnrichmentSuggestion"][];
+            aeoChanges: components["schemas"]["ArtistFieldChange"][];
+            aeoRuns: components["schemas"]["ArtistEnrichmentRun"][];
+            aeoIdentityCandidates: components["schemas"]["ArtistIdentityCandidate"][];
+            aeoMedia: components["schemas"]["ArtistMediaAsset"][];
         };
         ArtistProfileUpsert: {
             /** Format: int64 */
@@ -1673,11 +2451,368 @@ export interface components {
             pinned: boolean;
             pinOrder?: number | null;
         };
+        /** @enum {string} */
+        OperationsStatus: "new" | "seen" | "assigned" | "in_progress" | "waiting" | "resolved" | "archived";
+        /** @enum {string} */
+        OperationsPriority: "urgent" | "high" | "normal" | "low";
+        /** @enum {string} */
+        OperationsSlaState: "on_track" | "at_risk" | "due" | "breached" | "paused";
+        OperationsWorkItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            branchId?: string | null;
+            sourceSystem: string;
+            sourceChannel: string;
+            entityType: string;
+            entityId?: string | null;
+            uncorrelated: boolean;
+            correlationKey: string;
+            titleEs: string;
+            titleEn: string;
+            descriptionEs: string;
+            descriptionEn: string;
+            status: components["schemas"]["OperationsStatus"];
+            priority: components["schemas"]["OperationsPriority"];
+            recommendedPriority: components["schemas"]["OperationsPriority"];
+            /** @enum {string} */
+            severity: "critical" | "error" | "warning" | "info";
+            seen: boolean;
+            /** Format: int64 */
+            firstSeenBy?: number | null;
+            /** Format: date-time */
+            firstSeenAt?: string | null;
+            /** Format: int64 */
+            assigneePartyId?: number | null;
+            responsibleTeam?: string | null;
+            /** Format: int64 */
+            customerPartyId?: number | null;
+            serviceKey?: string | null;
+            /** Format: int64 */
+            amountMinor?: number | null;
+            currency?: string | null;
+            paymentState?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            dueAt?: string | null;
+            /** Format: date-time */
+            snoozedUntil?: string | null;
+            waitingReason?: string | null;
+            waitingExternalDependency: boolean;
+            /** Format: date-time */
+            resumeAt?: string | null;
+            /** Format: date-time */
+            resolvedAt?: string | null;
+            /** Format: date-time */
+            archivedAt?: string | null;
+            slaState: components["schemas"]["OperationsSlaState"];
+            /** Format: int64 */
+            version: number;
+            metadata: {
+                [key: string]: unknown;
+            };
+        };
+        OperationsWorkItemPage: {
+            items: components["schemas"]["OperationsWorkItem"][];
+            nextCursor?: string | null;
+            hasMore: boolean;
+        };
+        OperationsWorkItemEvent: {
+            /** Format: int64 */
+            id: number;
+            eventType: string;
+            /** Format: int64 */
+            actorPartyId?: number | null;
+            actorRole?: string | null;
+            bodyEs: string;
+            bodyEn: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            occurredAt: string;
+        };
+        OperationsNote: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            authorPartyId: number;
+            body: string;
+            mentionedPartyIds: number[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            editedAt?: string | null;
+        };
+        OperationsWorkItemDetail: {
+            workItem: components["schemas"]["OperationsWorkItem"];
+            events: components["schemas"]["OperationsWorkItemEvent"][];
+            notes: components["schemas"]["OperationsNote"][];
+            allowedTransitions: components["schemas"]["OperationsStatus"][];
+            sourceRecordUrl?: string | null;
+            quickActions: string[];
+        };
+        OperationsMetrics: {
+            /** Format: int64 */
+            newRegistrations: number;
+            /** Format: int64 */
+            registrationsRequiringAttention: number;
+            /** Format: int64 */
+            reservationsAwaitingConfirmation: number;
+            /** Format: int64 */
+            todaySessions: number;
+            /** Format: int64 */
+            schedulingConflicts: number;
+            /** Format: int64 */
+            unpaidInvoices: number;
+            /** Format: int64 */
+            overdueInvoices: number;
+            /** Format: int64 */
+            paymentsAwaitingVerification: number;
+            /** Format: int64 */
+            revenueReceivedTodayMinor: number;
+            /** Format: int64 */
+            unassignedWork: number;
+            /** Format: int64 */
+            slaBreaches: number;
+            /** Format: double */
+            averageFirstResponseSeconds?: number | null;
+            /** Format: double */
+            averageResolutionSeconds?: number | null;
+            /** Format: int64 */
+            integrationFailures: number;
+            currency: string;
+            /** Format: date-time */
+            calculatedAt: string;
+        };
+        OperationsVersionedCommand: {
+            /** Format: int64 */
+            expectedVersion: number;
+            reason?: string | null;
+            requestId: string;
+            sourceClient: string;
+        };
+        OperationsTransitionCommand: components["schemas"]["OperationsVersionedCommand"] & {
+            targetStatus: components["schemas"]["OperationsStatus"];
+            waitingExternalDependency?: boolean | null;
+            /** Format: date-time */
+            resumeAt?: string | null;
+        };
+        OperationsAssignmentCommand: components["schemas"]["OperationsVersionedCommand"] & {
+            /** Format: int64 */
+            assigneePartyId?: number | null;
+            responsibleTeam?: string | null;
+        };
+        OperationsPriorityCommand: {
+            /** Format: int64 */
+            expectedVersion: number;
+            priority: components["schemas"]["OperationsPriority"];
+            reason: string;
+            requestId: string;
+            sourceClient: string;
+        };
+        OperationsNoteCreate: {
+            body: string;
+            mentionedPartyIds: number[];
+            requestId: string;
+            sourceClient: string;
+        };
+        OperationsManualWorkItemCreate: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            branchId?: string | null;
+            entityType: string;
+            entityId?: string | null;
+            uncorrelated: boolean;
+            correlationKey: string;
+            titleEs: string;
+            titleEn: string;
+            descriptionEs: string;
+            descriptionEn: string;
+            priority: components["schemas"]["OperationsPriority"];
+            responsibleTeam?: string | null;
+            /** Format: int64 */
+            customerPartyId?: number | null;
+            serviceKey?: string | null;
+            /** Format: int64 */
+            amountMinor?: number | null;
+            currency?: string | null;
+            metadata: {
+                [key: string]: unknown;
+            };
+            requestId: string;
+            sourceClient: string;
+        };
+        OperationsApprovalCreate: {
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            branchId?: string | null;
+            /** Format: uuid */
+            workItemId?: string | null;
+            actionType: string;
+            targetEntityType: string;
+            targetEntityId: string;
+            /** Format: int64 */
+            amountMinor?: number | null;
+            currency?: string | null;
+            reason: string;
+            idempotencyKey: string;
+            /** Format: date-time */
+            expiresAt?: string | null;
+            requestId: string;
+            sourceClient: string;
+        };
+        OperationsApprovalDecision: {
+            /** @enum {string} */
+            decision: "approved" | "rejected";
+            reason: string;
+            /** @enum {string} */
+            expectedDecision: "pending";
+            requestId: string;
+            sourceClient: string;
+        };
+        OperationsApproval: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            branchId?: string | null;
+            /** Format: uuid */
+            workItemId?: string | null;
+            actionType: string;
+            targetEntityType: string;
+            targetEntityId: string;
+            /** Format: int64 */
+            amountMinor?: number | null;
+            currency?: string | null;
+            /** Format: int64 */
+            requesterPartyId: number;
+            requesterRole: string;
+            requestReason: string;
+            /** Format: date-time */
+            requestedAt: string;
+            /** Format: int64 */
+            approverPartyId?: number | null;
+            approverRole?: string | null;
+            decision: string;
+            decisionReason?: string | null;
+            /** Format: date-time */
+            decidedAt?: string | null;
+            /** Format: date-time */
+            expiresAt?: string | null;
+            executionStatus: string;
+        };
+        OperationsIntegrationFailure: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: uuid */
+            branchId?: string | null;
+            provider: string;
+            direction: string;
+            sourceRecordType: string;
+            sourceRecordId: string;
+            failureCode: string;
+            redactedSummary: string;
+            retryable: boolean;
+            status: string;
+            attemptCount: number;
+            /** Format: date-time */
+            lastAttemptAt?: string | null;
+            /** Format: date-time */
+            nextAttemptAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        OperationsReplayCommand: {
+            reason: string;
+            requestId: string;
+            sourceClient: string;
+        };
+        OperationsStreamEvent: {
+            /** Format: int64 */
+            id: number;
+            eventType: string;
+            /** Format: uuid */
+            workItemId?: string | null;
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            createdAt: string;
+        };
+        OperationsStreamBatch: {
+            events: components["schemas"]["OperationsStreamEvent"][];
+            /** Format: int64 */
+            lastEventId?: number | null;
+            retryAfterMs: number;
+        };
+        OperationsSavedView: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            /** Format: int64 */
+            ownerPartyId?: number | null;
+            name: string;
+            shared: boolean;
+            filters: {
+                [key: string]: unknown;
+            };
+            columns: string[];
+            widgets: string[];
+            subscribedEventTypes: string[];
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        OperationsSavedViewCreate: {
+            /** Format: uuid */
+            organizationId: string;
+            name: string;
+            shared: boolean;
+            filters: {
+                [key: string]: unknown;
+            };
+            columns: string[];
+            widgets: string[];
+            subscribedEventTypes: string[];
+            requestId: string;
+            sourceClient: string;
+        };
+        OperationsPushSubscriptionCreate: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            platform: "ios" | "android" | "web";
+            deviceToken: string;
+            requestId: string;
+            sourceClient: string;
+        };
+        OperationsPushSubscription: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            platform: string;
+            active: boolean;
+            /** Format: date-time */
+            updatedAt: string;
+        };
     };
     responses: never;
     parameters: {
         AccessRequestId: number;
         FeatureId: string;
+        OperationsWorkItemId: string;
     };
     requestBodies: never;
     headers: never;
@@ -2490,6 +3625,313 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    getArtistEnrichmentOverview: {
+        parameters: {
+            query?: {
+                status?: string;
+                artistId?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete enrichment overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistEnrichmentOverview"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict Admin role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listArtistEnrichmentRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistEnrichmentRun"][];
+                };
+            };
+        };
+    };
+    runArtistEnrichment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistEnrichmentRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Run result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistEnrichmentRun"];
+                };
+            };
+        };
+    };
+    updateArtistEnrichmentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistEnrichmentRunUpdate"];
+            };
+        };
+        responses: {
+            /** @description Durable updated run state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistEnrichmentRun"];
+                };
+            };
+        };
+    };
+    rerunArtistEnrichment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artistId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistEnrichmentRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Artist-scoped run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistEnrichmentRun"];
+                };
+            };
+        };
+    };
+    decideArtistEnrichmentSuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistEnrichmentDecision"];
+            };
+        };
+        responses: {
+            /** @description Idempotent decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistEnrichmentSuggestion"];
+                };
+            };
+        };
+    };
+    createArtistResearchSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistResearchSourceCreate"];
+            };
+        };
+        responses: {
+            /** @description Idempotent provenance record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistResearchSource"];
+                };
+            };
+        };
+    };
+    createArtistEnrichmentSuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistEnrichmentSuggestionCreate"];
+            };
+        };
+        responses: {
+            /** @description Created or existing suggestion */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistEnrichmentSuggestion"];
+                };
+            };
+        };
+    };
+    createArtistMediaAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistMediaAssetCreate"];
+            };
+        };
+        responses: {
+            /** @description Created or existing media asset */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistMediaAsset"];
+                };
+            };
+        };
+    };
+    decideArtistEnrichmentSuggestionSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artistId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistEnrichmentDecision"];
+            };
+        };
+        responses: {
+            /** @description Updated suggestion set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistEnrichmentSuggestion"][];
+                };
+            };
+        };
+    };
+    createArtistIdentityCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistIdentityCandidateCreate"];
+            };
+        };
+        responses: {
+            /** @description Candidate queued for review or automatic approval */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistIdentityCandidate"];
+                };
+            };
+        };
+    };
+    decideArtistIdentityCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidateId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtistEnrichmentDecision"];
+            };
+        };
+        responses: {
+            /** @description Updated candidate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistIdentityCandidate"];
+                };
             };
         };
     };
@@ -3544,6 +4986,509 @@ export interface operations {
             };
             /** @description Unknown, concealed, or non-recent feature */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getOperationsMetrics: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                branchId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized operational metrics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsMetrics"];
+                };
+            };
+            /** @description No enabled operations scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listOperationsWorkItems: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                q?: string;
+                seen?: boolean;
+                entityType?: string;
+                status?: components["schemas"]["OperationsStatus"];
+                priority?: components["schemas"]["OperationsPriority"];
+                slaState?: components["schemas"]["OperationsSlaState"];
+                assigneePartyId?: number;
+                customerPartyId?: number;
+                service?: string;
+                from?: string;
+                to?: string;
+                minAmountMinor?: number;
+                maxAmountMinor?: number;
+                paymentState?: string;
+                organizationId?: string;
+                branchId?: string;
+                sourceChannel?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scope-filtered page; restricted fields and records are omitted server-side */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWorkItemPage"];
+                };
+            };
+        };
+    };
+    createOperationsWorkItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsManualWorkItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Durable work item */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWorkItem"];
+                };
+            };
+            /** @description Correlation or entity-reference invariant failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getOperationsWorkItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemId: components["parameters"]["OperationsWorkItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Work item, immutable domain history, notes, and authorized actions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWorkItemDetail"];
+                };
+            };
+            /** @description Missing or concealed work item */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    markOperationsWorkItemSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemId: components["parameters"]["OperationsWorkItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsVersionedCommand"];
+            };
+        };
+        responses: {
+            /** @description Updated work item */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWorkItem"];
+                };
+            };
+            /** @description Optimistic-concurrency conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    transitionOperationsWorkItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemId: components["parameters"]["OperationsWorkItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsTransitionCommand"];
+            };
+        };
+        responses: {
+            /** @description Updated work item */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWorkItem"];
+                };
+            };
+            /** @description Optimistic-concurrency conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description State-machine guard rejected the transition */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    assignOperationsWorkItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemId: components["parameters"]["OperationsWorkItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsAssignmentCommand"];
+            };
+        };
+        responses: {
+            /** @description Updated work item */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWorkItem"];
+                };
+            };
+            /** @description Assignee is outside the organization and branch scope */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    prioritizeOperationsWorkItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemId: components["parameters"]["OperationsWorkItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsPriorityCommand"];
+            };
+        };
+        responses: {
+            /** @description Updated work item */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsWorkItem"];
+                };
+            };
+            /** @description Manager permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    addOperationsWorkItemNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workItemId: components["parameters"]["OperationsWorkItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsNoteCreate"];
+            };
+        };
+        responses: {
+            /** @description Created note */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsNote"];
+                };
+            };
+        };
+    };
+    createOperationsApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsApprovalCreate"];
+            };
+        };
+        responses: {
+            /** @description Pending approval */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsApproval"];
+                };
+            };
+        };
+    };
+    decideOperationsApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                approvalId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsApprovalDecision"];
+            };
+        };
+        responses: {
+            /** @description Decided approval */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsApproval"];
+                };
+            };
+            /** @description Changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listOperationsIntegrationFailures: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                status?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redacted failure summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsIntegrationFailure"][];
+                };
+            };
+        };
+    };
+    replayOperationsIntegrationFailure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                failureId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsReplayCommand"];
+            };
+        };
+        responses: {
+            /** @description Replay scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsIntegrationFailure"];
+                };
+            };
+        };
+    };
+    listOperationsStreamEvents: {
+        parameters: {
+            query?: {
+                afterId?: number;
+                limit?: number;
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered resumable event batch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsStreamBatch"];
+                };
+            };
+        };
+    };
+    listOperationsSavedViews: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized saved views */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsSavedView"][];
+                };
+            };
+        };
+    };
+    createOperationsSavedView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsSavedViewCreate"];
+            };
+        };
+        responses: {
+            /** @description Saved view */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsSavedView"];
+                };
+            };
+        };
+    };
+    createOperationsPushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationsPushSubscriptionCreate"];
+            };
+        };
+        responses: {
+            /** @description Push subscription metadata */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsPushSubscription"];
+                };
+            };
+            /** @description Token encryption key is not configured */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

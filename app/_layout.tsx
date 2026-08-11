@@ -32,6 +32,7 @@ function RootNavigator() {
         <Stack.Screen name="auth" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="about" />
+        <Stack.Screen name="operations" />
         <Stack.Screen name="input-list/[id]" />
       </Stack>
     </MobileRouteGuard>

@@ -8,6 +8,7 @@ import { OptionalStripeProvider } from '../lib/nativeStripe';
 import { queryClient } from '../lib/queryClient';
 import { AuthProvider } from './AuthProvider';
 import { FirstRunProvider } from './FirstRunProvider';
+import { NetworkProvider } from './NetworkProvider';
 import { UserSettingsProvider } from './UserSettingsProvider';
 import { AppThemeProvider } from '../theme/ThemeProvider';
 
@@ -34,7 +35,9 @@ export function AppProviders({ children }: PropsWithChildren) {
                       single-feature-onboarding-v1 and persists install/signup seen flags. */}
                   <FirstRunProvider>
                     {/* ExperimentProvider sits inside Analytics so assignment events have a destination. */}
-                    <ExperimentProvider>{children}</ExperimentProvider>
+                    <ExperimentProvider>
+                      <NetworkProvider>{children}</NetworkProvider>
+                    </ExperimentProvider>
                   </FirstRunProvider>
                 </UserSettingsProvider>
               </AnalyticsProvider>

@@ -1,13 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator,
-  SafeAreaView
+  SafeAreaView, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { usePreventRemove, useNavigation } from '@react-navigation/native';
 
 import { Artists } from '../src/api/artists';
 import { normalizeRouteParam } from '../src/lib/routeParams';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 
 const GENRE_OPTIONS = [
   'Rock', 'Pop', 'Hip-Hop', 'Jazz', 'Blues', 'Classical',
@@ -19,6 +21,7 @@ export default function EditArtistProfileScreen() {
   const { artistId: rawArtistId } = useLocalSearchParams<{ artistId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const analytics = useAnalytics();
   const artistId = normalizeRouteParam(rawArtistId);
 
   const [name, setName] = useState('');
@@ -28,6 +31,26 @@ export default function EditArtistProfileScreen() {
   const [instagramHandle, setInstagramHandle] = useState('');
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [showGenreSelect, setShowGenreSelect] = useState(false);
+
+  const nameRef = useRef<TextInput>(null);
+  const bioRef = useRef<TextInput>(null);
+  const imageUrlRef = useRef<TextInput>(null);
+  const instagramRef = useRef<TextInput>(null);
+  const spotifyRef = useRef<TextInput>(null);
+
+  const navigation = useNavigation();
+  const [isDirty, setIsDirty] = useState(false);
+
+  usePreventRemove(isDirty, ({ data }) => {
+    Alert.alert(
+      'Cambios sin guardar',
+      '¿Quieres descartar los cambios?',
+      [
+        { text: 'Cancelar', style: 'cancel', onPress: () => {} },
+        { text: 'Descartar', style: 'destructive', onPress: () => navigation.dispatch(data.action) },
+      ],
+    );
+  });
 
   const artistQuery = useQuery({
     queryKey: ['artist', artistId],
@@ -41,7 +64,9 @@ export default function EditArtistProfileScreen() {
       return Artists.update(artistId, body);
     },
     onSuccess: () => {
+      setIsDirty(false);
       qc.invalidateQueries({ queryKey: ['artist', artistId] });
+      analytics.capture('artist_profile_saved', { platform: 'mobile', action: 'update' });
       Alert.alert('Listo', 'Perfil actualizado');
       router.back();
     },
@@ -67,6 +92,7 @@ export default function EditArtistProfileScreen() {
         ? prev.filter(g => g !== genre)
         : [...prev, genre]
     );
+    setIsDirty(true);
   }, []);
 
   const handleUpdateProfile = useCallback(async () => {
@@ -123,49 +149,61 @@ export default function EditArtistProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text accessibilityRole="header" style={styles.title}>Editar perfil de artista</Text>
 
         <View style={styles.field}>
           <Text style={styles.label}>Nombre artístico *</Text>
           <TextInput
+            ref={nameRef}
             placeholder="Tu nombre artístico"
             accessibilityLabel="Nombre artístico, obligatorio"
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => { setName(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
             autoCapitalize="words"
             returnKeyType="next"
+            onSubmitEditing={() => bioRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Biografía</Text>
           <TextInput
+            ref={bioRef}
             placeholder="Cuéntanos sobre ti..."
             accessibilityLabel="Biografía"
             value={bio}
-            onChangeText={setBio}
+            onChangeText={(text) => { setBio(text); setIsDirty(true); }}
             style={[styles.input, styles.bioInput]}
             placeholderTextColor="#999"
             multiline
             numberOfLines={4}
+            returnKeyType="next"
+            onSubmitEditing={() => imageUrlRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Image URL</Text>
           <TextInput
+            ref={imageUrlRef}
             placeholder="https://..."
             accessibilityLabel="URL de imagen"
             value={imageUrl}
-            onChangeText={setImageUrl}
+            onChangeText={(text) => { setImageUrl(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
             keyboardType="url"
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="next"
+            onSubmitEditing={() => instagramRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
@@ -222,29 +260,35 @@ export default function EditArtistProfileScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Usuario de Instagram</Text>
           <TextInput
+            ref={instagramRef}
             placeholder="@username"
             accessibilityLabel="Usuario de Instagram"
             value={instagramHandle}
-            onChangeText={setInstagramHandle}
+            onChangeText={(text) => { setInstagramHandle(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="next"
+            onSubmitEditing={() => spotifyRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Spotify URL</Text>
           <TextInput
+            ref={spotifyRef}
             placeholder="https://open.spotify.com/artist/..."
             accessibilityLabel="URL de Spotify"
             value={spotifyUrl}
-            onChangeText={setSpotifyUrl}
+            onChangeText={(text) => { setSpotifyUrl(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
             keyboardType="url"
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="done"
           />
         </View>
 
@@ -262,6 +306,7 @@ export default function EditArtistProfileScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

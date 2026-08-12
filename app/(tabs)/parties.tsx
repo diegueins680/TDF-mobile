@@ -2,13 +2,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listParties, createParty } from '../../src/api/parties';
 import type { Party } from '../../src/types';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, TextInput, View, Text, Button, StyleSheet } from 'react-native';
+import { FlatList, TextInput, View, Text, Button, StyleSheet, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useAppTheme } from '../../src/theme/ThemeProvider';
 
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import { useAuth } from '../../src/providers/AuthProvider';
 
 export default function Parties() {
+  const { colors } = useAppTheme();
   const qc = useQueryClient();
   const router = useRouter();
   const { token, loading } = useAuth();
@@ -24,7 +26,17 @@ export default function Parties() {
     enabled: canUseParties
   });
 
+  const [refreshing, setRefreshing] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const mCreate = useMutation({
     mutationFn: (body: Partial<Party>) => createParty(body),
@@ -42,20 +54,20 @@ export default function Parties() {
   const canCreate = canUseParties && newName.trim().length > 0 && !mCreate.isPending;
 
   const renderItem = useCallback(({ item }: { item: Party }) => (
-    <View style={styles.card}>
-      <Text style={styles.title}>{item.name}</Text>
-      {!!item.instagram && <Text>@{item.instagram}</Text>}
-      {!!item.phone && <Text>{item.phone}</Text>}
+    <View style={[styles.card, { borderColor: colors.borderSubtle }]}>
+      <Text style={[styles.title, { color: colors.textPrimary }]}>{item.name}</Text>
+      {!!item.instagram && <Text style={{ color: colors.textSecondary }}>@{item.instagram}</Text>}
+      {!!item.phone && <Text style={{ color: colors.textSecondary }}>{item.phone}</Text>}
     </View>
-  ), []);
+  ), [colors]);
 
   const keyExtractor = useCallback((item: Party) => String(item.id), []);
 
   const renderEmpty = useCallback(() => (
     <View style={styles.empty}>
-      <Text>{hasToken ? 'Aún no tienes clientes' : 'Acceso restringido para cargar clientes.'}</Text>
+      <Text style={{ color: colors.textSecondary }}>{hasToken ? 'Aún no tienes clientes' : 'Acceso restringido para cargar clientes.'}</Text>
     </View>
-  ), [hasToken]);
+  ), [hasToken, colors]);
 
   const errorText = useMemo(() => {
     if (!hasToken) return 'Acceso restringido para cargar clientes.';
@@ -66,8 +78,8 @@ export default function Parties() {
   const renderError = useCallback(() => {
     if (!isError) return null;
     return (
-      <View style={styles.errorBox}>
-        <Text style={styles.errorText}>{errorText}</Text>
+      <View style={[styles.errorBox, { borderColor: colors.dangerBorder, backgroundColor: colors.dangerSurface }]}>
+        <Text style={[styles.errorText, { color: colors.danger }]}>{errorText}</Text>
         <View style={styles.row}>
           {hasToken && (
             <Button title={isFetching ? 'Reintentando…' : 'Reintentar'} onPress={() => refetch()} disabled={isFetching} />
@@ -75,15 +87,15 @@ export default function Parties() {
         </View>
       </View>
     );
-  }, [errorText, hasToken, isError, isFetching, refetch]);
+  }, [errorText, hasToken, isError, isFetching, refetch, colors]);
 
   return (
     <View style={styles.wrap} testID="partiesScreen">
-      {loading && <Text>Cargando sesión…</Text>}
+      {loading && <Text style={{ color: colors.textSecondary }}>Cargando sesión…</Text>}
       {!loading && !hasToken && (
-        <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>Acceso restringido para cargar y crear clientes.</Text>
-          <Text style={styles.noticeBody}>Inicia sesión para cargar y crear clientes.</Text>
+        <View style={[styles.notice, { backgroundColor: colors.infoSurface, borderColor: colors.infoBorder }]}>
+          <Text style={[styles.noticeTitle, { color: colors.textPrimary }]}>Acceso restringido para cargar y crear clientes.</Text>
+          <Text style={[styles.noticeBody, { color: colors.textSecondary }]}>Inicia sesión para cargar y crear clientes.</Text>
           <View style={styles.row}>
             <Button title="Abrir login" onPress={() => router.push('/auth')} />
           </View>
@@ -93,7 +105,7 @@ export default function Parties() {
         placeholder="Buscar nombre o Instagram…"
         value={q}
         onChangeText={setQ}
-        style={styles.input}
+        style={[styles.input, { borderColor: colors.border, color: colors.textPrimary }]}
         autoCapitalize="none"
         autoCorrect={false}
         clearButtonMode="while-editing"
@@ -104,7 +116,7 @@ export default function Parties() {
           placeholder="Nombre del nuevo cliente…"
           value={newName}
           onChangeText={setNewName}
-          style={[styles.input, { flex: 1 }]}
+          style={[styles.input, { flex: 1, borderColor: colors.border, color: colors.textPrimary }]}
           accessibilityLabel="Nombre del nuevo cliente"
         />
         <Button
@@ -115,10 +127,10 @@ export default function Parties() {
         />
       </View>
 
-      {canUseParties && isLoading && <Text>Cargando…</Text>}
+      {canUseParties && isLoading && <Text style={{ color: colors.textSecondary }}>Cargando…</Text>}
       {createError && (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{createError}</Text>
+        <View style={[styles.errorBox, { borderColor: colors.dangerBorder, backgroundColor: colors.dangerSurface }]}>
+          <Text style={[styles.errorText, { color: colors.danger }]}>{createError}</Text>
         </View>
       )}
       {renderError()}
@@ -133,6 +145,9 @@ export default function Parties() {
         initialNumToRender={12}
         windowSize={8}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.actionPrimary} colors={[colors.actionPrimary]} />
+        }
       />
     </View>
   );
@@ -140,23 +155,21 @@ export default function Parties() {
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, padding: 12, gap: 8 },
-  input: { borderWidth: 1, borderColor: '#CCC', borderRadius: 8, padding: 10 },
+  input: { borderWidth: 1, borderRadius: 8, padding: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  card: { padding: 12, borderWidth: 1, borderColor: '#EEE', borderRadius: 8, marginTop: 8 },
+  card: { padding: 12, borderWidth: 1, borderRadius: 8, marginTop: 8 },
   title: { fontSize: 16, fontWeight: '600' },
   empty: { padding: 20, alignItems: 'center' },
   list: { paddingBottom: 24 },
-  notice: { padding: 12, borderRadius: 8, backgroundColor: '#eef2ff', borderWidth: 1, borderColor: '#c7d2fe' },
-  noticeTitle: { fontWeight: '700', color: '#0f172a', marginBottom: 4 },
-  noticeBody: { color: '#1e293b', marginBottom: 8 },
+  notice: { padding: 12, borderRadius: 8, borderWidth: 1 },
+  noticeTitle: { fontWeight: '700', marginBottom: 4 },
+  noticeBody: { marginBottom: 8 },
   errorBox: {
     marginTop: 8,
     padding: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#fecdd3',
-    backgroundColor: '#fff1f2',
     gap: 8
   },
-  errorText: { color: '#b91c1c' }
+  errorText: { fontSize: 14 }
 });

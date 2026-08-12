@@ -19,7 +19,8 @@ let currentToken: string | undefined = normalizeAuthToken(process.env.EXPO_PUBLI
 
 export const http = axios.create({
   baseURL: API_BASE,
-  headers: { 'Content-Type': 'application/json' }
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 30_000,
 });
 
 const applyAuthHeader = (token?: string) => {
@@ -58,6 +59,13 @@ const withApiErrorMessage = (error: Error, message: string): Error => {
 export function normalizeApiError(error: unknown): Error {
   if (!axios.isAxiosError(error)) {
     return error instanceof Error ? error : new Error('Ocurrió un error inesperado.');
+  }
+
+  if (error.code === 'ECONNABORTED') {
+    return withApiErrorMessage(
+      error,
+      'La solicitud tardó demasiado. Verifica tu conexión e inténtalo de nuevo.',
+    );
   }
 
   if (!error.response) {

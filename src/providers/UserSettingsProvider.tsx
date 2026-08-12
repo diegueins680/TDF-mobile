@@ -1,8 +1,10 @@
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { normalizePartyId } from '../lib/identity';
+import { setFormatterPreferences } from '../lib/formatters';
 import { getLocalePreferences, updateLocalePreferences } from '../api/preferences';
 import { useOptionalAuth } from './AuthProvider';
+import { setLocale as setI18nLocale } from '../i18n';
 
 const SUPPORTED_LOCALES = ['en', 'es', 'fr', 'de', 'pt'] as const;
 const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'BRL'] as const;
@@ -115,6 +117,8 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
   const applySettings = useCallback((next: UserSettings) => {
     settingsRef.current = next;
     setSettings(next);
+    setFormatterPreferences(next.locale, next.timezone, next.currency);
+    setI18nLocale(next.locale.startsWith('en') ? 'en' : 'es');
   }, []);
 
   useEffect(() => {

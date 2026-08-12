@@ -2,6 +2,7 @@ import React from 'react';
 import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { useAppTheme } from '../theme/ThemeProvider';
 import type { EventLiveBroadcast } from '../types';
 
 type EventLiveBroadcastCardProps = {
@@ -22,37 +23,62 @@ export function EventLiveBroadcastCard({
   onWatch,
   onEnd,
 }: EventLiveBroadcastCardProps) {
+  const { colors } = useAppTheme();
   const isLive = broadcast.status === 'live';
   const canEnd = isLive && !!currentPartyId && broadcast.broadcasterPartyId === currentPartyId;
   const hasPlayback = isExternalPlaybackUrl(broadcast.playbackUrl);
 
   return (
-    <View style={[styles.card, isLive && styles.liveCard]}>
+    <View
+      style={[
+        styles.card,
+        { borderColor: colors.borderSubtle, backgroundColor: colors.surface },
+        isLive && { borderColor: colors.dangerBorder, backgroundColor: colors.dangerSurface },
+      ]}
+    >
       <View style={styles.header}>
-        <View style={styles.statusRow}>
-          <View style={[styles.statusDot, isLive ? styles.liveDot : styles.endedDot]} />
-          <Text style={[styles.statusText, isLive ? styles.liveText : styles.endedText]}>
+        <View
+          style={styles.statusRow}
+          accessibilityLabel={`Estado: ${isLive ? 'En vivo' : 'Finalizado'}, ${broadcast.viewerCount} espectadores`}
+        >
+          <View
+            style={[
+              styles.statusDot,
+              { backgroundColor: isLive ? colors.danger : colors.textSecondary },
+            ]}
+          />
+          <Text
+            maxFontSizeMultiplier={1.5}
+            style={[styles.statusText, { color: isLive ? colors.danger : colors.textSecondary }]}
+          >
             {isLive ? 'En vivo' : 'Finalizado'}
           </Text>
         </View>
-        <View style={styles.viewerBadge}>
-          <MaterialCommunityIcons name="eye-outline" size={14} color="#334155" />
-          <Text style={styles.viewerText}>{broadcast.viewerCount}</Text>
+        <View
+          style={[styles.viewerBadge, { backgroundColor: colors.borderSubtle }]}
+          accessibilityLabel={`${broadcast.viewerCount} espectadores`}
+        >
+          <MaterialCommunityIcons name="eye-outline" size={14} color={colors.textSecondary} />
+          <Text maxFontSizeMultiplier={1.5} style={[styles.viewerText, { color: colors.textSecondary }]}>
+            {broadcast.viewerCount}
+          </Text>
         </View>
       </View>
 
-      <Text style={styles.title}>{broadcast.title}</Text>
-      <Text style={styles.meta}>
+      <Text maxFontSizeMultiplier={1.5} style={[styles.title, { color: colors.textPrimary }]}>{broadcast.title}</Text>
+      <Text maxFontSizeMultiplier={1.5} style={[styles.meta, { color: colors.textSecondary }]}>
         Fanclub de {broadcast.artistName} · {broadcast.broadcasterName}
       </Text>
       {broadcast.description ? (
-        <Text style={styles.description}>{broadcast.description}</Text>
+        <Text maxFontSizeMultiplier={1.5} style={[styles.description, { color: colors.textSecondary }]}>
+          {broadcast.description}
+        </Text>
       ) : null}
 
       <View style={styles.detailRow}>
         <View style={styles.detail}>
-          <Text style={styles.detailLabel}>Inicio</Text>
-          <Text style={styles.detailValue}>
+          <Text maxFontSizeMultiplier={1.5} style={[styles.detailLabel, { color: colors.textSecondary }]}>Inicio</Text>
+          <Text maxFontSizeMultiplier={1.5} style={[styles.detailValue, { color: colors.textPrimary }]}>
             {new Date(broadcast.startedAt).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
@@ -60,8 +86,8 @@ export function EventLiveBroadcastCard({
           </Text>
         </View>
         <View style={styles.detail}>
-          <Text style={styles.detailLabel}>Artista</Text>
-          <Text style={styles.detailValue} numberOfLines={1}>
+          <Text maxFontSizeMultiplier={1.5} style={[styles.detailLabel, { color: colors.textSecondary }]}>Artista</Text>
+          <Text maxFontSizeMultiplier={1.5} style={[styles.detailValue, { color: colors.textPrimary }]} numberOfLines={1}>
             {broadcast.artistName}
           </Text>
         </View>
@@ -69,20 +95,35 @@ export function EventLiveBroadcastCard({
 
       <View style={styles.actions}>
         <TouchableOpacity
-          style={[styles.watchButton, !hasPlayback && styles.disabledButton]}
+          style={[
+            styles.watchButton,
+            { backgroundColor: colors.dangerAction },
+            !hasPlayback && styles.disabledButton,
+          ]}
           onPress={() => onWatch(broadcast)}
           disabled={!hasPlayback}
+          accessibilityRole="button"
+          accessibilityLabel={`Ver transmisión de ${broadcast.title}`}
+          accessibilityState={{ disabled: !hasPlayback }}
         >
-          <MaterialCommunityIcons name="play-circle-outline" size={18} color="#fff" />
-          <Text style={styles.watchButtonText}>Ver</Text>
+          <MaterialCommunityIcons name="play-circle-outline" size={18} color={colors.dangerActionContrast} />
+          <Text maxFontSizeMultiplier={1.5} style={[styles.watchButtonText, { color: colors.dangerActionContrast }]}>Ver</Text>
         </TouchableOpacity>
         {canEnd ? (
           <TouchableOpacity
-            style={[styles.endButton, ending && styles.disabledButton]}
+            style={[
+              styles.endButton,
+              { borderColor: colors.dangerBorder, backgroundColor: colors.surface },
+              ending && styles.disabledButton,
+            ]}
             onPress={() => onEnd(broadcast)}
             disabled={ending}
+            accessibilityRole="button"
+            accessibilityLabel="Terminar transmisión"
           >
-            <Text style={styles.endButtonText}>{ending ? 'Cerrando...' : 'Terminar'}</Text>
+            <Text maxFontSizeMultiplier={1.5} style={[styles.endButtonText, { color: colors.danger }]}>
+              {ending ? 'Cerrando...' : 'Terminar'}
+            </Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -98,15 +139,9 @@ export function openLiveBroadcastPlayback(broadcast: EventLiveBroadcast): void {
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
     borderRadius: 12,
     padding: 14,
     gap: 8,
-    backgroundColor: '#fff',
-  },
-  liveCard: {
-    borderColor: '#fecaca',
-    backgroundColor: '#fff7f7',
   },
   header: {
     flexDirection: 'row',
@@ -124,49 +159,32 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  liveDot: {
-    backgroundColor: '#dc2626',
-  },
-  endedDot: {
-    backgroundColor: '#94a3b8',
-  },
   statusText: {
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
-  },
-  liveText: {
-    color: '#b91c1c',
-  },
-  endedText: {
-    color: '#64748b',
   },
   viewerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     borderRadius: 999,
-    backgroundColor: '#e2e8f0',
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   viewerText: {
-    color: '#334155',
     fontWeight: '800',
     fontSize: 12,
   },
   title: {
-    color: '#0f172a',
     fontSize: 16,
     fontWeight: '800',
   },
   meta: {
-    color: '#475569',
     fontSize: 13,
     fontWeight: '600',
   },
   description: {
-    color: '#64748b',
     lineHeight: 19,
   },
   detailRow: {
@@ -178,13 +196,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   detailLabel: {
-    color: '#94a3b8',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
   detailValue: {
-    color: '#0f172a',
     fontWeight: '700',
     marginTop: 2,
   },
@@ -198,25 +214,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#dc2626',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 9,
+    minHeight: 44,
   },
   watchButtonText: {
-    color: '#fff',
     fontWeight: '800',
   },
   endButton: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#fecaca',
     paddingHorizontal: 12,
     paddingVertical: 9,
-    backgroundColor: '#fff',
+    minHeight: 44,
   },
   endButtonText: {
-    color: '#b91c1c',
     fontWeight: '800',
   },
   disabledButton: {

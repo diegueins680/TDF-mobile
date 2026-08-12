@@ -1,13 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createBooking, listBookings } from '../../src/api/bookings';
 import type { Booking } from '../../src/types';
+import { useAppTheme } from '../../src/theme/ThemeProvider';
 
 export default function Bookings() {
   const qc = useQueryClient();
+  const { colors } = useAppTheme();
+  const [refreshing, setRefreshing] = useState(false);
   const q = useQuery<Booking[]>({ queryKey: ['bookings'], queryFn: listBookings });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await q.refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const m = useMutation({
     mutationFn: createBooking,
@@ -25,13 +37,13 @@ export default function Bookings() {
   }, [m]);
 
   const renderItem = useCallback(({ item }: { item: Booking }) => (
-    <View style={{ backgroundColor: 'white', borderRadius: 8, padding: 12, elevation: 2 }}>
+    <View style={{ backgroundColor: colors.surface, borderRadius: 8, padding: 12, elevation: 2 }} accessibilityRole="summary" accessibilityLabel={`${item.title}, inicio ${item.start}, fin ${item.end}${item.status ? `, estado ${item.status}` : ''}`}>
       <Text style={{ fontWeight: '700' }}>{item.title}</Text>
-      <Text style={{ color: '#475569' }}>{item.start}</Text>
-      <Text style={{ color: '#475569' }}>{item.end}</Text>
-      {item.status ? <Text style={{ color: '#22c55e', marginTop: 4 }}>{item.status}</Text> : null}
+      <Text style={{ color: colors.textSecondary }}>{item.start}</Text>
+      <Text style={{ color: colors.textSecondary }}>{item.end}</Text>
+      {item.status ? <Text style={{ color: colors.success, marginTop: 4 }}>{item.status}</Text> : null}
     </View>
-  ), []);
+  ), [colors]);
 
   const keyExtractor = useCallback((item: Booking, index: number) => (
     `${item.id}-${item.start}-${index}`
@@ -49,7 +61,7 @@ export default function Bookings() {
     const message = q.error instanceof Error ? q.error.message : 'No se pudieron cargar las reservas.';
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, padding: 20 }}>
-        <Text style={{ color: 'red' }}>{message}</Text>
+        <Text style={{ color: colors.danger }} accessibilityLiveRegion="polite">{message}</Text>
       </SafeAreaView>
     );
   }
@@ -57,7 +69,7 @@ export default function Bookings() {
   if (q.isLoading) {
     return (
       <SafeAreaView edges={['top']} style={{ flex: 1, padding: 20 }}>
-        <Text>Cargando reservas…</Text>
+        <Text accessibilityLiveRegion="polite">Cargando reservas…</Text>
       </SafeAreaView>
     );
   }
@@ -66,9 +78,12 @@ export default function Bookings() {
     <SafeAreaView edges={['top']} style={{ flex: 1, padding: 16 }}>
       <TouchableOpacity
         onPress={createQuickSession}
-        style={{ backgroundColor: '#2563eb', padding: 12, borderRadius: 8, marginBottom: 12 }}
+        style={{ backgroundColor: colors.actionPrimary, padding: 12, borderRadius: 8, marginBottom: 12 }}
+        accessibilityRole="button"
+        accessibilityLabel="Crear sesión rápida de 1 hora"
+        accessibilityState={{ busy: m.isPending }}
       >
-        <Text style={{ color: 'white', fontWeight: '700', textAlign: 'center' }}>
+        <Text style={{ color: colors.actionPrimaryContrast, fontWeight: '700', textAlign: 'center' }}>
           Crear sesión rápida
         </Text>
       </TouchableOpacity>
@@ -83,6 +98,9 @@ export default function Bookings() {
         initialNumToRender={12}
         windowSize={8}
         removeClippedSubviews
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.actionPrimary} colors={[colors.actionPrimary]} />
+        }
       />
     </SafeAreaView>
   );

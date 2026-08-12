@@ -9,6 +9,8 @@ import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { FeatureAccessNotice } from '../src/components/FeatureAccessNotice';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
+import { NetworkBanner } from '../src/providers/NetworkProvider';
 import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
 
 function RootNavigator() {
@@ -68,8 +70,14 @@ function MobileRouteGuard({ children }: { children: ReactNode }) {
         feature_id: (locked ?? concealed)?.feature.id ?? 'unknown',
         reason: (locked ?? concealed)?.reason ?? 'unknown',
       });
+    } else if (allowed && features.length > 0) {
+      analytics.capture('feature_navigation_selected', {
+        platform: 'mobile',
+        feature_id: features.map((f) => f.id).join(','),
+        route: routePath.replace(/\d+/g, ':id'),
+      });
     }
-  }, [analytics, concealed, forbidden, locked, routePath, unresolved]);
+  }, [allowed, analytics, concealed, features, forbidden, locked, routePath, unresolved]);
 
   if (technical) return children;
   if (loading && requiresAuthentication) {
@@ -110,7 +118,10 @@ const styles = StyleSheet.create({
 export default function RootLayout() {
   return (
     <AppProviders>
-      <RootNavigator />
+      <ErrorBoundary>
+        <NetworkBanner />
+        <RootNavigator />
+      </ErrorBoundary>
     </AppProviders>
   );
 }

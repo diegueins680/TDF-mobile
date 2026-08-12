@@ -1,14 +1,16 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator,
-  SafeAreaView
+  SafeAreaView, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import { usePreventRemove, useNavigation } from '@react-navigation/native';
 
 import { Artists } from '../src/api/artists';
 import { resolvePartyId } from '../src/lib/identity';
 import { useAuth } from '../src/providers/AuthProvider';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
 const GENRES = [
@@ -20,6 +22,7 @@ export default function CreateArtistProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const { partyId: authPartyId } = useAuth();
+  const analytics = useAnalytics();
   const { partyId: settingsPartyId } = useUserSettings();
 
   const [name, setName] = useState('');
@@ -30,13 +33,35 @@ export default function CreateArtistProfileScreen() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const effectivePartyId = resolvePartyId(authPartyId, settingsPartyId);
 
+  const nameRef = useRef<TextInput>(null);
+  const bioRef = useRef<TextInput>(null);
+  const imageUrlRef = useRef<TextInput>(null);
+  const instagramRef = useRef<TextInput>(null);
+  const spotifyRef = useRef<TextInput>(null);
+
+  const navigation = useNavigation();
+  const [isDirty, setIsDirty] = useState(false);
+
+  usePreventRemove(isDirty, ({ data }) => {
+    Alert.alert(
+      'Cambios sin guardar',
+      '¿Quieres descartar los cambios?',
+      [
+        { text: 'Cancelar', style: 'cancel', onPress: () => {} },
+        { text: 'Descartar', style: 'destructive', onPress: () => navigation.dispatch(data.action) },
+      ],
+    );
+  });
+
   const createMutation = useMutation({
     mutationFn: (body: Parameters<typeof Artists.create>[0]) => Artists.create(body),
     onSuccess: () => {
+      setIsDirty(false);
       qc.invalidateQueries({ queryKey: ['artists'] });
       if (effectivePartyId) {
         qc.invalidateQueries({ queryKey: ['user-artist-profile', effectivePartyId] });
       }
+      analytics.capture('artist_profile_saved', { platform: 'mobile', action: 'create' });
       Alert.alert('Success', 'Artist profile created!');
       router.back();
     },
@@ -49,6 +74,7 @@ export default function CreateArtistProfileScreen() {
     setSelectedGenres(prev =>
       prev.includes(genre) ? prev.filter(g => g !== genre) : [...prev, genre]
     );
+    setIsDirty(true);
   }, []);
 
   const handleCreateProfile = useCallback(async () => {
@@ -74,6 +100,7 @@ export default function CreateArtistProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Create Artist Profile</Text>
         <Text style={styles.identityText}>
@@ -83,35 +110,47 @@ export default function CreateArtistProfileScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Artist Name *</Text>
           <TextInput
+            ref={nameRef}
             placeholder="Your artist name"
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => { setName(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
+            returnKeyType="next"
+            onSubmitEditing={() => bioRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Bio</Text>
           <TextInput
+            ref={bioRef}
             placeholder="Tell us about your music..."
             value={bio}
-            onChangeText={setBio}
+            onChangeText={(text) => { setBio(text); setIsDirty(true); }}
             style={[styles.input, styles.inputMultiline]}
             multiline
             numberOfLines={4}
             placeholderTextColor="#999"
+            returnKeyType="next"
+            onSubmitEditing={() => imageUrlRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Image URL</Text>
           <TextInput
+            ref={imageUrlRef}
             placeholder="https://..."
             value={imageUrl}
-            onChangeText={setImageUrl}
+            onChangeText={(text) => { setImageUrl(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
+            returnKeyType="next"
+            onSubmitEditing={() => instagramRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
@@ -135,23 +174,29 @@ export default function CreateArtistProfileScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Instagram Handle</Text>
           <TextInput
+            ref={instagramRef}
             placeholder="@username"
             value={instagramHandle}
-            onChangeText={setInstagramHandle}
+            onChangeText={(text) => { setInstagramHandle(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
             autoCapitalize="none"
+            returnKeyType="next"
+            onSubmitEditing={() => spotifyRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Spotify URL</Text>
           <TextInput
+            ref={spotifyRef}
             placeholder="https://open.spotify.com/artist/..."
             value={spotifyUrl}
-            onChangeText={setSpotifyUrl}
+            onChangeText={(text) => { setSpotifyUrl(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
+            returnKeyType="done"
           />
         </View>
 
@@ -167,6 +212,7 @@ export default function CreateArtistProfileScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

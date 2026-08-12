@@ -21,6 +21,8 @@ export default function About() {
   const iosBuild = Constants.expoConfig?.ios?.buildNumber;
   const androidVersionCode = Constants.expoConfig?.android?.versionCode;
 
+  const isDev = process.env.NODE_ENV === 'development';
+
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
       <View style={styles.section}>
@@ -29,13 +31,17 @@ export default function About() {
         <Text>
           Build: iOS {iosBuild ?? 'n/a'} / Android {androidVersionCode ?? 'n/a'}
         </Text>
-        <Text>Environment: {appEnvironment}</Text>
-        <Text>API: {API_BASE}</Text>
-        <Text>Uploads: {UPLOAD_BASE ?? 'Not configured'}</Text>
-        <Text>TZ: {DEFAULT_TZ}</Text>
         <Text>Support: {supportEmail}</Text>
-        <Text>Status: {q.isLoading ? '…' : q.data?.status || 'unknown'}</Text>
-        {q.data?.version ? <Text>Version: {q.data.version}</Text> : null}
+        {isDev && (
+          <>
+            <Text>Environment: {appEnvironment}</Text>
+            <Text>API: {API_BASE}</Text>
+            <Text>Uploads: {UPLOAD_BASE ?? 'Not configured'}</Text>
+            <Text>TZ: {DEFAULT_TZ}</Text>
+            <Text>Status: {q.isLoading ? '…' : q.data?.status || 'unknown'}</Text>
+            {q.data?.version ? <Text>Version: {q.data.version}</Text> : null}
+          </>
+        )}
       </View>
       <PublicLinksSection />
     </ScrollView>

@@ -428,16 +428,18 @@ export default function EventsScreen() {
             onDayPress={day => setSelectedDate(day.dateString)}
             markedDates={markedDates}
             theme={{
-              backgroundColor: colors.surface,
+              backgroundColor: colors.canvas,
               calendarBackground: colors.surface,
+              monthTextColor: colors.textPrimary,
+              dayTextColor: colors.textPrimary,
               textSectionTitleColor: colors.textSecondary,
+              todayTextColor: colors.actionPrimary,
               selectedDayBackgroundColor: colors.actionPrimary,
               selectedDayTextColor: colors.actionPrimaryContrast,
-              todayTextColor: colors.actionPrimary,
-              dotColor: colors.actionPrimary,
-              disabledArrowColor: colors.borderSubtle,
-              monthTextColor: colors.textPrimary,
-              textDisabledColor: colors.borderSubtle
+              arrowColor: colors.actionPrimary,
+              textDayFontFamily: undefined,
+              textMonthFontFamily: undefined,
+              textDayHeaderFontFamily: undefined,
             }}
           />
 

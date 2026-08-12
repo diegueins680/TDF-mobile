@@ -10,6 +10,7 @@ import {
 import { Animated, StyleSheet, Text } from 'react-native';
 
 import { useAppTheme } from '../theme/ThemeProvider';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 /* ------------------------------------------------------------------ */
 /*  Context                                                            */
@@ -89,15 +90,16 @@ export function NetworkProvider({ children }: PropsWithChildren) {
 export function NetworkBanner() {
   const { isConnected } = useNetwork();
   const { colors } = useAppTheme();
+  const reduceMotion = useReduceMotion();
   const [opacity] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     Animated.timing(opacity, {
       toValue: isConnected ? 0 : 1,
-      duration: 250,
+      duration: reduceMotion ? 0 : 250,
       useNativeDriver: true,
     }).start();
-  }, [isConnected, opacity]);
+  }, [isConnected, opacity, reduceMotion]);
 
   return (
     <Animated.View

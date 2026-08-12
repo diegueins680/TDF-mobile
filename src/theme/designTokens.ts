@@ -18,7 +18,7 @@ export const palette = {
   surfaceDark: '#12121a',
   text: '#111113',
   textDark: '#f4f4f5',
-  textSecondary: '#6b6b74',
+  textSecondary: '#5a5a63',
   textSecondaryDark: '#a1a1aa',
   divider: 'rgba(0,0,0,0.06)',
   dividerDark: 'rgba(255,255,255,0.06)',

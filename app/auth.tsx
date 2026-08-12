@@ -53,8 +53,11 @@ export default function AuthScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'Fan' | 'Artista' | 'Teacher'>('Fan');
   const lastNameInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
+  const phoneInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const forgotPasswordEmailInputRef = useRef<TextInput>(null);
 
@@ -158,7 +161,8 @@ export default function AuthScreen() {
         lastName: lastName.trim(),
         email: signupEmail.trim().toLowerCase(),
         password,
-        roles: ['Fan'],
+        phone: phone.trim() || undefined,
+        roles: [selectedRole],
       });
       setToken(session.token, session.partyId ?? null, {
         roles: session.roles ?? [],
@@ -374,6 +378,26 @@ export default function AuthScreen() {
                     error={signupEmailError}
                     returnKeyType="next"
                     blurOnSubmit={false}
+                    onSubmitEditing={() => phoneInputRef.current?.focus()}
+                  />
+                  <FormField
+                    ref={phoneInputRef}
+                    label="Teléfono"
+                    optional
+                    value={phone}
+                    onChangeText={(value) => {
+                      setPhone(value);
+                      setErrorMessage(null);
+                    }}
+                    placeholder="+57 300 123 4567"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="tel"
+                    textContentType="telephoneNumber"
+                    keyboardType="phone-pad"
+                    maxLength={30}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
                     onSubmitEditing={() => passwordInputRef.current?.focus()}
                   />
                 </>
@@ -423,6 +447,47 @@ export default function AuthScreen() {
                   }
                 }}
               />
+
+              {mode === 'signup' ? (
+                <View style={styles.roleSelectorContainer}>
+                  <Text style={[styles.label, { color: colors.textPrimary }]}>¿Cómo vas a usar TDF?</Text>
+                  <View style={styles.roleRow}>
+                    {([
+                      { key: 'Fan' as const, label: 'Fan' },
+                      { key: 'Artista' as const, label: 'Artista' },
+                      { key: 'Teacher' as const, label: 'Profesor' },
+                    ]).map(({ key, label }) => (
+                      <TouchableOpacity
+                        key={key}
+                        style={[
+                          styles.roleButton,
+                          {
+                            backgroundColor: selectedRole === key ? colors.actionPrimary : colors.surface,
+                            borderColor: selectedRole === key ? colors.actionPrimary : colors.border,
+                          },
+                        ]}
+                        onPress={() => {
+                          setSelectedRole(key);
+                          setErrorMessage(null);
+                        }}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: selectedRole === key }}
+                      >
+                        <Text
+                          style={[
+                            styles.roleButtonText,
+                            {
+                              color: selectedRole === key ? colors.actionPrimaryContrast : colors.textPrimary,
+                            },
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
 
               {mode === 'login' ? (
                 <TouchableOpacity
@@ -698,5 +763,17 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   divider: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
   forgotPasswordLink: { color: colors.actionPrimary, fontSize: 13, fontWeight: '600' },
-  buttonDisabled: { opacity: 0.5 }
+  buttonDisabled: { opacity: 0.5 },
+  roleSelectorContainer: { gap: 8 },
+  roleRow: { flexDirection: 'row', gap: 8 },
+  roleButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  roleButtonText: { fontSize: 13, fontWeight: '700' },
 });

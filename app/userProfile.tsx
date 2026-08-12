@@ -150,7 +150,14 @@ export default function UserProfileScreen() {
   }, [router]);
 
   const handleUnsaveEvent = useCallback((eventId: ID) => {
-    unsaveMutation.mutate(eventId);
+    Alert.alert(
+      'Quitar evento guardado',
+      '¿Quieres quitar este evento de tus guardados?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Quitar', style: 'destructive', onPress: () => unsaveMutation.mutate(eventId) },
+      ],
+    );
   }, [unsaveMutation]);
 
   const handleSaveIdentity = useCallback(() => {
@@ -169,9 +176,22 @@ export default function UserProfileScreen() {
   }, [draftPartyId, draftName, setIdentity, analytics]);
 
   const handleClearIdentity = useCallback(() => {
-    clearIdentity();
-    setDraftPartyId('');
-    setDraftName('');
+    Alert.alert(
+      'Limpiar identidad',
+      '¿Estás seguro? Se borrará tu Party ID y nombre para mostrar.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Limpiar',
+          style: 'destructive',
+          onPress: () => {
+            clearIdentity();
+            setDraftPartyId('');
+            setDraftName('');
+          },
+        },
+      ],
+    );
   }, [clearIdentity]);
 
   const handleSaveRegion = useCallback(() => {

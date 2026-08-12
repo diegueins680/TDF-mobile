@@ -274,7 +274,18 @@ export default function InventoryScreen() {
       coConditionOut: checkoutForm.coConditionOut?.trim() || undefined,
       coNotes: checkoutForm.coNotes?.trim() || undefined
     };
-    checkoutMutation.mutate({ assetId: toStringId(checkoutAsset.assetId), payload });
+    Alert.alert(
+      'Registrar salida',
+      '¿Confirmar la salida de este equipo?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Confirmar',
+          style: 'destructive',
+          onPress: () => checkoutMutation.mutate({ assetId: toStringId(checkoutAsset.assetId), payload }),
+        },
+      ],
+    );
   }, [canUseInventory, checkoutAsset, checkoutForm, checkoutMutation]);
 
   const submitCheckin = useCallback(() => {

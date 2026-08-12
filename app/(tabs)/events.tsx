@@ -242,8 +242,20 @@ export default function EventsScreen() {
   }, [eventsByDate, selectedDate]);
 
   const handleToggleSaved = useCallback((eventId: string) => {
-    saveToggleMutation.mutate(eventId);
-  }, [saveToggleMutation]);
+    const isCurrentlySaved = savedEventIds.includes(eventId);
+    if (isCurrentlySaved) {
+      Alert.alert(
+        'Quitar evento guardado',
+        '¿Quieres quitar este evento de tus guardados?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Quitar', style: 'destructive', onPress: () => saveToggleMutation.mutate(eventId) },
+        ],
+      );
+    } else {
+      saveToggleMutation.mutate(eventId);
+    }
+  }, [saveToggleMutation, savedEventIds]);
 
   const isCardUpdating = useCallback((eventId: string) => (
     saveToggleMutation.isPending && String(saveToggleMutation.variables) === eventId

@@ -159,7 +159,16 @@ export default function SocialScreen() {
               { backgroundColor: colors.surfaceMuted },
               (!canUseSocial || unfollowMutation.isPending) && styles.buttonDisabled
             ]}
-            onPress={() => unfollowMutation.mutate(targetId)}
+            onPress={() => {
+              Alert.alert(
+                'Dejar de seguir',
+                `¿Dejar de seguir a ${label}?`,
+                [
+                  { text: 'Cancelar', style: 'cancel' },
+                  { text: 'Dejar de seguir', style: 'destructive', onPress: () => unfollowMutation.mutate(targetId) },
+                ],
+              );
+            }}
             disabled={!canUseSocial || unfollowMutation.isPending}
             accessibilityRole="button"
             accessibilityLabel={`Dejar de seguir a ${label}`}

@@ -38,6 +38,7 @@ import {
   presentNativePaymentSheet,
 } from '../src/lib/nativeStripe';
 import { normalizeRouteParam } from '../src/lib/routeParams';
+import { notificationSuccess } from '../src/utils/haptics';
 import {
   clearTicketCheckoutKey,
   getOrCreateTicketCheckoutKey,
@@ -46,6 +47,7 @@ import {
 } from '../src/lib/ticketCheckoutIdempotency';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
+import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
 import type {
   EventTicketOrder,
   EventTicketPaymentIntent,
@@ -428,6 +430,7 @@ export default function TicketCheckoutScreen() {
         quantity: result.quantity,
         free: result.kind === 'zero-total-confirmed',
       });
+      void notificationSuccess();
       setShowOrders(true);
       if (result.kind === 'payment-received') {
         setSubmittedOrderId(result.orderId);
@@ -513,6 +516,7 @@ export default function TicketCheckoutScreen() {
   const hasAccount = Boolean(token?.trim() && partyId);
 
   return (
+    <ScreenErrorBoundary>
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
@@ -938,6 +942,7 @@ export default function TicketCheckoutScreen() {
         ) : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </ScreenErrorBoundary>
   );
 }
 

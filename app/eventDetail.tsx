@@ -56,6 +56,7 @@ import { countGoingRsvps } from '../src/lib/rsvp';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
+import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
 import type {
   EventLiveBroadcast,
   EventLiveBroadcastQuality,
@@ -755,6 +756,7 @@ export default function EventDetailScreen() {
     !hasLivePublisher &&
     !startLiveBroadcastMutation.isPending;
   return (
+    <ScreenErrorBoundary>
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -1366,6 +1368,7 @@ export default function EventDetailScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </ScreenErrorBoundary>
   );
 }
 

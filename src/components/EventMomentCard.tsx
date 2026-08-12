@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'reac
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { countMomentReactions } from '../lib/eventMoments';
+import { impactLight } from '../utils/haptics';
 import { useAppTheme } from '../theme/ThemeProvider';
 import type { EventMoment, EventMomentReactionKind } from '../types';
 
@@ -149,6 +150,7 @@ export function EventMomentCard({
                 reactionDisabled && styles.buttonDisabled,
               ]}
               onPress={async () => {
+                void impactLight();
                 try {
                   await onToggleReaction(moment.id, reaction.kind);
                   onReactionPosted?.();

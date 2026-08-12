@@ -25,6 +25,7 @@ import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
+import { impactLight } from '../../src/utils/haptics';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -103,6 +104,7 @@ export default function EventsScreen() {
     mutationFn: (eventId: string) => toggleSavedEvent(eventId),
     onSuccess: (_data, eventId) => {
       const wasSaved = savedEventIds.includes(eventId);
+      void impactLight();
       analytics.capture('feature_favorite_changed', {
         platform: 'mobile',
         event_id: eventId,

@@ -11,6 +11,7 @@ import { useAuth } from '../../src/providers/AuthProvider';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
+import { impactMedium } from '../../src/utils/haptics';
 
 type TabKey = 'following' | 'followers';
 
@@ -73,6 +74,7 @@ export default function SocialScreen() {
     },
     onSuccess: (_data, targetId) => {
       invalidateAll();
+      void impactMedium();
       analytics.capture('artist_followed', { platform: 'mobile', target_party_id: targetId });
       Alert.alert('Listo', 'Ahora sigues a esta persona.');
     },
@@ -92,6 +94,7 @@ export default function SocialScreen() {
     },
     onSuccess: (_data, targetId) => {
       invalidateAll();
+      void impactMedium();
       analytics.capture('artist_unfollowed', { platform: 'mobile', target_party_id: targetId });
       Alert.alert('Listo', 'Dejaste de seguir a esta persona.');
     },

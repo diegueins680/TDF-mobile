@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -13,6 +13,7 @@ type Props = {
 function ArtistCardComponent({ artist, onPress }: Props) {
   const router = useRouter();
   const { colors } = useAppTheme();
+  const [imageError, setImageError] = useState(false);
 
   const handlePress = () => {
     if (onPress) {
@@ -30,12 +31,18 @@ function ArtistCardComponent({ artist, onPress }: Props) {
       accessibilityLabel={`Ver perfil de ${artist.name}`}
       accessibilityHint="Abre el perfil del artista"
     >
-      {artist.imageUrl && (
+      {artist.imageUrl && !imageError ? (
         <Image
           source={{ uri: artist.imageUrl }}
           style={[styles.image, { backgroundColor: colors.canvas }]}
           accessible={false}
+          onError={() => setImageError(true)}
         />
+      ) : null}
+      {(!artist.imageUrl || imageError) && (
+        <View style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.canvas }]}>
+          <Text style={styles.fallbackIcon}>🎵</Text>
+        </View>
       )}
       
       <View style={styles.content}>
@@ -73,6 +80,13 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: 180
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  fallbackIcon: {
+    fontSize: 40
   },
   content: {
     padding: 12,

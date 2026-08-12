@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -22,6 +22,7 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
   const analytics = useAnalytics();
   const { locale } = useUserSettings();
   const { colors } = useAppTheme();
+  const [imageError, setImageError] = useState(false);
 
   const handlePress = () => {
     if (onPress) {
@@ -48,8 +49,13 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
   return (
     <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <TouchableOpacity onPress={handlePress} accessibilityRole="button" accessibilityLabel={a11yLabel}>
-        {event.imageUrl && (
-          <Image source={{ uri: event.imageUrl }} style={[styles.image, { backgroundColor: colors.canvas }]} />
+        {event.imageUrl && !imageError ? (
+          <Image source={{ uri: event.imageUrl }} style={[styles.image, { backgroundColor: colors.canvas }]} onError={() => setImageError(true)} />
+        ) : null}
+        {(!event.imageUrl || imageError) && (
+          <View style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.canvas }]}>
+            <Text style={styles.fallbackIcon}>📅</Text>
+          </View>
         )}
 
         <View style={styles.content}>
@@ -144,6 +150,13 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: 160
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  fallbackIcon: {
+    fontSize: 40
   },
   content: {
     padding: 12,

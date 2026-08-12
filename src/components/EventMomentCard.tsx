@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -59,6 +59,7 @@ export function EventMomentCard({
   onOpenMedia,
 }: EventMomentCardProps) {
   const { colors } = useAppTheme();
+  const [imageError, setImageError] = useState(false);
   const totalReactions = countMomentReactions(moment);
   const canConnect =
     !!moment.authorPartyId &&
@@ -106,8 +107,16 @@ export function EventMomentCard({
         accessibilityRole={moment.media.kind === 'video' ? 'button' : 'image'}
         accessibilityLabel={`Video de ${moment.authorName}`}
       >
-        {moment.media.kind === 'image' ? (
-          <Image source={{ uri: moment.media.uri }} style={[styles.mediaImage, { backgroundColor: colors.borderSubtle }]} />
+        {moment.media.kind === 'image' && !imageError ? (
+          <Image
+            source={{ uri: moment.media.uri }}
+            style={[styles.mediaImage, { backgroundColor: colors.borderSubtle }]}
+            onError={() => setImageError(true)}
+          />
+        ) : moment.media.kind === 'image' && imageError ? (
+          <View style={[styles.mediaImage, styles.mediaPlaceholder, { backgroundColor: colors.borderSubtle }]}>
+            <Text style={styles.fallbackIcon}>🎵</Text>
+          </View>
         ) : (
           <View style={[styles.videoBox, { backgroundColor: colors.textPrimary }]}>
             <MaterialCommunityIcons name="play-circle-outline" size={40} color={colors.surface} />
@@ -261,6 +270,13 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 220,
     borderRadius: 14,
+  },
+  mediaPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackIcon: {
+    fontSize: 40,
   },
   videoBox: {
     height: 220,

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
-import { Redirect, Stack, type Href, usePathname, useSegments } from 'expo-router';
+import { Redirect, Stack, type Href, usePathname, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import * as Linking from 'expo-linking';
 
 import { AppProviders } from '../src/providers/AppProviders';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
@@ -41,8 +42,29 @@ function RootNavigator() {
   );
 }
 
+function handleDeepLink(url: string, router: ReturnType<typeof useRouter>) {
+  try {
+    const { path, queryParams } = Linking.parse(url);
+    if (!path) return;
+
+    if (path.startsWith('event/')) {
+      const eventId = path.replace('event/', '');
+      router.push(`/eventDetail?eventId=${eventId}`);
+    } else if (path.startsWith('artist/')) {
+      const artistId = path.replace('artist/', '');
+      router.push(`/artistDetail?artistId=${artistId}`);
+    } else if (path === 'stripe-redirect') {
+      router.push('/tickets');
+    }
+    // Add more routes as needed
+  } catch (e) {
+    console.warn('Failed to handle deep link:', url, e);
+  }
+}
+
 function MobileRouteGuard({ children }: { children: ReactNode }) {
   const segments = useSegments();
+  const router = useRouter();
   const analytics = useAnalytics();
   const { token, roles, modules, featureFlags, loading } = useAuth();
   const { locale } = useUserSettings();
@@ -60,6 +82,23 @@ function MobileRouteGuard({ children }: { children: ReactNode }) {
     && features.every((feature) => feature.requiredAuth === 'authenticated');
   const unresolved = features.length === 0;
   const forbidden = !loading && !technical && !unresolved && Boolean(token?.trim()) && !allowed;
+
+  useEffect(() => {
+    const handleInitialUrl = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        handleDeepLink(initialUrl, router);
+      }
+    };
+
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url, router);
+    });
+
+    handleInitialUrl();
+
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     if (unresolved) {

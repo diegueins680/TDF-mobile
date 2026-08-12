@@ -9,6 +9,7 @@ import { useAppTheme } from '../src/theme/ThemeProvider';
 
 import { Artists, type ArtistFollower } from '../src/api/artists';
 import { Events } from '../src/api/events';
+import { ArtistDetailSkeleton } from '../src/components/skeletons/ArtistCardSkeleton';
 import { resolvePartyId } from '../src/lib/identity';
 import { normalizeRouteParam } from '../src/lib/routeParams';
 
@@ -115,12 +116,10 @@ export default function ArtistDetailScreen() {
     );
   }
 
-  if (artistQuery.isLoading) {
+  if (artistQuery.isLoading && !artist) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.canvas }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.actionPrimary} />
-        </View>
+        <ArtistDetailSkeleton />
       </SafeAreaView>
     );
   }

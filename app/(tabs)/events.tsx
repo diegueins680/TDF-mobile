@@ -24,6 +24,7 @@ import { listSavedEventIds, toggleSavedEvent } from '../../src/lib/savedEvents';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
+import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -265,10 +266,11 @@ export default function EventsScreen() {
 
   const listError = eventScope === 'saved' ? savedEventsQuery.isError : isError;
 
-  if (listLoading) {
+  const hasListData = eventScope === 'saved' ? !!savedEventsQuery.data : !!events;
+  if (listLoading && !hasListData) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <ActivityIndicator size="large" color={colors.actionPrimary} />
+        <EventListSkeleton />
       </SafeAreaView>
     );
   }

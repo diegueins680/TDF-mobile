@@ -239,7 +239,7 @@ export default function EventsScreen() {
     });
     marked[selectedDate] = { ...marked[selectedDate], selected: true, selectedColor: colors.actionPrimary };
     return marked;
-  }, [eventsByDate, selectedDate]);
+  }, [colors.actionPrimary, eventsByDate, selectedDate]);
 
   const handleToggleSaved = useCallback((eventId: string) => {
     const isCurrentlySaved = savedEventIds.includes(eventId);

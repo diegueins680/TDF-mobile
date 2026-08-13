@@ -46,7 +46,7 @@ function RootNavigator() {
 
 function handleDeepLink(url: string, router: ReturnType<typeof useRouter>) {
   try {
-    const { path, queryParams } = Linking.parse(url);
+    const { path } = Linking.parse(url);
     if (!path) return;
 
     if (path.startsWith('event/')) {
@@ -100,7 +100,7 @@ function MobileRouteGuard({ children }: { children: ReactNode }) {
     handleInitialUrl();
 
     return () => subscription.remove();
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (unresolved) {

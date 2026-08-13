@@ -3,18 +3,7 @@ import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'reac
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { countMomentReactions } from '../lib/eventMoments';
-import type { EventMoment, EventMomentReactionKind } from '../types';
-
-const REACTION_META: Array<{
-  kind: EventMomentReactionKind;
-  label: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  color: string;
-}> = [
-  { kind: 'fire', label: 'Fire', icon: 'fire', color: '#ea580c' },
-  { kind: 'love', label: 'Love', icon: 'heart', color: '#db2777' },
-  { kind: 'applause', label: 'Clap', icon: 'hand-clap', color: '#2563eb' },
-];
+import type { EventMoment, EventMomentReactionOption } from '../types';
 
 const formatDuration = (durationMs?: number | null): string => {
   if (!durationMs || durationMs <= 0) return 'Video corto';
@@ -30,12 +19,14 @@ type EventMomentCardProps = {
   currentPartyId?: string | null;
   featured?: boolean;
   reactionDisabled?: boolean;
+  reactionOptions: readonly EventMomentReactionOption[];
+  reactionUnavailableLabel: string;
   commentDisabled?: boolean;
   connectDisabled?: boolean;
   commentDraft: string;
   onChangeComment: (momentId: string, value: string) => void;
   onSubmitComment: (momentId: string) => void;
-  onToggleReaction: (momentId: string, reaction: EventMomentReactionKind) => void;
+  onToggleReaction: (momentId: string, reaction: EventMomentReactionOption) => void;
   onReactionPosted?: () => void;
   onConnectAuthor?: (partyId: string) => void;
   onOpenMedia?: (uri: string) => void;
@@ -47,6 +38,8 @@ export function EventMomentCard({
   currentPartyId,
   featured = false,
   reactionDisabled = false,
+  reactionOptions,
+  reactionUnavailableLabel,
   commentDisabled = false,
   connectDisabled = false,
   commentDraft,
@@ -111,20 +104,21 @@ export function EventMomentCard({
       {moment.caption ? <Text style={styles.caption}>{moment.caption}</Text> : null}
 
       <View style={styles.reactionRow}>
-        {REACTION_META.map((reaction) => {
-          const count = moment.reactions[reaction.kind].length;
-          const active = moment.reactions[reaction.kind].includes(currentActorKey);
+        {reactionOptions.map((reaction) => {
+          const actors = moment.reactions[reaction.id] ?? [];
+          const count = actors.length;
+          const active = actors.includes(currentActorKey);
           return (
             <TouchableOpacity
-              key={reaction.kind}
+              key={reaction.id}
               style={[
                 styles.reactionChip,
-                active && { borderColor: reaction.color, backgroundColor: `${reaction.color}14` },
+                active && styles.reactionChipActive,
                 reactionDisabled && styles.buttonDisabled,
               ]}
               onPress={async () => {
                 try {
-                  await onToggleReaction(moment.id, reaction.kind);
+                  await onToggleReaction(moment.id, reaction);
                   onReactionPosted?.();
                 } catch {
                   // Swallow — the parent owns error surfacing for the toggle
@@ -132,15 +126,24 @@ export function EventMomentCard({
                 }
               }}
               disabled={reactionDisabled}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active, disabled: reactionDisabled }}
+              accessibilityLabel={count > 0 ? `${reaction.label}: ${count}` : reaction.label}
             >
-              <MaterialCommunityIcons name={reaction.icon} size={16} color={active ? reaction.color : '#64748b'} />
-              <Text style={[styles.reactionText, active && { color: reaction.color }]}>
+              <Text accessibilityElementsHidden style={styles.reactionEmoji}>{reaction.emoji}</Text>
+              <Text style={[styles.reactionText, active && styles.reactionTextActive]}>
                 {reaction.label} {count > 0 ? count : ''}
               </Text>
             </TouchableOpacity>
           );
         })}
       </View>
+
+      {reactionOptions.length === 0 ? (
+        <Text style={styles.reactionUnavailable} accessibilityRole="alert">
+          {reactionUnavailableLabel}
+        </Text>
+      ) : null}
 
       <Text style={styles.summaryText}>
         {totalReactions} reacciones · {moment.comments.length} comentarios
@@ -191,6 +194,10 @@ const styles = StyleSheet.create({
     borderColor: '#c7d2fe',
     backgroundColor: '#f8faff',
   },
+  reactionChipActive: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+  reactionTextActive: { color: '#1d4ed8' },
+  reactionEmoji: { fontSize: 16, lineHeight: 20 },
+  reactionUnavailable: { color: '#64748b', fontSize: 12 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -285,6 +292,8 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     paddingHorizontal: 10,
     paddingVertical: 8,
+    minHeight: 44,
+    minWidth: 44,
   },
   reactionText: {
     color: '#475569',

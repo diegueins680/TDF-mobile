@@ -5,7 +5,7 @@ import type {
   EventMoment,
   EventMomentCommentInput,
   EventMomentCreateInput,
-  EventMomentReactionKind,
+  EventMomentReactionOption,
   ID,
 } from '../types';
 import {
@@ -115,10 +115,10 @@ export async function toggleMomentFeedReaction(input: {
   eventId: ID;
   momentId: string;
   actorKey: string;
-  reaction: EventMomentReactionKind;
+  reaction: EventMomentReactionOption;
 }, options?: RemoteModeOptions): Promise<MomentMutationResult> {
   if (!options?.preferRemote || isLocalMomentId(input.momentId)) {
-    await toggleLocalMomentReaction(input);
+    await toggleLocalMomentReaction({ ...input, reactionTypeId: input.reaction.id });
     return { source: 'local' };
   }
 
@@ -130,7 +130,7 @@ export async function toggleMomentFeedReaction(input: {
       throw error;
     }
 
-    await toggleLocalMomentReaction(input);
+    await toggleLocalMomentReaction({ ...input, reactionTypeId: input.reaction.id });
     return {
       source: 'local',
       fallbackReason: getFallbackReason(error),

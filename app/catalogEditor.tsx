@@ -246,6 +246,7 @@ export default function CatalogEditorScreen() {
                   <Text style={[styles.meta, { color: colors.textSecondary }]}>
                     {workflowLabel(item.workflowState)} · {item.active ? t('Activo', 'Active') : t('Inactivo', 'Inactive')}
                     {radioOption ? ` · ${radioOption.durationMinutes} min` : ''}
+                    {item.displaySymbol ? ` · ${item.displaySymbol}` : ''}
                     {item.id === defaultId ? ` · ${t('Predeterminado', 'Default')}` : ''}
                   </Text>
                   {editorKind !== 'read-only' ? (
@@ -279,12 +280,15 @@ export default function CatalogEditorScreen() {
                 {editorKind === 'radio-auto-stop' ? (
                   <Field label={t('Duración en minutos', 'Duration in minutes')} value={form.durationMinutes} onChangeText={(durationMinutes) => setForm({ ...form, durationMinutes })} keyboardType="number-pad" />
                 ) : null}
+                {editorKind === 'reaction-type' ? (
+                  <Field label={t('Símbolo o emoji', 'Symbol or emoji')} value={form.displaySymbol} onChangeText={(displaySymbol) => setForm({ ...form, displaySymbol })} />
+                ) : null}
                 <Field label={t('Orden manual', 'Manual order')} value={form.sortOrder} onChangeText={(sortOrder) => setForm({ ...form, sortOrder })} keyboardType="number-pad" />
                 <Field label={t('Nombre en español', 'Spanish name')} value={form.nameEs} onChangeText={(nameEs) => setForm({ ...form, nameEs })} />
                 <Field label={t('Nombre en inglés', 'English name')} value={form.nameEn} onChangeText={(nameEn) => setForm({ ...form, nameEn })} />
                 <Field label={t('Descripción en español', 'Spanish description')} value={form.descriptionEs} onChangeText={(descriptionEs) => setForm({ ...form, descriptionEs })} multiline />
                 <Field label={t('Descripción en inglés', 'English description')} value={form.descriptionEn} onChangeText={(descriptionEn) => setForm({ ...form, descriptionEn })} multiline />
-                <View style={styles.switchRow}>
+                {defaultScopeKind ? <View style={styles.switchRow}>
                   <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>
                     {t('Predeterminado global', 'Global default')}
                   </Text>
@@ -294,7 +298,7 @@ export default function CatalogEditorScreen() {
                     onValueChange={(defaultForScope) => setForm({ ...form, defaultForScope })}
                     accessibilityLabel={t('Usar como predeterminado global', 'Use as global default')}
                   />
-                </View>
+                </View> : null}
                 {editingPublishedDefault ? (
                   <Text style={[styles.meta, { color: colors.textSecondary }]}>
                     {t('Elige otra opción para sustituir el predeterminado actual.', 'Choose another option to replace the current default.')}

@@ -408,7 +408,15 @@ export type EventTicketPaymentIntent = {
 };
 
 export type EventMomentMediaKind = 'image' | 'video';
-export type EventMomentReactionKind = 'fire' | 'love' | 'applause';
+
+export type EventMomentReactionOption = {
+  id: string;
+  code: string;
+  label: string;
+  nameEs: string;
+  nameEn: string;
+  emoji: string;
+};
 
 export type EventMomentMedia = {
   kind: EventMomentMediaKind;
@@ -435,7 +443,8 @@ export type EventMoment = {
   caption?: string | null;
   media: EventMomentMedia;
   createdAt: string;
-  reactions: Record<EventMomentReactionKind, string[]>;
+  /** Canonical reaction-type UUID -> actor keys. */
+  reactions: Record<string, string[]>;
   comments: EventMomentComment[];
 };
 

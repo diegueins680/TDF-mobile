@@ -36,6 +36,7 @@ const validForm = (overrides: Partial<CatalogAdminForm> = {}): CatalogAdminForm 
   reason: ' Revisión móvil ',
   defaultForScope: true,
   durationMinutes: '',
+  displaySymbol: '',
   ...overrides,
 });
 
@@ -45,7 +46,27 @@ describe('mobile catalog administration', () => {
     expect(catalogEditorKind('radio_auto_stop_option')).toBe('radio-auto-stop');
     expect(catalogEditorKind('feedback_category')).toBe('feedback-category');
     expect(catalogEditorKind('feedback_severity')).toBe('feedback-severity');
+    expect(catalogEditorKind('reaction_type')).toBe('reaction-type');
     expect(catalogEditorKind('arbitrary_json')).toBe('read-only');
+  });
+
+  it('creates a reaction revision with persisted bilingual copy and symbol metadata', () => {
+    const form = validForm({
+      entityId: undefined,
+      baseVersion: undefined,
+      code: 'applause',
+      nameEs: 'Aplauso',
+      nameEn: 'Applause',
+      displaySymbol: '👏',
+    });
+
+    expect(catalogAdminFormIsValid('reaction-type', form)).toBe(true);
+    expect(buildCatalogAdminDraft('reaction-type', form)).toMatchObject({
+      code: 'applause',
+      displaySymbol: '👏',
+      sourcePlatform: 'mobile-admin',
+    });
+    expect(catalogAdminFormIsValid('reaction-type', { ...form, displaySymbol: '' })).toBe(false);
   });
 
   it('creates an appearance revision using the canonical UUID and typed default payload', () => {

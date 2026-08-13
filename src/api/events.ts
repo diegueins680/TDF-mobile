@@ -12,7 +12,7 @@ import type {
   EventMomentComment,
   EventMomentCommentInput,
   EventMomentCreateInput,
-  EventMomentReactionKind,
+  EventMomentReactionOption,
   RSVPStatus,
   EventInvitationStatus,
   ArtistSocialLinks,
@@ -109,7 +109,11 @@ type BackendInvitationDTO = {
 };
 
 type BackendMomentReactionDTO = {
-  emrReaction?: string | null;
+  emrReactionTypeId?: string | null;
+  emrReactionCode?: string | null;
+  emrReactionNameEs?: string | null;
+  emrReactionNameEn?: string | null;
+  emrReactionEmoji?: string | null;
   emrPartyId?: ID | null;
   emrCreatedAt?: string | null;
 };
@@ -324,14 +328,6 @@ const requireNonBlankText = (value: string | null | undefined, fieldName: string
 const normalizeMomentMediaKind = (value: string | null | undefined): 'image' | 'video' => {
   const normalized = value?.trim().toLowerCase();
   return normalized === 'video' ? 'video' : 'image';
-};
-
-const normalizeMomentReactionKind = (value: string | null | undefined): EventMomentReactionKind | null => {
-  const normalized = value?.trim().toLowerCase();
-  if (normalized === 'fire' || normalized === 'love' || normalized === 'applause') {
-    return normalized;
-  }
-  return null;
 };
 
 const normalizeBackendVenueId = (value: ID | null | undefined): string | null => {
@@ -687,11 +683,11 @@ export const Events = {
   reactToMoment: async (
     eventId: ID,
     momentId: string,
-    reaction: EventMomentReactionKind,
+    reaction: EventMomentReactionOption,
   ): Promise<EventMoment> => {
     const dto = await post<BackendMomentDTO>(
       `/social-events/events/${eventId}/moments/${encodeURIComponent(momentId)}/reactions`,
-      { emrrReaction: reaction },
+      { emrrReactionTypeId: requireCatalogUuid(reaction.id, 'emrrReactionTypeId') },
     );
     return mapMomentDto(dto, eventId);
   },
@@ -1065,16 +1061,17 @@ function mapMomentCommentDto(dto: BackendMomentCommentDTO, fallbackMomentId: ID,
 }
 
 function mapMomentReactions(dto: BackendMomentDTO): EventMoment['reactions'] {
-  const reactions: EventMoment['reactions'] = { fire: [], love: [], applause: [] };
+  const reactions: EventMoment['reactions'] = {};
 
   (dto.emReactions ?? []).forEach((reactionDto, index) => {
-    const reaction = normalizeMomentReactionKind(reactionDto.emrReaction);
-    if (!reaction) return;
+    const reactionTypeId = normalizeCatalogUuid(reactionDto.emrReactionTypeId);
+    if (!reactionTypeId) return;
 
     const partyId = normalizeIdentityPartyId(reactionDto.emrPartyId);
-    const actorKey = partyId ? `party:${partyId}` : `guest:${reaction}:${index}`;
-    if (!reactions[reaction].includes(actorKey)) {
-      reactions[reaction].push(actorKey);
+    const actorKey = partyId ? `party:${partyId}` : `guest:${reactionTypeId}:${index}`;
+    const actors = reactions[reactionTypeId] ?? [];
+    if (!actors.includes(actorKey)) {
+      reactions[reactionTypeId] = [...actors, actorKey];
     }
   });
 

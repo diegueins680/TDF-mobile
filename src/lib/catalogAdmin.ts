@@ -5,6 +5,7 @@ export type CatalogEditorKind =
   | 'radio-auto-stop'
   | 'feedback-category'
   | 'feedback-severity'
+  | 'reaction-type'
   | 'read-only';
 
 export interface CatalogAdminForm {
@@ -19,6 +20,7 @@ export interface CatalogAdminForm {
   reason: string;
   defaultForScope: boolean;
   durationMinutes: string;
+  displaySymbol: string;
 }
 
 export const catalogEditorKind = (entityKind: string): CatalogEditorKind => {
@@ -31,6 +33,8 @@ export const catalogEditorKind = (entityKind: string): CatalogEditorKind => {
       return 'feedback-category';
     case 'feedback_severity':
       return 'feedback-severity';
+    case 'reaction_type':
+      return 'reaction-type';
     default:
       return 'read-only';
   }
@@ -46,6 +50,7 @@ export const emptyCatalogAdminForm = (): CatalogAdminForm => ({
   reason: '',
   defaultForScope: false,
   durationMinutes: '',
+  displaySymbol: '',
 });
 
 export const formFromCatalogItem = (
@@ -64,6 +69,7 @@ export const formFromCatalogItem = (
   reason: '',
   defaultForScope,
   durationMinutes: durationMinutes === undefined ? '' : String(durationMinutes),
+  displaySymbol: item.displaySymbol ?? '',
 });
 
 const optionalText = (value: string): string | undefined => value.trim() || undefined;
@@ -107,6 +113,9 @@ export const buildCatalogAdminDraft = (
   if (kind === 'feedback-category' || kind === 'feedback-severity') {
     return { ...draft, globalDefault: form.defaultForScope };
   }
+  if (kind === 'reaction-type') {
+    return { ...draft, displaySymbol: form.displaySymbol.trim() };
+  }
   throw new Error('Este tipo de catálogo todavía no admite edición móvil estricta.');
 };
 
@@ -127,6 +136,10 @@ export const catalogAdminFormIsValid = (
 
   if (kind === 'appearance-mode') return Boolean(form.entityId);
   if (kind === 'feedback-category' || kind === 'feedback-severity') return true;
+  if (kind === 'reaction-type') {
+    const symbol = form.displaySymbol.trim();
+    return symbol.length > 0 && symbol.length <= 16;
+  }
   const duration = Number(form.durationMinutes);
   return Number.isSafeInteger(duration) && duration >= 0 && duration <= 1440;
 };

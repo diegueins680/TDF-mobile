@@ -47,7 +47,9 @@ const page = (code: string) => {
     ? [item(code, 'system', uuid(201))]
     : code === 'event-types'
       ? [item(code, 'concert', uuid(202))]
-      : [item(code, `${code}-value`, uuid(203 + SYNCED_CATALOGS.indexOf(code as never)))];
+      : code === 'reaction-types'
+        ? [{ ...item(code, 'fire', uuid(204)), displaySymbol: '🔥' }]
+        : [item(code, `${code}-value`, uuid(203 + SYNCED_CATALOGS.indexOf(code as never)))];
   const defaults = code === 'appearance-modes'
     ? [{ entityId: items[0]!.id, scopeKind: 'appearance-mode', scopeId: 'global', version: 1 }]
     : code === 'event-types'

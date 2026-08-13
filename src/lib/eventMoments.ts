@@ -8,15 +8,13 @@ import type {
   EventMomentComment,
   EventMomentCommentInput,
   EventMomentCreateInput,
-  EventMomentReactionKind,
   ID,
 } from '../types';
 
 const STORAGE_KEY = 'tdf-event-moments';
 const MAX_CAPTION_LENGTH = 280;
 const MAX_COMMENT_LENGTH = 500;
-
-const REACTION_KINDS = ['fire', 'love', 'applause'] as const;
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const EventMomentMediaSchema = z.object({
   kind: z.enum(['image', 'video']),
@@ -43,11 +41,7 @@ const EventMomentSchema = z.object({
   caption: z.string().trim().max(MAX_CAPTION_LENGTH).nullable().optional(),
   media: EventMomentMediaSchema,
   createdAt: z.string().trim().min(1),
-  reactions: z.object({
-    fire: z.array(z.unknown()).optional(),
-    love: z.array(z.unknown()).optional(),
-    applause: z.array(z.unknown()).optional(),
-  }),
+  reactions: z.record(z.string(), z.array(z.unknown())),
   comments: z.array(z.unknown()).optional(),
 });
 
@@ -141,11 +135,14 @@ const sanitizeMoment = (moment: unknown): EventMoment | null => {
       durationMs: parsed.data.media.durationMs ?? null,
     },
     createdAt,
-    reactions: {
-      fire: normalizeReactionActors(parsed.data.reactions.fire),
-      love: normalizeReactionActors(parsed.data.reactions.love),
-      applause: normalizeReactionActors(parsed.data.reactions.applause),
-    },
+    reactions: Object.fromEntries(
+      Object.entries(parsed.data.reactions).flatMap(([reactionTypeId, actors]) => {
+        const normalizedId = normalizeText(reactionTypeId)?.toLowerCase();
+        return normalizedId && CANONICAL_UUID.test(normalizedId)
+          ? [[normalizedId, normalizeReactionActors(actors)]]
+          : [];
+      }),
+    ),
     comments: sortCommentsNewestFirst(
       (parsed.data.comments ?? [])
         .map((comment) => sanitizeComment(comment))
@@ -236,15 +233,15 @@ export function buildMomentActor(input: {
 }
 
 export function countMomentReactions(moment: EventMoment): number {
-  return REACTION_KINDS.reduce((total, reaction) => total + moment.reactions[reaction].length, 0);
+  return Object.values(moment.reactions).reduce((total, actors) => total + actors.length, 0);
 }
 
-export function getMomentTopReaction(moment: EventMoment): EventMomentReactionKind | null {
-  let winningReaction: EventMomentReactionKind | null = null;
+export function getMomentTopReaction(moment: EventMoment): string | null {
+  let winningReaction: string | null = null;
   let winningCount = 0;
 
-  REACTION_KINDS.forEach((reaction) => {
-    const count = moment.reactions[reaction].length;
+  Object.entries(moment.reactions).forEach(([reaction, actors]) => {
+    const count = actors.length;
     if (count > winningCount) {
       winningReaction = reaction;
       winningCount = count;
@@ -306,7 +303,7 @@ export async function createEventMoment(input: EventMomentCreateInput): Promise<
       durationMs: input.media.durationMs ?? null,
     },
     createdAt,
-    reactions: { fire: [], love: [], applause: [] },
+    reactions: {},
     comments: [],
   };
 
@@ -318,25 +315,29 @@ export async function toggleMomentReaction(input: {
   eventId: ID;
   momentId: string;
   actorKey: string;
-  reaction: EventMomentReactionKind;
+  reactionTypeId: string;
 }): Promise<EventMoment[]> {
   const actorKey = normalizeText(input.actorKey);
+  const reactionTypeId = normalizeText(input.reactionTypeId)?.toLowerCase();
   if (!actorKey) throw new Error('Necesitas una identidad para reaccionar.');
+  if (!reactionTypeId || !CANONICAL_UUID.test(reactionTypeId)) {
+    throw new Error('Selecciona una reacción sincronizada con identidad canónica.');
+  }
 
   return updateMoments(input.eventId, (current) =>
     current.map((moment) => {
       if (moment.id !== input.momentId) return moment;
 
-      const alreadySelected = moment.reactions[input.reaction].includes(actorKey);
+      const alreadySelected = (moment.reactions[reactionTypeId] ?? []).includes(actorKey);
       const nextReactions = Object.fromEntries(
-        REACTION_KINDS.map((reaction) => [
+        Object.entries(moment.reactions).map(([reaction, actors]) => [
           reaction,
-          moment.reactions[reaction].filter((candidate) => candidate !== actorKey),
+          actors.filter((candidate) => candidate !== actorKey),
         ]),
       ) as EventMoment['reactions'];
 
       if (!alreadySelected) {
-        nextReactions[input.reaction] = [actorKey, ...nextReactions[input.reaction]];
+        nextReactions[reactionTypeId] = [actorKey, ...(nextReactions[reactionTypeId] ?? [])];
       }
 
       return { ...moment, reactions: nextReactions };

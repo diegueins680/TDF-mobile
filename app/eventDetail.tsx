@@ -61,7 +61,7 @@ import type {
   EventLiveBroadcastQuality,
   EventInvitationStatus,
   EventMoment,
-  EventMomentReactionKind,
+  EventMomentReactionOption,
   ID,
   RSVPStatus,
 } from '../src/types';
@@ -91,7 +91,21 @@ export default function EventDetailScreen() {
   const qc = useQueryClient();
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: authPartyId } = useAuth();
-  const { partyId: settingsPartyId, displayName, locale, timezone, currency } = useUserSettings();
+  const { partyId: settingsPartyId, displayName, locale, timezone, currency, getCatalogItems } = useUserSettings();
+  const reactionOptions = useMemo<EventMomentReactionOption[]>(
+    () => getCatalogItems('reaction-types').flatMap((item) => {
+      const emoji = item.displaySymbol?.trim();
+      return emoji ? [{
+        id: item.id,
+        code: item.code,
+        label: item.name,
+        nameEs: item.nameEs,
+        nameEn: item.nameEn,
+        emoji,
+      }] : [];
+    }),
+    [getCatalogItems],
+  );
   const displayCurrency = currency || process.env.EXPO_PUBLIC_DEFAULT_CURRENCY || 'USD';
   const normalizedPartyId = resolvePartyId(authPartyId, settingsPartyId);
   const currentActor = useMemo(
@@ -383,7 +397,7 @@ export default function EventDetailScreen() {
   });
 
   const reactionMutation = useMutation({
-    mutationFn: ({ momentId, reaction }: { momentId: string; reaction: EventMomentReactionKind }) => {
+    mutationFn: ({ momentId, reaction }: { momentId: string; reaction: EventMomentReactionOption }) => {
       if (!eventId) throw new Error('Event not found');
       return toggleMomentFeedReaction({
         eventId,
@@ -1004,6 +1018,12 @@ export default function EventDetailScreen() {
                       currentPartyId={currentActor.partyId}
                       featured={featuredMomentIds.has(moment.id)}
                       reactionDisabled={reactionMutation.isPending}
+                      reactionOptions={reactionOptions}
+                      reactionUnavailableLabel={
+                        locale === 'en'
+                          ? 'No synchronized reactions. Refresh catalogs to react.'
+                          : 'Sin reacciones sincronizadas. Actualiza los catálogos para reaccionar.'
+                      }
                       commentDisabled={commentMutation.isPending}
                       connectDisabled={connectMomentAuthorMutation.isPending}
                       commentDraft={commentDrafts[moment.id] ?? ''}

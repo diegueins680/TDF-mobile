@@ -39,7 +39,7 @@ import { useAuth } from '../providers/AuthProvider';
 import { useFirstRun } from '../providers/FirstRunProvider';
 import { useUserSettings } from '../providers/UserSettingsProvider';
 import type {
-  EventMomentReactionKind,
+  EventMomentReactionOption,
   ID,
   SocialEvent,
 } from '../types';
@@ -76,8 +76,22 @@ export function NewUserOnboardingGate({ children }: Props) {
   const { isReady: experimentsReady, getVariant } = useExperiments();
   const { cohortReady, isNewUser } = useFirstRun();
   const { token, partyId: authPartyId } = useAuth();
-  const { partyId: settingsPartyId, displayName } = useUserSettings();
+  const { partyId: settingsPartyId, displayName, locale, getCatalogItems } = useUserSettings();
   const { track } = useExperimentEvent();
+  const reactionOptions = useMemo<EventMomentReactionOption[]>(
+    () => getCatalogItems('reaction-types').flatMap((item) => {
+      const emoji = item.displaySymbol?.trim();
+      return emoji ? [{
+        id: item.id,
+        code: item.code,
+        label: item.name,
+        nameEs: item.nameEs,
+        nameEn: item.nameEn,
+        emoji,
+      }] : [];
+    }),
+    [getCatalogItems],
+  );
 
   const normalizedPartyId = resolvePartyId(authPartyId, settingsPartyId);
   const currentActor = useMemo(
@@ -208,7 +222,7 @@ export function NewUserOnboardingGate({ children }: Props) {
   }, []);
 
   const handleToggleReaction = useCallback(
-    async (momentId: string, reaction: EventMomentReactionKind) => {
+    async (momentId: string, reaction: EventMomentReactionOption) => {
       if (!featuredEvent?.id) return;
       try {
         await toggleMomentFeedReaction(
@@ -273,6 +287,12 @@ export function NewUserOnboardingGate({ children }: Props) {
               currentActorKey={currentActor.actorKey}
               currentPartyId={normalizedPartyId ?? null}
               featured={idx === 0}
+              reactionOptions={reactionOptions}
+              reactionUnavailableLabel={
+                locale === 'en'
+                  ? 'No synchronized reactions. Refresh catalogs to react.'
+                  : 'Sin reacciones sincronizadas. Actualiza los catálogos para reaccionar.'
+              }
               commentDraft={commentDrafts[moment.id] ?? ''}
               onChangeComment={handleChangeComment}
               onSubmitComment={() => {
@@ -302,8 +322,8 @@ export function NewUserOnboardingGate({ children }: Props) {
             <View style={styles.emptyPreview}>
               <Text style={styles.previewLabel}>Vista previa</Text>
               <Text style={styles.previewBody}>
-                Un “momento” es una foto o video corto del evento. Reaccionas con 🔥 ❤️ 👏 y
-                conectas con quien lo subió.
+                Un “momento” es una foto o video corto del evento. Reaccionas con las opciones
+                publicadas y conectas con quien lo subió.
               </Text>
             </View>
           </View>

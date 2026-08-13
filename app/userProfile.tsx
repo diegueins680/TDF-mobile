@@ -239,9 +239,11 @@ export default function UserProfileScreen() {
             onPress={() => handleUnsaveEvent(item.id)}
             disabled={unsaveMutation.isPending}
           >
-            <Text style={styles.unsaveButtonText}>
-              {unsaveMutation.isPending ? 'Actualizando…' : 'Quitar'}
-            </Text>
+            {unsaveMutation.isPending ? (
+              <ActivityIndicator size="small" color={colors.textPrimary} />
+            ) : (
+              <Text style={styles.unsaveButtonText}>Quitar</Text>
+            )}
           </TouchableOpacity>
         </View>
 

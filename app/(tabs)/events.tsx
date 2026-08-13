@@ -155,9 +155,7 @@ export default function EventsScreen() {
     const needle = debouncedSearch.trim().toLocaleLowerCase(locale);
     return source
       .filter((event) => {
-        if (!event.isPublic) return false;
-        const status = event.status?.toLowerCase();
-        if (status === 'cancelled' || status === 'completed') return false;
+        if (!event.isPublic || !event.publicListable) return false;
         if (!needle) return true;
         return [
           event.title,

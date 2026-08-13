@@ -150,7 +150,6 @@ export default function AuthScreen() {
         lastName: lastName.trim(),
         email: signupEmail.trim().toLowerCase(),
         password,
-        roles: ['Fan'],
       });
       setToken(session.token, session.partyId ?? null);
       setPassword('');

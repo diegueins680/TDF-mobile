@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator,
-  FlatList, Modal, SafeAreaView
+  FlatList, Modal
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
@@ -20,11 +21,19 @@ export default function CreateEventScreen() {
   const { venueId: rawVenueId } = useLocalSearchParams<{ venueId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
-  const { currency } = useUserSettings();
+  const {
+    currency,
+    catalogSource,
+    catalogSyncing,
+    getCatalogItems,
+    getCatalogDefaults,
+    refreshCatalogs,
+  } = useUserSettings();
   const routeVenueId = useMemo(() => normalizeRouteParam(rawVenueId), [rawVenueId]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [eventTypeId, setEventTypeId] = useState('');
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date(new Date().getTime() + 2 * 60 * 60 * 1000));
   const [startInput, setStartInput] = useState(startTime.toISOString());
@@ -41,6 +50,23 @@ export default function CreateEventScreen() {
   const [artistSearch, setArtistSearch] = useState('');
   const [selectedVenueSnapshot, setSelectedVenueSnapshot] = useState<Venue | null>(null);
   const [selectedArtistsById, setSelectedArtistsById] = useState<Record<string, ArtistProfile>>({});
+
+  const eventTypeOptions = useMemo(
+    () => getCatalogItems('event-types').filter((item) => (
+      item.active && item.workflowState === 'published' && !item.deprecatedAt
+    )),
+    [getCatalogItems],
+  );
+  const defaultEventTypeId = useMemo(
+    () => getCatalogDefaults('event-types').find((entry) => (
+      entry.scopeKind === 'social-event'
+      && entry.scopeId === 'global'
+      && !entry.localeId
+      && eventTypeOptions.some((item) => item.id === entry.entityId)
+    ))?.entityId ?? '',
+    [eventTypeOptions, getCatalogDefaults],
+  );
+  const eventTypeSelectionValid = eventTypeOptions.some((item) => item.id === eventTypeId);
 
   const { data: venues, isLoading: venuesLoading } = useQuery({
     queryKey: ['venues', venueSearch],
@@ -75,6 +101,10 @@ export default function CreateEventScreen() {
       setVenueId(routeVenueId);
     }
   }, [routeVenueId, venueId]);
+
+  useEffect(() => {
+    if (!eventTypeId && defaultEventTypeId) setEventTypeId(defaultEventTypeId);
+  }, [defaultEventTypeId, eventTypeId]);
 
   useEffect(() => {
     if (!venueId || !venues?.length) return;
@@ -196,6 +226,15 @@ export default function CreateEventScreen() {
       Alert.alert('Validación', 'El nombre del evento es obligatorio');
       return;
     }
+    if (!eventTypeSelectionValid) {
+      Alert.alert(
+        'Tipo de evento no disponible',
+        catalogSource === 'emergency'
+          ? 'Conéctate y sincroniza los catálogos antes de crear el evento.'
+          : 'El tipo seleccionado ya no está disponible. Sincroniza y elige otro tipo.',
+      );
+      return;
+    }
     if (!venueId) {
       Alert.alert('Validación', 'Selecciona un lugar');
       return;
@@ -221,6 +260,7 @@ export default function CreateEventScreen() {
     }
 
     createMutation.mutate({
+      eventTypeId,
       title: title.trim(),
       description: description.trim(),
       startTime: parsedStart.toISOString(),
@@ -232,7 +272,7 @@ export default function CreateEventScreen() {
       ticketUrl: ticketUrl.trim() || undefined,
       isPublic
     });
-  }, [title, description, venueId, artistIds, startInput, endInput, ticketPrice, ticketUrl, isPublic, currency, createMutation, parseDateInput]);
+  }, [title, description, eventTypeId, eventTypeSelectionValid, venueId, artistIds, startInput, endInput, ticketPrice, ticketUrl, isPublic, currency, catalogSource, createMutation, parseDateInput]);
 
   const renderVenueItem = useCallback(({ item }: { item: Venue }) => (
     <TouchableOpacity
@@ -290,6 +330,59 @@ export default function CreateEventScreen() {
             numberOfLines={3}
             placeholderTextColor="#999"
           />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Tipo de evento *</Text>
+          {eventTypeOptions.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.catalogOptions}
+              accessibilityRole="radiogroup"
+            >
+              {eventTypeOptions.map((item) => {
+                const selected = item.id === eventTypeId;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.catalogOption, selected && styles.catalogOptionSelected]}
+                    onPress={() => setEventTypeId(item.id)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    accessibilityLabel={`Tipo de evento: ${item.name}`}
+                  >
+                    <Text style={[styles.catalogOptionText, selected && styles.catalogOptionTextSelected]}>
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <View style={styles.catalogUnavailable} accessibilityRole="alert">
+              <Text style={styles.catalogUnavailableText}>
+                {catalogSyncing
+                  ? 'Sincronizando tipos de evento…'
+                  : 'No hay tipos de evento publicados disponibles. Tu borrador se conservará.'}
+              </Text>
+              {!catalogSyncing && (
+                <TouchableOpacity
+                  style={styles.refreshCatalogButton}
+                  onPress={() => { void refreshCatalogs(); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Volver a sincronizar tipos de evento"
+                >
+                  <Text style={styles.refreshCatalogButtonText}>Sincronizar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+          {eventTypeId !== '' && !eventTypeSelectionValid && eventTypeOptions.length > 0 && (
+            <Text style={styles.catalogConflict} accessibilityRole="alert">
+              El tipo elegido dejó de estar disponible. Selecciona uno vigente para continuar.
+            </Text>
+          )}
         </View>
 
         <Text style={styles.sectionTitle}>Fecha y hora</Text>
@@ -451,11 +544,11 @@ export default function CreateEventScreen() {
         </View>
 
         <TouchableOpacity
-          style={styles.createButton}
+          style={[styles.createButton, (!eventTypeSelectionValid || createMutation.isPending) && styles.createButtonDisabled]}
           onPress={handleCreateEvent}
-          disabled={createMutation.isPending}
+          disabled={!eventTypeSelectionValid || createMutation.isPending}
           accessibilityRole="button"
-          accessibilityState={{ disabled: createMutation.isPending }}
+          accessibilityState={{ disabled: !eventTypeSelectionValid || createMutation.isPending }}
         >
           {createMutation.isPending ? (
             <ActivityIndicator color="#fff" />
@@ -587,11 +680,22 @@ const styles = StyleSheet.create({
   selectedText: { fontSize: 14, color: '#1a1a1a', fontWeight: '500' },
   selectedSubtext: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   placeholder: { fontSize: 14, color: '#999' },
+  catalogOptions: { gap: 8, paddingVertical: 2 },
+  catalogOption: { minHeight: 44, justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 22, paddingHorizontal: 16 },
+  catalogOptionSelected: { backgroundColor: '#dbeafe', borderColor: '#2563eb' },
+  catalogOptionText: { color: '#374151', fontSize: 14, fontWeight: '600' },
+  catalogOptionTextSelected: { color: '#1d4ed8' },
+  catalogUnavailable: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74', borderRadius: 8, padding: 12 },
+  catalogUnavailableText: { color: '#9a3412', fontSize: 13, lineHeight: 18 },
+  catalogConflict: { color: '#b91c1c', fontSize: 13, lineHeight: 18, marginTop: 8 },
+  refreshCatalogButton: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: 8, paddingHorizontal: 14, borderRadius: 8, backgroundColor: '#9a3412' },
+  refreshCatalogButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   checkbox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   checkboxBox: { width: 20, height: 20, borderWidth: 1, borderColor: '#ddd', borderRadius: 4, backgroundColor: '#fff' },
   checkboxBoxChecked: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   checkboxLabel: { fontSize: 14, color: '#1a1a1a' },
   createButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 16 },
+  createButtonDisabled: { backgroundColor: '#9ca3af' },
   createButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   modal: { flex: 1, backgroundColor: '#fff' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },

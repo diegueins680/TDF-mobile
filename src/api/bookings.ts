@@ -7,6 +7,7 @@ export type BookingDTO = {
   startsAt: string;
   endsAt: string;
   status: string;
+  serviceOfferingId?: string | null;
 };
 
 export type CreateBookingReq = {
@@ -15,7 +16,7 @@ export type CreateBookingReq = {
   end: string;
   status?: string;
   partyId?: number | null;
-  serviceType?: string | null;
+  serviceOfferingId: string;
   resourceIds?: string[];
   notes?: string | null;
 };
@@ -27,7 +28,7 @@ type CreateBookingPayload = {
   cbStatus: string;
   cbNotes?: string | null;
   cbPartyId?: number | null;
-  cbServiceType?: string | null;
+  cbServiceOfferingId: string;
   cbResourceIds?: string[];
 };
 
@@ -46,7 +47,7 @@ const toCreatePayload = (body: CreateBookingReq): CreateBookingPayload => ({
   cbStatus: body.status ?? 'Confirmed',
   cbNotes: body.notes ?? null,
   cbPartyId: body.partyId ?? null,
-  cbServiceType: body.serviceType ?? null,
+  cbServiceOfferingId: body.serviceOfferingId,
   cbResourceIds: body.resourceIds
 });
 

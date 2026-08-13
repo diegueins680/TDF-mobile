@@ -3,11 +3,17 @@ import { useCallback, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createBooking, listBookings } from '../../src/api/bookings';
+import { loadServiceOfferingSnapshot } from '../../src/lib/serviceCatalogSnapshot';
 import type { Booking } from '../../src/types';
 
 export default function Bookings() {
   const qc = useQueryClient();
   const q = useQuery<Booking[]>({ queryKey: ['bookings'], queryFn: listBookings });
+  const servicesQuery = useQuery({
+    queryKey: ['service-offerings', 'snapshot'],
+    queryFn: () => loadServiceOfferingSnapshot('es'),
+  });
+  const defaultService = servicesQuery.data?.[0] ?? null;
 
   const m = useMutation({
     mutationFn: createBooking,
@@ -20,9 +26,16 @@ export default function Bookings() {
   const createQuickSession = useCallback(() => {
     const now = new Date();
     const start = now.toISOString();
-    const end = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
-    m.mutate({ title: 'Session', start, end });
-  }, [m]);
+    if (!defaultService) return;
+    const durationMinutes = defaultService.scDefaultDurationMinutes ?? 60;
+    const end = new Date(now.getTime() + durationMinutes * 60 * 1000).toISOString();
+    m.mutate({
+      title: defaultService.scName,
+      start,
+      end,
+      serviceOfferingId: defaultService.scId,
+    });
+  }, [defaultService, m]);
 
   const renderItem = useCallback(({ item }: { item: Booking }) => (
     <View style={{ backgroundColor: 'white', borderRadius: 8, padding: 12, elevation: 2 }}>
@@ -66,10 +79,13 @@ export default function Bookings() {
     <SafeAreaView edges={['top']} style={{ flex: 1, padding: 16 }}>
       <TouchableOpacity
         onPress={createQuickSession}
-        style={{ backgroundColor: '#2563eb', padding: 12, borderRadius: 8, marginBottom: 12 }}
+        disabled={!defaultService || m.isPending}
+        accessibilityRole="button"
+        accessibilityLabel={defaultService ? `Crear sesión rápida de ${defaultService.scName}` : 'Catálogo de servicios no disponible'}
+        style={{ backgroundColor: defaultService ? '#2563eb' : '#94a3b8', padding: 12, borderRadius: 8, marginBottom: 12, minHeight: 44 }}
       >
         <Text style={{ color: 'white', fontWeight: '700', textAlign: 'center' }}>
-          Crear sesión rápida
+          {defaultService ? `Crear sesión rápida · ${defaultService.scName}` : 'Catálogo de servicios no disponible'}
         </Text>
       </TouchableOpacity>
 

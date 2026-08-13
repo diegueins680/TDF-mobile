@@ -3,10 +3,8 @@ import type { EventTicketTier, SocialEvent } from '../types';
 export const MAX_TICKETS_PER_ORDER = 100;
 
 export const isEventTicketPurchaseEligible = (
-  event: Pick<SocialEvent, 'isPublic' | 'status'>,
-): boolean => Boolean(
-  event.isPublic && ['announced', 'on_sale', 'live'].includes(event.status?.trim().toLowerCase() ?? ''),
-);
+  event: Pick<SocialEvent, 'isPublic' | 'ticketPurchaseEnabled'>,
+): boolean => event.isPublic && event.ticketPurchaseEnabled;
 
 export type TicketTierSaleState =
   | 'available'

@@ -11,23 +11,19 @@ import { resolvePartyId } from '../src/lib/identity';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
-const GENRES = [
-  'Rock', 'Pop', 'Hip-Hop', 'Jazz', 'Electronic', 'Classical', 'Country',
-  'R&B', 'Latin', 'Indie', 'Alternative', 'Metal', 'Soul', 'Blues', 'Reggae'
-];
-
 export default function CreateArtistProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const { partyId: authPartyId } = useAuth();
-  const { partyId: settingsPartyId } = useUserSettings();
+  const { partyId: settingsPartyId, getCatalogItems, catalogSyncing } = useUserSettings();
+  const genreOptions = getCatalogItems('genres');
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [instagramHandle, setInstagramHandle] = useState('');
   const [spotifyUrl, setSpotifyUrl] = useState('');
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [selectedGenreIds, setSelectedGenreIds] = useState<string[]>([]);
   const effectivePartyId = resolvePartyId(authPartyId, settingsPartyId);
 
   const createMutation = useMutation({
@@ -45,9 +41,9 @@ export default function CreateArtistProfileScreen() {
     }
   });
 
-  const toggleGenre = useCallback((genre: string) => {
-    setSelectedGenres(prev =>
-      prev.includes(genre) ? prev.filter(g => g !== genre) : [...prev, genre]
+  const toggleGenre = useCallback((genreId: string) => {
+    setSelectedGenreIds(prev =>
+      prev.includes(genreId) ? prev.filter(id => id !== genreId) : [...prev, genreId]
     );
   }, []);
 
@@ -66,11 +62,11 @@ export default function CreateArtistProfileScreen() {
       name: name.trim(),
       bio: bio.trim() || undefined,
       imageUrl: imageUrl.trim() || undefined,
-      genres: selectedGenres.length > 0 ? selectedGenres : undefined,
+      genreIds: selectedGenreIds.length > 0 ? selectedGenreIds : undefined,
       instagramHandle: instagramHandle.trim() || undefined,
       spotifyUrl: spotifyUrl.trim() || undefined
     });
-  }, [name, bio, imageUrl, instagramHandle, spotifyUrl, selectedGenres, createMutation, effectivePartyId]);
+  }, [name, bio, imageUrl, instagramHandle, spotifyUrl, selectedGenreIds, createMutation, effectivePartyId]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -118,18 +114,26 @@ export default function CreateArtistProfileScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Genres</Text>
           <View style={styles.genreGrid}>
-            {GENRES.map(genre => (
+            {genreOptions.map(genre => (
               <TouchableOpacity
-                key={genre}
-                style={[styles.genreTag, selectedGenres.includes(genre) && styles.genreTagSelected]}
-                onPress={() => toggleGenre(genre)}
+                key={genre.id}
+                style={[styles.genreTag, selectedGenreIds.includes(genre.id) && styles.genreTagSelected]}
+                onPress={() => toggleGenre(genre.id)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: selectedGenreIds.includes(genre.id) }}
+                accessibilityLabel={genre.name}
               >
-                <Text style={[styles.genreTagText, selectedGenres.includes(genre) && styles.genreTagTextSelected]}>
-                  {genre}
+                <Text style={[styles.genreTagText, selectedGenreIds.includes(genre.id) && styles.genreTagTextSelected]}>
+                  {genre.name}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+          {genreOptions.length === 0 && (
+            <Text style={styles.catalogStatus}>
+              {catalogSyncing ? 'Sincronizando géneros…' : 'No hay un catálogo de géneros disponible.'}
+            </Text>
+          )}
         </View>
 
         <View style={styles.field}>
@@ -181,10 +185,11 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a1a1a' },
   inputMultiline: { height: 100, textAlignVertical: 'top', paddingVertical: 10 },
   genreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  genreTag: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8 },
+  genreTag: { minHeight: 44, justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 22, paddingHorizontal: 12, paddingVertical: 8 },
   genreTagSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   genreTagText: { fontSize: 12, color: '#666', fontWeight: '500' },
   genreTagTextSelected: { color: '#fff' },
+  catalogStatus: { marginTop: 8, color: '#6b7280', fontSize: 13 },
   createButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 16 },
   createButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' }
 });

@@ -80,6 +80,12 @@ export function normalizeApiError(error: unknown): Error {
       'Las entradas pagadas deben comprarse desde el checkout seguro.',
     );
   }
+  if (status === 403) {
+    return withApiErrorMessage(
+      error,
+      serverMessage ?? 'No tienes permiso para realizar esta acción.',
+    );
+  }
   if (
     status === 409
     && (normalized === 'not enough tickets available' || normalized === 'event capacity reached')

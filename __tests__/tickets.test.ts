@@ -63,9 +63,8 @@ describe('ticket UX helpers', () => {
   });
 
   it('uses one purchase-eligibility policy across ticket surfaces', () => {
-    expect(isEventTicketPurchaseEligible({ isPublic: true, status: 'on_sale' })).toBe(true);
-    expect(isEventTicketPurchaseEligible({ isPublic: true, status: 'live' })).toBe(true);
-    expect(isEventTicketPurchaseEligible({ isPublic: true, status: 'planning' })).toBe(false);
-    expect(isEventTicketPurchaseEligible({ isPublic: false, status: 'on_sale' })).toBe(false);
+    expect(isEventTicketPurchaseEligible({ isPublic: true, ticketPurchaseEnabled: true })).toBe(true);
+    expect(isEventTicketPurchaseEligible({ isPublic: true, ticketPurchaseEnabled: false })).toBe(false);
+    expect(isEventTicketPurchaseEligible({ isPublic: false, ticketPurchaseEnabled: true })).toBe(false);
   });
 });

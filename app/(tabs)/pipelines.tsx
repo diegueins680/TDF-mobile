@@ -1,45 +1,51 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScrollView, View, Text, Alert, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { listPipeline, updateStage } from '../../src/api/pipelines';
-import type { PipelineCard, PipelineKind, PipelineStage } from '../../src/types';
+import { refreshPipelineSnapshot, updateStage } from '../../src/api/pipelines';
+import type { PipelineCard, PipelineDefinition, PipelineStage } from '../../src/types';
 import { StagePill } from '../../src/components/StagePill';
+import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 
-const STAGES: PipelineStage[] = ['Intake', 'Editing', 'Mixing', 'Revisions', 'Mastering', 'Approved'];
-
-type MovePayload = { kind: PipelineKind; id: PipelineCard['id']; stage: PipelineStage };
+type MovePayload = { workflowId: string; id: PipelineCard['id']; workflowStateId: string };
 
 function Column({
-  title,
+  definition,
+  stage,
   cards,
+  english,
   onMove,
 }: {
-  title: string;
+  definition: PipelineDefinition;
+  stage: PipelineStage;
   cards: PipelineCard[];
-  onMove: (id: PipelineCard['id'], to: PipelineStage) => void;
+  english: boolean;
+  onMove: (id: PipelineCard['id'], workflowStateId: string) => void;
 }) {
+  const stageName = english ? stage.nameEn : stage.nameEs;
   return (
     <View style={styles.col}>
-      <Text style={styles.colTitle}>{title}</Text>
-      {cards.length === 0 ? (
-        <Text style={styles.emptyText}>No cards yet</Text>
-      ) : null}
-      {cards.map(c => (
-        <Pressable key={String(c.id)} style={styles.card}
-          onLongPress={() => {
-            Alert.alert(
-              'Move to stage',
-              undefined,
-              STAGES.map((s) => ({
-                text: s,
-                onPress: () => onMove(c.id, s),
-              })),
-            );
-          }}
+      <Text style={styles.pipelineTitle}>{english ? definition.nameEn : definition.nameEs}</Text>
+      <Text style={styles.colTitle}>{stageName}</Text>
+      {cards.length === 0 ? <Text style={styles.emptyText}>{english ? 'No cards yet' : 'Aún no hay tarjetas'}</Text> : null}
+      {cards.map((card) => (
+        <Pressable
+          key={String(card.id)}
+          style={styles.card}
+          accessibilityRole="button"
+          accessibilityLabel={`${card.title}, ${stageName}`}
+          accessibilityHint={english ? 'Long press to choose another stage' : 'Mantén presionado para elegir otra etapa'}
+          onLongPress={() => Alert.alert(
+            english ? 'Move to stage' : 'Mover a etapa',
+            undefined,
+            definition.stages.map((target) => ({
+              text: english ? target.nameEn : target.nameEs,
+              onPress: () => onMove(card.id, target.id),
+            })),
+          )}
         >
-          <Text style={styles.cardTitle}>{c.title}</Text>
-          {c.artist ? <Text>{c.artist}</Text> : null}
-          <StagePill stage={c.stage} />
+          <Text style={styles.cardTitle}>{card.title}</Text>
+          {card.artist ? <Text>{card.artist}</Text> : null}
+          <StagePill name={stageName} />
         </Pressable>
       ))}
     </View>
@@ -48,48 +54,39 @@ function Column({
 
 export default function Pipelines() {
   const qc = useQueryClient();
-  const mixing = useQuery<PipelineCard[]>({ queryKey: ['pipeline', 'mixing'], queryFn: () => listPipeline('mixing') });
-  const mastering = useQuery<PipelineCard[]>({ queryKey: ['pipeline', 'mastering'], queryFn: () => listPipeline('mastering') });
-
-  const m = useMutation<void, Error, MovePayload>({
-    mutationFn: ({ kind, id, stage }) => updateStage(kind, id, stage),
-    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['pipeline', vars.kind] }),
+  const { locale } = useUserSettings();
+  const english = locale.toLowerCase().startsWith('en');
+  const snapshotQuery = useQuery({ queryKey: ['pipeline-snapshot'], queryFn: refreshPipelineSnapshot });
+  const mutation = useMutation<PipelineCard, Error, MovePayload>({
+    mutationFn: ({ workflowId, id, workflowStateId }) => updateStage(workflowId, id, workflowStateId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pipeline-snapshot'] }),
   });
 
-  if (mixing.isLoading || mastering.isLoading) {
-    return (
-      <SafeAreaView style={styles.page} edges={['top']}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563eb" />
-        </View>
-      </SafeAreaView>
-    );
+  if (snapshotQuery.isLoading) {
+    return <SafeAreaView style={styles.page} edges={['top']}><View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View></SafeAreaView>;
   }
 
-  if (mixing.isError || mastering.isError) {
-    return (
-      <SafeAreaView style={styles.page} edges={['top']}>
-        <View style={styles.center}>
-          <Text style={styles.errorText}>Could not load pipelines.</Text>
-        </View>
-      </SafeAreaView>
-    );
+  if (snapshotQuery.isError || !snapshotQuery.data) {
+    return <SafeAreaView style={styles.page} edges={['top']}><View style={styles.center}><Text style={styles.errorText}>{english ? 'No valid pipeline snapshot is available.' : 'No hay un snapshot válido de pipelines.'}</Text></View></SafeAreaView>;
   }
 
-  const mixingCards = mixing.data || [];
-  const masteringCards = mastering.data || [];
-
+  const snapshot = snapshotQuery.data;
   return (
     <SafeAreaView style={styles.page} edges={['top']}>
+      {mutation.isError ? <Text accessibilityRole="alert" style={styles.errorBanner}>{mutation.error.message}</Text> : null}
       <ScrollView horizontal contentContainerStyle={styles.content}>
-        <Column title="Mixing" cards={mixingCards}
-          onMove={(id, stage) => m.mutate({ kind: 'mixing', id, stage })} />
-        <Column title="Mastering" cards={masteringCards}
-          onMove={(id, stage) => m.mutate({ kind: 'mastering', id, stage })} />
-        <View style={styles.helpCard}>
-          <Text style={styles.helpTitle}>Tip</Text>
-          <Text style={styles.helpText}>Long-press any card to move it to another stage.</Text>
-        </View>
+        {snapshot.definitions.flatMap((definition) => definition.stages.map((stage) => (
+          <Column
+            key={`${definition.workflowId}:${stage.id}`}
+            definition={definition}
+            stage={stage}
+            cards={(snapshot.cards[definition.workflowId] ?? [])
+              .filter((card) => card.workflowStateId === stage.id)
+              .sort((left, right) => left.sortOrder - right.sortOrder)}
+            english={english}
+            onMove={(id, workflowStateId) => mutation.mutate({ workflowId: definition.workflowId, id, workflowStateId })}
+          />
+        )))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -97,27 +94,14 @@ export default function Pipelines() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#fff' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  content: {
-    paddingHorizontal: 12,
-    paddingTop: 28,
-    paddingBottom: 12,
-  },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  content: { paddingHorizontal: 12, paddingTop: 28, paddingBottom: 12 },
   col: { width: 280, marginRight: 12 },
+  pipelineTitle: { fontSize: 12, color: '#4b5563', marginBottom: 2 },
   colTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
   emptyText: { color: '#6b7280', marginBottom: 8 },
-  card: { backgroundColor: 'white', padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#eee', gap: 4 },
+  card: { minHeight: 44, backgroundColor: 'white', padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', gap: 4 },
   cardTitle: { fontWeight: '600' },
-  errorText: { color: '#dc2626', fontSize: 14 },
-  helpCard: {
-    width: 220,
-    backgroundColor: '#eff6ff',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-    borderRadius: 10,
-    padding: 12,
-    alignSelf: 'flex-start',
-  },
-  helpTitle: { fontWeight: '700', color: '#1d4ed8', marginBottom: 4 },
-  helpText: { color: '#1e3a8a', lineHeight: 20, fontSize: 13 },
+  errorText: { color: '#dc2626', fontSize: 14, textAlign: 'center' },
+  errorBanner: { color: '#991b1b', backgroundColor: '#fee2e2', padding: 12 },
 });

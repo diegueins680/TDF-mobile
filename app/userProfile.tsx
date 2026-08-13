@@ -13,28 +13,34 @@ import { normalizePartyId } from '../src/lib/identity';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, unsaveEvent } from '../src/lib/savedEvents';
 import { formatTicketMoney } from '../src/lib/tickets';
-import { useAppTheme, type ThemePreference } from '../src/theme/ThemeProvider';
-
-const THEME_OPTIONS: ReadonlyArray<{ value: ThemePreference; label: string }> = [
-  { value: 'system', label: 'Sistema' },
-  { value: 'light', label: 'Claro' },
-  { value: 'dark', label: 'Oscuro' },
-];
+import { useAppTheme } from '../src/theme/ThemeProvider';
+import { useAuth } from '../src/providers/AuthProvider';
 
 export default function UserProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { preference: themePreference, setPreference: setThemePreference } = useAppTheme();
+  const { token } = useAuth();
+  const {
+    preferenceId: themePreferenceId,
+    options: themeOptions,
+    catalogSource: themeCatalogSource,
+    setPreferenceById: setThemePreferenceById,
+  } = useAppTheme();
   const {
     partyId, displayName, setIdentity, clearIdentity, loading,
-    locale, currency, timezone, countryCode, supportedLocales, supportedCurrencies,
+    localeId, locale, currencyId, currency, timezone, countryId, countryCode,
+    getCatalogItems,
     setRegionalPreferences,
   } = useUserSettings();
+  const countries = useMemo(() => getCatalogItems('countries'), [getCatalogItems]);
+  const localeOptions = useMemo(() => getCatalogItems('locales'), [getCatalogItems]);
+  const currencyOptions = useMemo(() => getCatalogItems('currencies'), [getCatalogItems]);
   const [activeTab, setActiveTab] = useState<'artist' | 'events' | 'saved'>('artist');
   const [draftPartyId, setDraftPartyId] = useState(partyId ?? '');
   const [draftName, setDraftName] = useState(displayName ?? '');
   const [draftTimezone, setDraftTimezone] = useState(timezone);
-  const [draftCountryCode, setDraftCountryCode] = useState(countryCode ?? '');
+  const [draftCountryId, setDraftCountryId] = useState(countryId ?? '');
+  const [countrySearch, setCountrySearch] = useState(countryCode ?? '');
 
   useEffect(() => {
     setDraftPartyId(partyId ?? '');
@@ -43,8 +49,22 @@ export default function UserProfileScreen() {
 
   useEffect(() => {
     setDraftTimezone(timezone);
-    setDraftCountryCode(countryCode ?? '');
-  }, [countryCode, timezone]);
+    const selectedCountry = countries.find((country) => country.id === countryId)
+      ?? countries.find((country) => country.code === countryCode);
+    setDraftCountryId(selectedCountry?.id ?? '');
+    setCountrySearch(selectedCountry ? `${selectedCountry.name} · ${selectedCountry.code}` : countryCode ?? '');
+  }, [countries, countryCode, countryId, timezone]);
+
+  const countryMatches = useMemo(() => {
+    const query = countrySearch.trim().toLocaleLowerCase(locale);
+    if (!query || countries.some((country) => country.id === draftCountryId && `${country.name} · ${country.code}`.toLocaleLowerCase(locale) === query)) {
+      return [];
+    }
+    return countries
+      .filter((country) => [country.name, country.code, ...country.searchAliases]
+        .some((value) => value.toLocaleLowerCase(locale).includes(query)))
+      .slice(0, 8);
+  }, [countries, countrySearch, draftCountryId, locale]);
 
   // Query user's artist profile
   const artistQuery = useQuery({
@@ -150,9 +170,13 @@ export default function UserProfileScreen() {
   }, [clearIdentity]);
 
   const handleSaveRegion = useCallback(() => {
-    setRegionalPreferences({ timezone: draftTimezone, countryCode: draftCountryCode });
+    if (countrySearch.trim() && !draftCountryId) {
+      Alert.alert('Selecciona un país', 'Elige una coincidencia del catálogo o borra la búsqueda para continuar sin país.');
+      return;
+    }
+    setRegionalPreferences({ timezone: draftTimezone, countryId: draftCountryId || null });
     Alert.alert('Guardado', 'Actualizamos tus preferencias regionales.');
-  }, [draftCountryCode, draftTimezone, setRegionalPreferences]);
+  }, [countrySearch, draftCountryId, draftTimezone, setRegionalPreferences]);
 
   const headerName = draftName || displayName || 'Tu perfil';
   const headerSubtitle = partyId ? `Party ID: ${partyId}` : 'Agrega tu Party ID para RSVP e invitaciones';
@@ -251,39 +275,86 @@ export default function UserProfileScreen() {
           <Text style={styles.sectionTitle}>Idioma y región</Text>
           <Text style={styles.helperText}>Apariencia</Text>
           <View style={styles.optionRow} accessibilityRole="radiogroup">
-            {THEME_OPTIONS.map((option) => (
+            {themeOptions.map((option) => (
               <TouchableOpacity
-                key={option.value}
-                style={[styles.optionButton, themePreference === option.value && styles.optionButtonActive]}
-                onPress={() => setThemePreference(option.value)}
+                key={option.id}
+                style={[styles.optionButton, themePreferenceId === option.id && styles.optionButtonActive]}
+                onPress={() => setThemePreferenceById(option.id)}
                 accessibilityRole="radio"
-                accessibilityState={{ selected: themePreference === option.value }}
+                accessibilityState={{ selected: themePreferenceId === option.id }}
                 accessibilityLabel={`Tema ${option.label.toLocaleLowerCase()}`}
               >
-                <Text style={[styles.optionButtonText, themePreference === option.value && styles.optionButtonTextActive]}>
+                <Text style={[styles.optionButtonText, themePreferenceId === option.id && styles.optionButtonTextActive]}>
                   {option.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+          {themeCatalogSource === 'emergency' && (
+            <Text style={styles.helperText}>Usando opciones de apariencia de emergencia hasta sincronizar.</Text>
+          )}
           <Text style={styles.helperText}>Idioma</Text>
           <View style={styles.optionRow}>
-            {supportedLocales.map((value) => (
-              <TouchableOpacity key={value} style={[styles.optionButton, locale === value && styles.optionButtonActive]} onPress={() => setRegionalPreferences({ locale: value })}>
-                <Text style={[styles.optionButtonText, locale === value && styles.optionButtonTextActive]}>{value.toUpperCase()}</Text>
+            {localeOptions.map((option) => (
+              <TouchableOpacity key={option.id} style={[styles.optionButton, localeId === option.id && styles.optionButtonActive]} onPress={() => setRegionalPreferences({ localeId: option.id })}>
+                <Text style={[styles.optionButtonText, localeId === option.id && styles.optionButtonTextActive]}>{option.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
           <Text style={styles.helperText}>Moneda preferida</Text>
           <View style={styles.optionRow}>
-            {supportedCurrencies.map((value) => (
-              <TouchableOpacity key={value} style={[styles.optionButton, currency === value && styles.optionButtonActive]} onPress={() => setRegionalPreferences({ currency: value })}>
-                <Text style={[styles.optionButtonText, currency === value && styles.optionButtonTextActive]}>{value}</Text>
+            {currencyOptions.map((option) => (
+              <TouchableOpacity key={option.id} style={[styles.optionButton, currencyId === option.id && styles.optionButtonActive]} onPress={() => setRegionalPreferences({ currencyId: option.id })}>
+                <Text style={[styles.optionButtonText, currencyId === option.id && styles.optionButtonTextActive]}>{option.name} · {option.code}</Text>
               </TouchableOpacity>
             ))}
           </View>
           <TextInput placeholder="Zona horaria IANA, por ejemplo Europe/Berlin" value={draftTimezone} onChangeText={setDraftTimezone} autoCapitalize="none" style={styles.input} />
-          <TextInput placeholder="Código de país ISO (opcional)" value={draftCountryCode} onChangeText={(value) => setDraftCountryCode(value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())} autoCapitalize="characters" style={styles.input} />
+          <TextInput
+            placeholder="Buscar país (opcional)"
+            value={countrySearch}
+            onChangeText={(value) => {
+              setCountrySearch(value);
+              setDraftCountryId('');
+            }}
+            autoCapitalize="words"
+            accessibilityLabel="Buscar país"
+            style={styles.input}
+          />
+          {countryMatches.length > 0 && (
+            <View style={styles.optionRow} accessibilityRole="radiogroup">
+              {countryMatches.map((country) => (
+                <TouchableOpacity
+                  key={country.id}
+                  style={[styles.optionButton, draftCountryId === country.id && styles.optionButtonActive]}
+                  onPress={() => {
+                    setDraftCountryId(country.id);
+                    setCountrySearch(`${country.name} · ${country.code}`);
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: draftCountryId === country.id }}
+                  accessibilityLabel={`${country.name}, ${country.code}`}
+                >
+                  <Text style={[styles.optionButtonText, draftCountryId === country.id && styles.optionButtonTextActive]}>
+                    {country.name} · {country.code}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {draftCountryId.length > 0 && (
+            <TouchableOpacity
+              style={styles.optionButton}
+              onPress={() => {
+                setDraftCountryId('');
+                setCountrySearch('');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Quitar país seleccionado"
+            >
+              <Text style={styles.optionButtonText}>Sin país</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.saveButton} onPress={handleSaveRegion}><Text style={styles.saveButtonText}>Guardar preferencias</Text></TouchableOpacity>
         </View>
 
@@ -303,6 +374,25 @@ export default function UserProfileScreen() {
           </View>
           <MaterialCommunityIcons name="chevron-right" size={24} color="#6b7280" />
         </TouchableOpacity>
+
+        {token ? (
+          <TouchableOpacity
+            style={styles.catalogsCard}
+            onPress={() => router.push('/catalogs')}
+            accessibilityRole="button"
+            accessibilityLabel="Abrir administración de Catálogos"
+            accessibilityHint="El servidor comprobará tus permisos de catálogo"
+          >
+            <View style={styles.catalogsIcon}>
+              <MaterialCommunityIcons name="format-list-bulleted-square" size={25} color="#0369a1" />
+            </View>
+            <View style={styles.myTicketsCopy}>
+              <Text style={styles.catalogsTitle}>Catálogos</Text>
+              <Text style={styles.myTicketsText}>Consulta y administra datos canónicos según tus permisos</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={24} color="#6b7280" />
+          </TouchableOpacity>
+        ) : null}
 
         <View style={styles.tabContainer}>
           <TouchableOpacity
@@ -431,9 +521,12 @@ const styles = StyleSheet.create({
   profileEmail: { fontSize: 13, color: '#666' },
   identityCard: { backgroundColor: '#fff', borderRadius: 8, padding: 16, borderWidth: 1, borderColor: '#f0f0f0', marginBottom: 16, gap: 10 },
   myTicketsCard: { minHeight: 72, backgroundColor: '#faf5ff', borderRadius: 14, padding: 13, borderWidth: 1, borderColor: '#ddd6fe', marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  catalogsCard: { minHeight: 72, backgroundColor: '#f0f9ff', borderRadius: 14, padding: 13, borderWidth: 1, borderColor: '#bae6fd', marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   myTicketsIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#ede9fe', alignItems: 'center', justifyContent: 'center' },
+  catalogsIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#e0f2fe', alignItems: 'center', justifyContent: 'center' },
   myTicketsCopy: { flex: 1, gap: 2 },
   myTicketsTitle: { color: '#2e1065', fontSize: 15, fontWeight: '800' },
+  catalogsTitle: { color: '#0c4a6e', fontSize: 15, fontWeight: '800' },
   myTicketsText: { color: '#6b7280', fontSize: 12 },
   input: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10 },
   identityActions: { flexDirection: 'row', gap: 8 },

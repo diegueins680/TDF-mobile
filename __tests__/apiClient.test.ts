@@ -76,6 +76,14 @@ describe('API client buyer errors', () => {
     expect(error.message).toMatch(/iniciar sesión/i);
   });
 
+  it('explains a denied protected-catalog operation without hiding the authorization result', () => {
+    const error = normalizeApiError({
+      isAxiosError: true,
+      response: { status: 403, data: {} },
+    });
+    expect(error.message).toMatch(/no tienes permiso/i);
+  });
+
   it('preserves idempotency conflict reasons instead of labeling every 409 as sold out', () => {
     const original = {
       isAxiosError: true,

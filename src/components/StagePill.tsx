@@ -1,14 +1,12 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { PipelineStage } from '../types';
+type Props = { name: string };
 
-type Props = { stage: PipelineStage };
-
-function StagePillComponent({ stage }: Props) {
+function StagePillComponent({ name }: Props) {
   return (
     <View style={styles.wrap}>
-      <Text style={styles.text}>{stage}</Text>
+      <Text style={styles.text}>{name}</Text>
     </View>
   );
 }

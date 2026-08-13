@@ -45,6 +45,7 @@ type BackendArtistDTO = {
 
 type BackendEventDTO = {
   eventId: ID;
+  eventTypeId: string;
   eventOrganizerPartyId?: ID | null;
   eventTitle: string;
   eventDescription?: string | null;
@@ -57,7 +58,12 @@ type BackendEventDTO = {
   eventTicketUrl?: string | null;
   eventImageUrl?: string | null;
   eventIsPublic?: boolean | null;
-  eventStatus?: string | null;
+  eventWorkflowStateId?: string | null;
+  eventWorkflowStateCode?: string | null;
+  eventWorkflowStateNameEs?: string | null;
+  eventWorkflowStateNameEn?: string | null;
+  eventPublicListable?: boolean | null;
+  eventTicketPurchaseEnabled?: boolean | null;
   eventCreatedAt?: string | null;
   eventUpdatedAt?: string | null;
   eventArtists?: BackendArtistDTO[];
@@ -295,6 +301,26 @@ const normalizeOptionalText = (value: string | null | undefined): string | null 
   return trimmed ? trimmed : null;
 };
 
+const CATALOG_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const normalizeCatalogUuid = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim();
+  return trimmed && CATALOG_UUID_PATTERN.test(trimmed) ? trimmed.toLowerCase() : null;
+};
+
+const requireCatalogUuid = (value: string | null | undefined, fieldName: string): string => {
+  const normalized = normalizeCatalogUuid(value);
+  if (!normalized) throw new Error(`${fieldName} must be a canonical catalog UUID.`);
+  return normalized;
+};
+
+const requireNonBlankText = (value: string | null | undefined, fieldName: string): string => {
+  const normalized = normalizeOptionalText(value);
+  if (!normalized) throw new Error(`${fieldName} must be a non-blank persisted value.`);
+  return normalized;
+};
+
 const normalizeMomentMediaKind = (value: string | null | undefined): 'image' | 'video' => {
   const normalized = value?.trim().toLowerCase();
   return normalized === 'video' ? 'video' : 'image';
@@ -359,6 +385,7 @@ export const Events = {
     offset?: number;
     artistId?: ID;
     venueId?: ID;
+    eventTypeId?: string;
     scope?: 'subscribed' | 'all';
   }): Promise<SocialEvent[]> => {
     const query = new URLSearchParams();
@@ -384,8 +411,10 @@ export const Events = {
     }
     const artistId = normalizeOptionalPositiveIdParam(filters?.artistId);
     const venueId = normalizeOptionalPositiveIdParam(filters?.venueId);
+    const eventTypeId = normalizeCatalogUuid(filters?.eventTypeId);
     if (artistId) query.append('artistId', artistId);
     if (venueId) query.append('venueId', venueId);
+    if (eventTypeId) query.append('event_type_id', eventTypeId);
 
     const url = `/social-events/events${query.toString() ? `?${query.toString()}` : ''}`;
     const events = await get<BackendEventDTO[]>(url);
@@ -810,6 +839,7 @@ function mapBackendEventToFrontend(
   const sources = (e.eventSources ?? []).map(mapBackendEventSource);
   return {
     id: e.eventId,
+    eventTypeId: requireCatalogUuid(e.eventTypeId, 'eventTypeId'),
     title: e.eventTitle,
     description: e.eventDescription || null,
     startTime: e.eventStart, // ISO string from backend
@@ -825,7 +855,12 @@ function mapBackendEventToFrontend(
     sources,
     imageUrl: e.eventImageUrl ?? null,
     isPublic: typeof e.eventIsPublic === 'boolean' ? e.eventIsPublic : true,
-    status: normalizeOptionalText(e.eventStatus)?.toLowerCase() ?? 'planning',
+    workflowStateId: requireCatalogUuid(e.eventWorkflowStateId, 'eventWorkflowStateId'),
+    workflowStateCode: requireNonBlankText(e.eventWorkflowStateCode, 'eventWorkflowStateCode'),
+    workflowStateNameEs: requireNonBlankText(e.eventWorkflowStateNameEs, 'eventWorkflowStateNameEs'),
+    workflowStateNameEn: requireNonBlankText(e.eventWorkflowStateNameEn, 'eventWorkflowStateNameEn'),
+    publicListable: e.eventPublicListable === true,
+    ticketPurchaseEnabled: e.eventTicketPurchaseEnabled === true,
     rsvpCount: Array.isArray(e.eventRsvps)
       ? e.eventRsvps.filter((rsvp) => normalizeRsvpStatus(rsvp.rsvpStatus) === 'GOING').length
       : 0,
@@ -885,6 +920,10 @@ function toBackendTicketPriceCents(value: unknown): number | null {
 function mapFrontendEventToBackend(body: SocialEventWrite) {
   const currency = body.currency?.trim().toUpperCase();
   return {
+    eventTypeId: requireCatalogUuid(body.eventTypeId, 'eventTypeId'),
+    ...(body.workflowStateId
+      ? { eventWorkflowStateId: requireCatalogUuid(body.workflowStateId, 'eventWorkflowStateId') }
+      : {}),
     eventTitle: body.title,
     eventDescription: body.description,
     eventStart: body.startTime,
@@ -941,6 +980,7 @@ function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): Soci
     : existing.currency ?? undefined;
 
   return {
+    eventTypeId: patch.eventTypeId ?? existing.eventTypeId,
     title: patch.title ?? existing.title,
     description: mergedDescription,
     startTime: patch.startTime ?? existing.startTime,
@@ -952,6 +992,7 @@ function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): Soci
     ticketUrl: mergedTicketUrl,
     imageUrl: mergedImageUrl,
     isPublic: patch.isPublic ?? existing.isPublic,
+    workflowStateId: patch.workflowStateId ?? existing.workflowStateId,
   };
 }
 

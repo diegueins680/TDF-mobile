@@ -11,6 +11,7 @@ type BackendArtistDTO = {
   artistBio?: string | null;
   artistAvatarUrl?: string | null;
   artistGenres?: string[];
+  artistGenreIds?: string[];
   artistSocialLinks?: ArtistSocialLinks;
   artistCreatedAt?: string | null;
   artistUpdatedAt?: string | null;
@@ -32,7 +33,7 @@ type ArtistWrite = {
   name?: string;
   bio?: string | null;
   imageUrl?: string | null;
-  genres?: string[];
+  genreIds?: string[];
   instagramHandle?: string | null;
   spotifyUrl?: string | null;
   socialLinks?: ArtistSocialLinks;
@@ -46,12 +47,12 @@ const hasOwn = (value: object, key: PropertyKey): boolean =>
  * Maps backend ArtistDTO to frontend ArtistProfile types
  */
 export const Artists = {
-  list: async (filters?: { name?: string; genre?: string; limit?: number; offset?: number }): Promise<ArtistProfile[]> => {
+  list: async (filters?: { name?: string; genreId?: string; limit?: number; offset?: number }): Promise<ArtistProfile[]> => {
     const query = new URLSearchParams();
     const name = filters?.name?.trim();
-    const genre = filters?.genre?.trim();
+    const genreId = filters?.genreId?.trim();
     if (name) query.append('name', name);
-    if (genre) query.append('genre', genre);
+    if (genreId) query.append('genreId', genreId);
     if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit)) {
       const normalizedLimit = Math.trunc(filters.limit);
       if (normalizedLimit > 0) {
@@ -110,8 +111,8 @@ export const Artists = {
     return mapBackendArtistToFrontend(artist);
   },
 
-  searchByGenre: async (genre: string): Promise<ArtistProfile[]> => {
-    const artists = await get<BackendArtistDTO[]>(`/social-events/artists?genre=${encodeURIComponent(genre)}`);
+  searchByGenre: async (genreId: string): Promise<ArtistProfile[]> => {
+    const artists = await get<BackendArtistDTO[]>(`/social-events/artists?genreId=${encodeURIComponent(genreId)}`);
     return artists.map((a) => mapBackendArtistToFrontend(a));
   },
 
@@ -161,6 +162,7 @@ export function mapBackendArtistToFrontend(a: BackendArtistDTO): ArtistProfile {
     bio: a.artistBio ?? null,
     imageUrl: a.artistAvatarUrl ?? null,
     genres: a.artistGenres ?? [],
+    genreIds: a.artistGenreIds ?? [],
     instagramHandle: socialLinks?.instagram ?? null,
     spotifyUrl: socialLinks?.spotify ?? null,
     socialLinks,
@@ -176,7 +178,7 @@ function mapFrontendArtistToBackend(body: ArtistWrite) {
     artistName: body.name,
     artistBio: normalizeOptionalText(body.bio),
     artistAvatarUrl: normalizeOptionalText(body.imageUrl),
-    artistGenres: body.genres ?? [],
+    artistGenreIds: body.genreIds ?? [],
     artistSocialLinks: socialLinks
   };
 }
@@ -294,7 +296,7 @@ function mergeArtistUpdate(existing: ArtistProfile, patch: ArtistProfileUpdate):
     name: patch.name ?? existing.name,
     bio: mergedBio,
     imageUrl: mergedImageUrl,
-    genres: patch.genres ?? existing.genres ?? [],
+    genreIds: patch.genreIds ?? existing.genreIds ?? [],
     socialLinks: mergeArtistSocialLinks(existing.socialLinks, patch),
   };
 }

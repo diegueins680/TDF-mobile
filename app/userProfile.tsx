@@ -21,6 +21,7 @@ export default function UserProfileScreen() {
   const qc = useQueryClient();
   const { token } = useAuth();
   const {
+    colors,
     preferenceId: themePreferenceId,
     options: themeOptions,
     catalogSource: themeCatalogSource,
@@ -185,7 +186,7 @@ export default function UserProfileScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color={colors.actionPrimary} />
         </View>
       </SafeAreaView>
     );

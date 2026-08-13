@@ -92,7 +92,21 @@ interface StoredThemeSelection {
   code: ThemePreference;
 }
 
-const AppThemeContext = createContext<AppThemeContextValue | null>(null);
+const DEFAULT_THEME_CONTEXT: AppThemeContextValue = {
+  colorScheme: 'light',
+  preference: 'system',
+  preferenceId: '',
+  options: [],
+  catalogSource: 'emergency',
+  colors: semanticColors.light,
+  setPreferenceById: () => undefined,
+};
+
+// Components can also be rendered in isolation (previews, error boundaries, and
+// unit tests). The provider remains authoritative in the application tree, while
+// this deterministic emergency value prevents a missing wrapper from crashing a
+// complete screen before the persisted appearance catalog is available.
+const AppThemeContext = createContext<AppThemeContextValue>(DEFAULT_THEME_CONTEXT);
 
 function isThemePreference(value: unknown): value is ThemePreference {
   return value === 'light' || value === 'dark' || value === 'system';
@@ -185,7 +199,5 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
 }
 
 export function useAppTheme(): AppThemeContextValue {
-  const context = useContext(AppThemeContext);
-  if (!context) throw new Error('useAppTheme must be used inside AppThemeProvider');
-  return context;
+  return useContext(AppThemeContext);
 }

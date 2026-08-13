@@ -120,9 +120,18 @@ describe('Social list filter serialization', () => {
   it('Artists.list trims text filters and skips blank values', async () => {
     get.mockResolvedValueOnce([]);
 
-    await Artists.list({ name: '  Ana  ', genre: '   ' });
+    await Artists.list({ name: '  Ana  ', genreId: '   ' });
 
     expect(get).toHaveBeenCalledWith('/social-events/artists?name=Ana');
+  });
+
+  it('Artists.list sends canonical genre UUID filters', async () => {
+    get.mockResolvedValueOnce([]);
+    const genreId = '11111111-1111-4111-8111-111111111111';
+
+    await Artists.list({ genreId });
+
+    expect(get).toHaveBeenCalledWith(`/social-events/artists?genreId=${genreId}`);
   });
 
   it('Venues.list trims city/query filters and skips blank values', async () => {
@@ -153,5 +162,17 @@ describe('Social list filter serialization', () => {
 
     expect(get).toHaveBeenNthCalledWith(1, '/social-events/events');
     expect(get).toHaveBeenNthCalledWith(2, '/social-events/events?artistId=party-a&venueId=venue-z');
+  });
+
+  it('Events.list sends only canonical event type UUID filters', async () => {
+    get.mockResolvedValueOnce([]);
+    get.mockResolvedValueOnce([]);
+    const eventTypeId = '41000000-0000-4000-8000-000000000001';
+
+    await Events.list({ eventTypeId });
+    await Events.list({ eventTypeId: 'party' });
+
+    expect(get).toHaveBeenNthCalledWith(1, `/social-events/events?event_type_id=${eventTypeId}`);
+    expect(get).toHaveBeenNthCalledWith(2, '/social-events/events');
   });
 });

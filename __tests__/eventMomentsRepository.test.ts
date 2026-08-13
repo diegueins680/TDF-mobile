@@ -38,7 +38,7 @@ describe('event moments repository', () => {
         authorName: 'Local draft',
         media: { kind: 'image', uri: 'file:///local.jpg', mimeType: 'image/jpeg' },
         createdAt: '2026-04-10T20:00:00.000Z',
-        reactions: { fire: [], love: [], applause: [] },
+        reactions: { '50800000-0000-4000-8000-000000000001': [] },
         comments: [],
       },
     ]);
@@ -49,7 +49,7 @@ describe('event moments repository', () => {
         authorName: 'Remote sync',
         media: { kind: 'image', uri: 'https://example.com/remote.jpg', mimeType: 'image/jpeg' },
         createdAt: '2026-04-10T21:00:00.000Z',
-        reactions: { fire: [], love: [], applause: [] },
+        reactions: { '50800000-0000-4000-8000-000000000001': [] },
         comments: [],
       },
     ]);
@@ -72,7 +72,7 @@ describe('event moments repository', () => {
       authorName: 'Cuco',
       media: { kind: 'image', uri: 'file:///fallback.jpg', mimeType: 'image/jpeg' },
       createdAt: '2026-04-10T22:00:00.000Z',
-      reactions: { fire: [], love: [], applause: [] },
+      reactions: { '50800000-0000-4000-8000-000000000001': [] },
       comments: [],
     });
 
@@ -106,7 +106,7 @@ describe('event moments repository', () => {
       authorName: 'Cuco',
       media: { kind: 'image', uri: 'file:///network.jpg', mimeType: 'image/jpeg' },
       createdAt: '2026-04-10T22:00:00.000Z',
-      reactions: { fire: [], love: [], applause: [] },
+      reactions: { '50800000-0000-4000-8000-000000000001': [] },
       comments: [],
     });
 
@@ -131,7 +131,14 @@ describe('event moments repository', () => {
           eventId: '42',
           momentId: 'moment-local-3',
           actorKey: 'party:7',
-          reaction: 'fire',
+          reaction: {
+            id: '50800000-0000-4000-8000-000000000001',
+            code: 'fire',
+            label: 'Fuego',
+            nameEs: 'Fuego',
+            nameEn: 'Fire',
+            emoji: '🔥',
+          },
         },
         { preferRemote: true },
       ),
@@ -139,6 +146,7 @@ describe('event moments repository', () => {
 
     expect(mockEvents.reactToMoment).not.toHaveBeenCalled();
     expect(mockLocalMoments.toggleMomentReaction).toHaveBeenCalledTimes(1);
+    expect(mockLocalMoments.toggleMomentReaction).toHaveBeenCalledWith(expect.objectContaining({ reactionTypeId: '50800000-0000-4000-8000-000000000001' }));
   });
 
   it('does not silently downgrade backend validation errors to local comments', async () => {

@@ -13,6 +13,9 @@ import {
 } from '../src/lib/eventMoments';
 
 const STORAGE_KEY = 'tdf-event-moments';
+const FIRE_ID = '50800000-0000-4000-8000-000000000001';
+const LOVE_ID = '50800000-0000-4000-8000-000000000002';
+const APPLAUSE_ID = '50800000-0000-4000-8000-000000000003';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
@@ -84,24 +87,24 @@ describe('event moments storage', () => {
       eventId: 9,
       momentId: moment.id,
       actorKey: actor.actorKey,
-      reaction: 'fire',
+      reactionTypeId: FIRE_ID,
     });
 
     let stored = await listEventMoments(9);
-    expect(stored[0]?.reactions.fire).toEqual([actor.actorKey]);
+    expect(stored[0]?.reactions[FIRE_ID]).toEqual([actor.actorKey]);
     expect(countMomentReactions(stored[0]!)).toBe(1);
-    expect(getMomentTopReaction(stored[0]!)).toBe('fire');
+    expect(getMomentTopReaction(stored[0]!)).toBe(FIRE_ID);
 
     await toggleMomentReaction({
       eventId: 9,
       momentId: moment.id,
       actorKey: actor.actorKey,
-      reaction: 'love',
+      reactionTypeId: LOVE_ID,
     });
 
     stored = await listEventMoments(9);
-    expect(stored[0]?.reactions.fire).toEqual([]);
-    expect(stored[0]?.reactions.love).toEqual([actor.actorKey]);
+    expect(stored[0]?.reactions[FIRE_ID]).toEqual([]);
+    expect(stored[0]?.reactions[LOVE_ID]).toEqual([actor.actorKey]);
 
     await addMomentComment({
       eventId: 9,
@@ -129,7 +132,7 @@ describe('event moments storage', () => {
           caption: '  Hola ',
           media: { kind: 'image', uri: 'file:///a.jpg', mimeType: 'image/jpeg' },
           createdAt: '2026-03-31T10:00:00.000Z',
-          reactions: { fire: ['party:1', 'party:1'], love: [''], applause: ['party:2'] },
+          reactions: { [FIRE_ID]: ['party:1', 'party:1'], [LOVE_ID]: [''], [APPLAUSE_ID]: ['party:2'], fire: ['legacy'] },
           comments: [
             {
               id: 'comment-a',
@@ -163,9 +166,9 @@ describe('event moments storage', () => {
         authorName: 'Lucia',
         caption: 'Hola',
         reactions: {
-          fire: ['party:1'],
-          love: [],
-          applause: ['party:2'],
+          [FIRE_ID]: ['party:1'],
+          [LOVE_ID]: [],
+          [APPLAUSE_ID]: ['party:2'],
         },
         comments: [
           expect.objectContaining({
@@ -197,8 +200,8 @@ describe('event moments storage', () => {
       },
     });
 
-    await toggleMomentReaction({ eventId: '77', momentId: featured.id, actorKey: 'party:1', reaction: 'fire' });
-    await toggleMomentReaction({ eventId: '77', momentId: featured.id, actorKey: 'party:2', reaction: 'fire' });
+    await toggleMomentReaction({ eventId: '77', momentId: featured.id, actorKey: 'party:1', reactionTypeId: FIRE_ID });
+    await toggleMomentReaction({ eventId: '77', momentId: featured.id, actorKey: 'party:2', reactionTypeId: FIRE_ID });
     await addMomentComment({
       eventId: '77',
       momentId: featured.id,

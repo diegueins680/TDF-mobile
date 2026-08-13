@@ -17,93 +17,96 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   default: mockAsyncStorage,
 }));
 
-const STORAGE_KEY = 'tdf-mobile-pipeline-stage-overrides-v1';
+const workflowId = '00000000-0000-4000-8000-000000000106';
+const serviceId = '10000000-0000-4000-8000-000000000001';
+const stateId = '00000000-0000-4000-8000-000000000251';
+const definitions = [{
+  workflowId,
+  code: 'pipeline-mixing',
+  nameEs: 'Pipeline de mezcla',
+  nameEn: 'Mixing pipeline',
+  revision: 12,
+  serviceOfferings: [{ id: serviceId, code: 'mixing', nameEs: 'Mezcla', nameEn: 'Mixing' }],
+  stages: [{ id: stateId, code: 'brief', nameEs: 'Brief', nameEn: 'Brief', sortOrder: 10, terminal: false }],
+}];
+const cards = [{
+  id: '30000000-0000-4000-8000-000000000001',
+  title: 'Demo',
+  artist: 'DJ',
+  serviceOfferingId: serviceId,
+  serviceOfferingCode: 'mixing',
+  workflowId,
+  workflowStateId: stateId,
+  workflowStateCode: 'brief',
+  workflowStateNameEs: 'Brief',
+  workflowStateNameEn: 'Brief',
+  sortOrder: 10,
+}];
 
-const loadPipelinesModule = (enabled = true): typeof import('../src/api/pipelines') => {
-  process.env.EXPO_PUBLIC_PIPELINES_API_ENABLED = enabled ? 'true' : 'false';
-  jest.resetModules();
-  return require('../src/api/pipelines');
-};
-
-describe('pipelines API normalization', () => {
-  let warnSpy: jest.SpyInstance;
-  let infoSpy: jest.SpyInstance;
-
+describe('versioned pipeline snapshot', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    infoSpy = jest.spyOn(console, 'info').mockImplementation(() => undefined);
     mockAsyncStorage.getItem.mockResolvedValue(null);
     mockAsyncStorage.setItem.mockResolvedValue(undefined);
     mockAsyncStorage.removeItem.mockResolvedValue(undefined);
   });
 
-  afterEach(() => {
-    warnSpy.mockRestore();
-    infoSpy.mockRestore();
-  });
-
-  it('normalizes backend stage and kind values', async () => {
-    mockGet.mockResolvedValueOnce([
-      { id: 'mx-1', title: 'Demo', artist: 'DJ', type: ' Mastering ', stage: 'editing' },
-    ]);
-
-    const { listPipeline } = loadPipelinesModule(true);
-    const rows = await listPipeline('mixing');
-
-    expect(rows).toEqual([
-      {
-        id: 'mx-1',
-        title: 'Demo',
-        artist: 'DJ',
-        stage: 'Editing',
-        kind: 'mastering',
-      },
-    ]);
-  });
-
-  it('falls back to Intake when API stage is unknown', async () => {
-    mockGet.mockResolvedValueOnce([
-      { id: 'mx-2', title: 'Unknown Stage', artist: null, type: 'mixing', stage: 'shipped' },
-    ]);
-
-    const { listPipeline } = loadPipelinesModule(true);
-    const rows = await listPipeline('mixing');
-
-    expect(rows[0]?.stage).toBe('Intake');
-  });
-
-  it('sanitizes persisted local stage overrides', async () => {
-    mockGet.mockRejectedValueOnce(new Error('api unavailable'));
-    mockAsyncStorage.getItem.mockResolvedValueOnce(
-      JSON.stringify({
-        'mixing:mx-101': 'editing',
-        'mixing:mx-102': 'not-a-stage',
-        ' ': 'Mastering',
-      }),
-    );
-
-    const { listPipeline } = loadPipelinesModule(true);
-    const rows = await listPipeline('mixing');
-
-    const card101 = rows.find((row) => String(row.id) === 'mx-101');
-    const card102 = rows.find((row) => String(row.id) === 'mx-102');
-    expect(card101?.stage).toBe('Editing');
-    expect(card102?.stage).toBe('Mixing');
+  it('persists canonical definitions and cards from the API', async () => {
+    mockGet.mockResolvedValueOnce({ revision: 12, definitions, cards });
+    const { refreshPipelineSnapshot } = require('../src/api/pipelines') as typeof import('../src/api/pipelines');
+    const snapshot = await refreshPipelineSnapshot();
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockGet).toHaveBeenCalledWith('/pipelines/snapshot');
+    expect(snapshot.cards[workflowId]?.[0]).toMatchObject({ workflowStateId: stateId, serviceOfferingId: serviceId });
     expect(mockAsyncStorage.setItem).toHaveBeenCalledWith(
-      STORAGE_KEY,
-      JSON.stringify({ 'mixing:mx-101': 'Editing' }),
+      'tdf-mobile-pipeline-snapshot-v1',
+      expect.any(String),
     );
   });
 
-  it('clears malformed local stage overrides', async () => {
-    mockGet.mockRejectedValueOnce(new Error('api unavailable'));
-    mockAsyncStorage.getItem.mockResolvedValueOnce('{bad-json');
+  it('rejects a card whose state is not in its persisted workflow snapshot', async () => {
+    mockGet.mockResolvedValueOnce({
+      revision: 12,
+      definitions,
+      cards: [{ ...cards[0], workflowStateId: '00000000-0000-4000-8000-000000000999' }],
+    });
+    const { refreshPipelineSnapshot } = require('../src/api/pipelines') as typeof import('../src/api/pipelines');
+    await expect(refreshPipelineSnapshot()).rejects.toThrow('Invalid canonical pipeline card');
+    expect(mockAsyncStorage.setItem).not.toHaveBeenCalled();
+  });
 
-    const { listPipeline } = loadPipelinesModule(true);
-    const rows = await listPipeline('mastering');
+  it('uses last-known-good data on failure and never invents emergency cards', async () => {
+    const cached = {
+      schemaVersion: 1,
+      revision: 12,
+      source: 'network',
+      syncedAt: '2026-08-11T00:00:00.000Z',
+      definitions,
+      cards: { [workflowId]: cards },
+    };
+    mockGet.mockRejectedValueOnce(new Error('offline'));
+    mockAsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(cached));
+    const { refreshPipelineSnapshot } = require('../src/api/pipelines') as typeof import('../src/api/pipelines');
+    await expect(refreshPipelineSnapshot()).resolves.toEqual(expect.objectContaining({ cards: cached.cards }));
 
-    expect(rows.length).toBeGreaterThan(0);
-    expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith(STORAGE_KEY);
+    mockGet.mockRejectedValueOnce(new Error('offline'));
+    mockAsyncStorage.getItem.mockResolvedValueOnce(null);
+    await expect(refreshPipelineSnapshot()).rejects.toThrow('offline');
+  });
+
+  it('writes only workflowStateId when moving a card', async () => {
+    const cached = {
+      schemaVersion: 1,
+      revision: 12,
+      source: 'network',
+      syncedAt: '2026-08-11T00:00:00.000Z',
+      definitions,
+      cards: { [workflowId]: cards },
+    };
+    mockAsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(cached));
+    mockPatch.mockResolvedValueOnce(cards[0]);
+    const { updateStage } = require('../src/api/pipelines') as typeof import('../src/api/pipelines');
+    await updateStage(workflowId, cards[0]!.id, stateId);
+    expect(mockPatch).toHaveBeenCalledWith(`/pipelines/${workflowId}/${cards[0]!.id}`, { workflowStateId: stateId });
   });
 });

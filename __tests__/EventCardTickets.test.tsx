@@ -21,6 +21,7 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
 
 const event: SocialEvent = {
   id: '42',
+  eventTypeId: '41000000-0000-4000-8000-000000000001',
   title: 'TDF Showcase',
   startTime: '2027-01-01T20:00:00.000Z',
   endTime: '2027-01-01T22:00:00.000Z',
@@ -39,7 +40,12 @@ const event: SocialEvent = {
   createdBy: '7',
   ticketPrice: 25,
   isPublic: true,
-  status: 'on_sale',
+  workflowStateId: '00000000-0000-4000-8000-000000000233',
+  workflowStateCode: 'on_sale',
+  workflowStateNameEs: 'En venta',
+  workflowStateNameEn: 'On sale',
+  publicListable: true,
+  ticketPurchaseEnabled: true,
   rsvpCount: 8,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -66,7 +72,7 @@ describe('EventCard ticket discovery', () => {
   });
 
   it('keeps the ticket CTA visible for announced events before a summary price exists', () => {
-    render(<EventCard event={{ ...event, status: 'announced', ticketPrice: undefined }} />);
+    render(<EventCard event={{ ...event, ticketPrice: undefined }} />);
     expect(screen.getByRole('button', { name: 'Ver entradas para TDF Showcase' })).toBeTruthy();
   });
 });

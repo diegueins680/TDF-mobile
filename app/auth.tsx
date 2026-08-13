@@ -162,7 +162,6 @@ export default function AuthScreen() {
         email: signupEmail.trim().toLowerCase(),
         password,
         phone: phone.trim() || undefined,
-        roles: [selectedRole],
       });
       setToken(session.token, session.partyId ?? null, {
         roles: session.roles ?? [],

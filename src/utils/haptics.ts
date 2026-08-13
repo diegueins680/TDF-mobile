@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 // Lightweight haptic feedback using Expo's haptics if available,
 // otherwise a no-op on platforms that don't support it.
 
-let hapticsModule: any = null;
+let hapticsModule: typeof import('expo-haptics') | null = null;
 
 async function getHaptics() {
   if (hapticsModule) return hapticsModule;

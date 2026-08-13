@@ -167,6 +167,16 @@ describe('versioned catalog snapshot', () => {
     });
   });
 
+  it('upgrades schema 8 and clears ETags until creator badge types synchronize', () => {
+    const snapshot = validSnapshot() as unknown as Record<string, unknown>;
+    snapshot.schemaVersion = 8;
+    const catalogs = snapshot.catalogs as Record<string, unknown>;
+    delete catalogs['creator-badge-types'];
+    const parsed = parseCatalogSnapshot(JSON.stringify(snapshot));
+    expect(parsed).toMatchObject({ schemaVersion: CATALOG_SNAPSHOT_SCHEMA_VERSION, etag: null, workflowEtag: null });
+    expect(parsed?.catalogs['creator-badge-types']).toBeUndefined();
+  });
+
   it('combines a cached catalog 304 with a newly published workflow revision atomically', async () => {
     const cached = validSnapshot();
     const changedWorkflow = workflow();

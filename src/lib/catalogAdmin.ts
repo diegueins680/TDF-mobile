@@ -6,6 +6,7 @@ export type CatalogEditorKind =
   | 'feedback-category'
   | 'feedback-severity'
   | 'reaction-type'
+  | 'flat-catalog'
   | 'read-only';
 
 export interface CatalogAdminForm {
@@ -36,6 +37,8 @@ export const catalogEditorKind = (entityKind: string): CatalogEditorKind => {
     case 'reaction_type':
     case 'content_reaction_type':
       return 'reaction-type';
+    case 'creator_badge_type':
+      return 'flat-catalog';
     default:
       return 'read-only';
   }
@@ -117,6 +120,7 @@ export const buildCatalogAdminDraft = (
   if (kind === 'reaction-type') {
     return { ...draft, displaySymbol: form.displaySymbol.trim() };
   }
+  if (kind === 'flat-catalog') return draft;
   throw new Error('Este tipo de catálogo todavía no admite edición móvil estricta.');
 };
 
@@ -141,6 +145,7 @@ export const catalogAdminFormIsValid = (
     const symbol = form.displaySymbol.trim();
     return symbol.length > 0 && symbol.length <= 16;
   }
+  if (kind === 'flat-catalog') return true;
   const duration = Number(form.durationMinutes);
   return Number.isSafeInteger(duration) && duration >= 0 && duration <= 1440;
 };

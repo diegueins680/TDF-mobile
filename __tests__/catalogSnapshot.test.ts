@@ -33,6 +33,7 @@ const REACTION_TYPE_IDS: Record<string, string> = {
   'reaction-types': '50800000-0000-4000-8000-000000000001',
   'content-reaction-types': '50900000-0000-4000-8000-000000000001',
 };
+const CREATOR_BADGE_TYPE_ID = '50a00000-0000-4000-8000-000000000003';
 
 const page = (
   code: string,
@@ -43,6 +44,8 @@ const page = (
   const items = values.map((value, index) => ({
     id: code === 'event-types'
       ? EVENT_TYPE_IDS[value]!
+      : code === 'creator-badge-types'
+        ? CREATOR_BADGE_TYPE_ID
       : REACTION_TYPE_IDS[code] ?? `${code}-${value}`,
     catalogId: `catalog-${code}`,
     catalogCode: code,
@@ -101,6 +104,7 @@ const batch = {
     page('event-types', ['party', 'concert'], 'party', 'social-event'),
     page('reaction-types', ['fire']),
     page('content-reaction-types', ['fire']),
+    page('creator-badge-types', ['og']),
   ],
   revision: 3,
   locale: 'es',
@@ -229,6 +233,7 @@ describe('versioned catalog snapshots', () => {
     expect(catalogCodes(snapshot, 'countries')).toEqual(['EC', 'US']);
     expect(catalogCodes(snapshot, 'appearance-modes')).toEqual(['system', 'light', 'dark']);
     expect(catalogCodes(snapshot, 'event-types')).toEqual(['party', 'concert']);
+    expect(catalogCodes(snapshot, 'creator-badge-types')).toEqual(['og']);
     expect(setItemMock).toHaveBeenCalledTimes(1);
     expect(parseCatalogSnapshot(setItemMock.mock.calls[0]?.[1] ?? '')?.revision).toBe(3);
   });

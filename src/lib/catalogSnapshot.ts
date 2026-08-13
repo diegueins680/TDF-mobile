@@ -9,9 +9,9 @@ import type {
 } from '../api/catalogs';
 import { fetchCatalogBatch, fetchPublicWorkflowStates } from '../api/catalogs';
 
-export const CATALOG_SNAPSHOT_SCHEMA_VERSION = 8;
+export const CATALOG_SNAPSHOT_SCHEMA_VERSION = 9;
 export const REQUIRED_BOOT_CATALOGS = ['locales', 'currencies', 'appearance-modes'] as const;
-export const SYNCED_CATALOGS = [...REQUIRED_BOOT_CATALOGS, 'genres', 'countries', 'event-types', 'reaction-types', 'content-reaction-types'] as const;
+export const SYNCED_CATALOGS = [...REQUIRED_BOOT_CATALOGS, 'genres', 'countries', 'event-types', 'reaction-types', 'content-reaction-types', 'creator-badge-types'] as const;
 export const SOCIAL_EVENT_WORKFLOW_CODE = 'social-event-lifecycle';
 const LEGACY_V2_CATALOGS = ['locales', 'currencies', 'genres'] as const;
 const LEGACY_V3_CATALOGS = [...LEGACY_V2_CATALOGS, 'countries'] as const;
@@ -19,6 +19,7 @@ const LEGACY_V4_CATALOGS = [...LEGACY_V3_CATALOGS, 'appearance-modes'] as const;
 const LEGACY_V5_CATALOGS = [...LEGACY_V4_CATALOGS, 'event-types'] as const;
 const LEGACY_V6_CATALOGS = LEGACY_V5_CATALOGS;
 const LEGACY_V7_CATALOGS = [...LEGACY_V6_CATALOGS, 'reaction-types'] as const;
+const LEGACY_V8_CATALOGS = [...LEGACY_V7_CATALOGS, 'content-reaction-types'] as const;
 const STORAGE_KEY = 'tdf-catalog-snapshot-v2';
 
 export interface CatalogSnapshot {
@@ -284,12 +285,25 @@ const isValidReactionTypePage = (page: CatalogPage | undefined): boolean => Bool
     && new Set(page.items.map((item) => item.code)).size === page.items.length,
 );
 
+const isValidPublishedFlatPage = (page: CatalogPage | undefined): boolean => Boolean(
+  page
+    && page.items.length > 0
+    && page.items.every((item) => (
+      item.active
+        && item.workflowState === 'published'
+        && !item.deprecatedAt
+        && CATALOG_ENTITY_UUID_PATTERN.test(item.id)
+    ))
+    && new Set(page.items.map((item) => item.id)).size === page.items.length
+    && new Set(page.items.map((item) => item.code)).size === page.items.length,
+);
+
 export const parseCatalogSnapshot = (raw: string): CatalogSnapshot | null => {
   try {
     const value = JSON.parse(raw) as unknown;
     if (!isRecord(value)) return null;
     const schemaVersion = value.schemaVersion as number;
-    if (![2, 3, 4, 5, 6, 7, CATALOG_SNAPSHOT_SCHEMA_VERSION].includes(schemaVersion) || value.source !== 'network') return null;
+    if (![2, 3, 4, 5, 6, 7, 8, CATALOG_SNAPSHOT_SCHEMA_VERSION].includes(schemaVersion) || value.source !== 'network') return null;
     if (typeof value.revision !== 'number' || value.revision < 0) return null;
     if (typeof value.locale !== 'string' || typeof value.syncedAt !== 'string') return null;
     if (!(value.etag === null || typeof value.etag === 'string') || !isRecord(value.catalogs)) return null;
@@ -305,6 +319,8 @@ export const parseCatalogSnapshot = (raw: string): CatalogSnapshot | null => {
               ? LEGACY_V6_CATALOGS
               : schemaVersion === 7
                 ? LEGACY_V7_CATALOGS
+                : schemaVersion === 8
+                  ? LEGACY_V8_CATALOGS
                 : SYNCED_CATALOGS;
     if (!requiredCatalogs.every((code) => isValidPage(value.catalogs[code], code, schemaVersion === CATALOG_SNAPSHOT_SCHEMA_VERSION))) return null;
     const emergencyAppearance = emergencyCatalogSnapshot().catalogs['appearance-modes']!;
@@ -319,7 +335,8 @@ export const parseCatalogSnapshot = (raw: string): CatalogSnapshot | null => {
     if (!isValidAppearancePage(catalogs['appearance-modes'], injectedEmergencyAppearance)) return null;
     if (schemaVersion >= 5 && !isValidSocialEventTypePage(catalogs['event-types'])) return null;
     if (schemaVersion >= 7 && !isValidReactionTypePage(catalogs['reaction-types'])) return null;
-    if (schemaVersion === CATALOG_SNAPSHOT_SCHEMA_VERSION && !isValidReactionTypePage(catalogs['content-reaction-types'])) return null;
+    if (schemaVersion >= 8 && !isValidReactionTypePage(catalogs['content-reaction-types'])) return null;
+    if (schemaVersion === CATALOG_SNAPSHOT_SCHEMA_VERSION && !isValidPublishedFlatPage(catalogs['creator-badge-types'])) return null;
     const workflows = schemaVersion === CATALOG_SNAPSHOT_SCHEMA_VERSION && isRecord(value.workflows)
       ? value.workflows
       : {};
@@ -365,6 +382,7 @@ const snapshotFromSources = (
   if (!isValidSocialEventTypePage(catalogs['event-types'])) return null;
   if (!isValidReactionTypePage(catalogs['reaction-types'])) return null;
   if (!isValidReactionTypePage(catalogs['content-reaction-types'])) return null;
+  if (!isValidPublishedFlatPage(catalogs['creator-badge-types'])) return null;
   if (!isValidWorkflow(workflow, SOCIAL_EVENT_WORKFLOW_CODE)) return null;
   return {
     schemaVersion: CATALOG_SNAPSHOT_SCHEMA_VERSION,

@@ -48,7 +48,17 @@ describe('mobile catalog administration', () => {
     expect(catalogEditorKind('feedback_severity')).toBe('feedback-severity');
     expect(catalogEditorKind('reaction_type')).toBe('reaction-type');
     expect(catalogEditorKind('content_reaction_type')).toBe('reaction-type');
+    expect(catalogEditorKind('creator_badge_type')).toBe('flat-catalog');
     expect(catalogEditorKind('arbitrary_json')).toBe('read-only');
+  });
+
+  it('creates a bilingual creator badge type without reaction-only metadata', () => {
+    const form = validForm({ code: 'og', nameEs: 'Miembro fundador', nameEn: 'Founding member' });
+    const draft = buildCatalogAdminDraft('flat-catalog', form);
+    expect(catalogAdminFormIsValid('flat-catalog', form)).toBe(true);
+    expect(draft).toMatchObject({ code: 'og', nameEs: 'Miembro fundador', nameEn: 'Founding member' });
+    expect(draft).not.toHaveProperty('displaySymbol');
+    expect(draft).not.toHaveProperty('globalDefault');
   });
 
   it('creates a reaction revision with persisted bilingual copy and symbol metadata', () => {

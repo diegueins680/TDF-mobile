@@ -1,22 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { countMomentReactions } from '../lib/eventMoments';
-import { impactLight } from '../utils/haptics';
-import { useAppTheme } from '../theme/ThemeProvider';
-import type { EventMoment, EventMomentReactionKind } from '../types';
-
-const REACTION_META: Array<{
-  kind: EventMomentReactionKind;
-  label: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  color: string;
-}> = [
-  { kind: 'fire', label: 'Fire', icon: 'fire', color: '#ea580c' },
-  { kind: 'love', label: 'Love', icon: 'heart', color: '#db2777' },
-  { kind: 'applause', label: 'Clap', icon: 'hand-clap', color: '#2563eb' },
-];
+import type { EventMoment, EventMomentReactionOption } from '../types';
 
 const formatDuration = (durationMs?: number | null): string => {
   if (!durationMs || durationMs <= 0) return 'Video corto';
@@ -32,12 +19,14 @@ type EventMomentCardProps = {
   currentPartyId?: string | null;
   featured?: boolean;
   reactionDisabled?: boolean;
+  reactionOptions: readonly EventMomentReactionOption[];
+  reactionUnavailableLabel: string;
   commentDisabled?: boolean;
   connectDisabled?: boolean;
   commentDraft: string;
   onChangeComment: (momentId: string, value: string) => void;
   onSubmitComment: (momentId: string) => void;
-  onToggleReaction: (momentId: string, reaction: EventMomentReactionKind) => void;
+  onToggleReaction: (momentId: string, reaction: EventMomentReactionOption) => void;
   onReactionPosted?: () => void;
   onConnectAuthor?: (partyId: string) => void;
   onOpenMedia?: (uri: string) => void;
@@ -49,6 +38,8 @@ export function EventMomentCard({
   currentPartyId,
   featured = false,
   reactionDisabled = false,
+  reactionOptions,
+  reactionUnavailableLabel,
   commentDisabled = false,
   connectDisabled = false,
   commentDraft,
@@ -59,8 +50,6 @@ export function EventMomentCard({
   onConnectAuthor,
   onOpenMedia,
 }: EventMomentCardProps) {
-  const { colors } = useAppTheme();
-  const [imageError, setImageError] = useState(false);
   const totalReactions = countMomentReactions(moment);
   const canConnect =
     !!moment.authorPartyId &&
@@ -68,35 +57,29 @@ export function EventMomentCard({
     (!currentPartyId || currentPartyId !== moment.authorPartyId);
 
   return (
-    <View style={[styles.card, featured && { borderColor: colors.selected, backgroundColor: colors.infoSurface }]}>
+    <View style={[styles.card, featured && styles.cardFeatured]}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <View style={styles.headerRow}>
-            <Text maxFontSizeMultiplier={1.5} style={[styles.authorName, { color: colors.textPrimary }]}>{moment.authorName}</Text>
+            <Text style={styles.authorName}>{moment.authorName}</Text>
             {featured ? (
-              <View style={[styles.featuredBadge, { backgroundColor: colors.selected }]}>
-                <Text maxFontSizeMultiplier={1.5} style={[styles.featuredBadgeText, { color: colors.actionPrimary }]}>Top moment</Text>
+              <View style={styles.featuredBadge}>
+                <Text style={styles.featuredBadgeText}>Top moment</Text>
               </View>
             ) : null}
           </View>
-          <Text maxFontSizeMultiplier={1.5} style={[styles.metaText, { color: colors.textSecondary }]}>
+          <Text style={styles.metaText}>
             {new Date(moment.createdAt).toLocaleString()}
             {moment.authorPartyId ? ` · Party #${moment.authorPartyId}` : ''}
           </Text>
         </View>
         {canConnect ? (
           <TouchableOpacity
-            style={[
-              styles.connectButton,
-              { backgroundColor: colors.selected },
-              connectDisabled && styles.buttonDisabled,
-            ]}
+            style={[styles.connectButton, connectDisabled && styles.buttonDisabled]}
             onPress={() => moment.authorPartyId && onConnectAuthor?.(moment.authorPartyId)}
             disabled={connectDisabled}
-            accessibilityRole="button"
-            accessibilityLabel="Conectar con artista"
           >
-            <Text maxFontSizeMultiplier={1.5} style={[styles.connectButtonText, { color: colors.actionPrimary }]}>Conectar</Text>
+            <Text style={styles.connectButtonText}>Conectar</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -105,54 +88,37 @@ export function EventMomentCard({
         activeOpacity={moment.media.kind === 'video' ? 0.8 : 1}
         disabled={!onOpenMedia || moment.media.kind !== 'video'}
         onPress={() => onOpenMedia?.(moment.media.uri)}
-        accessibilityRole={moment.media.kind === 'video' ? 'button' : 'image'}
-        accessibilityLabel={`Video de ${moment.authorName}`}
       >
-        {moment.media.kind === 'image' && !imageError ? (
-          <Image
-            source={{ uri: moment.media.uri }}
-            style={[styles.mediaImage, { backgroundColor: colors.borderSubtle }]}
-            onError={() => setImageError(true)}
-          />
-        ) : moment.media.kind === 'image' && imageError ? (
-          <View style={[styles.mediaImage, styles.mediaPlaceholder, { backgroundColor: colors.borderSubtle }]}>
-            <Text style={styles.fallbackIcon}>🎵</Text>
-          </View>
+        {moment.media.kind === 'image' ? (
+          <Image source={{ uri: moment.media.uri }} style={styles.mediaImage} />
         ) : (
-          <View style={[styles.videoBox, { backgroundColor: colors.textPrimary }]}>
-            <MaterialCommunityIcons name="play-circle-outline" size={40} color={colors.surface} />
-            <Text maxFontSizeMultiplier={1.5} style={[styles.videoTitle, { color: colors.surface }]}>Video del evento</Text>
-            <Text maxFontSizeMultiplier={1.5} style={[styles.videoMeta, { color: colors.textSecondary }]}>
-              {formatDuration(moment.media.durationMs)}
-            </Text>
-            {onOpenMedia ? (
-              <Text maxFontSizeMultiplier={1.5} style={[styles.videoHint, { color: colors.actionPrimary }]}>Toca para abrir</Text>
-            ) : null}
+          <View style={styles.videoBox}>
+            <MaterialCommunityIcons name="play-circle-outline" size={40} color="#f8fafc" />
+            <Text style={styles.videoTitle}>Video del evento</Text>
+            <Text style={styles.videoMeta}>{formatDuration(moment.media.durationMs)}</Text>
+            {onOpenMedia ? <Text style={styles.videoHint}>Toca para abrir</Text> : null}
           </View>
         )}
       </TouchableOpacity>
 
-      {moment.caption ? (
-        <Text maxFontSizeMultiplier={1.5} style={[styles.caption, { color: colors.textPrimary }]}>{moment.caption}</Text>
-      ) : null}
+      {moment.caption ? <Text style={styles.caption}>{moment.caption}</Text> : null}
 
       <View style={styles.reactionRow}>
-        {REACTION_META.map((reaction) => {
-          const count = moment.reactions[reaction.kind].length;
-          const active = moment.reactions[reaction.kind].includes(currentActorKey);
+        {reactionOptions.map((reaction) => {
+          const actors = moment.reactions[reaction.id] ?? [];
+          const count = actors.length;
+          const active = actors.includes(currentActorKey);
           return (
             <TouchableOpacity
-              key={reaction.kind}
+              key={reaction.id}
               style={[
                 styles.reactionChip,
-                { borderColor: active ? reaction.color : colors.borderSubtle },
-                active && { backgroundColor: `${reaction.color}14` },
+                active && styles.reactionChipActive,
                 reactionDisabled && styles.buttonDisabled,
               ]}
               onPress={async () => {
-                void impactLight();
                 try {
-                  await onToggleReaction(moment.id, reaction.kind);
+                  await onToggleReaction(moment.id, reaction);
                   onReactionPosted?.();
                 } catch {
                   // Swallow — the parent owns error surfacing for the toggle
@@ -161,15 +127,11 @@ export function EventMomentCard({
               }}
               disabled={reactionDisabled}
               accessibilityRole="button"
-              accessibilityLabel={`${reaction.label}, ${count} reacciones`}
-              accessibilityState={{ disabled: reactionDisabled }}
+              accessibilityState={{ selected: active, disabled: reactionDisabled }}
+              accessibilityLabel={count > 0 ? `${reaction.label}: ${count}` : reaction.label}
             >
-              <MaterialCommunityIcons
-                name={reaction.icon}
-                size={16}
-                color={active ? reaction.color : colors.textSecondary}
-              />
-              <Text maxFontSizeMultiplier={1.5} style={[styles.reactionText, { color: colors.textSecondary }, active && { color: reaction.color }]}>
+              <Text accessibilityElementsHidden style={styles.reactionEmoji}>{reaction.emoji}</Text>
+              <Text style={[styles.reactionText, active && styles.reactionTextActive]}>
                 {reaction.label} {count > 0 ? count : ''}
               </Text>
             </TouchableOpacity>
@@ -177,42 +139,42 @@ export function EventMomentCard({
         })}
       </View>
 
-      <Text maxFontSizeMultiplier={1.5} style={[styles.summaryText, { color: colors.textSecondary }]}>
+      {reactionOptions.length === 0 ? (
+        <Text style={styles.reactionUnavailable} accessibilityRole="alert">
+          {reactionUnavailableLabel}
+        </Text>
+      ) : null}
+
+      <Text style={styles.summaryText}>
         {totalReactions} reacciones · {moment.comments.length} comentarios
       </Text>
 
       <View style={styles.commentsList}>
         {moment.comments.slice(0, 2).map((comment) => (
-          <View key={comment.id} style={[styles.commentBubble, { backgroundColor: colors.surfaceMuted }]}>
-            <Text maxFontSizeMultiplier={1.5} style={[styles.commentAuthor, { color: colors.textPrimary }]}>{comment.authorName}</Text>
-            <Text maxFontSizeMultiplier={1.5} style={[styles.commentBody, { color: colors.textSecondary }]}>{comment.body}</Text>
+          <View key={comment.id} style={styles.commentBubble}>
+            <Text style={styles.commentAuthor}>{comment.authorName}</Text>
+            <Text style={styles.commentBody}>{comment.body}</Text>
           </View>
         ))}
       </View>
 
       <View style={styles.commentComposer}>
         <TextInput
-          maxFontSizeMultiplier={1.5}
           placeholder="Escribe un comentario"
           value={commentDraft}
           onChangeText={(value) => onChangeComment(moment.id, value)}
-          style={[styles.commentInput, { borderColor: colors.border, color: colors.textPrimary }]}
+          style={styles.commentInput}
           editable={!commentDisabled}
-          accessibilityLabel="Escribe un comentario"
         />
         <TouchableOpacity
           style={[
             styles.commentButton,
-            { backgroundColor: colors.actionPrimary },
             (!commentDraft.trim() || commentDisabled) && styles.buttonDisabled,
           ]}
           onPress={() => onSubmitComment(moment.id)}
           disabled={!commentDraft.trim() || commentDisabled}
-          accessibilityRole="button"
-          accessibilityLabel="Enviar comentario"
-          accessibilityState={{ disabled: !commentDraft.trim() || commentDisabled }}
         >
-          <Text maxFontSizeMultiplier={1.5} style={[styles.commentButtonText, { color: colors.actionPrimaryContrast }]}>Enviar</Text>
+          <Text style={styles.commentButtonText}>Enviar</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -222,10 +184,20 @@ export function EventMomentCard({
 const styles = StyleSheet.create({
   card: {
     gap: 12,
+    backgroundColor: '#fff',
     borderWidth: 1,
+    borderColor: '#e5e7eb',
     borderRadius: 18,
     padding: 14,
   },
+  cardFeatured: {
+    borderColor: '#c7d2fe',
+    backgroundColor: '#f8faff',
+  },
+  reactionChipActive: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+  reactionTextActive: { color: '#1d4ed8' },
+  reactionEmoji: { fontSize: 16, lineHeight: 20 },
+  reactionUnavailable: { color: '#64748b', fontSize: 12 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -244,27 +216,32 @@ const styles = StyleSheet.create({
   authorName: {
     fontSize: 15,
     fontWeight: '800',
+    color: '#0f172a',
   },
   metaText: {
+    color: '#64748b',
     fontSize: 12,
   },
   featuredBadge: {
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 4,
+    backgroundColor: '#dbeafe',
   },
   featuredBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
+    color: '#1d4ed8',
   },
   connectButton: {
     alignSelf: 'flex-start',
+    backgroundColor: '#eef2ff',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    minHeight: 44,
   },
   connectButtonText: {
+    color: '#1e3a8a',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -272,34 +249,33 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 220,
     borderRadius: 14,
-  },
-  mediaPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackIcon: {
-    fontSize: 40,
+    backgroundColor: '#e2e8f0',
   },
   videoBox: {
     height: 220,
     borderRadius: 14,
+    backgroundColor: '#0f172a',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 16,
   },
   videoTitle: {
+    color: '#f8fafc',
     fontSize: 16,
     fontWeight: '700',
   },
   videoMeta: {
+    color: '#cbd5e1',
     fontSize: 12,
   },
   videoHint: {
+    color: '#93c5fd',
     fontSize: 12,
     fontWeight: '600',
   },
   caption: {
+    color: '#111827',
     lineHeight: 20,
   },
   reactionRow: {
@@ -313,15 +289,19 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 999,
     borderWidth: 1,
+    borderColor: '#e2e8f0',
     paddingHorizontal: 10,
     paddingVertical: 8,
     minHeight: 44,
+    minWidth: 44,
   },
   reactionText: {
+    color: '#475569',
     fontSize: 12,
     fontWeight: '700',
   },
   summaryText: {
+    color: '#64748b',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -331,13 +311,16 @@ const styles = StyleSheet.create({
   commentBubble: {
     gap: 2,
     borderRadius: 12,
+    backgroundColor: '#f8fafc',
     padding: 10,
   },
   commentAuthor: {
+    color: '#0f172a',
     fontSize: 12,
     fontWeight: '700',
   },
   commentBody: {
+    color: '#334155',
     lineHeight: 18,
   },
   commentComposer: {
@@ -348,17 +331,20 @@ const styles = StyleSheet.create({
   commentInput: {
     flex: 1,
     borderWidth: 1,
+    borderColor: '#d4d4d8',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    color: '#0f172a',
   },
   commentButton: {
+    backgroundColor: '#2563eb',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    minHeight: 44,
   },
   commentButtonText: {
+    color: '#fff',
     fontWeight: '700',
     fontSize: 12,
   },

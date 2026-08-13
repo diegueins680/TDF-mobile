@@ -10,24 +10,26 @@ describe('mobile new-user surface', () => {
     expect(MOBILE_LANDING_ROUTE).toBe('/(tabs)/events');
   });
 
-  it('keeps the visible tab bar focused on the minimal community experience', () => {
+  it('keeps the visible tab bar focused on community plus two-interaction discovery', () => {
     expect(NEW_USER_VISIBLE_TABS.map((tab) => tab.name)).toEqual([
       'events',
       'social',
-      'vcard',
+      'more',
+      'create',
       'profile',
     ]);
     expect(NEW_USER_VISIBLE_TABS.map((tab) => tab.title)).toEqual([
       'Eventos',
       'Seguir',
-      'vCard',
+      'Explorar',
+      'Crear',
       'Perfil',
     ]);
   });
 
   it('keeps internal ops modules hidden from the mobile tab bar', () => {
     expect(HIDDEN_INTERNAL_TABS).toEqual(
-      expect.arrayContaining(['parties', 'bookings', 'pipelines', 'inventory', 'create', 'about'])
+      expect.arrayContaining(['parties', 'bookings', 'pipelines', 'inventory', 'vcard', 'about'])
     );
   });
 
@@ -40,6 +42,8 @@ describe('mobile new-user surface', () => {
       'Seguir',
       'Video streaming',
       'Club de fans',
+      'Explorar funciones autorizadas',
+      'Creación rápida autorizada',
     ]);
   });
 });

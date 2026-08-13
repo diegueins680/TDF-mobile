@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import SchemaForm from './components/SchemaForm';
+import SchemaForm from '../../src/components/contracts/SchemaForm';
 
 export default function NewContractScreen() {
   return (

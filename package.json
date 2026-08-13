@@ -51,7 +51,6 @@
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@stripe/stripe-react-native": "^0.50.3",
     "@tanstack/react-query": "^5.90.5",
-    "@testomatio/reporter": "0.7.6",
     "axios": "^1.12.2",
     "expo": "~54.0.35",
     "expo-application": "~7.0.8",
@@ -61,6 +60,7 @@
     "expo-linking": "~8.0.12",
     "expo-localization": "~17.0.9",
     "expo-location": "~19.0.8",
+    "expo-notifications": "~0.32.17",
     "expo-router": "~6.0.24",
     "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
@@ -92,7 +92,6 @@
     "@typescript-eslint/parser": "^8.9.0",
     "babel-preset-expo": "~54.0.10",
     "detox": "^20.51.1",
-    "eas-cli": "^16.32.0",
     "eslint": "^9.14.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react": "^7.37.2",
@@ -105,6 +104,10 @@
     "typescript": "~5.9.2"
   },
   "overrides": {
+    "@expo/metro-config": {
+      "postcss": "8.5.26"
+    },
+    "brace-expansion@^2.0.0": "2.1.4",
     "react-native-reanimated": "~4.1.1"
   }
 }

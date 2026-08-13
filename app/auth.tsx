@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 
-import { loginRequest, googleLoginRequest, signupRequest } from '../src/api/auth';
+import { loginRequest, googleLoginRequest, signupRequest, requestPasswordReset } from '../src/api/auth';
 import { API_BASE } from '../src/lib/api';
 import {
   GOOGLE_IOS_CLIENT_ID,
@@ -24,6 +24,7 @@ import { loadNativeGoogleSignin, type NativeGoogleSigninModule } from '../src/li
 import { MOBILE_LANDING_ROUTE } from '../src/navigation/mobileSurface';
 import FormField from '../src/components/FormField';
 import { useAuth } from '../src/providers/AuthProvider';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 
 const readErrorMessage = (error: unknown, fallback: string) => {
@@ -40,33 +41,37 @@ export default function AuthScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string | string[]; returnTo?: string | string[] }>();
   const { token, loading, setToken, clearToken } = useAuth();
+  const analytics = useAnalytics();
   const requestedMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const rawReturnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const returnTo = rawReturnTo?.startsWith('/') && !rawReturnTo.startsWith('//') && rawReturnTo.length <= 500
     ? rawReturnTo as Href
     : MOBILE_LANDING_ROUTE;
-  const [mode, setMode] = useState<'login' | 'signup'>(requestedMode === 'signup' ? 'signup' : 'login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgotPassword'>(requestedMode === 'signup' ? 'signup' : 'login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'Fan' | 'Artista' | 'Teacher'>('Fan');
   const lastNameInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
+  const phoneInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
+  const forgotPasswordEmailInputRef = useRef<TextInput>(null);
 
-  useEffect(() => {
-    if (__DEV__) {
-      setUsername('tdf-owner');
-      setPassword('TDFowner2025!');
-    }
-  }, []);
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
   const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [googleSigninModule, setGoogleSigninModule] = useState<NativeGoogleSigninModule | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [isForgotPasswordSubmitting, setIsForgotPasswordSubmitting] = useState(false);
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
+  const [forgotPasswordError, setForgotPasswordError] = useState<string | null>(null);
 
   const hasToken = Boolean(token?.trim());
   const canSubmitPassword = username.trim().length > 0 && password.length > 0 && !isPasswordSubmitting;
@@ -75,6 +80,8 @@ export default function AuthScreen() {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim()) &&
     password.trim().length >= 8 &&
     !isSignupSubmitting;
+  const canSubmitForgotPassword =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotPasswordEmail.trim()) && !isForgotPasswordSubmitting;
   const signupEmailError = signupEmail.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim())
     ? 'Ingresa un correo electrónico válido.'
     : null;
@@ -127,8 +134,12 @@ export default function AuthScreen() {
         password
       });
 
-      setToken(session.token, session.partyId ?? null);
+      setToken(session.token, session.partyId ?? null, {
+        roles: session.roles ?? [],
+        modules: session.modules ?? [],
+      });
       setPassword('');
+      analytics.capture('login_completed', { platform: 'mobile', method: 'password' });
       setFeedbackMessage('Sesión iniciada.');
       router.replace(returnTo);
     } catch (error) {
@@ -150,9 +161,15 @@ export default function AuthScreen() {
         lastName: lastName.trim(),
         email: signupEmail.trim().toLowerCase(),
         password,
+        phone: phone.trim() || undefined,
+        roles: [selectedRole],
       });
-      setToken(session.token, session.partyId ?? null);
+      setToken(session.token, session.partyId ?? null, {
+        roles: session.roles ?? [],
+        modules: session.modules ?? [],
+      });
       setPassword('');
+      analytics.capture('signup_completed', { platform: 'mobile', method: 'password' });
       setFeedbackMessage('Cuenta creada. Ya puedes elegir tus entradas.');
       router.replace(returnTo);
     } catch (error) {
@@ -190,7 +207,10 @@ export default function AuthScreen() {
       }
 
       const session = await googleLoginRequest({ idToken: response.data.idToken });
-      setToken(session.token, session.partyId ?? null);
+      setToken(session.token, session.partyId ?? null, {
+        roles: session.roles ?? [],
+        modules: session.modules ?? [],
+      });
       setPassword('');
       setFeedbackMessage('Sesión con Google iniciada.');
       router.replace(returnTo);
@@ -234,6 +254,23 @@ export default function AuthScreen() {
     setPassword('');
   };
 
+  const handleForgotPassword = async () => {
+    if (!canSubmitForgotPassword) return;
+
+    setForgotPasswordError(null);
+    setForgotPasswordSuccess(false);
+    setIsForgotPasswordSubmitting(true);
+
+    try {
+      await requestPasswordReset(forgotPasswordEmail.trim().toLowerCase());
+      setForgotPasswordSuccess(true);
+    } catch (error) {
+      setForgotPasswordError(readErrorMessage(error, 'No pudimos enviar el enlace. Verifica el correo.'));
+    } finally {
+      setIsForgotPasswordSubmitting(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.page}>
       <KeyboardAvoidingView
@@ -242,16 +279,20 @@ export default function AuthScreen() {
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
-            <Text style={styles.title}>{mode === 'signup' ? 'Crea tu cuenta' : 'Inicia sesión'}</Text>
+            <Text style={styles.title}>
+              {mode === 'signup' ? 'Crea tu cuenta' : mode === 'forgotPassword' ? 'Restablecer contraseña' : 'Inicia sesión'}
+            </Text>
             <Text style={styles.subtitle}>
               {mode === 'signup'
                 ? 'Solo toma un minuto. Después volverás directo a elegir tus entradas.'
-                : 'Accede a tus eventos, compras y códigos QR con tu cuenta de TDF Records.'}
+                : mode === 'forgotPassword'
+                  ? 'Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña.'
+                  : 'Accede a tus eventos, compras y códigos QR con tu cuenta de TDF Records.'}
             </Text>
             {__DEV__ ? <Text style={styles.meta}>API base: {API_BASE}</Text> : null}
           </View>
 
-          {showLoginActions ? (
+          {showLoginActions && mode !== 'forgotPassword' ? (
             <View style={styles.card}>
               <View style={styles.modeSwitch}>
                 <TouchableOpacity
@@ -270,6 +311,7 @@ export default function AuthScreen() {
                   onPress={() => {
                     setMode('signup');
                     setErrorMessage(null);
+                    analytics.capture('signup_started', { platform: 'mobile' });
                   }}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: mode === 'signup' }}
@@ -336,6 +378,26 @@ export default function AuthScreen() {
                     error={signupEmailError}
                     returnKeyType="next"
                     blurOnSubmit={false}
+                    onSubmitEditing={() => phoneInputRef.current?.focus()}
+                  />
+                  <FormField
+                    ref={phoneInputRef}
+                    label="Teléfono"
+                    optional
+                    value={phone}
+                    onChangeText={(value) => {
+                      setPhone(value);
+                      setErrorMessage(null);
+                    }}
+                    placeholder="+57 300 123 4567"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="tel"
+                    textContentType="telephoneNumber"
+                    keyboardType="phone-pad"
+                    maxLength={30}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
                     onSubmitEditing={() => passwordInputRef.current?.focus()}
                   />
                 </>
@@ -385,6 +447,62 @@ export default function AuthScreen() {
                   }
                 }}
               />
+
+              {mode === 'signup' ? (
+                <View style={styles.roleSelectorContainer}>
+                  <Text style={[styles.label, { color: colors.textPrimary }]}>¿Cómo vas a usar TDF?</Text>
+                  <View style={styles.roleRow}>
+                    {([
+                      { key: 'Fan' as const, label: 'Fan' },
+                      { key: 'Artista' as const, label: 'Artista' },
+                      { key: 'Teacher' as const, label: 'Profesor' },
+                    ]).map(({ key, label }) => (
+                      <TouchableOpacity
+                        key={key}
+                        style={[
+                          styles.roleButton,
+                          {
+                            backgroundColor: selectedRole === key ? colors.actionPrimary : colors.surface,
+                            borderColor: selectedRole === key ? colors.actionPrimary : colors.border,
+                          },
+                        ]}
+                        onPress={() => {
+                          setSelectedRole(key);
+                          setErrorMessage(null);
+                        }}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: selectedRole === key }}
+                      >
+                        <Text
+                          style={[
+                            styles.roleButtonText,
+                            {
+                              color: selectedRole === key ? colors.actionPrimaryContrast : colors.textPrimary,
+                            },
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              {mode === 'login' ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    setMode('forgotPassword');
+                    setErrorMessage(null);
+                    setForgotPasswordError(null);
+                    setForgotPasswordSuccess(false);
+                    setForgotPasswordEmail('');
+                  }}
+                  accessibilityRole="link"
+                >
+                  <Text style={styles.forgotPasswordLink}>¿Olvidaste tu contraseña?</Text>
+                </TouchableOpacity>
+              ) : null}
 
               <TouchableOpacity
                 testID={mode === 'signup' ? 'signupButton' : 'loginButton'}
@@ -451,6 +569,86 @@ export default function AuthScreen() {
                   {errorMessage}
                 </Text>
               ) : null}
+            </View>
+          ) : null}
+
+          {showLoginActions && mode === 'forgotPassword' ? (
+            <View style={styles.card}>
+              {forgotPasswordSuccess ? (
+                <>
+                  <Text style={styles.successText} accessibilityLiveRegion="polite">
+                    Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setMode('login');
+                      setForgotPasswordSuccess(false);
+                      setForgotPasswordEmail('');
+                      setForgotPasswordError(null);
+                    }}
+                    accessibilityRole="link"
+                  >
+                    <Text style={styles.forgotPasswordLink}>Volver al inicio de sesión</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <FormField
+                    ref={forgotPasswordEmailInputRef}
+                    label="Correo electrónico"
+                    value={forgotPasswordEmail}
+                    onChangeText={(value) => {
+                      setForgotPasswordEmail(value);
+                      setForgotPasswordError(null);
+                    }}
+                    placeholder="tu@correo.com"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                    keyboardType="email-address"
+                    maxLength={254}
+                    returnKeyType="done"
+                    onSubmitEditing={() => void handleForgotPassword()}
+                  />
+
+                  <TouchableOpacity
+                    style={[styles.primaryButton, !canSubmitForgotPassword && styles.buttonDisabled]}
+                    onPress={() => void handleForgotPassword()}
+                    disabled={!canSubmitForgotPassword}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canSubmitForgotPassword, busy: isForgotPasswordSubmitting }}
+                  >
+                    {isForgotPasswordSubmitting ? (
+                      <ActivityIndicator color={colors.actionPrimaryContrast} />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Enviar enlace</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {forgotPasswordError ? (
+                    <Text
+                      style={styles.errorText}
+                      accessibilityRole="alert"
+                      accessibilityLiveRegion="assertive"
+                    >
+                      {forgotPasswordError}
+                    </Text>
+                  ) : null}
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setMode('login');
+                      setForgotPasswordError(null);
+                      setForgotPasswordSuccess(false);
+                      setForgotPasswordEmail('');
+                    }}
+                    accessibilityRole="link"
+                  >
+                    <Text style={styles.forgotPasswordLink}>Volver al inicio de sesión</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           ) : null}
 
@@ -564,5 +762,18 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   divider: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
-  buttonDisabled: { opacity: 0.5 }
+  forgotPasswordLink: { color: colors.actionPrimary, fontSize: 13, fontWeight: '600' },
+  buttonDisabled: { opacity: 0.5 },
+  roleSelectorContainer: { gap: 8 },
+  roleRow: { flexDirection: 'row', gap: 8 },
+  roleButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  roleButtonText: { fontSize: 13, fontWeight: '700' },
 });

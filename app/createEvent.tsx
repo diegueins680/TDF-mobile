@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator,
-  FlatList, Modal
+  FlatList, Modal, SafeAreaView, KeyboardAvoidingView, Platform
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { usePreventRemove, useNavigation } from '@react-navigation/native';
 
 import { Events } from '../src/api/events';
 import { Venues } from '../src/api/venues';
@@ -13,27 +13,22 @@ import { Artists } from '../src/api/artists';
 import type { ID, ArtistProfile, Venue } from '../src/types';
 import { normalizeRouteParam } from '../src/lib/routeParams';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
+import { useAppTheme } from '../src/theme/ThemeProvider';
 
 const hasSameId = (left: ID | null | undefined, right: ID | null | undefined): boolean =>
   left != null && right != null && String(left) === String(right);
 
 export default function CreateEventScreen() {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
   const { venueId: rawVenueId } = useLocalSearchParams<{ venueId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
-  const {
-    currency,
-    catalogSource,
-    catalogSyncing,
-    getCatalogItems,
-    getCatalogDefaults,
-    refreshCatalogs,
-  } = useUserSettings();
+  const { currency } = useUserSettings();
   const routeVenueId = useMemo(() => normalizeRouteParam(rawVenueId), [rawVenueId]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [eventTypeId, setEventTypeId] = useState('');
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date(new Date().getTime() + 2 * 60 * 60 * 1000));
   const [startInput, setStartInput] = useState(startTime.toISOString());
@@ -51,22 +46,33 @@ export default function CreateEventScreen() {
   const [selectedVenueSnapshot, setSelectedVenueSnapshot] = useState<Venue | null>(null);
   const [selectedArtistsById, setSelectedArtistsById] = useState<Record<string, ArtistProfile>>({});
 
-  const eventTypeOptions = useMemo(
-    () => getCatalogItems('event-types').filter((item) => (
-      item.active && item.workflowState === 'published' && !item.deprecatedAt
-    )),
-    [getCatalogItems],
-  );
-  const defaultEventTypeId = useMemo(
-    () => getCatalogDefaults('event-types').find((entry) => (
-      entry.scopeKind === 'social-event'
-      && entry.scopeId === 'global'
-      && !entry.localeId
-      && eventTypeOptions.some((item) => item.id === entry.entityId)
-    ))?.entityId ?? '',
-    [eventTypeOptions, getCatalogDefaults],
-  );
-  const eventTypeSelectionValid = eventTypeOptions.some((item) => item.id === eventTypeId);
+  const [titleError, setTitleError] = useState('');
+  const [venueError, setVenueError] = useState('');
+  const [artistError, setArtistError] = useState('');
+  const [startTimeError, setStartTimeError] = useState('');
+  const [endTimeError, setEndTimeError] = useState('');
+  const [ticketPriceError, setTicketPriceError] = useState('');
+
+  const titleRef = useRef<TextInput>(null);
+  const descriptionRef = useRef<TextInput>(null);
+  const startTimeRef = useRef<TextInput>(null);
+  const endTimeRef = useRef<TextInput>(null);
+  const ticketPriceRef = useRef<TextInput>(null);
+  const ticketUrlRef = useRef<TextInput>(null);
+
+  const navigation = useNavigation();
+  const [isDirty, setIsDirty] = useState(false);
+
+  usePreventRemove(isDirty, ({ data }) => {
+    Alert.alert(
+      'Cambios sin guardar',
+      '¿Quieres descartar los cambios?',
+      [
+        { text: 'Cancelar', style: 'cancel', onPress: () => {} },
+        { text: 'Descartar', style: 'destructive', onPress: () => navigation.dispatch(data.action) },
+      ],
+    );
+  });
 
   const { data: venues, isLoading: venuesLoading } = useQuery({
     queryKey: ['venues', venueSearch],
@@ -87,6 +93,7 @@ export default function CreateEventScreen() {
   const createMutation = useMutation({
     mutationFn: (body: Parameters<typeof Events.create>[0]) => Events.create(body),
     onSuccess: () => {
+      setIsDirty(false);
       qc.invalidateQueries({ queryKey: ['events'] });
       Alert.alert('Éxito', '¡Evento creado!');
       router.back();
@@ -101,10 +108,6 @@ export default function CreateEventScreen() {
       setVenueId(routeVenueId);
     }
   }, [routeVenueId, venueId]);
-
-  useEffect(() => {
-    if (!eventTypeId && defaultEventTypeId) setEventTypeId(defaultEventTypeId);
-  }, [defaultEventTypeId, eventTypeId]);
 
   useEffect(() => {
     if (!venueId || !venues?.length) return;
@@ -167,7 +170,6 @@ export default function CreateEventScreen() {
   const parseDateInput = useCallback((text: string) => {
     const parsed = new Date(text);
     if (isNaN(parsed.getTime())) {
-      Alert.alert('Formato de fecha', 'Usa un formato válido, por ejemplo 2025-12-15T15:00:00Z');
       return null;
     }
     return parsed;
@@ -184,6 +186,7 @@ export default function CreateEventScreen() {
   const toggleArtist = useCallback((artistId: ID) => {
     const artistKey = String(artistId);
     const selectedArtist = (artists ?? []).find((artist) => hasSameId(artist.id, artistId));
+    setIsDirty(true);
 
     setArtistIds((current) => (
       current.some((id) => String(id) === artistKey)
@@ -214,53 +217,56 @@ export default function CreateEventScreen() {
   }, [router]);
 
   const handleCreateEvent = useCallback(async () => {
+    setTitleError('');
+    setVenueError('');
+    setArtistError('');
+    setStartTimeError('');
+    setEndTimeError('');
+    setTicketPriceError('');
+
     const parsedStart = parseDateInput(startInput);
     const parsedEnd = parseDateInput(endInput);
 
+    if (!parsedStart) {
+      setStartTimeError('Usa un formato válido, por ejemplo 2025-12-15T15:00:00Z');
+    }
+    if (!parsedEnd) {
+      setEndTimeError('Usa un formato válido, por ejemplo 2025-12-15T15:00:00Z');
+    }
     if (!parsedStart || !parsedEnd) return;
 
     setStartTime(parsedStart);
     setEndTime(parsedEnd);
 
     if (!title.trim()) {
-      Alert.alert('Validación', 'El nombre del evento es obligatorio');
-      return;
-    }
-    if (!eventTypeSelectionValid) {
-      Alert.alert(
-        'Tipo de evento no disponible',
-        catalogSource === 'emergency'
-          ? 'Conéctate y sincroniza los catálogos antes de crear el evento.'
-          : 'El tipo seleccionado ya no está disponible. Sincroniza y elige otro tipo.',
-      );
+      setTitleError('El nombre del evento es obligatorio');
       return;
     }
     if (!venueId) {
-      Alert.alert('Validación', 'Selecciona un lugar');
+      setVenueError('Selecciona un lugar');
       return;
     }
     if (artistIds.length === 0) {
-      Alert.alert('Validation', 'Please select at least one artist');
+      setArtistError('Selecciona al menos un artista');
       return;
     }
     if (parsedStart >= parsedEnd) {
-      Alert.alert('Validation', 'End time must be after start time');
+      setEndTimeError('La hora de fin debe ser posterior a la de inicio');
       return;
     }
 
     const trimmedPrice = ticketPrice.trim();
     const parsedPrice = trimmedPrice ? Number(trimmedPrice) : undefined;
     if (trimmedPrice && !Number.isFinite(parsedPrice)) {
-      Alert.alert('Validation', 'Ticket price must be a valid number');
+      setTicketPriceError('El precio debe ser un número válido');
       return;
     }
     if (typeof parsedPrice === 'number' && parsedPrice < 0) {
-      Alert.alert('Validación', 'El precio de entrada debe ser cero o mayor');
+      setTicketPriceError('El precio de entrada debe ser cero o mayor');
       return;
     }
 
     createMutation.mutate({
-      eventTypeId,
       title: title.trim(),
       description: description.trim(),
       startTime: parsedStart.toISOString(),
@@ -272,7 +278,7 @@ export default function CreateEventScreen() {
       ticketUrl: ticketUrl.trim() || undefined,
       isPublic
     });
-  }, [title, description, eventTypeId, eventTypeSelectionValid, venueId, artistIds, startInput, endInput, ticketPrice, ticketUrl, isPublic, currency, catalogSource, createMutation, parseDateInput]);
+  }, [title, description, venueId, artistIds, startInput, endInput, ticketPrice, ticketUrl, isPublic, currency, createMutation, parseDateInput]);
 
   const renderVenueItem = useCallback(({ item }: { item: Venue }) => (
     <TouchableOpacity
@@ -283,12 +289,14 @@ export default function CreateEventScreen() {
         setVenueId(item.id);
         setSelectedVenueSnapshot(item);
         setShowVenueModal(false);
+        setVenueError('');
+        setIsDirty(true);
       }}
     >
       <Text style={styles.modalItemTitle}>{item.name}</Text>
       <Text style={styles.modalItemSubtitle}>{item.city}</Text>
     </TouchableOpacity>
-  ), []);
+  ), [styles]);
 
   const renderArtistItem = useCallback(({ item }: { item: ArtistProfile }) => (
     <TouchableOpacity
@@ -301,88 +309,45 @@ export default function CreateEventScreen() {
       <Text style={styles.modalItemTitle}>{item.name}</Text>
       {item.genres && <Text style={styles.modalItemSubtitle}>{item.genres.join(', ')}</Text>}
     </TouchableOpacity>
-  ), [artistIds, toggleArtist]);
+  ), [artistIds, toggleArtist, styles]);
 
   return (
     <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.sectionTitle}>Event Details</Text>
 
         <View style={styles.field}>
           <Text style={styles.label}>Title *</Text>
           <TextInput
+            ref={titleRef}
+            returnKeyType="next"
+            onSubmitEditing={() => descriptionRef.current?.focus()}
+            blurOnSubmit={false}
             placeholder="Nombre del evento"
             value={title}
-            onChangeText={setTitle}
+            onChangeText={(text) => { setTitle(text); setTitleError(''); setIsDirty(true); }}
             style={styles.input}
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textSecondary}
           />
+          {titleError ? <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }} accessibilityRole="alert">{titleError}</Text> : null}
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Description</Text>
           <TextInput
+            ref={descriptionRef}
+            returnKeyType="next"
+            onSubmitEditing={() => startTimeRef.current?.focus()}
+            blurOnSubmit={false}
             placeholder="¿De qué trata este evento?"
             value={description}
-            onChangeText={setDescription}
+            onChangeText={(text) => { setDescription(text); setIsDirty(true); }}
             style={[styles.input, styles.inputMultiline]}
             multiline
             numberOfLines={3}
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textSecondary}
           />
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Tipo de evento *</Text>
-          {eventTypeOptions.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.catalogOptions}
-              accessibilityRole="radiogroup"
-            >
-              {eventTypeOptions.map((item) => {
-                const selected = item.id === eventTypeId;
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[styles.catalogOption, selected && styles.catalogOptionSelected]}
-                    onPress={() => setEventTypeId(item.id)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    accessibilityLabel={`Tipo de evento: ${item.name}`}
-                  >
-                    <Text style={[styles.catalogOptionText, selected && styles.catalogOptionTextSelected]}>
-                      {item.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          ) : (
-            <View style={styles.catalogUnavailable} accessibilityRole="alert">
-              <Text style={styles.catalogUnavailableText}>
-                {catalogSyncing
-                  ? 'Sincronizando tipos de evento…'
-                  : 'No hay tipos de evento publicados disponibles. Tu borrador se conservará.'}
-              </Text>
-              {!catalogSyncing && (
-                <TouchableOpacity
-                  style={styles.refreshCatalogButton}
-                  onPress={() => { void refreshCatalogs(); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Volver a sincronizar tipos de evento"
-                >
-                  <Text style={styles.refreshCatalogButtonText}>Sincronizar</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-          {eventTypeId !== '' && !eventTypeSelectionValid && eventTypeOptions.length > 0 && (
-            <Text style={styles.catalogConflict} accessibilityRole="alert">
-              El tipo elegido dejó de estar disponible. Selecciona uno vigente para continuar.
-            </Text>
-          )}
         </View>
 
         <Text style={styles.sectionTitle}>Fecha y hora</Text>
@@ -390,19 +355,24 @@ export default function CreateEventScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Hora de inicio *</Text>
           <TextInput
+            ref={startTimeRef}
+            returnKeyType="next"
+            onSubmitEditing={() => endTimeRef.current?.focus()}
+            blurOnSubmit={false}
             placeholder="YYYY-MM-DDTHH:mm:ssZ"
             value={startInput}
-            onChangeText={setStartInput}
+            onChangeText={(text) => { setStartInput(text); setStartTimeError(''); setIsDirty(true); }}
             onBlur={() => {
               const parsed = parseDateInput(startInput);
               if (parsed) {
                 setStartTime(parsed);
               } else {
                 setStartInput(startTime.toISOString());
+                setStartTimeError('Usa un formato válido, por ejemplo 2025-12-15T15:00:00Z');
               }
             }}
             style={styles.input}
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textSecondary}
           />
           <View style={styles.row}>
             <TouchableOpacity
@@ -411,6 +381,7 @@ export default function CreateEventScreen() {
                 const now = new Date();
                 setStartTime(now);
                 setStartInput(now.toISOString());
+                setIsDirty(true);
               }}
             >
               <Text style={styles.smallButtonText}>Ahora</Text>
@@ -421,29 +392,36 @@ export default function CreateEventScreen() {
                 const nextHour = new Date(Date.now() + 60 * 60 * 1000);
                 setStartTime(nextHour);
                 setStartInput(nextHour.toISOString());
+                setIsDirty(true);
               }}
             >
               <Text style={styles.smallButtonText}>+1h</Text>
             </TouchableOpacity>
           </View>
+          {startTimeError ? <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }} accessibilityRole="alert">{startTimeError}</Text> : null}
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Hora de fin *</Text>
           <TextInput
+            ref={endTimeRef}
+            returnKeyType="next"
+            onSubmitEditing={() => ticketPriceRef.current?.focus()}
+            blurOnSubmit={false}
             placeholder="YYYY-MM-DDTHH:mm:ssZ"
             value={endInput}
-            onChangeText={setEndInput}
+            onChangeText={(text) => { setEndInput(text); setEndTimeError(''); setIsDirty(true); }}
             onBlur={() => {
               const parsed = parseDateInput(endInput);
               if (parsed) {
                 setEndTime(parsed);
               } else {
                 setEndInput(endTime.toISOString());
+                setEndTimeError('Usa un formato válido, por ejemplo 2025-12-15T15:00:00Z');
               }
             }}
             style={styles.input}
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textSecondary}
           />
           <View style={styles.row}>
             <TouchableOpacity
@@ -452,6 +430,7 @@ export default function CreateEventScreen() {
                 const plusTwo = new Date(Date.now() + 2 * 60 * 60 * 1000);
                 setEndTime(plusTwo);
                 setEndInput(plusTwo.toISOString());
+                setIsDirty(true);
               }}
             >
               <Text style={styles.smallButtonText}>+2h</Text>
@@ -462,11 +441,13 @@ export default function CreateEventScreen() {
                 const plusOne = new Date(endTime.getTime() + 60 * 60 * 1000);
                 setEndTime(plusOne);
                 setEndInput(plusOne.toISOString());
+                setIsDirty(true);
               }}
             >
               <Text style={styles.smallButtonText}>+1h desde la actual</Text>
             </TouchableOpacity>
           </View>
+          {endTimeError ? <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }} accessibilityRole="alert">{endTimeError}</Text> : null}
         </View>
 
         <Text style={styles.sectionTitle}>Lugar y artistas</Text>
@@ -478,9 +459,10 @@ export default function CreateEventScreen() {
               {selectedVenue?.name || (routeVenueQuery.isLoading && venueId ? 'Cargando lugar…' : 'Selecciona un lugar')}
             </Text>
           </View>
+          {venueError ? <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }} accessibilityRole="alert">{venueError}</Text> : null}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.field} onPress={() => setShowArtistModal(true)}>
+        <TouchableOpacity style={styles.field} onPress={() => { setShowArtistModal(true); setArtistError(''); }}>
           <Text style={styles.label}>Artistas *</Text>
           {artistIds.length > 0 ? (
             <View style={styles.selectedBox}>
@@ -499,6 +481,7 @@ export default function CreateEventScreen() {
               <Text style={styles.placeholder}>Selecciona artistas</Text>
             </View>
           )}
+          {artistError ? <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }} accessibilityRole="alert">{artistError}</Text> : null}
         </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Entradas</Text>
@@ -506,24 +489,31 @@ export default function CreateEventScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Precio ({currency})</Text>
           <TextInput
+            ref={ticketPriceRef}
+            returnKeyType="next"
+            onSubmitEditing={() => ticketUrlRef.current?.focus()}
+            blurOnSubmit={false}
             placeholder="0.00"
             value={ticketPrice}
-            onChangeText={setTicketPrice}
+            onChangeText={(text) => { setTicketPrice(text); setTicketPriceError(''); setIsDirty(true); }}
             style={styles.input}
             keyboardType="decimal-pad"
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textSecondary}
           />
+          {ticketPriceError ? <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }} accessibilityRole="alert">{ticketPriceError}</Text> : null}
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>URL de entradas</Text>
           <TextInput
+            ref={ticketUrlRef}
+            returnKeyType="done"
             placeholder="https://..."
             accessibilityLabel="URL de entradas"
             value={ticketUrl}
-            onChangeText={setTicketUrl}
+            onChangeText={(text) => { setTicketUrl(text); setIsDirty(true); }}
             style={styles.input}
-            placeholderTextColor="#999"
+            placeholderTextColor={colors.textSecondary}
             keyboardType="url"
             autoCapitalize="none"
             autoCorrect={false}
@@ -533,7 +523,7 @@ export default function CreateEventScreen() {
         <View style={styles.field}>
           <TouchableOpacity
             style={styles.checkbox}
-            onPress={() => setIsPublic(!isPublic)}
+            onPress={() => { setIsPublic(!isPublic); setIsDirty(true); }}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: isPublic }}
             accessibilityLabel="Hacer evento público"
@@ -544,19 +534,20 @@ export default function CreateEventScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.createButton, (!eventTypeSelectionValid || createMutation.isPending) && styles.createButtonDisabled]}
+          style={styles.createButton}
           onPress={handleCreateEvent}
-          disabled={!eventTypeSelectionValid || createMutation.isPending}
+          disabled={createMutation.isPending}
           accessibilityRole="button"
-          accessibilityState={{ disabled: !eventTypeSelectionValid || createMutation.isPending }}
+          accessibilityState={{ disabled: createMutation.isPending }}
         >
           {createMutation.isPending ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.actionPrimaryContrast} />
           ) : (
             <Text style={styles.createButtonText}>Crear evento</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Venue Modal */}
       <Modal
@@ -598,7 +589,7 @@ export default function CreateEventScreen() {
 
           {venuesLoading ? (
             <View style={styles.modalLoading}>
-              <ActivityIndicator size="large" color="#2563eb" />
+              <ActivityIndicator size="large" color={colors.actionPrimary} />
             </View>
           ) : (
             <FlatList
@@ -651,7 +642,7 @@ export default function CreateEventScreen() {
 
           {artistsLoading ? (
             <View style={styles.modalLoading}>
-              <ActivityIndicator size="large" color="#2563eb" />
+              <ActivityIndicator size="large" color={colors.actionPrimary} />
             </View>
           ) : (
             <FlatList
@@ -667,49 +658,40 @@ export default function CreateEventScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafafa' },
-  content: { paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 24 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginTop: 16, marginBottom: 12, textTransform: 'uppercase' },
-  field: { marginBottom: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
-  label: { fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 6 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a1a1a' },
-  inputMultiline: { height: 80, textAlignVertical: 'top', paddingVertical: 10 },
-  selectedBox: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' },
-  selectedText: { fontSize: 14, color: '#1a1a1a', fontWeight: '500' },
-  selectedSubtext: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  placeholder: { fontSize: 14, color: '#999' },
-  catalogOptions: { gap: 8, paddingVertical: 2 },
-  catalogOption: { minHeight: 44, justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 22, paddingHorizontal: 16 },
-  catalogOptionSelected: { backgroundColor: '#dbeafe', borderColor: '#2563eb' },
-  catalogOptionText: { color: '#374151', fontSize: 14, fontWeight: '600' },
-  catalogOptionTextSelected: { color: '#1d4ed8' },
-  catalogUnavailable: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74', borderRadius: 8, padding: 12 },
-  catalogUnavailableText: { color: '#9a3412', fontSize: 13, lineHeight: 18 },
-  catalogConflict: { color: '#b91c1c', fontSize: 13, lineHeight: 18, marginTop: 8 },
-  refreshCatalogButton: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: 8, paddingHorizontal: 14, borderRadius: 8, backgroundColor: '#9a3412' },
-  refreshCatalogButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  checkbox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  checkboxBox: { width: 20, height: 20, borderWidth: 1, borderColor: '#ddd', borderRadius: 4, backgroundColor: '#fff' },
-  checkboxBoxChecked: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  checkboxLabel: { fontSize: 14, color: '#1a1a1a' },
-  createButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 16 },
-  createButtonDisabled: { backgroundColor: '#9ca3af' },
-  createButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  modal: { flex: 1, backgroundColor: '#fff' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  modalHeaderAction: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
-  modalClose: { fontSize: 14, color: '#2563eb', fontWeight: '600' },
-  modalCreate: { fontSize: 14, color: '#16a34a', fontWeight: '600' },
-  modalTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-  modalSearchInput: { marginHorizontal: 16, marginVertical: 12, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  modalList: { paddingHorizontal: 16, paddingBottom: 24 },
-  modalItem: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#f0f0f0' },
-  modalItemSelected: { backgroundColor: '#f0f8ff', borderColor: '#2563eb' },
-  modalItemTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
-  modalItemSubtitle: { fontSize: 12, color: '#999', marginTop: 4 },
-  modalLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  smallButton: { backgroundColor: '#111827', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
-  smallButtonText: { color: '#fff', fontWeight: '700' }
-});
+function createStyles(colors: ReturnType<typeof import('../src/theme/ThemeProvider').useAppTheme>['colors']) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.canvas },
+    content: { paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 24 },
+    sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginTop: 16, marginBottom: 12, textTransform: 'uppercase' },
+    field: { marginBottom: 12 },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+    label: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+    input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: colors.textPrimary },
+    inputMultiline: { height: 80, textAlignVertical: 'top', paddingVertical: 10 },
+    selectedBox: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, justifyContent: 'center' },
+    selectedText: { fontSize: 14, color: colors.textPrimary, fontWeight: '500' },
+    selectedSubtext: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    placeholder: { fontSize: 14, color: colors.textSecondary },
+    checkbox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    checkboxBox: { width: 20, height: 20, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 4, backgroundColor: colors.surface },
+    checkboxBoxChecked: { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary },
+    checkboxLabel: { fontSize: 14, color: colors.textPrimary },
+    createButton: { backgroundColor: colors.actionPrimary, paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 16 },
+    createButtonText: { color: colors.actionPrimaryContrast, fontSize: 14, fontWeight: '700' },
+    modal: { flex: 1, backgroundColor: colors.surface },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.surfaceMuted },
+    modalHeaderAction: { minWidth: 60, minHeight: 44, justifyContent: 'center' },
+    modalClose: { fontSize: 14, color: colors.actionPrimary, fontWeight: '600' },
+    modalCreate: { fontSize: 14, color: colors.success, fontWeight: '600' },
+    modalTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+    modalSearchInput: { marginHorizontal: 16, marginVertical: 12, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.surface, color: colors.textPrimary },
+    modalList: { paddingHorizontal: 16, paddingBottom: 24 },
+    modalItem: { backgroundColor: colors.surface, padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: colors.surfaceMuted },
+    modalItemSelected: { backgroundColor: colors.infoSurface, borderColor: colors.actionPrimary },
+    modalItemTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+    modalItemSubtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+    modalLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    smallButton: { backgroundColor: colors.textPrimary, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
+    smallButtonText: { color: colors.surface, fontWeight: '700' }
+  });
+}

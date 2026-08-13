@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,6 +22,10 @@ import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import type { EventCityInput, SocialEvent } from '../../src/types';
 import { listSavedEventIds, toggleSavedEvent } from '../../src/lib/savedEvents';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
+import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
+import { useAppTheme } from '../../src/theme/ThemeProvider';
+import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
+import { impactLight } from '../../src/utils/haptics';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -40,6 +45,8 @@ const toLocalDateKey = (value: string | Date, timeZone: string): string => {
 
 export default function EventsScreen() {
   const qc = useQueryClient();
+  const { colors } = useAppTheme();
+  const analytics = useAnalytics();
   const { locale, timezone, countryCode } = useUserSettings();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
@@ -51,6 +58,7 @@ export default function EventsScreen() {
   const [newCityName, setNewCityName] = useState('');
   const [newCountryCode, setNewCountryCode] = useState(countryCode ?? 'US');
   const debouncedSearch = useDebouncedValue(searchFilter, 250);
+  const [refreshing, setRefreshing] = useState(false);
 
   const { data: events, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['events', 'buyer-upcoming', discoveryScope],
@@ -79,9 +87,29 @@ export default function EventsScreen() {
     }
   });
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (eventScope === 'saved') {
+        await savedEventsQuery.refetch();
+      } else {
+        await refetch();
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [eventScope, refetch, savedEventsQuery]);
+
   const saveToggleMutation = useMutation({
     mutationFn: (eventId: string) => toggleSavedEvent(eventId),
-    onSuccess: () => {
+    onSuccess: (_data, eventId) => {
+      const wasSaved = savedEventIds.includes(eventId);
+      void impactLight();
+      analytics.capture('feature_favorite_changed', {
+        platform: 'mobile',
+        event_id: eventId,
+        action: wasSaved ? 'unsaved' : 'saved',
+      });
       qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
       qc.invalidateQueries({ queryKey: ['saved-events'] });
     }
@@ -167,6 +195,20 @@ export default function EventsScreen() {
       .sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime());
   }, [debouncedSearch, eventScope, events, locale, savedEventsQuery.data]);
 
+  const searchQuery = debouncedSearch.trim();
+  const hasSearchNoResults = searchQuery.length > 0 && effectiveEvents.length === 0;
+
+  useEffect(() => {
+    if (hasSearchNoResults) {
+      analytics.capture('feature_search_no_results', {
+        platform: 'mobile',
+        query: searchQuery,
+        scope: eventScope,
+        discovery_scope: discoveryScope,
+      });
+    }
+  }, [hasSearchNoResults, searchQuery, eventScope, discoveryScope, analytics]);
+
   const eventsByDate = useMemo(() => {
     if (!effectiveEvents.length) return {};
     
@@ -193,15 +235,27 @@ export default function EventsScreen() {
     }
     const marked: Record<string, MarkedDateStyle> = {};
     Object.keys(eventsByDate).forEach(date => {
-      marked[date] = { marked: true, dotColor: '#2563eb' };
+      marked[date] = { marked: true, dotColor: colors.actionPrimary };
     });
-    marked[selectedDate] = { ...marked[selectedDate], selected: true, selectedColor: '#2563eb' };
+    marked[selectedDate] = { ...marked[selectedDate], selected: true, selectedColor: colors.actionPrimary };
     return marked;
   }, [eventsByDate, selectedDate]);
 
   const handleToggleSaved = useCallback((eventId: string) => {
-    saveToggleMutation.mutate(eventId);
-  }, [saveToggleMutation]);
+    const isCurrentlySaved = savedEventIds.includes(eventId);
+    if (isCurrentlySaved) {
+      Alert.alert(
+        'Quitar evento guardado',
+        '¿Quieres quitar este evento de tus guardados?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Quitar', style: 'destructive', onPress: () => saveToggleMutation.mutate(eventId) },
+        ],
+      );
+    } else {
+      saveToggleMutation.mutate(eventId);
+    }
+  }, [saveToggleMutation, savedEventIds]);
 
   const isCardUpdating = useCallback((eventId: string) => (
     saveToggleMutation.isPending && String(saveToggleMutation.variables) === eventId
@@ -224,10 +278,11 @@ export default function EventsScreen() {
 
   const listError = eventScope === 'saved' ? savedEventsQuery.isError : isError;
 
-  if (listLoading) {
+  const hasListData = eventScope === 'saved' ? !!savedEventsQuery.data : !!events;
+  if (listLoading && !hasListData) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <EventListSkeleton />
       </SafeAreaView>
     );
   }
@@ -235,10 +290,10 @@ export default function EventsScreen() {
   if (listError) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <Text style={styles.error}>No se pudieron cargar los eventos</Text>
-        <Text style={styles.errorHelper}>Comprueba tu conexión e inténtalo nuevamente.</Text>
+        <Text style={[styles.error, { color: colors.danger }]} accessibilityLiveRegion="polite">No se pudieron cargar los eventos</Text>
+        <Text style={[styles.errorHelper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">Comprueba tu conexión e inténtalo nuevamente.</Text>
         <TouchableOpacity
-          style={styles.retryButton}
+          style={[styles.retryButton, { backgroundColor: colors.actionPrimary }]}
           onPress={() => {
             if (eventScope === 'saved') {
               void savedEventsQuery.refetch();
@@ -249,20 +304,21 @@ export default function EventsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Reintentar cargar eventos"
         >
-          <Text style={styles.retryButtonText}>Reintentar</Text>
+          <Text style={[styles.retryButtonText, { color: colors.actionPrimaryContrast }]}>Reintentar</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.canvas }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Eventos cerca de ti</Text>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.canvas }]}>
+        <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">Eventos cerca de ti</Text>
         <TouchableOpacity
           style={[
             styles.manageCitiesButton,
+            { backgroundColor: colors.selected },
             citySubscriptionsQuery.isLoading && styles.manageCitiesButtonDisabled,
           ]}
           onPress={openCityModal}
@@ -270,95 +326,95 @@ export default function EventsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Administrar ciudades suscritas"
         >
-          <Text style={styles.manageCitiesButtonText}>Ciudades</Text>
+          <Text style={[styles.manageCitiesButtonText, { color: colors.actionPrimary }]}>Ciudades</Text>
         </TouchableOpacity>
       </View>
 
       {/* Search */}
-      <View style={styles.searchContainer}>
+      <View style={[styles.searchContainer, { backgroundColor: colors.surface }]}>
         <TextInput
           placeholder="Buscar eventos, artistas o ciudades"
           value={searchFilter}
           onChangeText={setSearchFilter}
-          style={styles.searchInput}
+          style={[styles.searchInput, { borderColor: colors.borderSubtle, color: colors.textPrimary }]}
           autoCapitalize="none"
           autoCorrect={false}
           accessibilityLabel="Buscar eventos, artistas o ciudades"
         />
-        {isFetching && !isLoading ? <ActivityIndicator size="small" color="#7c3aed" /> : null}
+        {isFetching && !isLoading ? <ActivityIndicator size="small" color={colors.actionPrimary} /> : null}
       </View>
 
       {/* View Mode Toggle */}
-      <View style={styles.toggleContainer}>
+      <View style={[styles.toggleContainer, { backgroundColor: colors.surface }]}>
         <TouchableOpacity
-          style={[styles.toggleBtn, discoveryScope === 'subscribed' && styles.toggleBtnActive]}
+          style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, discoveryScope === 'subscribed' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
           onPress={() => setDiscoveryScope('subscribed')}
-          accessibilityRole="button"
+          accessibilityRole="tab"
           accessibilityLabel="Ver eventos de mis ciudades"
           accessibilityState={{ selected: discoveryScope === 'subscribed' }}
         >
-          <Text style={[styles.toggleBtnText, discoveryScope === 'subscribed' && styles.toggleBtnTextActive]}>
+          <Text style={[styles.toggleBtnText, { color: colors.textSecondary }, discoveryScope === 'subscribed' && [styles.toggleBtnTextActive, { color: colors.actionPrimaryContrast }]]}>
             Mis ciudades
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.toggleBtn, discoveryScope === 'all' && styles.toggleBtnActive]}
+          style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, discoveryScope === 'all' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
           onPress={() => setDiscoveryScope('all')}
-          accessibilityRole="button"
+          accessibilityRole="tab"
           accessibilityLabel="Explorar eventos de todas las ciudades"
           accessibilityState={{ selected: discoveryScope === 'all' }}
         >
-          <Text style={[styles.toggleBtnText, discoveryScope === 'all' && styles.toggleBtnTextActive]}>
+          <Text style={[styles.toggleBtnText, { color: colors.textSecondary }, discoveryScope === 'all' && [styles.toggleBtnTextActive, { color: colors.actionPrimaryContrast }]]}>
             Explorar
           </Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.toggleContainer}>
+      <View style={[styles.toggleContainer, { backgroundColor: colors.surface }]}>
         <TouchableOpacity
-          style={[styles.toggleBtn, eventScope === 'all' && styles.toggleBtnActive]}
+          style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, eventScope === 'all' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
           onPress={() => setEventScope('all')}
-          accessibilityRole="button"
+          accessibilityRole="tab"
           accessibilityLabel="Mostrar todos los eventos"
           accessibilityState={{ selected: eventScope === 'all' }}
         >
-          <Text style={[styles.toggleBtnText, eventScope === 'all' && styles.toggleBtnTextActive]}>
+          <Text style={[styles.toggleBtnText, { color: colors.textSecondary }, eventScope === 'all' && [styles.toggleBtnTextActive, { color: colors.actionPrimaryContrast }]]}>
             Todos
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.toggleBtn, eventScope === 'saved' && styles.toggleBtnActive]}
+          style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, eventScope === 'saved' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
           onPress={() => setEventScope('saved')}
-          accessibilityRole="button"
+          accessibilityRole="tab"
           accessibilityLabel="Mostrar eventos guardados"
           accessibilityState={{ selected: eventScope === 'saved' }}
         >
-          <Text style={[styles.toggleBtnText, eventScope === 'saved' && styles.toggleBtnTextActive]}>
+          <Text style={[styles.toggleBtnText, { color: colors.textSecondary }, eventScope === 'saved' && [styles.toggleBtnTextActive, { color: colors.actionPrimaryContrast }]]}>
             Guardados ({savedEventIds.length})
           </Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.toggleContainer}>
+      <View style={[styles.toggleContainer, { backgroundColor: colors.surface }]}>
         <TouchableOpacity
-          style={[styles.toggleBtn, viewMode === 'list' && styles.toggleBtnActive]}
+          style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, viewMode === 'list' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
           onPress={() => setViewMode('list')}
-          accessibilityRole="button"
+          accessibilityRole="tab"
           accessibilityLabel="Ver en lista"
           accessibilityState={{ selected: viewMode === 'list' }}
         >
-          <Text style={[styles.toggleBtnText, viewMode === 'list' && styles.toggleBtnTextActive]}>
+          <Text style={[styles.toggleBtnText, { color: colors.textSecondary }, viewMode === 'list' && [styles.toggleBtnTextActive, { color: colors.actionPrimaryContrast }]]}>
             Lista
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.toggleBtn, viewMode === 'calendar' && styles.toggleBtnActive]}
+          style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, viewMode === 'calendar' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
           onPress={() => setViewMode('calendar')}
-          accessibilityRole="button"
+          accessibilityRole="tab"
           accessibilityLabel="Ver en calendario"
           accessibilityState={{ selected: viewMode === 'calendar' }}
         >
-          <Text style={[styles.toggleBtnText, viewMode === 'calendar' && styles.toggleBtnTextActive]}>
+          <Text style={[styles.toggleBtnText, { color: colors.textSecondary }, viewMode === 'calendar' && [styles.toggleBtnTextActive, { color: colors.actionPrimaryContrast }]]}>
             Calendario
           </Text>
         </TouchableOpacity>
@@ -372,16 +428,18 @@ export default function EventsScreen() {
             onDayPress={day => setSelectedDate(day.dateString)}
             markedDates={markedDates}
             theme={{
-              backgroundColor: '#fff',
-              calendarBackground: '#fff',
-              textSectionTitleColor: '#666',
-              selectedDayBackgroundColor: '#2563eb',
-              selectedDayTextColor: '#fff',
-              todayTextColor: '#2563eb',
-              dotColor: '#2563eb',
-              disabledArrowColor: '#ccc',
-              monthTextColor: '#1a1a1a',
-              textDisabledColor: '#ccc'
+              backgroundColor: colors.canvas,
+              calendarBackground: colors.surface,
+              monthTextColor: colors.textPrimary,
+              dayTextColor: colors.textPrimary,
+              textSectionTitleColor: colors.textSecondary,
+              todayTextColor: colors.actionPrimary,
+              selectedDayBackgroundColor: colors.actionPrimary,
+              selectedDayTextColor: colors.actionPrimaryContrast,
+              arrowColor: colors.actionPrimary,
+              textDayFontFamily: undefined,
+              textMonthFontFamily: undefined,
+              textDayHeaderFontFamily: undefined,
             }}
           />
 
@@ -392,10 +450,13 @@ export default function EventsScreen() {
               keyExtractor={keyExtractor}
               style={styles.calendarList}
               contentContainerStyle={styles.calendarListContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.actionPrimary} colors={[colors.actionPrimary]} />
+              }
             />
           ) : (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 {eventScope === 'saved' ? 'No hay eventos guardados en esta fecha' : 'No hay eventos en esta fecha'}
               </Text>
             </View>
@@ -407,9 +468,12 @@ export default function EventsScreen() {
           renderItem={renderEventItem}
           keyExtractor={keyExtractor}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.actionPrimary} colors={[colors.actionPrimary]} />
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 {debouncedSearch
                   ? 'No encontramos eventos que coincidan con tu búsqueda'
                   : eventScope === 'saved'
@@ -420,11 +484,14 @@ export default function EventsScreen() {
               </Text>
               {!debouncedSearch && eventScope === 'all' && discoveryScope === 'subscribed' ? (
                 <TouchableOpacity
-                  style={styles.emptyCitiesButton}
+                  style={[styles.emptyCitiesButton, { backgroundColor: colors.selected }]}
                   onPress={openCityModal}
                   disabled={citySubscriptionsQuery.isLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Elegir ciudades para seguir eventos"
+                  accessibilityState={{ disabled: citySubscriptionsQuery.isLoading }}
                 >
-                  <Text style={styles.emptyCitiesButtonText}>Elegir ciudades</Text>
+                  <Text style={[styles.emptyCitiesButtonText, { color: colors.actionPrimary }]}>Elegir ciudades</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -440,11 +507,11 @@ export default function EventsScreen() {
         accessibilityViewIsModal
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.cityModal}>
+          <View style={[styles.cityModal, { backgroundColor: colors.surface }]}>
             <View style={styles.cityModalHeader}>
               <View style={styles.cityModalTitleGroup}>
-                <Text style={styles.cityModalTitle}>Tus ciudades</Text>
-                <Text style={styles.cityModalSubtitle}>
+                <Text style={[styles.cityModalTitle, { color: colors.textPrimary }]}>Tus ciudades</Text>
+                <Text style={[styles.cityModalSubtitle, { color: colors.textSecondary }]}>
                   Importaremos eventos de estas ciudades cada seis horas.
                 </Text>
               </View>
@@ -454,16 +521,16 @@ export default function EventsScreen() {
                 accessibilityLabel="Cerrar selector de ciudades"
                 hitSlop={8}
               >
-                <Text style={styles.cityModalClose}>Cerrar</Text>
+                <Text style={[styles.cityModalClose, { color: colors.actionPrimary }]}>Cerrar</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.cityList} keyboardShouldPersistTaps="handled">
               {draftCities.map((city) => (
-                <View key={`${city.countryCode}:${city.name.toLocaleLowerCase()}`} style={styles.cityChip}>
+                <View key={`${city.countryCode}:${city.name.toLocaleLowerCase()}`} style={[styles.cityChip, { borderColor: colors.borderSubtle }]}>
                   <View>
-                    <Text style={styles.cityChipName}>{city.name}</Text>
-                    <Text style={styles.cityChipCountry}>{city.countryCode}</Text>
+                    <Text style={[styles.cityChipName, { color: colors.textPrimary }]}>{city.name}</Text>
+                    <Text style={[styles.cityChipCountry, { color: colors.textSecondary }]}>{city.countryCode}</Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => setDraftCities((current) => current.filter(
@@ -473,18 +540,18 @@ export default function EventsScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Quitar ${city.name}`}
                   >
-                    <Text style={styles.cityRemove}>Quitar</Text>
+                    <Text style={[styles.cityRemove, { color: colors.danger }]}>Quitar</Text>
                   </TouchableOpacity>
                 </View>
               ))}
               {draftCities.length === 0 ? (
-                <Text style={styles.cityEmpty}>Todavía no sigues ninguna ciudad.</Text>
+                <Text style={[styles.cityEmpty, { color: colors.textSecondary }]}>Todavía no sigues ninguna ciudad.</Text>
               ) : null}
             </ScrollView>
 
             <View style={styles.cityAddRow}>
               <TextInput
-                style={[styles.cityInput, styles.cityNameInput]}
+                style={[styles.cityInput, styles.cityNameInput, { borderColor: colors.borderSubtle, color: colors.textPrimary }]}
                 placeholder="Ciudad"
                 value={newCityName}
                 onChangeText={setNewCityName}
@@ -492,7 +559,7 @@ export default function EventsScreen() {
                 accessibilityLabel="Nombre de ciudad"
               />
               <TextInput
-                style={[styles.cityInput, styles.countryInput]}
+                style={[styles.cityInput, styles.countryInput, { borderColor: colors.borderSubtle, color: colors.textPrimary }]}
                 placeholder="EC"
                 value={newCountryCode}
                 onChangeText={(value) => setNewCountryCode(value.toUpperCase().slice(0, 2))}
@@ -500,24 +567,27 @@ export default function EventsScreen() {
                 maxLength={2}
                 accessibilityLabel="Código de país"
               />
-              <TouchableOpacity style={styles.cityAddButton} onPress={addDraftCity}>
-                <Text style={styles.cityAddButtonText}>Añadir</Text>
+              <TouchableOpacity style={[styles.cityAddButton, { backgroundColor: colors.selected }]} onPress={addDraftCity} accessibilityRole="button" accessibilityLabel="Añadir ciudad a la lista">
+                <Text style={[styles.cityAddButtonText, { color: colors.actionPrimary }]}>Añadir</Text>
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity
               style={[
                 styles.citySaveButton,
+                { backgroundColor: colors.actionPrimary },
                 citySubscriptionsMutation.isPending && styles.citySaveButtonDisabled,
               ]}
               disabled={citySubscriptionsMutation.isPending}
               onPress={() => citySubscriptionsMutation.mutate(draftCities)}
               accessibilityRole="button"
+              accessibilityLabel="Guardar ciudades suscritas"
+              accessibilityState={{ busy: citySubscriptionsMutation.isPending, disabled: citySubscriptionsMutation.isPending }}
             >
               {citySubscriptionsMutation.isPending ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.actionPrimaryContrast} />
               ) : (
-                <Text style={styles.citySaveButtonText}>Guardar ciudades</Text>
+                <Text style={[styles.citySaveButtonText, { color: colors.actionPrimaryContrast }]}>Guardar ciudades</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -530,7 +600,6 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa'
   },
   center: {
     flex: 1,
@@ -544,24 +613,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 8,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0'
   },
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1a1a1a'
   },
   manageCitiesButton: {
     minHeight: 36,
     justifyContent: 'center',
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: '#ede9fe'
   },
   manageCitiesButtonText: {
-    color: '#6d28d9',
     fontSize: 13,
     fontWeight: '700'
   },
@@ -569,20 +633,17 @@ const styles = StyleSheet.create({
     opacity: 0.5
   },
   createBtn: {
-    backgroundColor: '#2563eb',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6
   },
   createBtnText: {
-    color: '#fff',
     fontWeight: '600',
     fontSize: 12
   },
   searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8
@@ -590,19 +651,16 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#1a1a1a'
   },
   toggleContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 8,
     gap: 8,
-    backgroundColor: '#fff'
   },
   toggleBtn: {
     flex: 1,
@@ -610,21 +668,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#ddd',
     alignItems: 'center'
   },
-  toggleBtnActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb'
-  },
+  toggleBtnActive: {},
   toggleBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#666'
   },
-  toggleBtnTextActive: {
-    color: '#fff'
-  },
+  toggleBtnTextActive: {},
   calendarContainer: {
     flex: 1,
     paddingHorizontal: 16,
@@ -648,7 +699,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#6b7280',
     textAlign: 'center'
   },
   emptyCitiesButton: {
@@ -657,33 +707,27 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingHorizontal: 16,
     borderRadius: 10,
-    backgroundColor: '#ede9fe'
   },
   emptyCitiesButtonText: {
-    color: '#6d28d9',
     fontWeight: '800'
   },
   error: {
     fontSize: 14,
-    color: '#dc2626'
   },
   errorHelper: {
     fontSize: 12,
-    color: '#6b7280',
     marginTop: 6,
     textAlign: 'center'
   },
   retryButton: {
     minHeight: 44,
     borderRadius: 12,
-    backgroundColor: '#7c3aed',
     paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12
   },
   retryButtonText: {
-    color: '#fff',
     fontWeight: '800'
   },
   modalBackdrop: {
@@ -693,7 +737,6 @@ const styles = StyleSheet.create({
   },
   cityModal: {
     maxHeight: '82%',
-    backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
@@ -709,17 +752,14 @@ const styles = StyleSheet.create({
     flex: 1
   },
   cityModalTitle: {
-    color: '#111827',
     fontSize: 20,
     fontWeight: '800'
   },
   cityModalSubtitle: {
-    color: '#6b7280',
     fontSize: 13,
     marginTop: 4
   },
   cityModalClose: {
-    color: '#6d28d9',
     fontWeight: '700',
     paddingVertical: 4
   },
@@ -732,29 +772,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
     borderRadius: 12,
     paddingHorizontal: 14,
     marginBottom: 8
   },
   cityChipName: {
-    color: '#111827',
     fontSize: 15,
     fontWeight: '700'
   },
   cityChipCountry: {
-    color: '#6b7280',
     fontSize: 12,
     marginTop: 2
   },
   cityRemove: {
-    color: '#dc2626',
     fontSize: 13,
     fontWeight: '700'
   },
   cityEmpty: {
     textAlign: 'center',
-    color: '#6b7280',
     paddingVertical: 24
   },
   cityAddRow: {
@@ -764,10 +799,8 @@ const styles = StyleSheet.create({
   cityInput: {
     minHeight: 44,
     borderWidth: 1,
-    borderColor: '#d1d5db',
     borderRadius: 10,
     paddingHorizontal: 12,
-    color: '#111827'
   },
   cityNameInput: {
     flex: 1
@@ -780,11 +813,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
     borderRadius: 10,
-    backgroundColor: '#ede9fe',
     paddingHorizontal: 12
   },
   cityAddButtonText: {
-    color: '#6d28d9',
     fontWeight: '800'
   },
   citySaveButton: {
@@ -792,13 +823,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 12,
-    backgroundColor: '#7c3aed'
   },
   citySaveButtonDisabled: {
     opacity: 0.6
   },
   citySaveButtonText: {
-    color: '#fff',
     fontSize: 15,
     fontWeight: '800'
   }

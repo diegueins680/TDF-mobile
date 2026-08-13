@@ -1,12 +1,17 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-type Props = { name: string };
+import type { PipelineStage } from '../types';
+import { useAppTheme } from '../theme/ThemeProvider';
 
-function StagePillComponent({ name }: Props) {
+type Props = { stage: PipelineStage };
+
+function StagePillComponent({ stage }: Props) {
+  const { colors } = useAppTheme();
+
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.text}>{name}</Text>
+    <View style={[styles.wrap, { backgroundColor: colors.surfaceMuted }]}>
+      <Text style={styles.text}>{stage}</Text>
     </View>
   );
 }
@@ -16,7 +21,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: '#efefef',
     alignSelf: 'flex-start'
   },
   text: { fontSize: 12 }

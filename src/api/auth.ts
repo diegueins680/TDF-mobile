@@ -60,3 +60,20 @@ export async function signupRequest(payload: SignupRequestDTO): Promise<LoginRes
     throw new Error(readErrorMessage(error, 'No pudimos crear tu cuenta. Revisa los datos e inténtalo de nuevo.'));
   }
 }
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  try {
+    await http.post('/v1/password-reset', { email });
+  } catch (error) {
+    throw new Error(readErrorMessage(error, 'No pudimos iniciar el reset. Verifica el correo.'));
+  }
+}
+
+export async function confirmPasswordReset(token: string, newPassword: string): Promise<LoginResponseDTO> {
+  try {
+    const response = await http.post<LoginResponseDTO>('/v1/password-reset/confirm', { token, newPassword });
+    return response.data;
+  } catch (error) {
+    throw new Error(readErrorMessage(error, 'No pudimos restablecer la contraseña.'));
+  }
+}

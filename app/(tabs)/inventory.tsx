@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AccessibilityInfo,
@@ -60,6 +60,14 @@ export default function InventoryScreen() {
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (feedback) {
+      const timer = setTimeout(() => setFeedback(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [feedback]);
+
   const [createForm, setCreateForm] = useState<{ name: string; category: string; photoUrl: string }>({
     name: '',
     category: '',
@@ -274,7 +282,18 @@ export default function InventoryScreen() {
       coConditionOut: checkoutForm.coConditionOut?.trim() || undefined,
       coNotes: checkoutForm.coNotes?.trim() || undefined
     };
-    checkoutMutation.mutate({ assetId: toStringId(checkoutAsset.assetId), payload });
+    Alert.alert(
+      'Registrar salida',
+      '¿Confirmar la salida de este equipo?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Confirmar',
+          style: 'destructive',
+          onPress: () => checkoutMutation.mutate({ assetId: toStringId(checkoutAsset.assetId), payload }),
+        },
+      ],
+    );
   }, [canUseInventory, checkoutAsset, checkoutForm, checkoutMutation]);
 
   const submitCheckin = useCallback(() => {
@@ -527,9 +546,17 @@ export default function InventoryScreen() {
 
             {feedback ? (
               <View style={styles.feedback}>
-                <Text style={styles.feedbackText} accessibilityLiveRegion="polite">
+                <Text style={styles.feedbackText} accessibilityLiveRegion="polite" accessibilityRole="alert">
                   {feedback}
                 </Text>
+                <TouchableOpacity
+                  style={styles.feedbackCloseBtn}
+                  onPress={() => setFeedback(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cerrar mensaje"
+                >
+                  <Text style={styles.feedbackCloseText}>✕</Text>
+                </TouchableOpacity>
               </View>
             ) : null}
             {assetsQuery.isError ? (
@@ -1162,9 +1189,21 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderColor: colors.infoBorder,
     borderWidth: 1,
     padding: 12,
-    borderRadius: 10
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  feedbackText: { color: colors.textPrimary },
+  feedbackText: { color: colors.textPrimary, flex: 1 },
+  feedbackCloseBtn: {
+    padding: 4,
+    marginLeft: 'auto',
+  },
+  feedbackCloseText: {
+    color: colors.textSecondary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
   errorBox: {
     backgroundColor: colors.dangerSurface,
     borderColor: colors.dangerBorder,

@@ -11,7 +11,7 @@ const APP_VERSION = process.env.APP_VERSION?.trim() || '1.0.1';
 const ANDROID_VERSION_CODE = Number.parseInt(process.env.ANDROID_VERSION_CODE?.trim() || '8', 10);
 const IOS_BUNDLE_ID = 'com.tdfrecords.app';
 const ANDROID_PACKAGE = 'com.tdf.records';
-const DEFAULT_TIME_ZONE = 'UTC';
+const DEFAULT_TIME_ZONE = 'America/Guayaquil';
 const PUBLIC_SITE_URL = 'https://tdf-app.pages.dev/mobile-app';
 const PUBLIC_SUPPORT_URL = `${PUBLIC_SITE_URL}/support.html`;
 const PUBLIC_PRIVACY_POLICY_URL = `${PUBLIC_SITE_URL}/privacy.html`;
@@ -74,6 +74,13 @@ const withGoogleSigninModularHeadersPlugin =
 const plugins: NonNullable<ExpoConfig['plugins']> = [
   'expo-router',
   'expo-secure-store',
+  [
+    'expo-notifications',
+    {
+      defaultChannel: 'operations',
+      sounds: []
+    }
+  ],
   'expo-localization',
   withGoogleSigninModularHeadersPlugin,
   [

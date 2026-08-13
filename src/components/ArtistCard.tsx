@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -13,6 +13,7 @@ type Props = {
 function ArtistCardComponent({ artist, onPress }: Props) {
   const router = useRouter();
   const { colors } = useAppTheme();
+  const [imageError, setImageError] = useState(false);
 
   const handlePress = () => {
     if (onPress) {
@@ -30,26 +31,32 @@ function ArtistCardComponent({ artist, onPress }: Props) {
       accessibilityLabel={`Ver perfil de ${artist.name}`}
       accessibilityHint="Abre el perfil del artista"
     >
-      {artist.imageUrl && (
+      {artist.imageUrl && !imageError ? (
         <Image
           source={{ uri: artist.imageUrl }}
           style={[styles.image, { backgroundColor: colors.canvas }]}
           accessible={false}
+          onError={() => setImageError(true)}
         />
+      ) : null}
+      {(!artist.imageUrl || imageError) && (
+        <View style={[styles.image, styles.imagePlaceholder, { backgroundColor: colors.canvas }]}>
+          <Text style={styles.fallbackIcon}>🎵</Text>
+        </View>
       )}
       
       <View style={styles.content}>
-        <Text style={[styles.name, { color: colors.textPrimary }]}>{artist.name}</Text>
-        
+        <Text maxFontSizeMultiplier={1.5} style={[styles.name, { color: colors.textPrimary }]}>{artist.name}</Text>
+
         {artist.bio && (
-          <Text style={[styles.bio, { color: colors.textSecondary }]} numberOfLines={2}>{artist.bio}</Text>
+          <Text maxFontSizeMultiplier={1.5} style={[styles.bio, { color: colors.textSecondary }]} numberOfLines={2}>{artist.bio}</Text>
         )}
 
         {artist.genres && artist.genres.length > 0 && (
           <View style={styles.genres}>
             {artist.genres.slice(0, 3).map((genre, idx) => (
               <View key={idx} style={[styles.genreTag, { backgroundColor: colors.selected }]}>
-                <Text style={[styles.genreText, { color: colors.textSecondary }]}>{genre}</Text>
+                <Text maxFontSizeMultiplier={1.5} style={[styles.genreText, { color: colors.textSecondary }]}>{genre}</Text>
               </View>
             ))}
           </View>
@@ -61,7 +68,6 @@ function ArtistCardComponent({ artist, onPress }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 12,
@@ -73,8 +79,14 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: 180,
-    backgroundColor: '#f0f0f0'
+    height: 180
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  fallbackIcon: {
+    fontSize: 40
   },
   content: {
     padding: 12,
@@ -82,12 +94,10 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a1a'
+    fontWeight: '700'
   },
   bio: {
     fontSize: 12,
-    color: '#666',
     lineHeight: 16
   },
   genres: {
@@ -96,14 +106,12 @@ const styles = StyleSheet.create({
     gap: 6
   },
   genreTag: {
-    backgroundColor: '#f0f0f0',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6
   },
   genreText: {
-    fontSize: 11,
-    color: '#666',
+    fontSize: 12,
     fontWeight: '500'
   }
 });

@@ -1,38 +1,67 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator,
-  SafeAreaView
+  SafeAreaView, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import { usePreventRemove, useNavigation } from '@react-navigation/native';
 
 import { Artists } from '../src/api/artists';
 import { resolvePartyId } from '../src/lib/identity';
 import { useAuth } from '../src/providers/AuthProvider';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
+
+const GENRES = [
+  'Rock', 'Pop', 'Hip-Hop', 'Jazz', 'Electronic', 'Classical', 'Country',
+  'R&B', 'Latin', 'Indie', 'Alternative', 'Metal', 'Soul', 'Blues', 'Reggae'
+];
 
 export default function CreateArtistProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const { partyId: authPartyId } = useAuth();
-  const { partyId: settingsPartyId, getCatalogItems, catalogSyncing } = useUserSettings();
-  const genreOptions = getCatalogItems('genres');
+  const analytics = useAnalytics();
+  const { partyId: settingsPartyId } = useUserSettings();
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [instagramHandle, setInstagramHandle] = useState('');
   const [spotifyUrl, setSpotifyUrl] = useState('');
-  const [selectedGenreIds, setSelectedGenreIds] = useState<string[]>([]);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const effectivePartyId = resolvePartyId(authPartyId, settingsPartyId);
+
+  const nameRef = useRef<TextInput>(null);
+  const bioRef = useRef<TextInput>(null);
+  const imageUrlRef = useRef<TextInput>(null);
+  const instagramRef = useRef<TextInput>(null);
+  const spotifyRef = useRef<TextInput>(null);
+
+  const navigation = useNavigation();
+  const [isDirty, setIsDirty] = useState(false);
+
+  usePreventRemove(isDirty, ({ data }) => {
+    Alert.alert(
+      'Cambios sin guardar',
+      '¿Quieres descartar los cambios?',
+      [
+        { text: 'Cancelar', style: 'cancel', onPress: () => {} },
+        { text: 'Descartar', style: 'destructive', onPress: () => navigation.dispatch(data.action) },
+      ],
+    );
+  });
 
   const createMutation = useMutation({
     mutationFn: (body: Parameters<typeof Artists.create>[0]) => Artists.create(body),
     onSuccess: () => {
+      setIsDirty(false);
       qc.invalidateQueries({ queryKey: ['artists'] });
       if (effectivePartyId) {
         qc.invalidateQueries({ queryKey: ['user-artist-profile', effectivePartyId] });
       }
+      analytics.capture('artist_profile_saved', { platform: 'mobile', action: 'create' });
       Alert.alert('Success', 'Artist profile created!');
       router.back();
     },
@@ -41,10 +70,11 @@ export default function CreateArtistProfileScreen() {
     }
   });
 
-  const toggleGenre = useCallback((genreId: string) => {
-    setSelectedGenreIds(prev =>
-      prev.includes(genreId) ? prev.filter(id => id !== genreId) : [...prev, genreId]
+  const toggleGenre = useCallback((genre: string) => {
+    setSelectedGenres(prev =>
+      prev.includes(genre) ? prev.filter(g => g !== genre) : [...prev, genre]
     );
+    setIsDirty(true);
   }, []);
 
   const handleCreateProfile = useCallback(async () => {
@@ -62,14 +92,15 @@ export default function CreateArtistProfileScreen() {
       name: name.trim(),
       bio: bio.trim() || undefined,
       imageUrl: imageUrl.trim() || undefined,
-      genreIds: selectedGenreIds.length > 0 ? selectedGenreIds : undefined,
+      genres: selectedGenres.length > 0 ? selectedGenres : undefined,
       instagramHandle: instagramHandle.trim() || undefined,
       spotifyUrl: spotifyUrl.trim() || undefined
     });
-  }, [name, bio, imageUrl, instagramHandle, spotifyUrl, selectedGenreIds, createMutation, effectivePartyId]);
+  }, [name, bio, imageUrl, instagramHandle, spotifyUrl, selectedGenres, createMutation, effectivePartyId]);
 
   return (
     <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Create Artist Profile</Text>
         <Text style={styles.identityText}>
@@ -79,83 +110,93 @@ export default function CreateArtistProfileScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>Artist Name *</Text>
           <TextInput
+            ref={nameRef}
             placeholder="Your artist name"
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => { setName(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
+            returnKeyType="next"
+            onSubmitEditing={() => bioRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Bio</Text>
           <TextInput
+            ref={bioRef}
             placeholder="Tell us about your music..."
             value={bio}
-            onChangeText={setBio}
+            onChangeText={(text) => { setBio(text); setIsDirty(true); }}
             style={[styles.input, styles.inputMultiline]}
             multiline
             numberOfLines={4}
             placeholderTextColor="#999"
+            returnKeyType="next"
+            onSubmitEditing={() => imageUrlRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Image URL</Text>
           <TextInput
+            ref={imageUrlRef}
             placeholder="https://..."
             value={imageUrl}
-            onChangeText={setImageUrl}
+            onChangeText={(text) => { setImageUrl(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
+            returnKeyType="next"
+            onSubmitEditing={() => instagramRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Genres</Text>
           <View style={styles.genreGrid}>
-            {genreOptions.map(genre => (
+            {GENRES.map(genre => (
               <TouchableOpacity
-                key={genre.id}
-                style={[styles.genreTag, selectedGenreIds.includes(genre.id) && styles.genreTagSelected]}
-                onPress={() => toggleGenre(genre.id)}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: selectedGenreIds.includes(genre.id) }}
-                accessibilityLabel={genre.name}
+                key={genre}
+                style={[styles.genreTag, selectedGenres.includes(genre) && styles.genreTagSelected]}
+                onPress={() => toggleGenre(genre)}
               >
-                <Text style={[styles.genreTagText, selectedGenreIds.includes(genre.id) && styles.genreTagTextSelected]}>
-                  {genre.name}
+                <Text style={[styles.genreTagText, selectedGenres.includes(genre) && styles.genreTagTextSelected]}>
+                  {genre}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
-          {genreOptions.length === 0 && (
-            <Text style={styles.catalogStatus}>
-              {catalogSyncing ? 'Sincronizando géneros…' : 'No hay un catálogo de géneros disponible.'}
-            </Text>
-          )}
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Instagram Handle</Text>
           <TextInput
+            ref={instagramRef}
             placeholder="@username"
             value={instagramHandle}
-            onChangeText={setInstagramHandle}
+            onChangeText={(text) => { setInstagramHandle(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
             autoCapitalize="none"
+            returnKeyType="next"
+            onSubmitEditing={() => spotifyRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Spotify URL</Text>
           <TextInput
+            ref={spotifyRef}
             placeholder="https://open.spotify.com/artist/..."
             value={spotifyUrl}
-            onChangeText={setSpotifyUrl}
+            onChangeText={(text) => { setSpotifyUrl(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
+            returnKeyType="done"
           />
         </View>
 
@@ -171,6 +212,7 @@ export default function CreateArtistProfileScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -185,11 +227,10 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a1a1a' },
   inputMultiline: { height: 100, textAlignVertical: 'top', paddingVertical: 10 },
   genreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  genreTag: { minHeight: 44, justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 22, paddingHorizontal: 12, paddingVertical: 8 },
+  genreTag: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8 },
   genreTagSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   genreTagText: { fontSize: 12, color: '#666', fontWeight: '500' },
   genreTagTextSelected: { color: '#fff' },
-  catalogStatus: { marginTop: 8, color: '#6b7280', fontSize: 13 },
   createButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 16 },
   createButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' }
 });

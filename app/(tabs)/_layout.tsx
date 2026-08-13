@@ -42,7 +42,7 @@ function TabsInner() {
         tabBarActiveTintColor: colors.actionPrimary,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' }
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
       }}
     >
       {NEW_USER_VISIBLE_TABS.map((tab) => (

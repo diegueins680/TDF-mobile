@@ -1,4 +1,5 @@
 import type { EventTicketTier, SocialEvent } from '../types';
+import { formatCurrency, formatDateTime } from './formatters';
 
 export const MAX_TICKETS_PER_ORDER = 100;
 
@@ -66,31 +67,16 @@ const deviceLocale = () => Intl.DateTimeFormat().resolvedOptions().locale || 'en
 const deviceTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 export const formatTicketMoney = (amountCents: number, currency: string, locale = deviceLocale()): string => {
-  const safeAmount = Number.isFinite(amountCents) ? amountCents : 0;
-  const normalizedCurrency = currency.trim().toUpperCase() || 'USD';
-
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: normalizedCurrency,
-    }).format(safeAmount / 100);
-  } catch {
-    return `${normalizedCurrency} ${(safeAmount / 100).toFixed(2)}`;
-  }
+  // locale param kept for backward compatibility; centralized formatter uses configured locale
+  void locale;
+  return formatCurrency(amountCents, currency);
 };
 
 export const formatTicketDateTime = (value: Date | string, locale = deviceLocale(), timezone = deviceTimezone()): string => {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-
-  return date.toLocaleString(locale, {
-    timeZone: timezone,
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  // locale/timezone params kept for backward compatibility; centralized formatter uses configured preferences
+  void locale;
+  void timezone;
+  return formatDateTime(value, { weekday: 'short' });
 };
 
 export const getStartingTicketPrice = (

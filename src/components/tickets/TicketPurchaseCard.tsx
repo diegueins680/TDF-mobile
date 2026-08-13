@@ -8,6 +8,7 @@ import {
   getTicketTierSaleState,
   ticketTierSaleStateLabel,
 } from '../../lib/tickets';
+import { useAppTheme } from '../../theme/ThemeProvider';
 
 type Props = {
   tiers: EventTicketTier[];
@@ -34,6 +35,7 @@ export function TicketPurchaseCard({
   onOpenExternal,
   onRetry,
 }: Props) {
+  const { colors } = useAppTheme();
   const startingPrice = getStartingTicketPrice(tiers);
   const availableTiers = canBuyInternally
     ? tiers.filter((tier) => getTicketTierSaleState(tier) === 'available')
@@ -48,20 +50,20 @@ export function TicketPurchaseCard({
 
   const renderAction = () => {
     if (isLoading) {
-      return <ActivityIndicator color="#6d28d9" accessibilityLabel="Cargando entradas" />;
+      return <ActivityIndicator color={colors.actionPrimary} accessibilityLabel="Cargando entradas" />;
     }
 
     if (isError) {
       return (
         <View style={styles.messageGroup}>
-          <Text style={styles.message}>No pudimos comprobar la disponibilidad.</Text>
+          <Text style={[styles.message, { color: colors.textSecondary }]}>No pudimos comprobar la disponibilidad.</Text>
           <TouchableOpacity
-            style={styles.secondaryButton}
+            style={[styles.secondaryButton, { borderColor: colors.selected }]}
             onPress={onRetry}
             accessibilityRole="button"
             accessibilityLabel="Reintentar cargar entradas"
           >
-            <Text style={styles.secondaryButtonText}>Reintentar</Text>
+            <Text style={[styles.secondaryButtonText, { color: colors.actionPrimary }]}>Reintentar</Text>
           </TouchableOpacity>
         </View>
       );
@@ -72,25 +74,25 @@ export function TicketPurchaseCard({
       return (
         <>
           <View style={styles.priceGroup}>
-            <Text style={styles.eyebrow}>{isFree ? 'ENTRADAS' : 'DESDE'}</Text>
-            <Text style={styles.price}>
+            <Text style={[styles.eyebrow, { color: colors.actionPrimary }]}>{isFree ? 'ENTRADAS' : 'DESDE'}</Text>
+            <Text style={[styles.price, { color: colors.selected }]}>
               {isFree ? 'Gratis' : formatTicketMoney(startingPrice.amountCents, startingPrice.currency)}
             </Text>
-            <Text style={styles.message}>
+            <Text style={[styles.message, { color: colors.textSecondary }]}>
               {availableTiers.length === 1
                 ? ticketTierSaleStateLabel(availableTiers[0])
                 : `${availableTiers.length} tipos disponibles`}
             </Text>
           </View>
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }]}
             onPress={onBuy}
             accessibilityRole="button"
             accessibilityLabel={isFree ? 'Obtener entradas gratis' : 'Comprar entradas'}
             accessibilityHint="Abre el checkout de este evento"
           >
-            <Text style={styles.primaryButtonText}>{isFree ? 'Obtener entradas' : 'Comprar entradas'}</Text>
-            <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
+            <Text style={[styles.primaryButtonText, { color: colors.actionPrimaryContrast }]}>{isFree ? 'Obtener entradas' : 'Comprar entradas'}</Text>
+            <MaterialCommunityIcons name="arrow-right" size={20} color={colors.actionPrimaryContrast} />
           </TouchableOpacity>
         </>
       );
@@ -99,8 +101,8 @@ export function TicketPurchaseCard({
     if (upcomingTier) {
       return (
         <View style={styles.messageGroup}>
-          <Text style={styles.stateTitle}>Venta próximamente</Text>
-          <Text style={styles.message}>{ticketTierSaleStateLabel(upcomingTier)}</Text>
+          <Text style={[styles.stateTitle, { color: colors.selected }]}>Venta próximamente</Text>
+          <Text style={[styles.message, { color: colors.textSecondary }]}>{ticketTierSaleStateLabel(upcomingTier)}</Text>
         </View>
       );
     }
@@ -110,21 +112,21 @@ export function TicketPurchaseCard({
       return (
         <>
           <View style={styles.priceGroup}>
-            <Text style={styles.stateTitle}>Venta en sitio externo</Text>
+            <Text style={[styles.stateTitle, { color: colors.selected }]}>Venta en sitio externo</Text>
             {fallbackCents !== null ? (
-              <Text style={styles.price}>
+              <Text style={[styles.price, { color: colors.selected }]}>
                 {fallbackCents === 0 ? 'Gratis' : formatTicketMoney(fallbackCents, fallbackCurrency)}
               </Text>
             ) : null}
           </View>
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }]}
             onPress={onOpenExternal}
             accessibilityRole="link"
             accessibilityLabel="Abrir venta externa de entradas"
           >
-            <Text style={styles.primaryButtonText}>Ir a la venta</Text>
-            <MaterialCommunityIcons name="open-in-new" size={18} color="#fff" />
+            <Text style={[styles.primaryButtonText, { color: colors.actionPrimaryContrast }]}>Ir a la venta</Text>
+            <MaterialCommunityIcons name="open-in-new" size={18} color={colors.actionPrimaryContrast} />
           </TouchableOpacity>
         </>
       );
@@ -132,8 +134,8 @@ export function TicketPurchaseCard({
 
     return (
       <View style={styles.messageGroup}>
-        <Text style={styles.stateTitle}>{soldOut ? 'Entradas agotadas' : 'Venta no disponible'}</Text>
-        <Text style={styles.message}>
+        <Text style={[styles.stateTitle, { color: colors.selected }]}>{soldOut ? 'Entradas agotadas' : 'Venta no disponible'}</Text>
+        <Text style={[styles.message, { color: colors.textSecondary }]}>
           {soldOut
             ? 'No quedan entradas disponibles en este momento.'
             : 'Aún no hay entradas publicadas para este evento.'}
@@ -143,14 +145,14 @@ export function TicketPurchaseCard({
   };
 
   return (
-    <View style={styles.card} accessibilityLabel="Entradas del evento">
+    <View style={[styles.card, { borderColor: colors.selected, backgroundColor: colors.canvas }]} accessibilityLabel="Entradas del evento">
       <View style={styles.headingRow}>
-        <View style={styles.iconBox}>
-          <MaterialCommunityIcons name="ticket-confirmation-outline" size={24} color="#6d28d9" />
+        <View style={[styles.iconBox, { backgroundColor: colors.selected }]}>
+          <MaterialCommunityIcons name="ticket-confirmation-outline" size={24} color={colors.actionPrimary} />
         </View>
         <View style={styles.headingCopy}>
-          <Text style={styles.title}>Entradas</Text>
-          <Text style={styles.subtitle}>Compra segura dentro de TDF Records</Text>
+          <Text style={[styles.title, { color: colors.selected }]}>Entradas</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Compra segura dentro de TDF Records</Text>
         </View>
       </View>
       {renderAction()}
@@ -164,8 +166,6 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#ddd6fe',
-    backgroundColor: '#faf5ff',
     padding: 16,
     gap: 14,
   },
@@ -174,39 +174,36 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#ede9fe',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headingCopy: { flex: 1, gap: 2 },
-  title: { color: '#2e1065', fontSize: 18, fontWeight: '800' },
-  subtitle: { color: '#6b7280', fontSize: 12, lineHeight: 17 },
+  title: { fontSize: 18, fontWeight: '800' },
+  subtitle: { fontSize: 12, lineHeight: 17 },
   priceGroup: { gap: 3 },
-  eyebrow: { color: '#7c3aed', fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
-  price: { color: '#2e1065', fontSize: 24, fontWeight: '900' },
-  stateTitle: { color: '#2e1065', fontSize: 16, fontWeight: '800' },
-  message: { color: '#5b6473', fontSize: 13, lineHeight: 18 },
+  eyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
+  price: { fontSize: 24, fontWeight: '900' },
+  stateTitle: { fontSize: 16, fontWeight: '800' },
+  message: { fontSize: 13, lineHeight: 18 },
   messageGroup: { gap: 8 },
   primaryButton: {
     minHeight: 50,
     borderRadius: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#6d28d9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  primaryButtonText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  primaryButtonText: { fontSize: 15, fontWeight: '800' },
   secondaryButton: {
     minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#c4b5fd',
     paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'flex-start',
   },
-  secondaryButtonText: { color: '#6d28d9', fontWeight: '800' },
+  secondaryButtonText: { fontWeight: '800' },
 });

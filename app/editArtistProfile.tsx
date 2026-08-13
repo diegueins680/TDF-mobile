@@ -1,30 +1,56 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator,
-  SafeAreaView
+  SafeAreaView, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { usePreventRemove, useNavigation } from '@react-navigation/native';
 
 import { Artists } from '../src/api/artists';
 import { normalizeRouteParam } from '../src/lib/routeParams';
-import { useUserSettings } from '../src/providers/UserSettingsProvider';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
+
+const GENRE_OPTIONS = [
+  'Rock', 'Pop', 'Hip-Hop', 'Jazz', 'Blues', 'Classical',
+  'Electronic', 'Reggae', 'Country', 'Folk', 'Latin', 'R&B',
+  'Soul', 'Metal', 'Punk', 'Indie', 'Alternative', 'Ambient'
+];
 
 export default function EditArtistProfileScreen() {
   const { artistId: rawArtistId } = useLocalSearchParams<{ artistId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const analytics = useAnalytics();
   const artistId = normalizeRouteParam(rawArtistId);
-  const { getCatalogItems, catalogSyncing } = useUserSettings();
-  const genreOptions = getCatalogItems('genres');
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [selectedGenreIds, setSelectedGenreIds] = useState<string[]>([]);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [instagramHandle, setInstagramHandle] = useState('');
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [showGenreSelect, setShowGenreSelect] = useState(false);
+
+  const nameRef = useRef<TextInput>(null);
+  const bioRef = useRef<TextInput>(null);
+  const imageUrlRef = useRef<TextInput>(null);
+  const instagramRef = useRef<TextInput>(null);
+  const spotifyRef = useRef<TextInput>(null);
+
+  const navigation = useNavigation();
+  const [isDirty, setIsDirty] = useState(false);
+
+  usePreventRemove(isDirty, ({ data }) => {
+    Alert.alert(
+      'Cambios sin guardar',
+      '¿Quieres descartar los cambios?',
+      [
+        { text: 'Cancelar', style: 'cancel', onPress: () => {} },
+        { text: 'Descartar', style: 'destructive', onPress: () => navigation.dispatch(data.action) },
+      ],
+    );
+  });
 
   const artistQuery = useQuery({
     queryKey: ['artist', artistId],
@@ -38,7 +64,9 @@ export default function EditArtistProfileScreen() {
       return Artists.update(artistId, body);
     },
     onSuccess: () => {
+      setIsDirty(false);
       qc.invalidateQueries({ queryKey: ['artist', artistId] });
+      analytics.capture('artist_profile_saved', { platform: 'mobile', action: 'update' });
       Alert.alert('Listo', 'Perfil actualizado');
       router.back();
     },
@@ -52,18 +80,19 @@ export default function EditArtistProfileScreen() {
       setName(artistQuery.data.name || '');
       setBio(artistQuery.data.bio || '');
       setImageUrl(artistQuery.data.imageUrl || '');
-      setSelectedGenreIds(artistQuery.data.genreIds || []);
+      setSelectedGenres(artistQuery.data.genres || []);
       setInstagramHandle(artistQuery.data.instagramHandle || '');
       setSpotifyUrl(artistQuery.data.spotifyUrl || '');
     }
   }, [artistQuery.data]);
 
-  const handleToggleGenre = useCallback((genreId: string) => {
-    setSelectedGenreIds(prev =>
-      prev.includes(genreId)
-        ? prev.filter(id => id !== genreId)
-        : [...prev, genreId]
+  const handleToggleGenre = useCallback((genre: string) => {
+    setSelectedGenres(prev =>
+      prev.includes(genre)
+        ? prev.filter(g => g !== genre)
+        : [...prev, genre]
     );
+    setIsDirty(true);
   }, []);
 
   const handleUpdateProfile = useCallback(async () => {
@@ -71,25 +100,16 @@ export default function EditArtistProfileScreen() {
       Alert.alert('Validación', 'El nombre artístico es obligatorio');
       return;
     }
-    const activeGenreIds = new Set(genreOptions.map((genre) => genre.id));
-    const unavailableGenreIds = selectedGenreIds.filter((genreId) => !activeGenreIds.has(genreId));
-    if (unavailableGenreIds.length > 0) {
-      Alert.alert(
-        'Géneros no disponibles',
-        'El perfil conserva géneros históricos que ya no pueden seleccionarse. Elimínalos o elige reemplazos vigentes antes de guardar.',
-      );
-      return;
-    }
 
     updateMutation.mutate({
       name: name.trim(),
       bio: bio.trim() || null,
       imageUrl: imageUrl.trim() || null,
-      genreIds: selectedGenreIds,
+      genres: selectedGenres,
       instagramHandle: instagramHandle.trim() || null,
       spotifyUrl: spotifyUrl.trim() || null
     });
-  }, [name, bio, imageUrl, selectedGenreIds, genreOptions, instagramHandle, spotifyUrl, updateMutation]);
+  }, [name, bio, imageUrl, selectedGenres, instagramHandle, spotifyUrl, updateMutation]);
 
   if (!artistId) {
     return (
@@ -129,49 +149,61 @@ export default function EditArtistProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text accessibilityRole="header" style={styles.title}>Editar perfil de artista</Text>
 
         <View style={styles.field}>
           <Text style={styles.label}>Nombre artístico *</Text>
           <TextInput
+            ref={nameRef}
             placeholder="Tu nombre artístico"
             accessibilityLabel="Nombre artístico, obligatorio"
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => { setName(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
             autoCapitalize="words"
             returnKeyType="next"
+            onSubmitEditing={() => bioRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Biografía</Text>
           <TextInput
+            ref={bioRef}
             placeholder="Cuéntanos sobre ti..."
             accessibilityLabel="Biografía"
             value={bio}
-            onChangeText={setBio}
+            onChangeText={(text) => { setBio(text); setIsDirty(true); }}
             style={[styles.input, styles.bioInput]}
             placeholderTextColor="#999"
             multiline
             numberOfLines={4}
+            returnKeyType="next"
+            onSubmitEditing={() => imageUrlRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Image URL</Text>
           <TextInput
+            ref={imageUrlRef}
             placeholder="https://..."
             accessibilityLabel="URL de imagen"
             value={imageUrl}
-            onChangeText={setImageUrl}
+            onChangeText={(text) => { setImageUrl(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
             keyboardType="url"
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="next"
+            onSubmitEditing={() => instagramRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
@@ -185,83 +217,78 @@ export default function EditArtistProfileScreen() {
             accessibilityLabel="Seleccionar géneros"
           >
             <Text style={styles.genreSelectButtonText}>
-              {selectedGenreIds.length > 0 ? `${selectedGenreIds.length} seleccionados` : 'Seleccionar géneros...'}
+              {selectedGenres.length > 0 ? `${selectedGenres.length} seleccionados` : 'Seleccionar géneros...'}
             </Text>
           </TouchableOpacity>
 
           {showGenreSelect && (
             <View style={styles.genreGrid}>
-              {genreOptions.map((genre) => (
+              {GENRE_OPTIONS.map((genre, idx) => (
                 <TouchableOpacity
-                  key={genre.id}
+                  key={idx}
                   style={[
                     styles.genreOption,
-                    selectedGenreIds.includes(genre.id) && styles.genreOptionSelected
+                    selectedGenres.includes(genre) && styles.genreOptionSelected
                   ]}
-                  onPress={() => handleToggleGenre(genre.id)}
+                  onPress={() => handleToggleGenre(genre)}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: selectedGenreIds.includes(genre.id) }}
-                  accessibilityLabel={genre.name}
+                  accessibilityState={{ checked: selectedGenres.includes(genre) }}
+                  accessibilityLabel={genre}
                 >
                   <Text
                     style={[
                       styles.genreOptionText,
-                      selectedGenreIds.includes(genre.id) && styles.genreOptionTextSelected
+                      selectedGenres.includes(genre) && styles.genreOptionTextSelected
                     ]}
                   >
-                    {genre.name}
+                    {genre}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
           )}
-          {genreOptions.length === 0 && (
-            <Text style={styles.catalogStatus}>
-              {catalogSyncing ? 'Sincronizando géneros…' : 'No hay un catálogo de géneros disponible.'}
-            </Text>
-          )}
 
           <View style={styles.selectedGenresContainer}>
-            {selectedGenreIds.map((genreId, idx) => {
-              const activeGenre = genreOptions.find((genre) => genre.id === genreId);
-              const historicalName = artistQuery.data?.genres?.[idx];
-              return (
-              <View key={genreId} style={styles.selectedGenreTag}>
-                <Text style={styles.selectedGenreText}>
-                  {activeGenre?.name ?? historicalName ?? 'Género histórico no disponible'}
-                </Text>
+            {selectedGenres.map((genre, idx) => (
+              <View key={idx} style={styles.selectedGenreTag}>
+                <Text style={styles.selectedGenreText}>{genre}</Text>
               </View>
-              );
-            })}
+            ))}
           </View>
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Usuario de Instagram</Text>
           <TextInput
+            ref={instagramRef}
             placeholder="@username"
             accessibilityLabel="Usuario de Instagram"
             value={instagramHandle}
-            onChangeText={setInstagramHandle}
+            onChangeText={(text) => { setInstagramHandle(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="next"
+            onSubmitEditing={() => spotifyRef.current?.focus()}
+            blurOnSubmit={false}
           />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Spotify URL</Text>
           <TextInput
+            ref={spotifyRef}
             placeholder="https://open.spotify.com/artist/..."
             accessibilityLabel="URL de Spotify"
             value={spotifyUrl}
-            onChangeText={setSpotifyUrl}
+            onChangeText={(text) => { setSpotifyUrl(text); setIsDirty(true); }}
             style={styles.input}
             placeholderTextColor="#999"
             keyboardType="url"
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="done"
           />
         </View>
 
@@ -279,6 +306,7 @@ export default function EditArtistProfileScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -295,17 +323,16 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 6, textTransform: 'uppercase' },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a1a1a' },
   bioInput: { textAlignVertical: 'top' },
-  genreSelectButton: { minHeight: 44, justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  genreSelectButton: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
   genreSelectButtonText: { fontSize: 14, color: '#1a1a1a' },
   genreGrid: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 8, marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  genreOption: { minHeight: 44, flex: 0.5, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
+  genreOption: { flex: 0.5, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
   genreOptionSelected: { backgroundColor: '#e0e7ff', borderColor: '#2563eb' },
   genreOptionText: { fontSize: 12, fontWeight: '500', color: '#666' },
   genreOptionTextSelected: { color: '#2563eb', fontWeight: '600' },
   selectedGenresContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   selectedGenreTag: { backgroundColor: '#e0e7ff', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
   selectedGenreText: { fontSize: 12, fontWeight: '600', color: '#2563eb' },
-  catalogStatus: { marginTop: 8, color: '#6b7280', fontSize: 13 },
   updateButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 16 },
   updateButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' }
 });

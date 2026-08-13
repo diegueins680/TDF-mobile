@@ -132,11 +132,23 @@ describe('Auth screen', () => {
         username: 'demo-user',
         password: 'demo-pass',
       });
-      expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42);
+      expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42, { roles: [], modules: [] });
       expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');
     });
     expect(await screen.findByText('Sesión iniciada.')).toBeTruthy();
   }, 10_000);
+
+  it('never prepopulates a username or password in development builds', async () => {
+    render(<AuthScreen />);
+
+    expect(screen.getByTestId('usernameInput').props.value).toBe('');
+    expect(screen.getByTestId('passwordInput').props.value).toBe('');
+    expect(screen.getByTestId('loginButton').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: false,
+    });
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
+  });
 
   it('exposes associated field labels, input guidance, and validation errors', async () => {
     render(<AuthScreen />);
@@ -145,7 +157,7 @@ describe('Auth screen', () => {
     expect(screen.getByLabelText('Usuario o correo')).toBeTruthy();
     expect(screen.getByLabelText('Contraseña')).toBeTruthy();
     expect(screen.getByTestId('loginButton').props.accessibilityState).toEqual({
-      disabled: false,
+      disabled: true,
       busy: false,
     });
 
@@ -185,7 +197,7 @@ describe('Auth screen', () => {
       email: 'ana@example.com',
       password: 'password-seguro',
     }));
-    expect(mockSetToken).toHaveBeenCalledWith('Bearer new-fan-token', 88);
+    expect(mockSetToken).toHaveBeenCalledWith('Bearer new-fan-token', 88, { roles: ['Fan'], modules: [] });
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');
   });
 
@@ -223,7 +235,7 @@ describe('Auth screen', () => {
     await waitFor(() =>
       expect(mockGoogleLoginRequest).toHaveBeenCalledWith({ idToken: 'google-id-token' })
     );
-    await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token', 77));
+    await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token', 77, { roles: [], modules: [] }));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events'));
     expect(screen.getByText('Sesión con Google iniciada.')).toBeTruthy();
   });

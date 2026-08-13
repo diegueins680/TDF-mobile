@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, View, Text, TouchableOpacity, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { ActivityIndicator, FlatList, View, Text, TouchableOpacity, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Parties } from '../../src/api/parties';
@@ -152,7 +152,11 @@ export default function SocialScreen() {
               accessibilityLabel={`Seguir a ${label}`}
               accessibilityState={{ busy: followMutation.isPending, disabled: !canUseSocial || followMutation.isPending }}
             >
-              <Text maxFontSizeMultiplier={1.5} style={[styles.primaryButtonText, { color: colors.actionPrimaryContrast }]}>Seguir</Text>
+              {followMutation.isPending ? (
+                <ActivityIndicator color={colors.actionPrimaryContrast} />
+              ) : (
+                <Text maxFontSizeMultiplier={1.5} style={[styles.primaryButtonText, { color: colors.actionPrimaryContrast }]}>Seguir</Text>
+              )}
             </TouchableOpacity>
           )
         ) : (
@@ -177,7 +181,11 @@ export default function SocialScreen() {
             accessibilityLabel={`Dejar de seguir a ${label}`}
             accessibilityState={{ busy: unfollowMutation.isPending, disabled: !canUseSocial || unfollowMutation.isPending }}
           >
-            <Text maxFontSizeMultiplier={1.5} style={[styles.secondaryButtonText, { color: colors.textPrimary }]}>Dejar de seguir</Text>
+            {unfollowMutation.isPending ? (
+              <ActivityIndicator color={colors.textPrimary} />
+            ) : (
+              <Text maxFontSizeMultiplier={1.5} style={[styles.secondaryButtonText, { color: colors.textPrimary }]}>Dejar de seguir</Text>
+            )}
           </TouchableOpacity>
         )}
       </View>

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const mockFetchCatalogBatch = jest.fn();
+const mockFetchPublicWorkflowStates = jest.fn();
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
@@ -10,10 +11,13 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 
 jest.mock('../src/api/catalogs', () => ({
   fetchCatalogBatch: (...args: unknown[]) => mockFetchCatalogBatch(...args),
+  fetchPublicWorkflowStates: (...args: unknown[]) => mockFetchPublicWorkflowStates(...args),
 }));
 
 import {
   CATALOG_SNAPSHOT_SCHEMA_VERSION,
+  SOCIAL_EVENT_WORKFLOW_CODE,
+  SYNCED_CATALOGS,
   catalogCodes,
   emergencyCatalogSnapshot,
   parseCatalogSnapshot,
@@ -25,6 +29,10 @@ const EVENT_TYPE_IDS: Record<string, string> = {
   party: '41000000-0000-4000-8000-000000000001',
   concert: '41000000-0000-4000-8000-000000000002',
 };
+const REACTION_TYPE_IDS: Record<string, string> = {
+  'reaction-types': '50800000-0000-4000-8000-000000000001',
+  'content-reaction-types': '50900000-0000-4000-8000-000000000001',
+};
 
 const page = (
   code: string,
@@ -33,7 +41,9 @@ const page = (
   defaultScopeKind = 'appearance-mode',
 ) => {
   const items = values.map((value, index) => ({
-    id: code === 'event-types' ? EVENT_TYPE_IDS[value]! : `${code}-${value}`,
+    id: code === 'event-types'
+      ? EVENT_TYPE_IDS[value]!
+      : REACTION_TYPE_IDS[code] ?? `${code}-${value}`,
     catalogId: `catalog-${code}`,
     catalogCode: code,
     kind: `${code}-reference`,
@@ -48,6 +58,7 @@ const page = (
     deprecatedAt: undefined as string | undefined,
     usageCount: 0,
     version: 1,
+    ...(REACTION_TYPE_IDS[code] ? { displaySymbol: '🔥' } : {}),
   }));
   return {
     catalog: {
@@ -88,9 +99,35 @@ const batch = {
     page('countries', ['EC', 'US']),
     page('appearance-modes', ['system', 'light', 'dark'], 'system'),
     page('event-types', ['party', 'concert'], 'party', 'social-event'),
+    page('reaction-types', ['fire']),
+    page('content-reaction-types', ['fire']),
   ],
   revision: 3,
   locale: 'es',
+};
+
+const workflow = {
+  workflowCode: SOCIAL_EVENT_WORKFLOW_CODE,
+  locale: 'es',
+  revision: 1,
+  states: [
+    {
+      id: '40100000-0000-4000-8000-000000000001',
+      workflowId: '40100000-0000-4000-8000-000000000000',
+      workflowCode: SOCIAL_EVENT_WORKFLOW_CODE,
+      code: 'published',
+      name: 'Publicado',
+      nameEs: 'Publicado',
+      nameEn: 'Published',
+      sortOrder: 1,
+      terminal: false,
+      active: true,
+      initialContexts: ['initial'],
+      capabilities: ['public-listable'],
+      transitions: [],
+      version: 1,
+    },
+  ],
 };
 
 describe('versioned catalog snapshots', () => {
@@ -100,6 +137,12 @@ describe('versioned catalog snapshots', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFetchCatalogBatch.mockReset();
+    mockFetchPublicWorkflowStates.mockReset();
+    mockFetchPublicWorkflowStates.mockResolvedValue({
+      workflow,
+      etag: '"workflow-1"',
+      notModified: false,
+    });
     getItemMock.mockResolvedValue(null);
     setItemMock.mockResolvedValue(undefined);
   });
@@ -266,15 +309,27 @@ describe('versioned catalog snapshots', () => {
       revision: 3,
       locale: 'es',
       etag: '"catalog-3"',
+      workflowEtag: '"workflow-1"',
       catalogs: Object.fromEntries(batch.catalogs.map((catalogPage) => [catalogPage.catalog.code, catalogPage])),
+      workflows: { [SOCIAL_EVENT_WORKFLOW_CODE]: workflow },
     };
     mockFetchCatalogBatch.mockResolvedValue({ batch: null, etag: '"catalog-3"', notModified: true });
+    mockFetchPublicWorkflowStates.mockResolvedValue({
+      workflow: null,
+      etag: '"workflow-1"',
+      notModified: true,
+    });
 
     await expect(refreshCatalogSnapshot('es', cached)).resolves.toEqual(cached);
     expect(mockFetchCatalogBatch).toHaveBeenCalledWith(
-      ['locales', 'currencies', 'appearance-modes', 'genres', 'countries', 'event-types'],
+      SYNCED_CATALOGS,
       'es',
       '"catalog-3"',
+    );
+    expect(mockFetchPublicWorkflowStates).toHaveBeenCalledWith(
+      SOCIAL_EVENT_WORKFLOW_CODE,
+      'es',
+      '"workflow-1"',
     );
     expect(setItemMock).not.toHaveBeenCalled();
   });

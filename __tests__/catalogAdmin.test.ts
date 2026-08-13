@@ -47,6 +47,7 @@ describe('mobile catalog administration', () => {
     expect(catalogEditorKind('feedback_category')).toBe('feedback-category');
     expect(catalogEditorKind('feedback_severity')).toBe('feedback-severity');
     expect(catalogEditorKind('reaction_type')).toBe('reaction-type');
+    expect(catalogEditorKind('content_reaction_type')).toBe('reaction-type');
     expect(catalogEditorKind('arbitrary_json')).toBe('read-only');
   });
 

@@ -47,7 +47,7 @@ const page = (code: string) => {
     ? [item(code, 'system', uuid(201))]
     : code === 'event-types'
       ? [item(code, 'concert', uuid(202))]
-      : code === 'reaction-types'
+      : code === 'reaction-types' || code === 'content-reaction-types'
         ? [{ ...item(code, 'fire', uuid(204)), displaySymbol: '🔥' }]
         : [item(code, `${code}-value`, uuid(203 + SYNCED_CATALOGS.indexOf(code as never)))];
   const defaults = code === 'appearance-modes'

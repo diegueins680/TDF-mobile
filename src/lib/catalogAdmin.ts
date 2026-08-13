@@ -34,6 +34,7 @@ export const catalogEditorKind = (entityKind: string): CatalogEditorKind => {
     case 'feedback_severity':
       return 'feedback-severity';
     case 'reaction_type':
+    case 'content_reaction_type':
       return 'reaction-type';
     default:
       return 'read-only';

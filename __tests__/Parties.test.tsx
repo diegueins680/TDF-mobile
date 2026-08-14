@@ -1,6 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { screen, fireEvent } from '@testing-library/react-native';
 import Parties from '../app/(tabs)/parties';
+import { renderWithTheme } from '../test/renderWithTheme';
 
 const mockRefetch = jest.fn();
 const mockMutate = jest.fn();
@@ -45,7 +46,7 @@ describe('Parties tab', () => {
       isFetching: false,
     });
 
-    render(<Parties />);
+    renderWithTheme(<Parties />);
 
     expect(screen.getByText(/Boom/)).toBeTruthy();
     const retry = screen.getByText(/Reintentar/);
@@ -68,7 +69,7 @@ describe('Parties tab', () => {
       isFetching: false,
     });
 
-    render(<Parties />);
+    renderWithTheme(<Parties />);
 
     expect(screen.getByText(/Inicia sesión para cargar y crear clientes/i)).toBeTruthy();
     const [authBtn] = screen.getAllByText(/Abrir login/i);

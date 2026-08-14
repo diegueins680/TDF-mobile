@@ -35,3 +35,11 @@ jest.mock('expo/src/winter/installGlobal', () => ({
     });
   },
 }));
+
+// Components that consume the application theme import AsyncStorage at module
+// load time. Use the package's supported Jest implementation globally so every
+// component test gets the same native-safe storage boundary by default. Suites
+// that need persistence-specific assertions can still provide a local mock.
+jest.mock('@react-native-async-storage/async-storage', () => (
+  jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock')
+));

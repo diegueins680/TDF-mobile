@@ -1,8 +1,9 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
 
 import { EventCard } from '../src/components/EventCard';
 import type { SocialEvent } from '../src/types';
+import { renderWithTheme } from '../test/renderWithTheme';
 
 const mockPush = jest.fn();
 const mockCapture = jest.fn();
@@ -49,7 +50,7 @@ describe('EventCard ticket discovery', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('takes buyers directly to the dedicated checkout', () => {
-    render(<EventCard event={event} />);
+    renderWithTheme(<EventCard event={event} />);
 
     fireEvent.press(screen.getByRole('button', { name: 'Ver entradas para TDF Showcase' }));
 
@@ -61,12 +62,12 @@ describe('EventCard ticket discovery', () => {
   });
 
   it('labels explicit zero price as free', () => {
-    render(<EventCard event={{ ...event, ticketPrice: 0 }} />);
+    renderWithTheme(<EventCard event={{ ...event, ticketPrice: 0 }} />);
     expect(screen.getByText('Gratis')).toBeTruthy();
   });
 
   it('keeps the ticket CTA visible for announced events before a summary price exists', () => {
-    render(<EventCard event={{ ...event, status: 'announced', ticketPrice: undefined }} />);
+    renderWithTheme(<EventCard event={{ ...event, status: 'announced', ticketPrice: undefined }} />);
     expect(screen.getByRole('button', { name: 'Ver entradas para TDF Showcase' })).toBeTruthy();
   });
 });

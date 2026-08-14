@@ -1,8 +1,9 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import TicketCheckoutScreen from '../app/ticketCheckout';
+import { renderWithTheme } from '../test/renderWithTheme';
 
 const mockInvalidateQueries = jest.fn();
 const mockRefetchOrders = jest.fn();
@@ -19,6 +20,9 @@ const mockPresentPaymentSheet = jest.fn();
 let mockTierPriceCents = 2500;
 let mockIncludeUnavailableTier = false;
 let mockTierQueryError = false;
+
+const checkoutStorageWrites = () => jest.mocked(AsyncStorage.setItem).mock.calls
+  .filter(([key]) => key.startsWith('tdf-ticket-checkout-key:'));
 
 const mockMutationRunner = jest.fn((options) => ({
   mutate: () => {
@@ -215,7 +219,7 @@ describe('Ticket checkout', () => {
   });
 
   it('prefills delivery data and updates quantity and total with an accessible stepper', async () => {
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     expect(await screen.findByDisplayValue('ana@example.com')).toBeTruthy();
     expect(screen.getByRole('radio', { name: /General.*25/i }).props.accessibilityState).toMatchObject({ selected: true });
@@ -227,7 +231,7 @@ describe('Ticket checkout', () => {
 
   it('shows unavailable tiers but prevents selecting them', async () => {
     mockIncludeUnavailableTier = true;
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     const tier = await screen.findByRole('radio', { name: /Preventa/i });
     expect(tier.props.accessibilityState).toMatchObject({ selected: false, disabled: true });
@@ -237,7 +241,7 @@ describe('Ticket checkout', () => {
   });
 
   it('shows an inline email error before creating an order', async () => {
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
     const email = await screen.findByDisplayValue('ana@example.com');
     fireEvent.changeText(email, 'correo-invalido');
 
@@ -257,7 +261,7 @@ describe('Ticket checkout', () => {
       clientSecret: '',
       paymentSheet: null,
     });
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     await screen.findByDisplayValue('ana@example.com');
     fireEvent.press(screen.getByRole('button', { name: /Confirmar 1 entrada gratis/i }));
@@ -285,7 +289,7 @@ describe('Ticket checkout', () => {
       clientSecret: '',
       paymentSheet: null,
     });
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     await screen.findByDisplayValue('ana@example.com');
     fireEvent.press(screen.getByText('¿Tienes un código promocional?'));
@@ -302,7 +306,7 @@ describe('Ticket checkout', () => {
 
   it('releases a pending reservation when PaymentSheet is cancelled', async () => {
     mockPresentPaymentSheet.mockResolvedValue({ error: { code: 'Canceled' } });
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     await screen.findByDisplayValue('ana@example.com');
     fireEvent.press(screen.getByRole('button', { name: /Pagar/i }));
@@ -314,7 +318,7 @@ describe('Ticket checkout', () => {
 
   it('keeps an ambiguous PaymentSheet result pending for webhook reconciliation', async () => {
     mockPresentPaymentSheet.mockResolvedValue({ error: { code: 'Failed', message: 'Bridge disconnected' } });
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     await screen.findByDisplayValue('ana@example.com');
     fireEvent.press(screen.getByRole('button', { name: /Pagar/i }));
@@ -326,7 +330,7 @@ describe('Ticket checkout', () => {
   });
 
   it('retains the key after PaymentSheet succeeds until the order becomes terminal', async () => {
-    const view = render(<TicketCheckoutScreen />);
+    const view = renderWithTheme(<TicketCheckoutScreen />);
 
     await screen.findByDisplayValue('ana@example.com');
     fireEvent.press(screen.getByRole('button', { name: /Pagar/i }));
@@ -342,7 +346,7 @@ describe('Ticket checkout', () => {
 
   it('reuses the checkout key when a create-payment response is lost', async () => {
     mockCreatePaymentSheet.mockRejectedValue(new Error('Sin respuesta del servidor'));
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     await screen.findByDisplayValue('ana@example.com');
     const payButton = screen.getByRole('button', { name: /Pagar/i });
@@ -374,14 +378,15 @@ describe('Ticket checkout', () => {
         clientSecret: '',
         paymentSheet: null,
       });
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     await screen.findByDisplayValue('ana@example.com');
     fireEvent.press(screen.getByRole('button', { name: /Pagar/i }));
 
     await waitFor(() => expect(mockCreatePaymentSheet).toHaveBeenCalledTimes(2));
-    const firstKey = jest.mocked(AsyncStorage.setItem).mock.calls[0][1];
-    const retryKey = jest.mocked(AsyncStorage.setItem).mock.calls[1][1];
+    const writes = checkoutStorageWrites();
+    const firstKey = writes[0][1];
+    const retryKey = writes[1][1];
     expect(retryKey).toMatch(/^tdf-/);
     expect(retryKey).not.toBe(firstKey);
     expect(await screen.findByText('¡Entradas confirmadas!')).toBeTruthy();
@@ -396,14 +401,14 @@ describe('Ticket checkout', () => {
         data: 'Ticket checkout is already closed; start a new checkout',
       },
     });
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     await screen.findByDisplayValue('ana@example.com');
     fireEvent.press(screen.getByRole('button', { name: /Pagar/i }));
 
     await screen.findByText('No pudimos completar la compra');
     expect(mockCreatePaymentSheet).toHaveBeenCalledTimes(2);
-    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(2);
+    expect(checkoutStorageWrites()).toHaveLength(2);
   });
 
   it('does not rotate a key for a different idempotency conflict', async () => {
@@ -415,18 +420,18 @@ describe('Ticket checkout', () => {
         data: 'ticketPurchaseIdempotencyKey was already used for different checkout details',
       },
     });
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     await screen.findByDisplayValue('ana@example.com');
     fireEvent.press(screen.getByRole('button', { name: /Pagar/i }));
 
     await waitFor(() => expect(mockCreatePaymentSheet).toHaveBeenCalledTimes(1));
-    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
+    expect(checkoutStorageWrites()).toHaveLength(1);
   });
 
   it('includes the normalized buyer name in the checkout fingerprint', async () => {
     mockCreatePaymentSheet.mockRejectedValue(new Error('Sin respuesta del servidor'));
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     await screen.findByDisplayValue('ana@example.com');
     const payButton = screen.getByRole('button', { name: /Pagar/i });
@@ -443,7 +448,7 @@ describe('Ticket checkout', () => {
 
   it('offers retry when availability fails instead of rendering a free state', () => {
     mockTierQueryError = true;
-    render(<TicketCheckoutScreen />);
+    renderWithTheme(<TicketCheckoutScreen />);
 
     expect(screen.getByText('No pudimos cargar las entradas')).toBeTruthy();
     expect(screen.queryByText('Gratis')).toBeNull();

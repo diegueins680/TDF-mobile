@@ -1,8 +1,8 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
 
 import CreateEventScreen from '../app/createEvent';
+import { renderWithTheme } from '../test/renderWithTheme';
 
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
@@ -16,6 +16,11 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+}));
+
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ dispatch: jest.fn() }),
+  usePreventRemove: jest.fn(),
 }));
 
 jest.mock('../src/api/events', () => ({
@@ -45,11 +50,9 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
 
 describe('CreateEvent screen', () => {
   const useQuery = jest.mocked(require('@tanstack/react-query').useQuery as jest.Mock);
-  let alertSpy: jest.SpiedFunction<typeof Alert.alert>;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
 
     useQuery.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
       if (queryKey[0] === 'venues') {
@@ -85,12 +88,8 @@ describe('CreateEvent screen', () => {
     });
   });
 
-  afterEach(() => {
-    alertSpy.mockRestore();
-  });
-
   it('blocks negative ticket prices before submitting the mutation', () => {
-    render(<CreateEventScreen />);
+    renderWithTheme(<CreateEventScreen />);
 
     fireEvent.changeText(screen.getByPlaceholderText('Nombre del evento'), 'Demo Event');
     fireEvent.press(screen.getByText('Selecciona un lugar'));
@@ -101,7 +100,8 @@ describe('CreateEvent screen', () => {
     fireEvent.changeText(screen.getByPlaceholderText('0.00'), '-5');
     fireEvent.press(screen.getByText('Crear evento'));
 
-    expect(Alert.alert).toHaveBeenCalledWith('Validación', 'El precio de entrada debe ser cero o mayor');
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByText('El precio de entrada debe ser cero o mayor')).toBeTruthy();
     expect(mockMutate).not.toHaveBeenCalled();
   });
 });

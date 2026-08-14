@@ -1,7 +1,8 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
 import ArtistDetailScreen from '../app/artistDetail';
+import { renderWithTheme } from '../test/renderWithTheme';
 
 const mockFollow = jest.fn();
 const mockInvalidateQueries = jest.fn();
@@ -79,7 +80,7 @@ describe('ArtistDetail screen', () => {
   });
 
   it('uses the saved party id fallback for follow actions', async () => {
-    render(<ArtistDetailScreen />);
+    renderWithTheme(<ArtistDetailScreen />);
 
     fireEvent.press(screen.getByText('Seguir'));
 

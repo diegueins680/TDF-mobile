@@ -3,12 +3,28 @@ import { Platform } from 'react-native';
 // Lightweight haptic feedback using Expo's haptics if available,
 // otherwise a no-op on platforms that don't support it.
 
-let hapticsModule: any = null;
+interface HapticsModule {
+  ImpactFeedbackStyle?: {
+    Light?: unknown;
+    Medium?: unknown;
+    Heavy?: unknown;
+  };
+  NotificationFeedbackType?: {
+    Success?: unknown;
+    Error?: unknown;
+  };
+  impactAsync?: (style?: unknown) => Promise<void>;
+  notificationAsync?: (type?: unknown) => Promise<void>;
+  selectionAsync?: () => Promise<void>;
+}
 
-async function getHaptics() {
+let hapticsModule: HapticsModule | null = null;
+
+async function getHaptics(): Promise<HapticsModule | null> {
   if (hapticsModule) return hapticsModule;
   try {
-    hapticsModule = await import('expo-haptics');
+    // @ts-expect-error expo-haptics is an optional runtime module and is intentionally not a hard dependency.
+    hapticsModule = await import('expo-haptics') as HapticsModule;
     return hapticsModule;
   } catch {
     return null;

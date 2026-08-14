@@ -1,8 +1,9 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
 
 import { TicketPurchaseCard } from '../src/components/tickets/TicketPurchaseCard';
 import type { EventTicketTier } from '../src/types';
+import { renderWithTheme } from '../test/renderWithTheme';
 
 jest.mock('@expo/vector-icons', () => ({
   MaterialCommunityIcons: 'MaterialCommunityIcons',
@@ -30,7 +31,7 @@ const callbacks = () => ({
 describe('TicketPurchaseCard', () => {
   it('puts the internal purchase action above event details', () => {
     const handlers = callbacks();
-    render(<TicketPurchaseCard tiers={[tier()]} {...handlers} />);
+    renderWithTheme(<TicketPurchaseCard tiers={[tier()]} {...handlers} />);
 
     fireEvent.press(screen.getByRole('button', { name: 'Comprar entradas' }));
     expect(handlers.onBuy).toHaveBeenCalledTimes(1);
@@ -38,7 +39,7 @@ describe('TicketPurchaseCard', () => {
   });
 
   it('labels an explicit zero-priced tier as free', () => {
-    render(<TicketPurchaseCard tiers={[tier({ priceCents: 0 })]} {...callbacks()} />);
+    renderWithTheme(<TicketPurchaseCard tiers={[tier({ priceCents: 0 })]} {...callbacks()} />);
 
     expect(screen.getByText('Gratis')).toBeTruthy();
     expect(screen.getByText('Obtener entradas')).toBeTruthy();
@@ -46,7 +47,7 @@ describe('TicketPurchaseCard', () => {
 
   it('distinguishes upcoming sales from sold out inventory', () => {
     const tomorrow = new Date(Date.now() + 86_400_000).toISOString();
-    const { rerender } = render(
+    const { rerender } = renderWithTheme(
       <TicketPurchaseCard tiers={[tier({ salesStart: tomorrow })]} {...callbacks()} />,
     );
     expect(screen.getByText('Venta próximamente')).toBeTruthy();
@@ -57,7 +58,7 @@ describe('TicketPurchaseCard', () => {
 
   it('offers retry for an availability error instead of claiming no tickets', () => {
     const handlers = callbacks();
-    render(<TicketPurchaseCard tiers={[]} isError {...handlers} />);
+    renderWithTheme(<TicketPurchaseCard tiers={[]} isError {...handlers} />);
 
     fireEvent.press(screen.getByText('Reintentar'));
     expect(handlers.onRetry).toHaveBeenCalledTimes(1);
@@ -66,7 +67,7 @@ describe('TicketPurchaseCard', () => {
 
   it('uses the external provider only when no internal tier is on sale', () => {
     const handlers = callbacks();
-    render(
+    renderWithTheme(
       <TicketPurchaseCard
         tiers={[]}
         externalTicketUrl="https://tickets.example.com"
@@ -80,7 +81,7 @@ describe('TicketPurchaseCard', () => {
   });
 
   it('does not offer an internal checkout when the event itself is not eligible', () => {
-    render(<TicketPurchaseCard tiers={[tier()]} canBuyInternally={false} {...callbacks()} />);
+    renderWithTheme(<TicketPurchaseCard tiers={[tier()]} canBuyInternally={false} {...callbacks()} />);
 
     expect(screen.queryByRole('button', { name: 'Comprar entradas' })).toBeNull();
     expect(screen.getByText('Venta no disponible')).toBeTruthy();

@@ -1,16 +1,15 @@
 import React from 'react';
-import { fireEvent, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import EventDetailScreen from '../app/eventDetail';
-import { renderWithTheme } from '../test/renderWithTheme';
 
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
 }));
 
 jest.mock('@expo/vector-icons', () => ({
@@ -219,7 +218,7 @@ describe('EventDetail moments tab', () => {
   });
 
   it('renders the social feed when switching to Momentos', () => {
-    renderWithTheme(<EventDetailScreen />);
+    render(<EventDetailScreen />);
 
     fireEvent.press(screen.getByText('Momentos (1)'));
 
@@ -232,7 +231,7 @@ describe('EventDetail moments tab', () => {
   });
 
   it('renders fanclub live broadcasts for followed event artists', () => {
-    renderWithTheme(<EventDetailScreen />);
+    render(<EventDetailScreen />);
 
     fireEvent.press(screen.getByText('En Vivo (1)'));
 

@@ -1,7 +1,5 @@
 import React from 'react';
-import { screen } from '@testing-library/react-native';
-
-import { renderWithTheme } from '../test/renderWithTheme';
+import { render, screen } from '@testing-library/react-native';
 
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
@@ -62,7 +60,7 @@ describe('Social screen', () => {
   });
 
   it('keeps the visible social surface focused on following', () => {
-    renderWithTheme(<SocialScreen />);
+    render(<SocialScreen />);
 
     expect(screen.getByText('Seguir')).toBeTruthy();
     expect(screen.getByText(/Siguiendo \(1\)/i)).toBeTruthy();

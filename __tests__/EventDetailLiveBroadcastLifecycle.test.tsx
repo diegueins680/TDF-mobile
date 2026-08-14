@@ -1,8 +1,7 @@
 import React from 'react';
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import EventDetailScreen from '../app/eventDetail';
-import { renderWithTheme } from '../test/renderWithTheme';
 
 const mockInvalidateQueries = jest.fn();
 const mockStopPublisher = jest.fn();
@@ -18,9 +17,9 @@ const mockUseMutation = jest.fn((options) => ({
 }));
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => undefined),
-  removeItem: jest.fn(async () => undefined),
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
 }));
 
 jest.mock('@expo/vector-icons', () => ({
@@ -190,7 +189,7 @@ describe('EventDetail live broadcast lifecycle', () => {
   });
 
   it('ends the tracked backend broadcast when the broadcasting screen unmounts', async () => {
-    const rendered = renderWithTheme(<EventDetailScreen />);
+    const rendered = render(<EventDetailScreen />);
 
     fireEvent.press(screen.getByText('En Vivo (0)'));
     fireEvent.press(screen.getByText('Iniciar en vivo'));

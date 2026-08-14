@@ -49,7 +49,18 @@ jest.mock('../src/providers/AuthProvider', () => ({
 }));
 
 jest.mock('../src/providers/UserSettingsProvider', () => ({
-  useUserSettings: () => ({ partyId: '7', displayName: 'Cuco' }),
+  useUserSettings: () => ({
+    partyId: '7',
+    displayName: 'Cuco',
+    getCatalogItems: (code: string) => code === 'reaction-types' ? [{
+      id: '50800000-0000-4000-8000-000000000001',
+      code: 'fire',
+      name: 'Fuego',
+      nameEs: 'Fuego',
+      nameEn: 'Fire',
+      displaySymbol: '🔥',
+    }] : [],
+  }),
 }));
 
 jest.mock('../src/api/events', () => ({
@@ -165,9 +176,7 @@ describe('EventDetail moments tab', () => {
               },
               createdAt: '2026-04-10T22:00:00.000Z',
               reactions: {
-                fire: ['party:7'],
-                love: [],
-                applause: [],
+                '50800000-0000-4000-8000-000000000001': ['party:7'],
               },
               comments: [],
             },

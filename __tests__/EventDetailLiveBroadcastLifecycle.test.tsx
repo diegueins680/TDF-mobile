@@ -59,7 +59,7 @@ jest.mock('../src/providers/AuthProvider', () => ({
 }));
 
 jest.mock('../src/providers/UserSettingsProvider', () => ({
-  useUserSettings: () => ({ partyId: '7', displayName: 'Cuco' }),
+  useUserSettings: () => ({ partyId: '7', displayName: 'Cuco', getCatalogItems: () => [] }),
 }));
 
 jest.mock('../src/api/events', () => ({

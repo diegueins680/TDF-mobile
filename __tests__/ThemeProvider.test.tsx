@@ -4,9 +4,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AppThemeProvider, useAppTheme } from '../src/theme/ThemeProvider';
 
+const mockThemeItems = [
+  { id: 'appearance-system', code: 'system', name: 'Sistema' },
+  { id: 'appearance-light', code: 'light', name: 'Claro' },
+  { id: 'appearance-dark', code: 'dark', name: 'Oscuro' },
+];
+
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
   setItem: jest.fn(),
+}));
+
+jest.mock('../src/providers/UserSettingsProvider', () => ({
+  useUserSettings: () => ({
+    getCatalogItems: (code: string) => code === 'appearance-modes' ? mockThemeItems : [],
+    getCatalogDefaults: (code: string) => code === 'appearance-modes'
+      ? [{ entityId: 'appearance-system', scopeKind: 'appearance-mode', scopeId: 'global', version: 1 }]
+      : [],
+    catalogSource: 'network',
+  }),
 }));
 
 function ThemeWrapper({ children }: PropsWithChildren) {
@@ -34,10 +50,15 @@ describe('AppThemeProvider', () => {
     expect(result.current.colors.dangerSurface).toBe('#450a0a');
     expect(result.current.colors.warningBorder).toBe('#fb923c');
 
-    act(() => result.current.setPreference('light'));
+    expect(result.current.preferenceId).toBe('appearance-dark');
+
+    act(() => result.current.setPreferenceById('appearance-light'));
 
     await waitFor(() => {
-      expect(setItemMock).toHaveBeenLastCalledWith('tdf-mobile/theme-preference', 'light');
+      expect(setItemMock).toHaveBeenLastCalledWith(
+        'tdf-mobile/theme-preference',
+        JSON.stringify({ id: 'appearance-light', code: 'light' }),
+      );
     });
     expect(result.current.colors.actionPrimary).toBe('#7c3aed');
     expect(result.current.colors.surfaceRaised).toBe('#ffffff');

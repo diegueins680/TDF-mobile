@@ -31,10 +31,27 @@ const mockedVenuesModule = jest.requireMock('../src/api/venues') as {
     getById: jest.Mock;
   };
 };
+const EVENT_TYPE_ID = '41000000-0000-4000-8000-000000000001';
+const EVENT_WORKFLOW_STATE_ID = '42000000-0000-4000-8000-000000000001';
+const EVENT_WORKFLOW_FIELDS = {
+  eventWorkflowStateId: EVENT_WORKFLOW_STATE_ID,
+  eventWorkflowStateCode: 'published',
+  eventWorkflowStateNameEs: 'Publicado',
+  eventWorkflowStateNameEn: 'Published',
+};
 
 describe('Social API update merge behavior', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    get.mockImplementation(async (path: string) => {
+      throw new Error(`Unexpected GET ${path}`);
+    });
+    post.mockImplementation(async (path: string) => {
+      throw new Error(`Unexpected POST ${path}`);
+    });
+    put.mockImplementation(async (path: string) => {
+      throw new Error(`Unexpected PUT ${path}`);
+    });
   });
 
   it('Events.update keeps required fields and artists when patch omits them', async () => {
@@ -52,6 +69,8 @@ describe('Social API update merge behavior', () => {
 
     get.mockResolvedValueOnce({
       eventId: 9,
+      eventTypeId: EVENT_TYPE_ID,
+      ...EVENT_WORKFLOW_FIELDS,
       eventTitle: 'Original title',
       eventDescription: 'Original desc',
       eventStart: '2026-04-01T10:00:00.000Z',
@@ -64,6 +83,8 @@ describe('Social API update merge behavior', () => {
 
     put.mockResolvedValueOnce({
       eventId: 9,
+      eventTypeId: EVENT_TYPE_ID,
+      ...EVENT_WORKFLOW_FIELDS,
       eventTitle: 'Updated title',
       eventDescription: 'Original desc',
       eventStart: '2026-04-01T10:00:00.000Z',
@@ -77,6 +98,8 @@ describe('Social API update merge behavior', () => {
     await Events.update(9, { title: 'Updated title' });
 
     expect(put).toHaveBeenCalledWith('/social-events/events/9', expect.objectContaining({
+      eventTypeId: EVENT_TYPE_ID,
+      eventWorkflowStateId: EVENT_WORKFLOW_STATE_ID,
       eventTitle: 'Updated title',
       eventStart: '2026-04-01T10:00:00.000Z',
       eventEnd: '2026-04-01T12:00:00.000Z',
@@ -88,6 +111,8 @@ describe('Social API update merge behavior', () => {
   it('Events.update keeps existing ticket price when patch ticket price is invalid', async () => {
     get.mockResolvedValueOnce({
       eventId: 9,
+      eventTypeId: EVENT_TYPE_ID,
+      ...EVENT_WORKFLOW_FIELDS,
       eventTitle: 'Original title',
       eventDescription: 'Original desc',
       eventStart: '2026-04-01T10:00:00.000Z',
@@ -100,6 +125,8 @@ describe('Social API update merge behavior', () => {
 
     put.mockResolvedValueOnce({
       eventId: 9,
+      eventTypeId: EVENT_TYPE_ID,
+      ...EVENT_WORKFLOW_FIELDS,
       eventTitle: 'Original title',
       eventDescription: 'Original desc',
       eventStart: '2026-04-01T10:00:00.000Z',
@@ -123,6 +150,8 @@ describe('Social API update merge behavior', () => {
   it('Events.update clears nullable fields when patch uses null', async () => {
     get.mockResolvedValueOnce({
       eventId: 9,
+      eventTypeId: EVENT_TYPE_ID,
+      ...EVENT_WORKFLOW_FIELDS,
       eventTitle: 'Original title',
       eventDescription: 'Original desc',
       eventStart: '2026-04-01T10:00:00.000Z',
@@ -137,6 +166,8 @@ describe('Social API update merge behavior', () => {
 
     put.mockResolvedValueOnce({
       eventId: 9,
+      eventTypeId: EVENT_TYPE_ID,
+      ...EVENT_WORKFLOW_FIELDS,
       eventTitle: 'Original title',
       eventDescription: null,
       eventStart: '2026-04-01T10:00:00.000Z',
@@ -168,6 +199,8 @@ describe('Social API update merge behavior', () => {
   it('Events.create serializes missing venue sentinels as null', async () => {
     post.mockResolvedValueOnce({
       eventId: 21,
+      eventTypeId: EVENT_TYPE_ID,
+      ...EVENT_WORKFLOW_FIELDS,
       eventTitle: 'No Venue Event',
       eventStart: '2026-05-01T18:00:00.000Z',
       eventEnd: '2026-05-01T20:00:00.000Z',
@@ -177,6 +210,8 @@ describe('Social API update merge behavior', () => {
     });
 
     await Events.create({
+      eventTypeId: EVENT_TYPE_ID,
+      workflowStateId: EVENT_WORKFLOW_STATE_ID,
       title: 'No Venue Event',
       startTime: '2026-05-01T18:00:00.000Z',
       endTime: '2026-05-01T20:00:00.000Z',
@@ -196,6 +231,8 @@ describe('Social API update merge behavior', () => {
   it('Events.create rejects invalid ticket prices before sending payload', async () => {
     await expect(
       Events.create({
+        eventTypeId: EVENT_TYPE_ID,
+        workflowStateId: EVENT_WORKFLOW_STATE_ID,
         title: 'Broken Price Event',
         startTime: '2026-05-01T18:00:00.000Z',
         endTime: '2026-05-01T20:00:00.000Z',
@@ -208,6 +245,8 @@ describe('Social API update merge behavior', () => {
 
     await expect(
       Events.create({
+        eventTypeId: EVENT_TYPE_ID,
+        workflowStateId: EVENT_WORKFLOW_STATE_ID,
         title: 'Negative Price Event',
         startTime: '2026-05-01T18:00:00.000Z',
         endTime: '2026-05-01T20:00:00.000Z',
@@ -225,6 +264,8 @@ describe('Social API update merge behavior', () => {
     const largeVenueId = '90071992547409931234';
     post.mockResolvedValueOnce({
       eventId: 22,
+      eventTypeId: EVENT_TYPE_ID,
+      ...EVENT_WORKFLOW_FIELDS,
       eventTitle: 'Large Venue Event',
       eventStart: '2026-05-10T18:00:00.000Z',
       eventEnd: '2026-05-10T20:00:00.000Z',
@@ -234,6 +275,8 @@ describe('Social API update merge behavior', () => {
     });
 
     await Events.create({
+      eventTypeId: EVENT_TYPE_ID,
+      workflowStateId: EVENT_WORKFLOW_STATE_ID,
       title: 'Large Venue Event',
       startTime: '2026-05-10T18:00:00.000Z',
       endTime: '2026-05-10T20:00:00.000Z',
@@ -280,6 +323,8 @@ describe('Social API update merge behavior', () => {
     get.mockResolvedValueOnce([
       {
         eventId: 31,
+        eventTypeId: EVENT_TYPE_ID,
+        ...EVENT_WORKFLOW_FIELDS,
         eventTitle: 'Canonical Venue Event',
         eventStart: '2026-05-10T18:00:00.000Z',
         eventEnd: '2026-05-10T20:00:00.000Z',
@@ -300,6 +345,8 @@ describe('Social API update merge behavior', () => {
     get.mockResolvedValueOnce([
       {
         eventId: 32,
+        eventTypeId: EVENT_TYPE_ID,
+        ...EVENT_WORKFLOW_FIELDS,
         eventTitle: 'Attendance Event',
         eventStart: '2026-05-10T18:00:00.000Z',
         eventEnd: '2026-05-10T20:00:00.000Z',
@@ -318,6 +365,19 @@ describe('Social API update merge behavior', () => {
     const events = await Events.list();
 
     expect(events[0]?.rsvpCount).toBe(2);
+  });
+
+  it('Events.create rejects non-canonical event type identifiers before posting', async () => {
+    await expect(Events.create({
+      eventTypeId: 'party',
+      title: 'Legacy type event',
+      startTime: '2026-05-01T18:00:00.000Z',
+      endTime: '2026-05-01T20:00:00.000Z',
+      venueId: 1,
+      artistIds: [],
+      isPublic: true,
+    })).rejects.toThrow('eventTypeId must be a canonical catalog UUID.');
+    expect(post).not.toHaveBeenCalled();
   });
 
   it('Events.sendInvitation preserves explicit fromUserId values like 0', async () => {
@@ -477,11 +537,13 @@ describe('Social API update merge behavior', () => {
   });
 
   it('Artists.update preserves name and genres when omitted in patch', async () => {
+    const rockGenreId = '11111111-1111-4111-8111-111111111111';
     get.mockResolvedValueOnce({
       artistId: 2,
       artistPartyId: 5,
       artistName: 'Artist Uno',
       artistGenres: ['Rock'],
+      artistGenreIds: [rockGenreId],
       artistBio: 'Old bio',
     });
 
@@ -490,6 +552,7 @@ describe('Social API update merge behavior', () => {
       artistPartyId: 5,
       artistName: 'Artist Uno',
       artistGenres: ['Rock'],
+      artistGenreIds: [rockGenreId],
       artistBio: 'New bio',
     });
 
@@ -497,7 +560,7 @@ describe('Social API update merge behavior', () => {
 
     expect(put).toHaveBeenCalledWith('/social-events/artists/2', expect.objectContaining({
       artistName: 'Artist Uno',
-      artistGenres: ['Rock'],
+      artistGenreIds: [rockGenreId],
       artistBio: 'New bio',
     }));
   });

@@ -19,14 +19,41 @@ export type Booking = {
   teacherId?: ID | null;
 };
 
-export type PipelineStage = 'Intake' | 'Editing' | 'Mixing' | 'Revisions' | 'Mastering' | 'Approved';
-export type PipelineKind = 'mixing' | 'mastering';
+export type PipelineStage = {
+  id: string;
+  code: string;
+  nameEs: string;
+  nameEn: string;
+  sortOrder: number;
+  terminal: boolean;
+};
+export type PipelineServiceOffering = {
+  id: string;
+  code: string;
+  nameEs: string;
+  nameEn: string;
+};
+export type PipelineDefinition = {
+  workflowId: string;
+  code: string;
+  nameEs: string;
+  nameEn: string;
+  revision: number;
+  serviceOfferings: PipelineServiceOffering[];
+  stages: PipelineStage[];
+};
 export type PipelineCard = {
   id: ID;
   title: string;
   artist?: string | null;
-  stage: PipelineStage;
-  kind: PipelineKind;
+  serviceOfferingId: string;
+  serviceOfferingCode: string;
+  workflowId: string;
+  workflowStateId: string;
+  workflowStateCode: string;
+  workflowStateNameEs: string;
+  workflowStateNameEn: string;
+  sortOrder: number;
 };
 
 export type Asset = {
@@ -96,6 +123,7 @@ export type ArtistProfile = {
   bio?: string | null;
   imageUrl?: string | null;
   genres?: string[];
+  genreIds?: string[];
   instagramHandle?: string | null;
   spotifyUrl?: string | null;
   createdAt: string;
@@ -108,7 +136,7 @@ export type ArtistProfileCreate = {
   name: string;
   bio?: string;
   imageUrl?: string;
-  genres?: string[];
+  genreIds?: string[];
   instagramHandle?: string;
   spotifyUrl?: string;
   socialLinks?: ArtistSocialLinks;
@@ -119,7 +147,7 @@ export type ArtistProfileUpdate = {
   name?: string;
   bio?: string | null;
   imageUrl?: string | null;
-  genres?: string[];
+  genreIds?: string[];
   instagramHandle?: string | null;
   spotifyUrl?: string | null;
   socialLinks?: ArtistSocialLinks | null;
@@ -183,6 +211,7 @@ export type VenueUpdate = {
 
 export type SocialEvent = {
   id: ID;
+  eventTypeId: string;
   title: string;
   description?: string | null;
   startTime: string; // ISO 8601
@@ -198,7 +227,12 @@ export type SocialEvent = {
   sources?: EventSource[];
   imageUrl?: string | null;
   isPublic: boolean;
-  status?: 'planning' | 'announced' | 'on_sale' | 'live' | 'completed' | 'cancelled' | string;
+  workflowStateId: string;
+  workflowStateCode: string;
+  workflowStateNameEs: string;
+  workflowStateNameEn: string;
+  publicListable: boolean;
+  ticketPurchaseEnabled: boolean;
   rsvpCount: number;
   createdAt: string;
   updatedAt: string;
@@ -228,6 +262,7 @@ export type EventCityInput = {
 };
 
 export type SocialEventCreate = {
+  eventTypeId: string;
   title: string;
   description?: string;
   startTime: string;
@@ -239,9 +274,11 @@ export type SocialEventCreate = {
   ticketUrl?: string;
   imageUrl?: string;
   isPublic?: boolean;
+  workflowStateId?: string;
 };
 
 export type SocialEventUpdate = {
+  eventTypeId?: string;
   title?: string;
   description?: string | null;
   startTime?: string;
@@ -253,6 +290,7 @@ export type SocialEventUpdate = {
   ticketUrl?: string | null;
   imageUrl?: string | null;
   isPublic?: boolean;
+  workflowStateId?: string;
 };
 
 export type RSVPStatus = 'GOING' | 'INTERESTED' | 'NOT_GOING' | 'NONE';
@@ -370,7 +408,15 @@ export type EventTicketPaymentIntent = {
 };
 
 export type EventMomentMediaKind = 'image' | 'video';
-export type EventMomentReactionKind = 'fire' | 'love' | 'applause';
+
+export type EventMomentReactionOption = {
+  id: string;
+  code: string;
+  label: string;
+  nameEs: string;
+  nameEn: string;
+  emoji: string;
+};
 
 export type EventMomentMedia = {
   kind: EventMomentMediaKind;
@@ -397,7 +443,8 @@ export type EventMoment = {
   caption?: string | null;
   media: EventMomentMedia;
   createdAt: string;
-  reactions: Record<EventMomentReactionKind, string[]>;
+  /** Canonical reaction-type UUID -> actor keys. */
+  reactions: Record<string, string[]>;
   comments: EventMomentComment[];
 };
 

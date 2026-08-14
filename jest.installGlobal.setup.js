@@ -1,4 +1,8 @@
 /* global jest */
+jest.mock('@react-native-async-storage/async-storage', () =>
+  jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 const BUILTIN_SYMBOL = Symbol.for('expo.builtin');
 
 const markExpoBuiltin = (value) => {

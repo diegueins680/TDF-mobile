@@ -1,4 +1,4 @@
-import type { Booking, ID, PipelineCard, PipelineKind, PipelineStage } from '../types';
+import type { Booking, ID } from '../types';
 
 export type RoleKey = string;
 
@@ -48,8 +48,13 @@ export interface PipelineCardDTO {
   id: ID;
   title: string;
   artist?: string | null;
-  type: string;
-  stage: string;
+  serviceOfferingId: string;
+  serviceOfferingCode: string;
+  workflowId: string;
+  workflowStateId: string;
+  workflowStateCode: string;
+  workflowStateNameEs: string;
+  workflowStateNameEn: string;
   sortOrder?: number;
   notes?: string | null;
 }
@@ -57,9 +62,25 @@ export interface PipelineCardDTO {
 export interface PipelineCardUpdate {
   title?: string;
   artist?: string | null;
-  stage?: string;
+  workflowStateId?: string;
   sortOrder?: number;
   notes?: string | null;
+}
+
+export interface PipelineDefinitionDTO {
+  workflowId: string;
+  code: string;
+  nameEs: string;
+  nameEn: string;
+  revision: number;
+  serviceOfferings: Array<{ id: string; code: string; nameEs: string; nameEn: string }>;
+  stages: Array<{ id: string; code: string; nameEs: string; nameEn: string; sortOrder: number; terminal: boolean }>;
+}
+
+export interface PipelineSnapshotDTO {
+  revision: number;
+  definitions: PipelineDefinitionDTO[];
+  cards: PipelineCardDTO[];
 }
 
 export interface BookingDTO {
@@ -70,29 +91,6 @@ export interface BookingDTO {
   status: string;
 }
 
-const PIPELINE_STAGES: PipelineStage[] = [
-  'Intake',
-  'Editing',
-  'Mixing',
-  'Revisions',
-  'Mastering',
-  'Approved'
-];
-
-const STAGE_BY_LOWER = new Map<string, PipelineStage>(
-  PIPELINE_STAGES.map((stage) => [stage.toLowerCase(), stage])
-);
-
-const normalizePipelineStage = (raw: unknown): PipelineStage | undefined => {
-  if (typeof raw !== 'string') return undefined;
-  return STAGE_BY_LOWER.get(raw.trim().toLowerCase());
-};
-
-const normalizePipelineKind = (raw: unknown): PipelineKind => {
-  if (typeof raw !== 'string') return 'mixing';
-  return raw.trim().toLowerCase() === 'mastering' ? 'mastering' : 'mixing';
-};
-
 export function fromBookingDTO(dto: BookingDTO): Booking {
   return {
     id: dto.bookingId,
@@ -100,15 +98,5 @@ export function fromBookingDTO(dto: BookingDTO): Booking {
     start: dto.startsAt,
     end: dto.endsAt,
     status: dto.status
-  };
-}
-
-export function fromPipelineCardDTO(dto: PipelineCardDTO): PipelineCard {
-  return {
-    id: dto.id,
-    title: dto.title,
-    artist: dto.artist ?? null,
-    stage: normalizePipelineStage(dto.stage) ?? 'Intake',
-    kind: normalizePipelineKind(dto.type)
   };
 }

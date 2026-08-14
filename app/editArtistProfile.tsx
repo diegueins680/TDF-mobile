@@ -10,12 +10,7 @@ import { usePreventRemove, useNavigation } from '@react-navigation/native';
 import { Artists } from '../src/api/artists';
 import { normalizeRouteParam } from '../src/lib/routeParams';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
-
-const GENRE_OPTIONS = [
-  'Rock', 'Pop', 'Hip-Hop', 'Jazz', 'Blues', 'Classical',
-  'Electronic', 'Reggae', 'Country', 'Folk', 'Latin', 'R&B',
-  'Soul', 'Metal', 'Punk', 'Indie', 'Alternative', 'Ambient'
-];
+import { useUserSettings } from '../src/providers/UserSettingsProvider';
 
 export default function EditArtistProfileScreen() {
   const { artistId: rawArtistId } = useLocalSearchParams<{ artistId?: string | string[] }>();
@@ -23,11 +18,13 @@ export default function EditArtistProfileScreen() {
   const qc = useQueryClient();
   const analytics = useAnalytics();
   const artistId = normalizeRouteParam(rawArtistId);
+  const { getCatalogItems, catalogSyncing } = useUserSettings();
+  const genreOptions = getCatalogItems('genres');
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [selectedGenreIds, setSelectedGenreIds] = useState<string[]>([]);
   const [instagramHandle, setInstagramHandle] = useState('');
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [showGenreSelect, setShowGenreSelect] = useState(false);
@@ -80,17 +77,17 @@ export default function EditArtistProfileScreen() {
       setName(artistQuery.data.name || '');
       setBio(artistQuery.data.bio || '');
       setImageUrl(artistQuery.data.imageUrl || '');
-      setSelectedGenres(artistQuery.data.genres || []);
+      setSelectedGenreIds(artistQuery.data.genreIds || []);
       setInstagramHandle(artistQuery.data.instagramHandle || '');
       setSpotifyUrl(artistQuery.data.spotifyUrl || '');
     }
   }, [artistQuery.data]);
 
-  const handleToggleGenre = useCallback((genre: string) => {
-    setSelectedGenres(prev =>
-      prev.includes(genre)
-        ? prev.filter(g => g !== genre)
-        : [...prev, genre]
+  const handleToggleGenre = useCallback((genreId: string) => {
+    setSelectedGenreIds(prev =>
+      prev.includes(genreId)
+        ? prev.filter(id => id !== genreId)
+        : [...prev, genreId]
     );
     setIsDirty(true);
   }, []);
@@ -100,16 +97,25 @@ export default function EditArtistProfileScreen() {
       Alert.alert('Validación', 'El nombre artístico es obligatorio');
       return;
     }
+    const activeGenreIds = new Set(genreOptions.map((genre) => genre.id));
+    const unavailableGenreIds = selectedGenreIds.filter((genreId) => !activeGenreIds.has(genreId));
+    if (unavailableGenreIds.length > 0) {
+      Alert.alert(
+        'Géneros no disponibles',
+        'El perfil conserva géneros históricos que ya no pueden seleccionarse. Elimínalos o elige reemplazos vigentes antes de guardar.',
+      );
+      return;
+    }
 
     updateMutation.mutate({
       name: name.trim(),
       bio: bio.trim() || null,
       imageUrl: imageUrl.trim() || null,
-      genres: selectedGenres,
+      genreIds: selectedGenreIds,
       instagramHandle: instagramHandle.trim() || null,
       spotifyUrl: spotifyUrl.trim() || null
     });
-  }, [name, bio, imageUrl, selectedGenres, instagramHandle, spotifyUrl, updateMutation]);
+  }, [name, bio, imageUrl, selectedGenreIds, genreOptions, instagramHandle, spotifyUrl, updateMutation]);
 
   if (!artistId) {
     return (
@@ -217,43 +223,54 @@ export default function EditArtistProfileScreen() {
             accessibilityLabel="Seleccionar géneros"
           >
             <Text style={styles.genreSelectButtonText}>
-              {selectedGenres.length > 0 ? `${selectedGenres.length} seleccionados` : 'Seleccionar géneros...'}
+              {selectedGenreIds.length > 0 ? `${selectedGenreIds.length} seleccionados` : 'Seleccionar géneros...'}
             </Text>
           </TouchableOpacity>
 
           {showGenreSelect && (
             <View style={styles.genreGrid}>
-              {GENRE_OPTIONS.map((genre, idx) => (
+              {genreOptions.map((genre) => (
                 <TouchableOpacity
-                  key={idx}
+                  key={genre.id}
                   style={[
                     styles.genreOption,
-                    selectedGenres.includes(genre) && styles.genreOptionSelected
+                    selectedGenreIds.includes(genre.id) && styles.genreOptionSelected
                   ]}
-                  onPress={() => handleToggleGenre(genre)}
+                  onPress={() => handleToggleGenre(genre.id)}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: selectedGenres.includes(genre) }}
-                  accessibilityLabel={genre}
+                  accessibilityState={{ checked: selectedGenreIds.includes(genre.id) }}
+                  accessibilityLabel={genre.name}
                 >
                   <Text
                     style={[
                       styles.genreOptionText,
-                      selectedGenres.includes(genre) && styles.genreOptionTextSelected
+                      selectedGenreIds.includes(genre.id) && styles.genreOptionTextSelected
                     ]}
                   >
-                    {genre}
+                    {genre.name}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
           )}
+          {genreOptions.length === 0 && (
+            <Text style={styles.catalogStatus}>
+              {catalogSyncing ? 'Sincronizando géneros…' : 'No hay un catálogo de géneros disponible.'}
+            </Text>
+          )}
 
           <View style={styles.selectedGenresContainer}>
-            {selectedGenres.map((genre, idx) => (
-              <View key={idx} style={styles.selectedGenreTag}>
-                <Text style={styles.selectedGenreText}>{genre}</Text>
+            {selectedGenreIds.map((genreId, idx) => {
+              const activeGenre = genreOptions.find((genre) => genre.id === genreId);
+              const historicalName = artistQuery.data?.genres?.[idx];
+              return (
+              <View key={genreId} style={styles.selectedGenreTag}>
+                <Text style={styles.selectedGenreText}>
+                  {activeGenre?.name ?? historicalName ?? 'Género histórico no disponible'}
+                </Text>
               </View>
-            ))}
+              );
+            })}
           </View>
         </View>
 
@@ -323,16 +340,17 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 6, textTransform: 'uppercase' },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a1a1a' },
   bioInput: { textAlignVertical: 'top' },
-  genreSelectButton: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  genreSelectButton: { minHeight: 44, justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
   genreSelectButtonText: { fontSize: 14, color: '#1a1a1a' },
   genreGrid: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 8, marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  genreOption: { flex: 0.5, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
+  genreOption: { minHeight: 44, flex: 0.5, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
   genreOptionSelected: { backgroundColor: '#e0e7ff', borderColor: '#2563eb' },
   genreOptionText: { fontSize: 12, fontWeight: '500', color: '#666' },
   genreOptionTextSelected: { color: '#2563eb', fontWeight: '600' },
   selectedGenresContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   selectedGenreTag: { backgroundColor: '#e0e7ff', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
   selectedGenreText: { fontSize: 12, fontWeight: '600', color: '#2563eb' },
+  catalogStatus: { marginTop: 8, color: '#6b7280', fontSize: 13 },
   updateButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 16 },
   updateButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' }
 });

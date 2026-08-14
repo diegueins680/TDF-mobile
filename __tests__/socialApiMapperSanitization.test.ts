@@ -9,6 +9,17 @@ import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
 import { Venues } from '../src/api/venues';
 
+const EVENT_TYPE_ID = '41000000-0000-4000-8000-000000000001';
+const WORKFLOW_STATE_ID = '00000000-0000-4000-8000-000000000233';
+const BACKEND_EVENT_LIFECYCLE = {
+  eventWorkflowStateId: WORKFLOW_STATE_ID,
+  eventWorkflowStateCode: 'on_sale',
+  eventWorkflowStateNameEs: 'En venta',
+  eventWorkflowStateNameEn: 'On sale',
+  eventPublicListable: true,
+  eventTicketPurchaseEnabled: true,
+};
+
 const { get, post, put } = jest.requireMock('../src/api/client') as {
   get: jest.Mock;
   post: jest.Mock;
@@ -38,6 +49,7 @@ describe('Social API mapper sanitization', () => {
   });
 
   it('Artists.create removes null and blank social links from payload', async () => {
+    const genreId = '11111111-1111-4111-8111-111111111111';
     post.mockResolvedValueOnce({
       artistId: 9,
       artistPartyId: 55,
@@ -51,6 +63,7 @@ describe('Social API mapper sanitization', () => {
     await Artists.create({
       partyId: 55,
       name: 'Sanitized Artist',
+      genreIds: [genreId],
       instagramHandle: ' @artist ',
       socialLinks: {
         spotify: ' https://open.spotify.com/artist/abc ',
@@ -62,12 +75,14 @@ describe('Social API mapper sanitization', () => {
     expect(post).toHaveBeenCalledWith(
       '/social-events/artists',
       expect.objectContaining({
+        artistGenreIds: [genreId],
         artistSocialLinks: {
           instagram: '@artist',
           spotify: 'https://open.spotify.com/artist/abc',
         },
       }),
     );
+    expect(post.mock.calls[0]?.[1]).not.toHaveProperty('artistGenres');
   });
 
   it('Artists.list preserves oversized digit ids and falls back on invalid numeric ids', async () => {
@@ -247,6 +262,8 @@ describe('Social API mapper sanitization', () => {
     get.mockResolvedValueOnce([
       {
         eventId: 101,
+        ...BACKEND_EVENT_LIFECYCLE,
+        eventTypeId: EVENT_TYPE_ID,
         eventTitle: 'Broken Price Event',
         eventStart: '2026-01-01T00:00:00.000Z',
         eventEnd: '2026-01-01T01:00:00.000Z',
@@ -256,6 +273,8 @@ describe('Social API mapper sanitization', () => {
       },
       {
         eventId: 102,
+        ...BACKEND_EVENT_LIFECYCLE,
+        eventTypeId: EVENT_TYPE_ID,
         eventTitle: 'Negative Price Event',
         eventStart: '2026-01-01T00:00:00.000Z',
         eventEnd: '2026-01-01T01:00:00.000Z',
@@ -265,6 +284,8 @@ describe('Social API mapper sanitization', () => {
       },
       {
         eventId: 103,
+        ...BACKEND_EVENT_LIFECYCLE,
+        eventTypeId: EVENT_TYPE_ID,
         eventTitle: 'Free Event',
         eventStart: '2026-01-01T00:00:00.000Z',
         eventEnd: '2026-01-01T01:00:00.000Z',
@@ -288,28 +309,31 @@ describe('Social API mapper sanitization', () => {
     get.mockResolvedValueOnce([
       {
         eventId: 302,
+        ...BACKEND_EVENT_LIFECYCLE,
+        eventTypeId: EVENT_TYPE_ID,
         eventTitle: 'Evento lejano',
         eventStart: '2027-01-02T20:00:00.000Z',
         eventEnd: '2027-01-02T22:00:00.000Z',
         eventVenueId: null,
         eventIsPublic: true,
-        eventStatus: 'announced',
       },
       {
         eventId: 301,
+        ...BACKEND_EVENT_LIFECYCLE,
+        eventTypeId: EVENT_TYPE_ID,
         eventTitle: 'Evento próximo',
         eventStart: '2027-01-01T20:00:00.000Z',
         eventEnd: '2027-01-01T22:00:00.000Z',
         eventVenueId: null,
         eventIsPublic: true,
-        eventStatus: 'on_sale',
       },
     ]);
 
     const events = await Events.list({ upcomingOnly: true });
 
     expect(events.map((event) => event.id)).toEqual([301, 302]);
-    expect(events[0]?.status).toBe('on_sale');
+    expect(events[0]?.workflowStateId).toBe(WORKFLOW_STATE_ID);
+    expect(events[0]?.ticketPurchaseEnabled).toBe(true);
   });
 
   it('Events mappers sanitize blank timestamp fields across events, RSVPs, and invitations', async () => {
@@ -317,6 +341,8 @@ describe('Social API mapper sanitization', () => {
       .mockResolvedValueOnce([
         {
           eventId: 201,
+          ...BACKEND_EVENT_LIFECYCLE,
+          eventTypeId: EVENT_TYPE_ID,
           eventTitle: 'Timestamp Event',
           eventStart: '2026-01-01T00:00:00.000Z',
           eventEnd: '2026-01-01T01:00:00.000Z',
@@ -365,6 +391,8 @@ describe('Social API mapper sanitization', () => {
       .mockResolvedValueOnce([
         {
           eventId: 202,
+          ...BACKEND_EVENT_LIFECYCLE,
+          eventTypeId: EVENT_TYPE_ID,
           eventTitle: 'Timestamp Event',
           eventStart: '2026-01-01T00:00:00.000Z',
           eventEnd: '2026-01-01T01:00:00.000Z',

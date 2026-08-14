@@ -2,7 +2,11 @@ import React, { PropsWithChildren } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { UserSettingsProvider, useUserSettings } from '../src/providers/UserSettingsProvider';
+import {
+  UserSettingsProvider,
+  parseUserSettings,
+  useUserSettings,
+} from '../src/providers/UserSettingsProvider';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
@@ -57,6 +61,31 @@ describe('UserSettingsProvider', () => {
     getItemMock.mockResolvedValue(null);
     setItemMock.mockResolvedValue();
     removeItemMock.mockResolvedValue();
+  });
+
+  it('restores canonical locale and currency UUIDs from offline storage', () => {
+    const localeId = '11111111-1111-4111-8111-111111111111';
+    const currencyId = '22222222-2222-4222-8222-222222222222';
+    const parsed = parseUserSettings(JSON.stringify({
+      localeId,
+      locale: 'es',
+      currencyId,
+      currency: 'USD',
+      timezone: 'America/Guayaquil',
+    }), ['es', 'en'], ['USD']);
+
+    expect(parsed).toMatchObject({ localeId, locale: 'es', currencyId, currency: 'USD' });
+  });
+
+  it('withholds malformed stored identifiers for snapshot reconciliation', () => {
+    const parsed = parseUserSettings(JSON.stringify({
+      localeId: 'es',
+      locale: 'es',
+      currencyId: 'USD',
+      currency: 'USD',
+    }), ['es', 'en'], ['USD']);
+
+    expect(parsed).toMatchObject({ localeId: '', locale: 'es', currencyId: '', currency: 'USD' });
   });
 
   it('trims stored identity values and drops blank entries', async () => {

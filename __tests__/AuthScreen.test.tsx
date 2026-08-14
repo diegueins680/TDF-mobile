@@ -32,6 +32,9 @@ jest.mock('../src/theme/ThemeProvider', () => {
     useAppTheme: () => ({
       colorScheme: 'light',
       preference: 'system',
+      preferenceId: 'appearance-system',
+      options: [],
+      catalogSource: 'network',
       colors: {
         canvas: '#f8fafc',
         surface: '#f1f5f9',
@@ -46,7 +49,7 @@ jest.mock('../src/theme/ThemeProvider', () => {
         danger: '#b91c1c',
         success: '#166534',
       },
-      setPreference: jest.fn(),
+      setPreferenceById: jest.fn(),
     }),
   };
 });
@@ -172,7 +175,7 @@ describe('Auth screen', () => {
     expect(screen.getByText('La contraseña debe tener al menos 8 caracteres.').props.accessibilityRole).toBe('alert');
   });
 
-  it('creates a fan account and stores the returned session', async () => {
+  it('creates an account without caller-selected roles and stores the returned session', async () => {
     mockSignupRequest.mockResolvedValue({
       token: 'Bearer new-fan-token',
       partyId: 88,
@@ -193,7 +196,6 @@ describe('Auth screen', () => {
       lastName: 'Paz',
       email: 'ana@example.com',
       password: 'password-seguro',
-      roles: ['Fan'],
     }));
     expect(mockSetToken).toHaveBeenCalledWith('Bearer new-fan-token', 88, { roles: ['Fan'], modules: [] });
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');

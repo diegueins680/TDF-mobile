@@ -66,6 +66,10 @@ export default function DirectoryScreen() {
   const [cityId, setCityId] = useState<string | undefined>();
   const [location, setLocation] = useState<{ latitude: number; longitude: number }>();
   const [radiusKm, setRadiusKm] = useState(25);
+  const [professionId, setProfessionId] = useState<string>();
+  const [serviceId, setServiceId] = useState<string>();
+  const [instrumentId, setInstrumentId] = useState<string>();
+  const [genreId, setGenreId] = useState<string>();
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [availableOnly, setAvailableOnly] = useState(false);
   const cityInitialized = useRef(false);
@@ -92,7 +96,8 @@ export default function DirectoryScreen() {
   const search = useInfiniteQuery({
     queryKey: [
       'directory-search', debouncedQuery, entityType, cityId,
-      location?.latitude, location?.longitude, radiusKm, remoteOnly, availableOnly,
+      location?.latitude, location?.longitude, radiusKm, professionId, serviceId,
+      instrumentId, genreId, remoteOnly, availableOnly,
     ],
     queryFn: ({ pageParam }) => Directory.search({
       q: debouncedQuery.trim() || undefined,
@@ -101,6 +106,10 @@ export default function DirectoryScreen() {
       latitude: location?.latitude,
       longitude: location?.longitude,
       radiusKm: location ? radiusKm : undefined,
+      professionId,
+      serviceId,
+      instrumentId,
+      genreId,
       remote: remoteOnly || undefined,
       available: availableOnly || undefined,
       cursor: pageParam,
@@ -152,6 +161,7 @@ export default function DirectoryScreen() {
         name: debouncedQuery.trim() || `Oportunidades en ${selectedCity?.name ?? 'mi ciudad'}`,
         canonicalQuery: {
           q: debouncedQuery.trim(), entityType, cityId, radiusKm: location ? radiusKm : undefined,
+          professionId, serviceId, instrumentId, genreId,
           remote: remoteOnly, available: availableOnly,
         },
         alertsEnabled: true,
@@ -161,7 +171,7 @@ export default function DirectoryScreen() {
     } catch (error) {
       Alert.alert('No pudimos guardarla', error instanceof Error ? error.message : 'Inténtalo nuevamente.');
     }
-  }, [availableOnly, cityId, debouncedQuery, entityType, location, radiusKm, remoteOnly, router, selectedCity?.name, token]);
+  }, [availableOnly, cityId, debouncedQuery, entityType, genreId, instrumentId, location, professionId, radiusKm, remoteOnly, router, selectedCity?.name, serviceId, token]);
 
   const openItem = useCallback((item: DirectorySearchItem) => {
     analytics.capture('directory_result_opened', {
@@ -221,6 +231,10 @@ export default function DirectoryScreen() {
           <FilterChip key={option.id} label={option.label} selected={entityType === option.id} onPress={() => setEntityType(option.id)} />
         ))}
       </ScrollView>
+      <TaxonomyFilterRow label="Profesión" items={taxonomies.data?.professions ?? []} selectedId={professionId} onSelect={setProfessionId} />
+      <TaxonomyFilterRow label="Servicio" items={taxonomies.data?.serviceOfferings ?? []} selectedId={serviceId} onSelect={setServiceId} />
+      <TaxonomyFilterRow label="Instrumento" items={taxonomies.data?.instruments ?? []} selectedId={instrumentId} onSelect={setInstrumentId} />
+      <TaxonomyFilterRow label="Género" items={taxonomies.data?.genres ?? []} selectedId={genreId} onSelect={setGenreId} />
       <View style={styles.chipRow}>
         <FilterChip label="Remoto" selected={remoteOnly} onPress={() => setRemoteOnly((value) => !value)} />
         <FilterChip label="Disponible" selected={availableOnly} onPress={() => setAvailableOnly((value) => !value)} />
@@ -269,6 +283,32 @@ export default function DirectoryScreen() {
         refreshControl={<RefreshControl refreshing={search.isRefetching} onRefresh={() => void search.refetch()} />}
       />
     </SafeAreaView>
+  );
+}
+
+function TaxonomyFilterRow({
+  label,
+  items,
+  selectedId,
+  onSelect,
+}: {
+  label: string;
+  items: Array<{ id: string; name: string }>;
+  selectedId?: string;
+  onSelect: (id: string | undefined) => void;
+}) {
+  const { colors } = useAppTheme();
+  if (!items.length) return null;
+  return (
+    <View style={styles.taxonomyFilter}>
+      <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+        <FilterChip label="Todos" selected={!selectedId} onPress={() => onSelect(undefined)} />
+        {items.map((item) => (
+          <FilterChip key={item.id} label={item.name} selected={item.id === selectedId} onPress={() => onSelect(item.id)} />
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -356,6 +396,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 16, lineHeight: 23 },
   searchInput: { minHeight: 52, borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, fontSize: 16 },
   label: { fontSize: 14, fontWeight: '800' },
+  taxonomyFilter: { gap: 6 },
   chipRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   chip: { minHeight: 42, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   segmented: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },

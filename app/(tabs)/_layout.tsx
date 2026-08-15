@@ -1,4 +1,4 @@
-import { Redirect, Tabs } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -21,18 +21,16 @@ export default function TabsLayout() {
     );
   }
 
-  if (!token?.trim()) {
-    return <Redirect href="/auth" />;
-  }
-
-  return (
+  return token?.trim() ? (
     <NewUserOnboardingGate>
-      <TabsInner />
+      <TabsInner authenticated />
     </NewUserOnboardingGate>
+  ) : (
+    <TabsInner authenticated={false} />
   );
 }
 
-function TabsInner() {
+function TabsInner({ authenticated }: { authenticated: boolean }) {
   const { colors } = useAppTheme();
 
   return (
@@ -45,7 +43,7 @@ function TabsInner() {
         tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
       }}
     >
-      {NEW_USER_VISIBLE_TABS.map((tab) => (
+      {NEW_USER_VISIBLE_TABS.filter((tab) => authenticated || tab.name === 'directory').map((tab) => (
         <Tabs.Screen
           key={tab.name}
           name={tab.name}
@@ -60,6 +58,9 @@ function TabsInner() {
             )
           }}
         />
+      ))}
+      {!authenticated && NEW_USER_VISIBLE_TABS.filter((tab) => tab.name !== 'directory').map((tab) => (
+        <Tabs.Screen key={tab.name} name={tab.name} options={{ href: null }} />
       ))}
       {HIDDEN_INTERNAL_TABS.map((name) => (
         <Tabs.Screen key={name} name={name} options={{ href: null }} />

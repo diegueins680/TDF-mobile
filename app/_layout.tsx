@@ -57,6 +57,8 @@ function handleDeepLink(url: string, router: ReturnType<typeof useRouter>) {
       router.push(`/artistDetail?artistId=${artistId}`);
     } else if (path === 'stripe-redirect') {
       router.push('/tickets');
+    } else if (path.startsWith('directory/')) {
+      router.push(`/${path}` as Href);
     }
     // Add more routes as needed
   } catch (e) {

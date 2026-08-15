@@ -9,7 +9,7 @@ import { useAuth } from '../src/providers/AuthProvider';
 
 export default function Index() {
   const [target, setTarget] = useState<Href | null>(null);
-  const { token, loading } = useAuth();
+  const { loading } = useAuth();
 
   useEffect(() => {
     let active = true;
@@ -29,11 +29,6 @@ export default function Index() {
         <ActivityIndicator size="large" />
       </View>
     );
-  }
-
-  const hasToken = Boolean(token?.trim());
-  if (target === MOBILE_LANDING_ROUTE && !hasToken) {
-    return <Redirect href="/auth" />;
   }
 
   return <Redirect href={target} />;

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Directory } from '../../src/api/directory';
+import { Directory, type DirectoryInvitation } from '../../src/api/directory';
 import {
   classifiedFormError,
   moneyToMinor,
@@ -20,14 +20,16 @@ export default function DirectoryManageScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
-  const [mode, setMode] = useState<'profiles' | 'classifieds'>('profiles');
+  const [mode, setMode] = useState<'profiles' | 'classifieds' | 'invitations'>('profiles');
   const [showForm, setShowForm] = useState(false);
   const profiles = useQuery({ queryKey: ['directory-managed-profiles'], queryFn: Directory.managedProfiles });
   const classifieds = useQuery({ queryKey: ['directory-managed-classifieds'], queryFn: Directory.managedClassifieds });
+  const invitations = useQuery({ queryKey: ['directory-invitations'], queryFn: Directory.invitations });
   const taxonomies = useQuery({ queryKey: ['directory-taxonomies', 'es'], queryFn: () => Directory.taxonomies('es') });
   const refresh = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: ['directory-managed-profiles'] }),
     queryClient.invalidateQueries({ queryKey: ['directory-managed-classifieds'] }),
+    queryClient.invalidateQueries({ queryKey: ['directory-invitations'] }),
   ]);
   const age = useMutation({
     mutationFn: () => Directory.setAgeAssurance({ adultAttestation: true }),
@@ -36,7 +38,7 @@ export default function DirectoryManageScreen() {
   const profileStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: string }) => Directory.transitionProfile(id, status), onSuccess: refresh });
   const classifiedStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: string }) => Directory.transitionClassified(id, status), onSuccess: refresh });
 
-  if (profiles.isLoading || classifieds.isLoading || taxonomies.isLoading) {
+  if (profiles.isLoading || classifieds.isLoading || invitations.isLoading || taxonomies.isLoading) {
     return <SafeAreaView style={[styles.centered, { backgroundColor: colors.canvas }]}><ActivityIndicator color={colors.actionPrimary} /></SafeAreaView>;
   }
 
@@ -53,10 +55,11 @@ export default function DirectoryManageScreen() {
         <View style={styles.row}>
           <Segment label={`Perfiles (${profiles.data?.length ?? 0})`} selected={mode === 'profiles'} onPress={() => { setMode('profiles'); setShowForm(false); }} />
           <Segment label={`Anuncios (${classifieds.data?.length ?? 0})`} selected={mode === 'classifieds'} onPress={() => { setMode('classifieds'); setShowForm(false); }} />
+          <Segment label={`Invitaciones (${invitations.data?.length ?? 0})`} selected={mode === 'invitations'} onPress={() => { setMode('invitations'); setShowForm(false); }} />
         </View>
-        <Pressable accessibilityRole="button" style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }]} onPress={() => setShowForm((value) => !value)}>
+        {mode !== 'invitations' ? <Pressable accessibilityRole="button" style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }]} onPress={() => setShowForm((value) => !value)}>
           <Text style={{ color: colors.actionPrimaryContrast, fontWeight: '800' }}>{showForm ? 'Cerrar formulario' : mode === 'profiles' ? 'Crear otro perfil' : 'Crear clasificado'}</Text>
-        </Pressable>
+        </Pressable> : null}
         {showForm && mode === 'profiles' ? <ProfileForm taxonomies={taxonomies.data!} onCreated={async () => { setShowForm(false); await refresh(); }} /> : null}
         {showForm && mode === 'classifieds' ? <ClassifiedForm taxonomies={taxonomies.data!} profiles={profiles.data ?? []} onCreated={async () => { setShowForm(false); await refresh(); }} /> : null}
         {mode === 'profiles' ? (profiles.data ?? []).map((profile) => (
@@ -69,7 +72,7 @@ export default function DirectoryManageScreen() {
               {profile.status === 'published' ? <Pressable onPress={() => profileStatus.mutate({ id: profile.id, status: 'paused' })}><Text style={{ color: colors.actionPrimary }}>Pausar</Text></Pressable> : null}
             </View>
           </View>
-        )) : (classifieds.data ?? []).map((classified) => (
+        )) : mode === 'classifieds' ? (classifieds.data ?? []).map((classified) => (
           <View key={classified.id} style={[styles.card, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSubtle }]}>
             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{classified.title}</Text>
             <Text style={{ color: colors.textSecondary }}>{classified.status}{classified.expiresAt ? ` · vence ${new Date(classified.expiresAt).toLocaleDateString()}` : ''}</Text>
@@ -78,10 +81,43 @@ export default function DirectoryManageScreen() {
               {classified.status === 'published' ? <Pressable onPress={() => classifiedStatus.mutate({ id: classified.id, status: 'filled' })}><Text style={{ color: colors.actionPrimary }}>Marcar cubierto</Text></Pressable> : null}
             </View>
           </View>
-        ))}
+        )) : (invitations.data ?? []).map((invitation) => <InvitationCard key={invitation.id} invitation={invitation} onRefresh={refresh} />)}
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function InvitationCard({ invitation, onRefresh }: { invitation: DirectoryInvitation; onRefresh: () => Promise<unknown> }) {
+  const { colors } = useAppTheme();
+  const [conversationMessage, setConversationMessage] = useState('Hola, acepté la invitación y quisiera continuar la conversación en TDF.');
+  const mine = invitation.participantRole === 'sender' ? invitation.senderProfile : invitation.targetProfile;
+  const other = invitation.participantRole === 'sender' ? invitation.targetProfile : invitation.senderProfile;
+  const transition = useMutation({
+    mutationFn: (status: string) => Directory.transitionInvitation(invitation.id, status),
+    onSuccess: onRefresh,
+    onError: (error) => Alert.alert('No pudimos actualizarla', error instanceof Error ? error.message : 'Inténtalo nuevamente.'),
+  });
+  const conversation = useMutation({
+    mutationFn: async () => {
+      await Directory.contact({ senderProfileId: mine.id, targetProfileId: other.id, contextKind: 'invitation', contextId: invitation.id, message: conversationMessage.trim() }, `mobile-invitation-contact-${invitation.id}`);
+      return Directory.transitionInvitation(invitation.id, 'conversation_open');
+    },
+    onSuccess: async () => { await onRefresh(); Alert.alert('Conversación abierta', 'El contexto de la invitación quedó vinculado al chat existente.'); },
+    onError: (error) => Alert.alert('No pudimos abrir la conversación', error instanceof Error ? error.message : 'Inténtalo nuevamente.'),
+  });
+  const pendingTarget = invitation.participantRole === 'target' && invitation.status === 'pending';
+  const pendingSender = invitation.participantRole === 'sender' && invitation.status === 'pending';
+  return <View style={[styles.card, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSubtle }]}>
+    <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{invitation.participantRole === 'sender' ? `Invitaste a ${other.name}` : `${other.name} te invitó`}</Text>
+    <Text style={{ color: colors.textSecondary }}>Actúas como {mine.name} · {invitation.classified?.title ?? 'invitación general'} · {invitation.status}</Text>
+    <Text style={{ color: colors.textPrimary }}>{invitation.message}</Text>
+    {invitation.status === 'accepted' ? <TextInput accessibilityLabel="Mensaje para abrir la conversación" multiline value={conversationMessage} onChangeText={setConversationMessage} style={[styles.input, styles.multiline, { color: colors.textPrimary, borderColor: colors.border }]} /> : null}
+    <View style={styles.row}>
+      {pendingTarget ? <><Pressable onPress={() => transition.mutate('accepted')}><Text style={{ color: colors.actionPrimary }}>Aceptar</Text></Pressable><Pressable onPress={() => transition.mutate('declined')}><Text style={{ color: colors.actionPrimary }}>Rechazar</Text></Pressable><Pressable onPress={() => transition.mutate('blocked')}><Text style={{ color: colors.danger }}>Bloquear</Text></Pressable></> : null}
+      {pendingSender ? <Pressable onPress={() => transition.mutate('withdrawn')}><Text style={{ color: colors.actionPrimary }}>Retirar</Text></Pressable> : null}
+      {invitation.status === 'accepted' ? <Pressable onPress={() => conversation.mutate()} disabled={!conversationMessage.trim() || conversation.isPending}><Text style={{ color: colors.actionPrimary }}>Abrir conversación</Text></Pressable> : null}
+    </View>
+  </View>;
 }
 
 type Taxonomies = Awaited<ReturnType<typeof Directory.taxonomies>>;

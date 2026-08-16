@@ -57,4 +57,19 @@ describe('mobile music directory canonical API', () => {
     await Directory.transitionClassified('33333333-3333-4333-8333-333333333333', 'filled');
     expect(mockPatch).toHaveBeenCalledWith('/directory/classifieds/33333333-3333-4333-8333-333333333333/status', { status: 'filled' });
   });
+
+  it('uses participant-scoped invitation endpoints with stable retry keys', async () => {
+    mockPost.mockResolvedValue({});
+    mockPatch.mockResolvedValue({});
+    const invitation = {
+      senderProfileId: '11111111-1111-4111-8111-111111111111',
+      targetProfileId: '22222222-2222-4222-8222-222222222222',
+      message: 'Te invito a colaborar en esta oportunidad musical.',
+    };
+    await Directory.invite(invitation, 'mobile-invitation-retry-1');
+    expect(mockPost).toHaveBeenCalledWith('/directory/invitations', invitation, { headers: { 'Idempotency-Key': 'mobile-invitation-retry-1' } });
+
+    await Directory.transitionInvitation('33333333-3333-4333-8333-333333333333', 'accepted');
+    expect(mockPatch).toHaveBeenCalledWith('/directory/invitations/33333333-3333-4333-8333-333333333333/status', { status: 'accepted' });
+  });
 });

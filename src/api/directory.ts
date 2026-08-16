@@ -9,6 +9,7 @@ export type ManagedDirectoryProfile = components['schemas']['ManagedDirectoryPro
 export type ManagedClassified = components['schemas']['ManagedClassified'];
 export type ApplicationCreate = components['schemas']['ApplicationCreate'];
 export type DirectoryContact = components['schemas']['DirectoryContact'];
+export type DirectoryInvitation = components['schemas']['DirectoryInvitation'];
 
 export interface DirectorySearchQuery {
   q?: string;
@@ -77,6 +78,11 @@ export const Directory = {
     ),
   contact: (body: DirectoryContact, idempotencyKey?: string) =>
     post<Record<string, unknown>>('/directory/contact', body, idempotencyConfig(idempotencyKey)),
+  invitations: () => get<DirectoryInvitation[]>('/directory/invitations'),
+  invite: (body: components['schemas']['InvitationCreate'], idempotencyKey?: string) =>
+    post<DirectoryInvitation>('/directory/invitations', body, idempotencyConfig(idempotencyKey)),
+  transitionInvitation: (invitationId: string, status: string) =>
+    patch<DirectoryInvitation>(`/directory/invitations/${encodeURIComponent(invitationId)}/status`, { status }),
   saveSearch: (body: components['schemas']['SavedSearchCreate'], idempotencyKey?: string) =>
     post<components['schemas']['SavedDirectorySearch']>(
       '/directory/saved-searches',

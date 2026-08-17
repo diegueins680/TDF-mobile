@@ -149,6 +149,24 @@ describe('CreateEvent screen', () => {
     }));
   });
 
+  it('submits null instead of inventing a duration when the end is unconfirmed', () => {
+    render(<CreateEventScreen />);
+
+    fireEvent.changeText(screen.getByPlaceholderText('Nombre del evento'), 'Evento sin fin oficial');
+    fireEvent.press(screen.getByText('Fin por confirmar'));
+    fireEvent.press(screen.getByText('Selecciona un lugar'));
+    fireEvent.press(screen.getByText('Main Room'));
+    fireEvent.press(screen.getByText('Selecciona artistas'));
+    fireEvent.press(screen.getByText('DJ Uno'));
+    fireEvent.press(screen.getByText('Listo'));
+    fireEvent.press(screen.getByText('Crear evento'));
+
+    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({
+      endTime: null,
+      title: 'Evento sin fin oficial',
+    }));
+  });
+
   it('preserves the form and offers synchronization when only emergency catalogs exist', () => {
     mockCatalogSource = 'emergency';
     mockGetCatalogItems.mockReturnValue([]);

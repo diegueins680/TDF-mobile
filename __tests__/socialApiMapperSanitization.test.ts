@@ -32,6 +32,23 @@ describe('Social API mapper sanitization', () => {
     jest.clearAllMocks();
   });
 
+  it('preserves an unconfirmed event end as null', async () => {
+    get.mockResolvedValueOnce([{
+      eventId: 42,
+      eventTypeId: EVENT_TYPE_ID,
+      ...BACKEND_EVENT_LIFECYCLE,
+      eventTitle: 'Fin por confirmar',
+      eventStart: '2027-01-01T20:00:00.000Z',
+      eventEnd: null,
+      eventVenueId: null,
+      eventArtists: [],
+    }]);
+
+    const events = await Events.list();
+
+    expect(events[0]?.endTime).toBeNull();
+  });
+
   it('Artists.list uses party id fallback when artist id is missing', async () => {
     get.mockResolvedValueOnce([
       {

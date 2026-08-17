@@ -6,6 +6,9 @@ export type DirectorySearchItem = components['schemas']['DirectorySearchItem'];
 export type DirectorySearchResponse = components['schemas']['DirectorySearchResponse'];
 export type DirectoryTaxonomies = components['schemas']['DirectoryTaxonomies'];
 export type ManagedDirectoryProfile = components['schemas']['ManagedDirectoryProfile'];
+export type DirectoryProfileUpsert = components['schemas']['DirectoryProfileUpsert'];
+export type DirectoryPortfolioItem = components['schemas']['DirectoryPortfolioItem'];
+export type DirectoryProfileLink = components['schemas']['DirectoryProfileLink'];
 export type ManagedClassified = components['schemas']['ManagedClassified'];
 export type ApplicationCreate = components['schemas']['ApplicationCreate'];
 export type DirectoryContact = components['schemas']['DirectoryContact'];
@@ -69,6 +72,8 @@ export const Directory = {
     put<Record<string, unknown>>('/directory/age-assurance', body),
   createProfile: (body: components['schemas']['DirectoryProfileUpsert'], idempotencyKey?: string) =>
     post<ManagedDirectoryProfile>('/directory/profiles', body, idempotencyConfig(idempotencyKey)),
+  updateProfile: (profileId: string, body: components['schemas']['DirectoryProfileUpsert']) =>
+    put<ManagedDirectoryProfile>(`/directory/profiles/${encodeURIComponent(profileId)}`, body),
   transitionProfile: (profileId: string, status: string) =>
     patch<ManagedDirectoryProfile>(`/directory/profiles/${encodeURIComponent(profileId)}/status`, { status }),
   createClassified: (body: components['schemas']['ClassifiedCreate'], idempotencyKey?: string) =>

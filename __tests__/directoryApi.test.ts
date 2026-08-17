@@ -72,4 +72,22 @@ describe('mobile music directory canonical API', () => {
     await Directory.transitionInvitation('33333333-3333-4333-8333-333333333333', 'accepted');
     expect(mockPatch).toHaveBeenCalledWith('/directory/invitations/33333333-3333-4333-8333-333333333333/status', { status: 'accepted' });
   });
+
+  it('reads public reviews and submits only an eligible interaction with a stable key', async () => {
+    mockGet.mockResolvedValue({});
+    mockPost.mockResolvedValue({});
+    await Directory.profileReviews('perfil & quito', '11111111-1111-4111-8111-111111111111', 10);
+    expect(mockGet).toHaveBeenCalledWith('/directory/profiles/perfil%20%26%20quito/reviews?cursor=11111111-1111-4111-8111-111111111111&limit=10');
+    await Directory.reviewEligibility('22222222-2222-4222-8222-222222222222');
+    expect(mockGet).toHaveBeenLastCalledWith('/directory/review-eligibility?authorProfileId=22222222-2222-4222-8222-222222222222');
+    const request = {
+      interactionId: '33333333-3333-4333-8333-333333333333',
+      authorProfileId: '22222222-2222-4222-8222-222222222222',
+      subjectProfileId: '44444444-4444-4444-8444-444444444444',
+      rating: 5,
+      body: 'Una colaboración profesional y verificable.',
+    };
+    await Directory.createReview(request, 'mobile-review-retry-1');
+    expect(mockPost).toHaveBeenLastCalledWith('/directory/reviews', request, { headers: { 'Idempotency-Key': 'mobile-review-retry-1' } });
+  });
 });

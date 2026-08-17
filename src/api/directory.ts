@@ -10,6 +10,9 @@ export type ManagedClassified = components['schemas']['ManagedClassified'];
 export type ApplicationCreate = components['schemas']['ApplicationCreate'];
 export type DirectoryContact = components['schemas']['DirectoryContact'];
 export type DirectoryInvitation = components['schemas']['DirectoryInvitation'];
+export type DirectoryReviewPage = components['schemas']['DirectoryReviewPage'];
+export type DirectoryReviewEligibility = components['schemas']['DirectoryReviewEligibility'];
+export type DirectoryReview = components['schemas']['DirectoryReview'];
 
 export interface DirectorySearchQuery {
   q?: string;
@@ -52,6 +55,8 @@ export const Directory = {
     get<DirectoryTaxonomies>(`/directory/taxonomies?locale=${encodeURIComponent(locale)}`),
   profile: (slug: string) =>
     get<components['schemas']['PublicDirectoryProfile']>(`/directory/profiles/${encodeURIComponent(slug)}`),
+  profileReviews: (slug: string, cursor?: string, limit = 20) =>
+    get<DirectoryReviewPage>(`/directory/profiles/${encodeURIComponent(slug)}/reviews${queryString({ cursor, limit })}`),
   classified: (slug: string) =>
     get<components['schemas']['PublicClassified']>(`/directory/classifieds/${encodeURIComponent(slug)}`),
   event: (id: string) =>
@@ -78,6 +83,10 @@ export const Directory = {
     ),
   contact: (body: DirectoryContact, idempotencyKey?: string) =>
     post<Record<string, unknown>>('/directory/contact', body, idempotencyConfig(idempotencyKey)),
+  reviewEligibility: (authorProfileId?: string) =>
+    get<DirectoryReviewEligibility[]>(`/directory/review-eligibility${authorProfileId ? `?authorProfileId=${encodeURIComponent(authorProfileId)}` : ''}`),
+  createReview: (body: components['schemas']['DirectoryReviewCreate'], idempotencyKey?: string) =>
+    post<DirectoryReview>('/directory/reviews', body, idempotencyConfig(idempotencyKey)),
   invitations: () => get<DirectoryInvitation[]>('/directory/invitations'),
   invite: (body: components['schemas']['InvitationCreate'], idempotencyKey?: string) =>
     post<DirectoryInvitation>('/directory/invitations', body, idempotencyConfig(idempotencyKey)),
@@ -89,4 +98,6 @@ export const Directory = {
       body,
       idempotencyConfig(idempotencyKey),
     ),
+  report: (body: components['schemas']['ReportCreate'], idempotencyKey?: string) =>
+    post<Record<string, unknown>>('/directory/reports', body, idempotencyConfig(idempotencyKey)),
 };

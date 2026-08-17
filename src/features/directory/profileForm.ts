@@ -5,7 +5,7 @@ export const minorToMoney = (value: number | null | undefined, minorUnits = 2): 
 
 export const isSafeProfileUrl = (value: string): boolean => {
   const trimmed = value.trim();
-  if (/[\\\s\u0000-\u001f\u007f]/u.test(trimmed)) return false;
+  if ([...trimmed].some((character) => character === '\\' || /\s/u.test(character) || character.charCodeAt(0) === 127)) return false;
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return true;
   try {
     const parsed = new URL(trimmed);

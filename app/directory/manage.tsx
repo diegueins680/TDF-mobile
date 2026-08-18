@@ -1,10 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Directory, type DirectoryInvitation } from '../../src/api/directory';
+import {
+  Directory,
+  type DirectoryInvitation,
+  type DirectoryPortfolioItem,
+  type DirectoryProfileLink,
+  type DirectoryProfileUpsert,
+  type ManagedDirectoryProfile,
+} from '../../src/api/directory';
 import {
   classifiedFormError,
   moneyToMinor,
@@ -12,6 +19,7 @@ import {
   requirementLabel,
   taxonomyRequirements,
 } from '../../src/features/directory/classifiedForm';
+import { minorToMoney, profileFormError } from '../../src/features/directory/profileForm';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 
 const slugify = (value: string) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 120);
@@ -22,6 +30,7 @@ export default function DirectoryManageScreen() {
   const { colors } = useAppTheme();
   const [mode, setMode] = useState<'profiles' | 'classifieds' | 'invitations'>('profiles');
   const [showForm, setShowForm] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<ManagedDirectoryProfile>();
   const profiles = useQuery({ queryKey: ['directory-managed-profiles'], queryFn: Directory.managedProfiles });
   const classifieds = useQuery({ queryKey: ['directory-managed-classifieds'], queryFn: Directory.managedClassifieds });
   const invitations = useQuery({ queryKey: ['directory-invitations'], queryFn: Directory.invitations });
@@ -57,17 +66,18 @@ export default function DirectoryManageScreen() {
           <Segment label={`Anuncios (${classifieds.data?.length ?? 0})`} selected={mode === 'classifieds'} onPress={() => { setMode('classifieds'); setShowForm(false); }} />
           <Segment label={`Invitaciones (${invitations.data?.length ?? 0})`} selected={mode === 'invitations'} onPress={() => { setMode('invitations'); setShowForm(false); }} />
         </View>
-        {mode !== 'invitations' ? <Pressable accessibilityRole="button" style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }]} onPress={() => setShowForm((value) => !value)}>
+        {mode !== 'invitations' ? <Pressable accessibilityRole="button" style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }]} onPress={() => { if (!showForm && mode === 'profiles') setEditingProfile(undefined); setShowForm((value) => !value); }}>
           <Text style={{ color: colors.actionPrimaryContrast, fontWeight: '800' }}>{showForm ? 'Cerrar formulario' : mode === 'profiles' ? 'Crear otro perfil' : 'Crear clasificado'}</Text>
         </Pressable> : null}
-        {showForm && mode === 'profiles' ? <ProfileForm taxonomies={taxonomies.data!} onCreated={async () => { setShowForm(false); await refresh(); }} /> : null}
+        {showForm && mode === 'profiles' ? <ProfileForm profile={editingProfile} taxonomies={taxonomies.data!} onSaved={async () => { setShowForm(false); setEditingProfile(undefined); await refresh(); }} /> : null}
         {showForm && mode === 'classifieds' ? <ClassifiedForm taxonomies={taxonomies.data!} profiles={profiles.data ?? []} onCreated={async () => { setShowForm(false); await refresh(); }} /> : null}
         {mode === 'profiles' ? (profiles.data ?? []).map((profile) => (
           <View key={profile.id} style={[styles.card, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSubtle }]}>
             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{profile.name}</Text>
-            <Text style={{ color: colors.textSecondary }}>{profile.kind} · {profile.status}</Text>
+            <Text style={{ color: colors.textSecondary }}>{profile.kind} · {profile.status} · {profile.professionIds.length} profesiones · {profile.serviceAreas.length} áreas</Text>
             <View style={styles.row}>
               <Pressable onPress={() => router.push(`/directory/profile/${profile.slug}`)}><Text style={{ color: colors.actionPrimary }}>Vista pública</Text></Pressable>
+              {profile.capabilities.edit ? <Pressable onPress={() => { setEditingProfile(profile); setShowForm(true); }}><Text style={{ color: colors.actionPrimary }}>Editar</Text></Pressable> : null}
               {profile.status !== 'published' && profile.capabilities.publish ? <Pressable onPress={() => profileStatus.mutate({ id: profile.id, status: 'published' })}><Text style={{ color: colors.actionPrimary }}>Publicar</Text></Pressable> : null}
               {profile.status === 'published' ? <Pressable onPress={() => profileStatus.mutate({ id: profile.id, status: 'paused' })}><Text style={{ color: colors.actionPrimary }}>Pausar</Text></Pressable> : null}
             </View>
@@ -122,55 +132,186 @@ function InvitationCard({ invitation, onRefresh }: { invitation: DirectoryInvita
 
 type Taxonomies = Awaited<ReturnType<typeof Directory.taxonomies>>;
 
-function ProfileForm({ taxonomies, onCreated }: { taxonomies: Taxonomies; onCreated: () => void }) {
+type ProfessionFormDetail = { headline: string; yearsExperience: string; rateMin: string; rateMax: string; currencyId: string };
+type InstrumentLevel = NonNullable<NonNullable<DirectoryProfileUpsert['instrumentDetails']>[number]['proficiency']>;
+type LanguageLevel = NonNullable<NonNullable<DirectoryProfileUpsert['languages']>[number]['proficiency']>;
+
+function ProfileForm({ profile, taxonomies, onSaved }: { profile?: ManagedDirectoryProfile; taxonomies: Taxonomies; onSaved: () => void }) {
   const { colors } = useAppTheme();
   const [name, setName] = useState('');
+  const [kind, setKind] = useState<DirectoryProfileUpsert['profileKind']>('person');
   const [bio, setBio] = useState('');
-  const [cityId, setCityId] = useState(
-    taxonomies.cities.find((city) => city.code === 'quito-ec-p')?.id
-      ?? taxonomies.cities.find((city) => city.name.trim().toLocaleLowerCase().includes('quito'))?.id
-      ?? taxonomies.cities[0]?.id
-      ?? '',
-  );
+  const [experience, setExperience] = useState('');
+  const [credits, setCredits] = useState('');
+  const [equipment, setEquipment] = useState('');
+  const [availabilityStatus, setAvailabilityStatus] = useState<NonNullable<DirectoryProfileUpsert['availabilityStatus']>>('ask');
   const [professionIds, setProfessionIds] = useState<string[]>([]);
+  const [professionDetails, setProfessionDetails] = useState<Record<string, ProfessionFormDetail>>({});
   const [instrumentIds, setInstrumentIds] = useState<string[]>([]);
+  const [instrumentLevels, setInstrumentLevels] = useState<Record<string, InstrumentLevel>>({});
   const [genreIds, setGenreIds] = useState<string[]>([]);
   const [serviceOfferingIds, setServiceOfferingIds] = useState<string[]>([]);
+  const [languageIds, setLanguageIds] = useState<string[]>([]);
+  const [languageLevels, setLanguageLevels] = useState<Record<string, LanguageLevel>>({});
+  const [cityIds, setCityIds] = useState<string[]>([]);
+  const [primaryCityId, setPrimaryCityId] = useState('');
+  const [serviceRadiusKm, setServiceRadiusKm] = useState('');
   const [onsite, setOnsite] = useState(true);
   const [remote, setRemote] = useState(false);
   const [availableToTravel, setAvailableToTravel] = useState(false);
   const [travelRadiusKm, setTravelRadiusKm] = useState('');
-  const city = taxonomies.cities.find((item) => item.id === cityId);
+  const [rateMin, setRateMin] = useState('');
+  const [rateMax, setRateMax] = useState('');
+  const [currencyId, setCurrencyId] = useState('');
+  const [portfolio, setPortfolio] = useState<DirectoryPortfolioItem[]>([]);
+  const [links, setLinks] = useState<DirectoryProfileLink[]>([]);
+  const preservedServiceAreas = profile?.serviceAreas.filter((area) => !area.cityId) ?? [];
+  const preservedPrimaryArea = preservedServiceAreas.find((area) => area.primaryLocation);
+
+  useEffect(() => {
+    const quito = taxonomies.cities.find((city) => city.code === 'quito-ec-p')?.id
+      ?? taxonomies.cities.find((city) => city.name.trim().toLocaleLowerCase().includes('quito'))?.id
+      ?? taxonomies.cities[0]?.id ?? '';
+    const defaultCurrencyId = profile?.rates?.currencyId ?? taxonomies.currencies.find((item) => item.code === 'USD')?.id ?? taxonomies.currencies[0]?.id ?? '';
+    const minorUnits = taxonomies.currencies.find((item) => item.id === defaultCurrencyId)?.minorUnits ?? 2;
+    const profileCities = profile?.serviceAreas.flatMap((area) => area.cityId ? [area.cityId] : []) ?? [];
+    const primary = profile?.serviceAreas.find((area) => area.primaryLocation)?.cityId ?? profileCities[0] ?? (profile ? '' : quito);
+    setName(profile?.name ?? '');
+    setKind(profile?.kind ?? 'person');
+    setBio(profile?.bio ?? '');
+    setExperience(profile?.experienceSummary ?? '');
+    setCredits(profile?.creditsSummary ?? '');
+    setEquipment(profile?.equipmentSummary ?? '');
+    setAvailabilityStatus(profile?.availabilityStatus ?? 'ask');
+    setProfessionIds(profile?.professionIds ?? []);
+    setProfessionDetails(Object.fromEntries((profile?.professionDetails ?? []).map((detail) => {
+      const detailCurrencyId = detail.currencyId ?? defaultCurrencyId;
+      const detailMinorUnits = taxonomies.currencies.find((item) => item.id === detailCurrencyId)?.minorUnits ?? 2;
+      return [detail.professionId, { headline: detail.headline ?? '', yearsExperience: detail.yearsExperience === undefined ? '' : String(detail.yearsExperience), rateMin: minorToMoney(detail.rateMinMinor, detailMinorUnits), rateMax: minorToMoney(detail.rateMaxMinor, detailMinorUnits), currencyId: detailCurrencyId }];
+    })));
+    setInstrumentIds(profile?.instrumentIds ?? []);
+    setInstrumentLevels(Object.fromEntries((profile?.instrumentDetails ?? []).map((detail) => [detail.instrumentId, detail.proficiency ?? 'professional'])));
+    setGenreIds(profile?.genreIds ?? []);
+    setServiceOfferingIds(profile?.serviceOfferingIds ?? []);
+    setLanguageIds((profile?.languages ?? []).map((language) => language.languageId));
+    setLanguageLevels(Object.fromEntries((profile?.languages ?? []).map((language) => [language.languageId, language.proficiency ?? 'professional'])));
+    setCityIds(profile ? profileCities : primary ? [primary] : []);
+    setPrimaryCityId(primary);
+    setServiceRadiusKm(profile?.serviceAreas.find((area) => area.primaryLocation)?.serviceRadiusKm?.toString() ?? '');
+    setOnsite(profile?.onsite ?? true);
+    setRemote(profile?.remote ?? false);
+    setAvailableToTravel(profile?.availableToTravel ?? false);
+    setTravelRadiusKm(profile?.travelRadiusKm?.toString() ?? '');
+    setRateMin(minorToMoney(profile?.rates?.minMinor ?? undefined, minorUnits));
+    setRateMax(minorToMoney(profile?.rates?.maxMinor ?? undefined, minorUnits));
+    setCurrencyId(defaultCurrencyId);
+    setPortfolio(profile?.portfolio.map((item) => ({ ...item })) ?? []);
+    setLinks(profile?.links.map((item) => ({ ...item })) ?? []);
+  }, [profile, taxonomies]);
+
+  const selectProfessions = (ids: string[]) => {
+    setProfessionIds(ids);
+    setProfessionDetails((current) => Object.fromEntries(ids.map((id) => [id, current[id] ?? { headline: '', yearsExperience: '', rateMin: '', rateMax: '', currencyId }])));
+  };
+  const selectInstruments = (ids: string[]) => {
+    setInstrumentIds(ids);
+    setInstrumentLevels((current) => Object.fromEntries(ids.map((id) => [id, current[id] ?? 'professional'])));
+  };
+  const selectLanguages = (ids: string[]) => {
+    setLanguageIds(ids);
+    setLanguageLevels((current) => Object.fromEntries(ids.map((id) => [id, current[id] ?? 'professional'])));
+  };
+  const selectCities = (ids: string[]) => {
+    setCityIds(ids);
+    if (!ids.includes(primaryCityId)) setPrimaryCityId(ids[0] ?? '');
+  };
+  const currency = taxonomies.currencies.find((item) => item.id === currencyId);
+  const minMinor = moneyToMinor(rateMin, currency?.minorUnits);
+  const maxMinor = moneyToMinor(rateMax, currency?.minorUnits);
+  const validationError = profileFormError({ name, cityIds, primaryCityId, hasPreservedPrimaryArea: Boolean(preservedPrimaryArea), onsite, remote, availableToTravel, rateMin, rateMax, portfolio, links });
   const mutation = useMutation({
     mutationFn: () => {
-      if (!city?.countryId) throw new Error('Selecciona una ciudad válida.');
-      return Directory.createProfile({
-        profileKind: 'person', publicName: name.trim(), slug: slugify(name), bio: bio.trim() || undefined,
-        professionIds, instrumentIds, genreIds, serviceOfferingIds, countryId: city.countryId,
-        cityId, onsite, remote, availableToTravel,
-        travelRadiusKm: availableToTravel && travelRadiusKm ? Number(travelRadiusKm) : undefined,
+      if (validationError) throw new Error(validationError);
+      const primaryCity = taxonomies.cities.find((item) => item.id === primaryCityId);
+      const primaryArea = primaryCity?.countryId ? { countryId: primaryCity.countryId, cityId: primaryCity.id } : preservedPrimaryArea;
+      if (!primaryArea?.countryId) throw new Error('Selecciona una ciudad principal válida.');
+      const cityServiceAreas: NonNullable<DirectoryProfileUpsert['serviceAreas']> = cityIds.map((cityId) => {
+        const city = taxonomies.cities.find((item) => item.id === cityId);
+        if (!city?.countryId) throw new Error('Una ciudad seleccionada no tiene país.');
+        return { countryId: city.countryId, cityId, serviceRadiusKm: serviceRadiusKm ? Number(serviceRadiusKm) : undefined, primaryLocation: cityId === primaryCityId, onsite };
       });
+      const retainedServiceAreas: NonNullable<DirectoryProfileUpsert['serviceAreas']> = preservedServiceAreas.map((area) => ({
+        ...area,
+        primaryLocation: primaryCity ? false : area.primaryLocation,
+      }));
+      const body: DirectoryProfileUpsert = {
+        profileKind: kind, publicName: name.trim(), slug: profile?.slug ?? slugify(name), bio: bio.trim() || undefined,
+        experienceSummary: experience.trim(), creditsSummary: credits.trim(), equipmentSummary: equipment.trim(),
+        portfolio, links, availabilityStatus, rateMinMinor: minMinor, rateMaxMinor: maxMinor,
+        currencyId: minMinor !== undefined || maxMinor !== undefined ? currencyId : undefined,
+        clearRates: Boolean(profile?.rates && minMinor === undefined && maxMinor === undefined),
+        professionIds,
+        professionDetails: professionIds.map((professionId) => {
+          const detail = professionDetails[professionId] ?? { headline: '', yearsExperience: '', rateMin: '', rateMax: '', currencyId };
+          const detailCurrency = taxonomies.currencies.find((item) => item.id === detail.currencyId);
+          return { professionId, headline: detail.headline.trim() || undefined, yearsExperience: detail.yearsExperience ? Number(detail.yearsExperience) : undefined, rateMinMinor: moneyToMinor(detail.rateMin, detailCurrency?.minorUnits), rateMaxMinor: moneyToMinor(detail.rateMax, detailCurrency?.minorUnits), currencyId: detail.rateMin || detail.rateMax ? detail.currencyId : undefined };
+        }),
+        instrumentIds, instrumentDetails: instrumentIds.map((instrumentId) => ({ instrumentId, proficiency: instrumentLevels[instrumentId] ?? 'professional' })),
+        genreIds, serviceOfferingIds,
+        languages: languageIds.map((languageId) => ({ languageId, proficiency: languageLevels[languageId] ?? 'professional' })),
+        serviceAreas: [...cityServiceAreas, ...retainedServiceAreas],
+        countryId: primaryArea.countryId, cityId: primaryCity?.id, onsite, remote, availableToTravel,
+        travelRadiusKm: availableToTravel && travelRadiusKm ? Number(travelRadiusKm) : undefined,
+      };
+      return profile ? Directory.updateProfile(profile.id, body) : Directory.createProfile(body);
     },
-    onSuccess: onCreated,
-    onError: (error) => Alert.alert('No pudimos crear el perfil', error instanceof Error ? error.message : 'Inténtalo nuevamente.'),
+    onSuccess: onSaved,
+    onError: (error) => Alert.alert('No pudimos guardar el perfil', error instanceof Error ? error.message : 'Inténtalo nuevamente.'),
   });
   return (
     <View style={[styles.form, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSubtle }]}>
+      <Text accessibilityRole="header" style={[styles.cardTitle, { color: colors.textPrimary }]}>{profile ? 'Editar perfil público' : 'Nuevo perfil público'}</Text>
       <TextInput accessibilityLabel="Nombre público" placeholder="Nombre público" placeholderTextColor={colors.textSecondary} value={name} onChangeText={setName} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} />
+      <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Tipo de perfil</Text>
+      <View style={styles.chips}>{([['person','Persona'],['artist','Artista'],['band','Banda'],['project','Proyecto'],['organization','Organización'],['company','Empresa'],['venue','Venue'],['studio','Estudio'],['agency','Agencia'],['label','Sello'],['distributor','Distribuidora'],['school','Escuela']] as const).map(([value,label]) => <Segment key={value} label={label} selected={kind === value} onPress={() => setKind(value)} />)}</View>
       <TextInput accessibilityLabel="Biografía" placeholder="Biografía" placeholderTextColor={colors.textSecondary} multiline value={bio} onChangeText={setBio} style={[styles.input, styles.multiline, { color: colors.textPrimary, borderColor: colors.border }]} />
-      <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Profesiones (puedes elegir varias)</Text>
-      <View style={styles.chips}>{taxonomies.professions.map((profession) => <Segment key={profession.id} label={profession.name} selected={professionIds.includes(profession.id)} onPress={() => setProfessionIds((current) => current.includes(profession.id) ? current.filter((id) => id !== profession.id) : [...current, profession.id])} />)}</View>
-      <MultiTaxonomy label="Instrumentos" items={taxonomies.instruments} values={instrumentIds} onChange={setInstrumentIds} />
+      <TextInput accessibilityLabel="Experiencia" placeholder="Experiencia" placeholderTextColor={colors.textSecondary} multiline value={experience} onChangeText={setExperience} style={[styles.input, styles.multiline, { color: colors.textPrimary, borderColor: colors.border }]} />
+      <TextInput accessibilityLabel="Créditos y discografía" placeholder="Créditos y discografía" placeholderTextColor={colors.textSecondary} multiline value={credits} onChangeText={setCredits} style={[styles.input, styles.multiline, { color: colors.textPrimary, borderColor: colors.border }]} />
+      <TextInput accessibilityLabel="Equipos disponibles" placeholder="Equipos disponibles" placeholderTextColor={colors.textSecondary} multiline value={equipment} onChangeText={setEquipment} style={[styles.input, styles.multiline, { color: colors.textPrimary, borderColor: colors.border }]} />
+      <MultiTaxonomy label="Profesiones (puedes elegir varias)" items={taxonomies.professions} values={professionIds} onChange={selectProfessions} />
+      {professionIds.map((id) => {
+        const detail = professionDetails[id] ?? { headline: '', yearsExperience: '', rateMin: '', rateMax: '', currencyId };
+        const update = (value: Partial<ProfessionFormDetail>) => setProfessionDetails((current) => ({ ...current, [id]: { ...detail, ...value } }));
+        return <View key={id} style={[styles.subform, { borderColor: colors.borderSubtle }]}><Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>{taxonomies.professions.find((item) => item.id === id)?.name}</Text><TextInput accessibilityLabel="Descripción de este rol" placeholder="Descripción de este rol" placeholderTextColor={colors.textSecondary} value={detail.headline} onChangeText={(value) => update({ headline: value })} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} /><TextInput accessibilityLabel="Años de experiencia" placeholder="Años de experiencia" placeholderTextColor={colors.textSecondary} keyboardType="decimal-pad" value={detail.yearsExperience} onChangeText={(value) => update({ yearsExperience: value })} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} /><TextInput accessibilityLabel="Tarifa mínima para este rol" placeholder="Tarifa mínima" placeholderTextColor={colors.textSecondary} keyboardType="decimal-pad" value={detail.rateMin} onChangeText={(value) => update({ rateMin: value })} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} /><TextInput accessibilityLabel="Tarifa máxima para este rol" placeholder="Tarifa máxima" placeholderTextColor={colors.textSecondary} keyboardType="decimal-pad" value={detail.rateMax} onChangeText={(value) => update({ rateMax: value })} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} /><View style={styles.chips}>{taxonomies.currencies.map((item) => <Segment key={item.id} label={item.code} selected={detail.currencyId === item.id} onPress={() => update({ currencyId: item.id })} />)}</View></View>;
+      })}
+      <MultiTaxonomy label="Instrumentos" items={taxonomies.instruments} values={instrumentIds} onChange={selectInstruments} />
+      {instrumentIds.map((id) => <View key={id} style={styles.fieldGroup}><Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>{taxonomies.instruments.find((item) => item.id === id)?.name}</Text><View style={styles.chips}>{[['beginner','Principiante'],['intermediate','Intermedio'],['advanced','Avanzado'],['professional','Profesional'],['virtuoso','Virtuoso']].map(([value,label]) => <Segment key={value} label={label} selected={(instrumentLevels[id] ?? 'professional') === value} onPress={() => setInstrumentLevels((current) => ({ ...current, [id]: value as InstrumentLevel }))} />)}</View></View>)}
       <MultiTaxonomy label="Géneros" items={taxonomies.genres} values={genreIds} onChange={setGenreIds} />
       <MultiTaxonomy label="Servicios" items={taxonomies.serviceOfferings} values={serviceOfferingIds} onChange={setServiceOfferingIds} />
+      <MultiTaxonomy label="Idiomas" items={taxonomies.languages} values={languageIds} onChange={selectLanguages} />
+      {languageIds.map((id) => <View key={id} style={styles.fieldGroup}><Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>{taxonomies.languages.find((item) => item.id === id)?.name}</Text><View style={styles.chips}>{[['basic','Básico'],['conversational','Conversacional'],['professional','Profesional'],['native','Nativo']].map(([value,label]) => <Segment key={value} label={label} selected={(languageLevels[id] ?? 'professional') === value} onPress={() => setLanguageLevels((current) => ({ ...current, [id]: value as LanguageLevel }))} />)}</View></View>)}
+      <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Disponibilidad</Text>
+      <View style={styles.chips}>{[['available','Disponible'],['limited','Limitada'],['unavailable','No disponible'],['ask','Consultar']].map(([value,label]) => <Segment key={value} label={label} selected={availabilityStatus === value} onPress={() => setAvailabilityStatus(value as typeof availabilityStatus)} />)}</View>
+      <MultiTaxonomy label="Ciudades y áreas de servicio" items={taxonomies.cities} values={cityIds} onChange={selectCities} />
+      {preservedServiceAreas.length > 0 ? <Text style={{ color: colors.textSecondary }}>Las áreas regionales o nacionales existentes que este selector todavía no edita se conservarán al guardar.</Text> : null}
       <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Ciudad principal</Text>
-      <View style={styles.chips}>{taxonomies.cities.map((cityOption) => <Segment key={cityOption.id} label={cityOption.name} selected={cityOption.id === cityId} onPress={() => setCityId(cityOption.id)} />)}</View>
+      <View style={styles.chips}>{cityIds.map((id) => <Segment key={id} label={taxonomies.cities.find((item) => item.id === id)?.name ?? id} selected={primaryCityId === id} onPress={() => setPrimaryCityId(id)} />)}</View>
+      <TextInput accessibilityLabel="Radio de servicio presencial en kilómetros" placeholder="Radio de servicio presencial (km)" placeholderTextColor={colors.textSecondary} keyboardType="decimal-pad" value={serviceRadiusKm} onChangeText={setServiceRadiusKm} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} />
       <BooleanField label="Trabajo presencial" value={onsite} onChange={setOnsite} />
       <BooleanField label="También trabajo remoto" value={remote} onChange={setRemote} />
       <BooleanField label="Disponible para viajar" value={availableToTravel} onChange={setAvailableToTravel} />
       {availableToTravel ? <TextInput accessibilityLabel="Radio de viaje en kilómetros" placeholder="Radio de viaje (km)" placeholderTextColor={colors.textSecondary} keyboardType="decimal-pad" value={travelRadiusKm} onChangeText={setTravelRadiusKm} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} /> : null}
-      {!onsite && !remote && !availableToTravel ? <Text style={{ color: colors.danger }}>Selecciona al menos una modalidad.</Text> : null}
-      <Pressable accessibilityRole="button" disabled={!name.trim() || !cityId || (!onsite && !remote && !availableToTravel) || mutation.isPending} style={[styles.primaryButton, { backgroundColor: colors.actionPrimary, opacity: !name.trim() || !cityId || (!onsite && !remote && !availableToTravel) || mutation.isPending ? 0.6 : 1 }]} onPress={() => mutation.mutate()}><Text style={{ color: colors.actionPrimaryContrast, fontWeight: '800' }}>Guardar borrador</Text></Pressable>
+      <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Tarifa general</Text>
+      <View style={styles.chips}>{taxonomies.currencies.map((item) => <Segment key={item.id} label={[item.code, item.symbol].filter(Boolean).join(' ')} selected={currencyId === item.id} onPress={() => setCurrencyId(item.id)} />)}</View>
+      <TextInput accessibilityLabel="Tarifa general mínima" placeholder="Tarifa mínima" placeholderTextColor={colors.textSecondary} keyboardType="decimal-pad" value={rateMin} onChangeText={setRateMin} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} />
+      <TextInput accessibilityLabel="Tarifa general máxima" placeholder="Tarifa máxima" placeholderTextColor={colors.textSecondary} keyboardType="decimal-pad" value={rateMax} onChangeText={setRateMax} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} />
+      <View style={styles.row}><Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Portafolio</Text><Pressable accessibilityRole="button" onPress={() => setPortfolio((current) => [...current, { itemType: 'other', title: '', url: '' }])}><Text style={{ color: colors.actionPrimary, fontWeight: '800' }}>+ Agregar</Text></Pressable></View>
+      {portfolio.map((item, index) => <View key={index} style={[styles.subform, { borderColor: colors.borderSubtle }]}><View style={styles.chips}>{['audio','video','image','release','credit','document','other'].map((value) => <Segment key={value} label={value} selected={item.itemType === value} onPress={() => setPortfolio((current) => current.map((entry, i) => i === index ? { ...entry, itemType: value as DirectoryPortfolioItem['itemType'] } : entry))} />)}</View><TextInput accessibilityLabel={'Título de portafolio ' + (index + 1)} placeholder="Título" placeholderTextColor={colors.textSecondary} value={item.title} onChangeText={(value) => setPortfolio((current) => current.map((entry, i) => i === index ? { ...entry, title: value } : entry))} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} /><TextInput accessibilityLabel={'URL de portafolio ' + (index + 1)} placeholder="https://…" placeholderTextColor={colors.textSecondary} autoCapitalize="none" value={item.url} onChangeText={(value) => setPortfolio((current) => current.map((entry, i) => i === index ? { ...entry, url: value } : entry))} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} /><Pressable accessibilityRole="button" onPress={() => setPortfolio((current) => current.filter((_, i) => i !== index))}><Text style={{ color: colors.danger }}>Quitar</Text></Pressable></View>)}
+      <View style={styles.row}><Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Enlaces y redes</Text><Pressable accessibilityRole="button" onPress={() => setLinks((current) => [...current, { label: '', url: '' }])}><Text style={{ color: colors.actionPrimary, fontWeight: '800' }}>+ Agregar</Text></Pressable></View>
+      {links.map((item, index) => <View key={index} style={[styles.subform, { borderColor: colors.borderSubtle }]}><TextInput accessibilityLabel={'Etiqueta de enlace ' + (index + 1)} placeholder="Etiqueta" placeholderTextColor={colors.textSecondary} value={item.label} onChangeText={(value) => setLinks((current) => current.map((entry, i) => i === index ? { ...entry, label: value } : entry))} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} /><TextInput accessibilityLabel={'URL de enlace ' + (index + 1)} placeholder="https://…" placeholderTextColor={colors.textSecondary} autoCapitalize="none" value={item.url} onChangeText={(value) => setLinks((current) => current.map((entry, i) => i === index ? { ...entry, url: value } : entry))} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} /><Pressable accessibilityRole="button" onPress={() => setLinks((current) => current.filter((_, i) => i !== index))}><Text style={{ color: colors.danger }}>Quitar</Text></Pressable></View>)}
+      <Text style={{ color: colors.textSecondary }}>Las direcciones exactas y coordenadas residenciales no se solicitan ni aparecen en los DTO públicos.</Text>
+      {validationError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{validationError}</Text> : null}
+      <Pressable accessibilityRole="button" disabled={Boolean(validationError) || mutation.isPending} style={[styles.primaryButton, { backgroundColor: colors.actionPrimary, opacity: validationError || mutation.isPending ? 0.6 : 1 }]} onPress={() => mutation.mutate()}><Text style={{ color: colors.actionPrimaryContrast, fontWeight: '800' }}>{profile ? 'Guardar cambios' : 'Guardar borrador'}</Text></Pressable>
     </View>
   );
 }
@@ -274,7 +415,7 @@ function MultiTaxonomy({ label, items, values, onChange }: { label: string; item
 
 function BooleanField({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
   const { colors } = useAppTheme();
-  return <View style={styles.row}><Text style={{ color: colors.textPrimary }}>{label}</Text><Switch value={value} onValueChange={onChange} /></View>;
+  return <View style={styles.row}><Text style={{ color: colors.textPrimary }}>{label}</Text><Switch accessibilityLabel={label} value={value} onValueChange={onChange} /></View>;
 }
 
 function Segment({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
@@ -288,6 +429,6 @@ const styles = StyleSheet.create({
   notice: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 }, row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12 },
   primaryButton: { minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 10 }, cardTitle: { fontSize: 19, fontWeight: '800' },
-  form: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 14 }, input: { minHeight: 48, borderWidth: 1, borderRadius: 12, padding: 12 }, multiline: { minHeight: 120, textAlignVertical: 'top' },
+  form: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 14 }, subform: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 10 }, input: { minHeight: 48, borderWidth: 1, borderRadius: 12, padding: 12 }, multiline: { minHeight: 120, textAlignVertical: 'top' },
   fieldLabel: { fontWeight: '800' }, fieldGroup: { gap: 8 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, segment: { minHeight: 42, borderWidth: 1, borderRadius: 22, paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center' },
 });

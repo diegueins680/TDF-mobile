@@ -215,12 +215,12 @@ export default function CreateEventScreen() {
 
   const handleCreateEvent = useCallback(async () => {
     const parsedStart = parseDateInput(startInput);
-    const parsedEnd = parseDateInput(endInput);
+    const parsedEnd = endInput.trim() ? parseDateInput(endInput) : null;
 
-    if (!parsedStart || !parsedEnd) return;
+    if (!parsedStart || (endInput.trim() && !parsedEnd)) return;
 
     setStartTime(parsedStart);
-    setEndTime(parsedEnd);
+    if (parsedEnd) setEndTime(parsedEnd);
 
     if (!title.trim()) {
       Alert.alert('Validación', 'El nombre del evento es obligatorio');
@@ -243,7 +243,7 @@ export default function CreateEventScreen() {
       Alert.alert('Validation', 'Please select at least one artist');
       return;
     }
-    if (parsedStart >= parsedEnd) {
+    if (parsedEnd && parsedStart >= parsedEnd) {
       Alert.alert('Validation', 'End time must be after start time');
       return;
     }
@@ -264,7 +264,7 @@ export default function CreateEventScreen() {
       title: title.trim(),
       description: description.trim(),
       startTime: parsedStart.toISOString(),
-      endTime: parsedEnd.toISOString(),
+      endTime: parsedEnd?.toISOString() ?? null,
       venueId,
       artistIds,
       ticketPrice: parsedPrice,
@@ -429,12 +429,13 @@ export default function CreateEventScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Hora de fin *</Text>
+          <Text style={styles.label}>Hora de fin (opcional)</Text>
           <TextInput
             placeholder="YYYY-MM-DDTHH:mm:ssZ"
             value={endInput}
             onChangeText={setEndInput}
             onBlur={() => {
+              if (!endInput.trim()) return;
               const parsed = parseDateInput(endInput);
               if (parsed) {
                 setEndTime(parsed);
@@ -465,6 +466,12 @@ export default function CreateEventScreen() {
               }}
             >
               <Text style={styles.smallButtonText}>+1h desde la actual</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() => setEndInput('')}
+            >
+              <Text style={styles.smallButtonText}>Fin por confirmar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -672,7 +679,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 24 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginTop: 16, marginBottom: 12, textTransform: 'uppercase' },
   field: { marginBottom: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   label: { fontSize: 12, fontWeight: '600', color: '#666', marginBottom: 6 },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#1a1a1a' },
   inputMultiline: { height: 80, textAlignVertical: 'top', paddingVertical: 10 },

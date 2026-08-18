@@ -4659,7 +4659,7 @@ export interface components {
             /** Format: date-time */
             startsAt: string;
             /** Format: date-time */
-            endsAt: string;
+            endsAt: string | null;
             timezone?: string | null;
             venueName?: string | null;
             venueAddress?: string | null;

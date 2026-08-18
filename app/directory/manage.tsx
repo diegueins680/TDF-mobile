@@ -415,7 +415,7 @@ function MultiTaxonomy({ label, items, values, onChange }: { label: string; item
 
 function BooleanField({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
   const { colors } = useAppTheme();
-  return <View style={styles.row}><Text style={{ color: colors.textPrimary }}>{label}</Text><Switch value={value} onValueChange={onChange} /></View>;
+  return <View style={styles.row}><Text style={{ color: colors.textPrimary }}>{label}</Text><Switch accessibilityLabel={label} value={value} onValueChange={onChange} /></View>;
 }
 
 function Segment({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {

@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Platform } from 'react-native';
 
 import { AuthProvider, useAuth } from '../src/providers/AuthProvider';
 import { get, getAuthToken, setAuthToken } from '../src/api/client';
@@ -83,6 +84,7 @@ function renderAuthProvider(queryClient = createTestQueryClient()) {
 
 describe('AuthProvider', () => {
   const getLegacyItemMock = jest.mocked(AsyncStorage.getItem);
+  const setLegacyItemMock = jest.mocked(AsyncStorage.setItem);
   const removeLegacyItemMock = jest.mocked(AsyncStorage.removeItem);
 
   const getSecureItemMock = jest.mocked(SecureStore.getItemAsync);
@@ -92,6 +94,7 @@ describe('AuthProvider', () => {
   const getMock = jest.mocked(get);
   const getAuthTokenMock = jest.mocked(getAuthToken);
   const setAuthTokenMock = jest.mocked(setAuthToken);
+  const originalPlatformOS = Platform.OS;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -103,6 +106,26 @@ describe('AuthProvider', () => {
     getLegacyItemMock.mockResolvedValue(null);
     removeLegacyItemMock.mockResolvedValue();
     getMock.mockResolvedValue({ partyId: 10 } as never);
+  });
+
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+  });
+
+  it('hydrates and persists the legacy token directly on web without invoking secure storage', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+    getLegacyItemMock.mockResolvedValueOnce('web-token');
+    getMock.mockResolvedValueOnce({ partyId: 71 } as never);
+
+    const { result } = renderAuthProvider();
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(getSecureItemMock).not.toHaveBeenCalled();
+    expect(setSecureItemMock).not.toHaveBeenCalled();
+    expect(setLegacyItemMock).toHaveBeenCalledWith('tdf-auth-token', 'Bearer web-token');
+    expect(result.current.token).toBe('Bearer web-token');
+    expect(result.current.partyId).toBe('71');
   });
 
   it('normalizes blank tokens to null and clears persisted storage', async () => {

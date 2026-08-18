@@ -50,7 +50,7 @@ type BackendEventDTO = {
   eventTitle: string;
   eventDescription?: string | null;
   eventStart: string;
-  eventEnd: string;
+  eventEnd?: string | null;
   eventVenueId?: string | null;
   eventPriceCents?: number | null;
   eventCurrency?: string | null;
@@ -839,7 +839,7 @@ function mapBackendEventToFrontend(
     title: e.eventTitle,
     description: e.eventDescription || null,
     startTime: e.eventStart, // ISO string from backend
-    endTime: e.eventEnd,     // ISO string from backend
+    endTime: e.eventEnd ?? null,
     venueId: normalizeVenueId(e.eventVenueId),
     venue: venueOverride,
     artistIds: artists.map((a) => a.id),
@@ -923,7 +923,7 @@ function mapFrontendEventToBackend(body: SocialEventWrite) {
     eventTitle: body.title,
     eventDescription: body.description,
     eventStart: body.startTime,
-    eventEnd: body.endTime,
+    eventEnd: body.endTime ?? null,
     eventVenueId: normalizeBackendVenueId(body.venueId),
     eventPriceCents: toBackendTicketPriceCents(body.ticketPrice),
     ...(currency ? { eventCurrency: currency } : {}),
@@ -975,12 +975,16 @@ function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): Soci
       : patch.currency ?? existing.currency ?? undefined
     : existing.currency ?? undefined;
 
+  const mergedEndTime = hasOwn(patch, 'endTime')
+    ? patch.endTime ?? null
+    : existing.endTime;
+
   return {
     eventTypeId: patch.eventTypeId ?? existing.eventTypeId,
     title: patch.title ?? existing.title,
     description: mergedDescription,
     startTime: patch.startTime ?? existing.startTime,
-    endTime: patch.endTime ?? existing.endTime,
+    endTime: mergedEndTime,
     venueId: mergedVenueId,
     artistIds: patch.artistIds ?? existing.artistIds,
     ticketPrice: mergedTicketPrice,

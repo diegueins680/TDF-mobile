@@ -4,6 +4,7 @@ import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createBooking, listBookings } from '../../src/api/bookings';
 import { loadServiceOfferingSnapshot } from '../../src/lib/serviceCatalogSnapshot';
+import { ExperienceReviews } from '../../src/components/reviews/ExperienceReviews';
 import type { Booking } from '../../src/types';
 
 export default function Bookings() {
@@ -94,6 +95,15 @@ export default function Bookings() {
         keyExtractor={keyExtractor}
         ItemSeparatorComponent={Separator}
         renderItem={renderItem}
+        ListHeaderComponent={defaultService ? (
+          <View style={{ marginBottom: 16 }}>
+            <ExperienceReviews
+              targetKind="service_offering"
+              targetId={defaultService.scId}
+              title={`Reseñas de ${defaultService.scName}`}
+            />
+          </View>
+        ) : null}
         ListEmptyComponent={renderEmpty}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={12}

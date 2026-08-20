@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 import { API_BASE } from '../lib/api';
 
 const BEARER_PREFIX = /^bearer\b/i;
@@ -131,8 +131,8 @@ export async function get<T>(path: string): Promise<T> {
   return requestData(http.get<T>(path));
 }
 
-export async function post<T>(path: string, body: unknown): Promise<T> {
-  return requestData(http.post<T>(path, body));
+export async function post<T>(path: string, body: unknown, config?: AxiosRequestConfig): Promise<T> {
+  return requestData(http.post<T>(path, body, config));
 }
 
 export async function put<T>(path: string, body: unknown): Promise<T> {

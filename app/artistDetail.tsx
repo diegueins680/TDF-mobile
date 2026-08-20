@@ -12,6 +12,8 @@ import { Events } from '../src/api/events';
 import { ArtistDetailSkeleton } from '../src/components/skeletons/ArtistCardSkeleton';
 import { resolvePartyId } from '../src/lib/identity';
 import { normalizeRouteParam } from '../src/lib/routeParams';
+import { Reviews } from '../src/api/reviews';
+import { DirectoryProfileReviews } from '../src/components/reviews/DirectoryProfileReviews';
 
 export default function ArtistDetailScreen() {
   const { colors } = useAppTheme();
@@ -37,6 +39,12 @@ export default function ArtistDetailScreen() {
   });
 
   const artist = artistQuery.data;
+  const directoryProfileQuery = useQuery({
+    queryKey: ['directory-profile-by-party', artist?.partyId],
+    queryFn: () => Reviews.getDirectoryProfileByParty(String(artist?.partyId)),
+    enabled: artist?.partyId != null,
+    retry: false,
+  });
   const socialRows = useMemo(() => {
     if (!artist) return [];
     const links = artist.socialLinks || {};
@@ -74,6 +82,7 @@ export default function ArtistDetailScreen() {
         artistQuery.refetch(),
         eventsQuery.refetch(),
         followersQuery.refetch(),
+        artist.partyId != null ? directoryProfileQuery.refetch() : Promise.resolve(),
       ]);
     } finally {
       setRefreshing(false);
@@ -217,6 +226,13 @@ export default function ArtistDetailScreen() {
         {upcomingEvents.length === 0 && !eventsQuery.isLoading && (
           <Text style={[styles.noEventsText, { color: colors.textSecondary }]}>No hay próximos eventos</Text>
         )}
+
+        {directoryProfileQuery.data ? (
+          <DirectoryProfileReviews
+            profileId={directoryProfileQuery.data.id}
+            slug={directoryProfileQuery.data.slug}
+          />
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

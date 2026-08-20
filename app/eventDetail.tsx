@@ -26,6 +26,7 @@ import { uploadMedia } from '../src/api/upload';
 import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard';
 import { EventMomentCard } from '../src/components/EventMomentCard';
 import { TicketPurchaseCard } from '../src/components/tickets/TicketPurchaseCard';
+import { ExperienceReviews } from '../src/components/reviews/ExperienceReviews';
 import { formatTicketMoney, isEventTicketPurchaseEligible } from '../src/lib/tickets';
 import {
   buildMomentActor,
@@ -950,6 +951,12 @@ export default function EventDetailScreen() {
                 <Text style={styles.inviteButtonText}>Invitar amistades</Text>
               </TouchableOpacity>
             </View>
+
+            <ExperienceReviews
+              targetKind="event"
+              targetId={String(event.id)}
+              title="Reseñas del evento"
+            />
           </>
         ) : activeTab === 'moments' ? (
           <>

@@ -36,7 +36,6 @@ import {
 import { resolvePartyId } from '../lib/identity';
 import { markFirstValueCompleted } from '../lib/onboardingIntent';
 import { markExperimentExposedOnce } from '../lib/firstRunFlags';
-import { MOBILE_LANDING_ROUTE } from '../navigation/mobileSurface';
 import { useAuth } from '../providers/AuthProvider';
 import { useFirstRun } from '../providers/FirstRunProvider';
 import { useUserSettings } from '../providers/UserSettingsProvider';
@@ -270,7 +269,7 @@ export function NewUserOnboardingGate({ children }: Props) {
     setTreatmentExited(true);
     analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
     void completeOnboarding();
-    router.replace(MOBILE_LANDING_ROUTE);
+    router.replace('/(tabs)/events');
   }, [analytics, completeOnboarding, router]);
 
   if (!gateEngaged) {

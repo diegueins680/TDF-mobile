@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Redirect, Stack, type Href, usePathname, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -13,6 +13,7 @@ import { FeatureAccessNotice } from '../src/components/FeatureAccessNotice';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { NetworkBanner } from '../src/providers/NetworkProvider';
 import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
+import { directoryDeepLinkTarget } from '../src/navigation/deepLinks';
 
 function RootNavigator() {
   const { colorScheme } = useAppTheme();
@@ -44,7 +45,7 @@ function RootNavigator() {
   );
 }
 
-function handleDeepLink(url: string, router: ReturnType<typeof useRouter>) {
+function handleDeepLink(url: string, router: ReturnType<typeof useRouter>, currentPathname: string) {
   try {
     const { path } = Linking.parse(url);
     if (!path) return;
@@ -57,6 +58,9 @@ function handleDeepLink(url: string, router: ReturnType<typeof useRouter>) {
       router.push(`/artistDetail?artistId=${artistId}`);
     } else if (path === 'stripe-redirect') {
       router.push('/tickets');
+    } else {
+      const target = directoryDeepLinkTarget(path, currentPathname);
+      if (target) router.push(target as Href);
     }
     // Add more routes as needed
   } catch (e) {
@@ -72,6 +76,7 @@ function MobileRouteGuard({ children }: { children: ReactNode }) {
   const { locale } = useUserSettings();
   const { colors } = useAppTheme();
   const routePath = segments.length > 0 ? `/${segments.join('/')}` : '/';
+  const routePathRef = useRef(routePath);
   const features = useMemo(() => getFeaturesByMobilePath(routePath), [routePath]);
   const decisions = useMemo(() => features.map((feature) => evaluateFeatureAccess(feature, {
     authenticated: Boolean(token?.trim()), roles, modules, featureFlags,
@@ -86,15 +91,19 @@ function MobileRouteGuard({ children }: { children: ReactNode }) {
   const forbidden = !loading && !technical && !unresolved && Boolean(token?.trim()) && !allowed;
 
   useEffect(() => {
+    routePathRef.current = routePath;
+  }, [routePath]);
+
+  useEffect(() => {
     const handleInitialUrl = async () => {
       const initialUrl = await Linking.getInitialURL();
       if (initialUrl) {
-        handleDeepLink(initialUrl, router);
+        handleDeepLink(initialUrl, router, routePathRef.current);
       }
     };
 
     const subscription = Linking.addEventListener('url', (event) => {
-      handleDeepLink(event.url, router);
+      handleDeepLink(event.url, router, routePathRef.current);
     });
 
     handleInitialUrl();

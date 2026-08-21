@@ -171,7 +171,7 @@ describe('Social API update merge behavior', () => {
       eventTitle: 'Original title',
       eventDescription: null,
       eventStart: '2026-04-01T10:00:00.000Z',
-      eventEnd: '2026-04-01T12:00:00.000Z',
+      eventEnd: null,
       eventVenueId: null,
       eventPriceCents: null,
       eventTicketUrl: null,
@@ -182,6 +182,7 @@ describe('Social API update merge behavior', () => {
 
     await Events.update(9, {
       description: null,
+      endTime: null,
       venueId: null,
       ticketPrice: null,
       ticketUrl: null,
@@ -190,6 +191,7 @@ describe('Social API update merge behavior', () => {
 
     const payload = put.mock.calls[0]?.[1];
     expect(payload.eventDescription).toBeUndefined();
+    expect(payload.eventEnd).toBeNull();
     expect(payload.eventVenueId).toBeNull();
     expect(payload.eventPriceCents).toBeNull();
     expect(payload.eventTicketUrl).toBeNull();

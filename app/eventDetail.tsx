@@ -753,7 +753,7 @@ export default function EventDetailScreen() {
   }
 
   const startDate = new Date(event.startTime);
-  const endDate = new Date(event.endTime);
+  const endDate = event.endTime ? new Date(event.endTime) : null;
   const rsvpCount = rsvpQuery.data ? countGoingRsvps(rsvpQuery.data) : (event.rsvpCount ?? 0);
   const invitations = invitationsQuery.data ?? [];
   const isSaved = savedEventIdsQuery.data?.includes(String(event.id)) ?? false;
@@ -864,8 +864,9 @@ export default function EventDetailScreen() {
                 {startDate.toLocaleTimeString(locale, { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}
               </Text>
               <Text style={styles.text}>
-                Hasta el {endDate.toLocaleDateString(locale, { timeZone: timezone })} {' '}
-                {endDate.toLocaleTimeString(locale, { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}
+                {endDate
+                  ? `Hasta el ${endDate.toLocaleDateString(locale, { timeZone: timezone })} ${endDate.toLocaleTimeString(locale, { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}`
+                  : 'Fin por confirmar'}
               </Text>
             </View>
 

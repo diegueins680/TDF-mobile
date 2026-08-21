@@ -75,4 +75,11 @@ describe('EventCard ticket discovery', () => {
     render(<EventCard event={{ ...event, ticketPrice: undefined }} />);
     expect(screen.getByRole('button', { name: 'Ver entradas para TDF Showcase' })).toBeTruthy();
   });
+
+  it('renders an event whose official end is not confirmed', () => {
+    render(<EventCard event={{ ...event, endTime: null }} />);
+
+    expect(screen.getByText('TDF Showcase')).toBeTruthy();
+    expect(screen.queryByText(/Invalid Date/i)).toBeNull();
+  });
 });

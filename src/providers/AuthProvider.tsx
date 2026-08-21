@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { setAuthToken, getAuthToken, get, normalizeAuthToken } from '../api/client';
 
@@ -97,6 +97,8 @@ const normalizeSessionSnapshot = (
 });
 
 const readSecureToken = async (): Promise<string | null> => {
+  if (Platform.OS === 'web') return null;
+
   try {
     return await SecureStore.getItemAsync(SECURE_STORAGE_KEY);
   } catch {
@@ -177,6 +179,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const queued = persistQueueRef.current
       .catch(() => undefined)
       .then(async () => {
+        if (Platform.OS === 'web') {
+          try {
+            if (next) {
+              await AsyncStorage.setItem(LEGACY_STORAGE_KEY, next);
+            } else {
+              await clearLegacyToken();
+            }
+          } catch {
+            // Keep the in-memory auth state usable when browser storage is unavailable.
+          }
+          return;
+        }
+
         const securePersisted = await persistSecureToken(next);
 
         if (!options?.preserveLegacyOnFailure || securePersisted || next === null) {

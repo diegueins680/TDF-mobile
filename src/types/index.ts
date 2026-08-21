@@ -215,7 +215,7 @@ export type SocialEvent = {
   title: string;
   description?: string | null;
   startTime: string; // ISO 8601
-  endTime: string; // ISO 8601
+  endTime: string | null; // ISO 8601 when an official end is confirmed
   venueId: ID;
   venue?: Venue;
   artistIds: ID[];
@@ -266,7 +266,7 @@ export type SocialEventCreate = {
   title: string;
   description?: string;
   startTime: string;
-  endTime: string;
+  endTime?: string | null;
   venueId: ID;
   artistIds: ID[];
   ticketPrice?: number;
@@ -282,7 +282,7 @@ export type SocialEventUpdate = {
   title?: string;
   description?: string | null;
   startTime?: string;
-  endTime?: string;
+  endTime?: string | null;
   venueId?: ID | null;
   artistIds?: ID[];
   ticketPrice?: number | null;

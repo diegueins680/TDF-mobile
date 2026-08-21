@@ -6,20 +6,20 @@ import {
 } from '../src/navigation/mobileSurface';
 
 describe('mobile new-user surface', () => {
-  it('lands new users on events', () => {
-    expect(MOBILE_LANDING_ROUTE).toBe('/(tabs)/events');
+  it('lands new users on the public music directory', () => {
+    expect(MOBILE_LANDING_ROUTE).toBe('/(tabs)/directory');
   });
 
-  it('keeps the visible tab bar focused on community plus two-interaction discovery', () => {
+  it('keeps the directory as the first visible tab', () => {
     expect(NEW_USER_VISIBLE_TABS.map((tab) => tab.name)).toEqual([
-      'events',
+      'directory',
       'social',
       'more',
       'create',
       'profile',
     ]);
     expect(NEW_USER_VISIBLE_TABS.map((tab) => tab.title)).toEqual([
-      'Eventos',
+      'Directorio',
       'Seguir',
       'Explorar',
       'Crear',
@@ -29,19 +29,17 @@ describe('mobile new-user surface', () => {
 
   it('keeps internal ops modules hidden from the mobile tab bar', () => {
     expect(HIDDEN_INTERNAL_TABS).toEqual(
-      expect.arrayContaining(['parties', 'bookings', 'pipelines', 'inventory', 'vcard', 'about'])
+      expect.arrayContaining(['events', 'parties', 'bookings', 'pipelines', 'inventory', 'vcard', 'about'])
     );
   });
 
   it('documents the new-user feature scope', () => {
     expect(NEW_USER_ALLOWED_FEATURES).toEqual([
-      'Eventos',
-      'Compra de tickets',
-      'vCards',
-      'Perfil',
-      'Seguir',
-      'Video streaming',
-      'Club de fans',
+      'Directorio y clasificados musicales',
+      'Eventos y venues públicos',
+      'Perfiles públicos',
+      'Búsquedas guardadas y alertas',
+      'Comunidad y conexiones',
       'Explorar funciones autorizadas',
       'Creación rápida autorizada',
     ]);

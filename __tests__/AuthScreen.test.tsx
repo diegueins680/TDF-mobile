@@ -133,7 +133,7 @@ describe('Auth screen', () => {
         password: 'demo-pass',
       });
       expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42, { roles: [], modules: [] });
-      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory');
     });
     expect(await screen.findByText('Sesión iniciada.')).toBeTruthy();
   }, 10_000);
@@ -198,7 +198,7 @@ describe('Auth screen', () => {
       password: 'password-seguro',
     }));
     expect(mockSetToken).toHaveBeenCalledWith('Bearer new-fan-token', 88, { roles: ['Fan'], modules: [] });
-    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory');
   });
 
   it('submits Google login and stores the returned token', async () => {
@@ -236,7 +236,7 @@ describe('Auth screen', () => {
       expect(mockGoogleLoginRequest).toHaveBeenCalledWith({ idToken: 'google-id-token' })
     );
     await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token', 77, { roles: [], modules: [] }));
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory'));
     expect(screen.getByText('Sesión con Google iniciada.')).toBeTruthy();
   });
 

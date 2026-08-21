@@ -33,8 +33,8 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
   };
 
   const startDate = new Date(event.startTime);
-  const endDate = new Date(event.endTime);
-  const isSameDay = formatDate(startDate) === formatDate(endDate);
+  const endDate = event.endTime ? new Date(event.endTime) : null;
+  const isSameDay = !endDate || formatDate(startDate) === formatDate(endDate);
 
   const a11yLabel = `${event.title}, ${formatDate(startDate)} ${formatTime(startDate)}${event.venue ? ` en ${event.venue.name}` : ''}`;
   const hasTicketAction =
@@ -64,7 +64,7 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
           <View style={styles.meta}>
             <Text maxFontSizeMultiplier={1.5} style={[styles.date, { color: colors.textSecondary }]}>
               {formatDate(startDate)} {formatTime(startDate)}
-              {!isSameDay && ` - ${formatDate(endDate)}`}
+              {endDate && !isSameDay && ` - ${formatDate(endDate)}`}
             </Text>
             {event.venue && <Text maxFontSizeMultiplier={1.5} style={[styles.venue, { color: colors.textSecondary }]}>{event.venue.name}</Text>}
           </View>

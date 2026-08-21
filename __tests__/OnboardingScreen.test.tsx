@@ -30,6 +30,17 @@ jest.mock('../src/lib/onboarding', () => ({
   setOnboardingSeen: (seen: boolean) => mockSetOnboardingSeen(seen),
 }));
 
+jest.mock('../src/providers/UserSettingsProvider', () => ({
+  useUserSettings: () => ({
+    locale: 'es',
+    getCatalogItems: () => [
+      { id: 'locale-es', code: 'es' },
+      { id: 'locale-en', code: 'en' },
+    ],
+    setRegionalPreferences: jest.fn(),
+  }),
+}));
+
 const OnboardingScreen = require('../app/onboarding').default;
 
 describe('Onboarding screen', () => {
@@ -40,11 +51,10 @@ describe('Onboarding screen', () => {
   it('shows only the minimal new-user mobile surface', () => {
     render(<OnboardingScreen />);
 
-    expect(screen.getByText(/Eventos y tickets/i)).toBeTruthy();
-    expect(screen.getByText(/Perfil, seguir y vCards/i)).toBeTruthy();
-    expect(screen.getByText(/Streaming y club de fans/i)).toBeTruthy();
+    expect(screen.getByRole('header', { name: /Tu comunidad musical/i })).toBeTruthy();
+    expect(screen.getByText(/Explora eventos, guarda tus favoritos y sigue artistas/i)).toBeTruthy();
 
-    expect(screen.queryByText(/inventario|bookings|pipelines|parties/i)).toBeNull();
+    expect(screen.queryByText(/vCards|streaming|inventario|bookings|pipelines|parties/i)).toBeNull();
   });
 
   it('routes new and returning users through authentication', () => {
@@ -54,7 +64,7 @@ describe('Onboarding screen', () => {
     if (!createAccountButton) throw new Error('Create account button not found');
     fireEvent.press(createAccountButton);
     expect(mockSetOnboardingSeen).toHaveBeenCalledWith(true);
-    expect(mockReplace).toHaveBeenCalledWith({ pathname: '/auth', params: { mode: 'signup' } });
+    expect(mockReplace).toHaveBeenCalledWith({ pathname: '/auth', params: { mode: 'signup', intent: 'events' } });
 
     const loginButton = screen.getByText(/Ya tengo cuenta/i).parent;
     if (!loginButton) throw new Error('Login button not found');
@@ -66,11 +76,20 @@ describe('Onboarding screen', () => {
   it('exposes named button controls with mobile-size touch targets', () => {
     render(<OnboardingScreen />);
 
-    expect(StyleSheet.flatten(screen.getByRole('button', { name: /Ingresar con una cuenta existente/i }).props.style)).toMatchObject({
-      minHeight: 44,
-      minWidth: 44,
+    expect(StyleSheet.flatten(screen.getByRole('button', { name: /Crear cuenta/i }).props.style)).toMatchObject({ minHeight: 50 });
+    expect(StyleSheet.flatten(screen.getByRole('button', { name: /Ya tengo cuenta/i }).props.style)).toMatchObject({ minHeight: 48 });
+  });
+
+  it('keeps enlarged content reachable instead of centering overflow above the scroll viewport', () => {
+    render(<OnboardingScreen />);
+
+    expect(StyleSheet.flatten(screen.getByTestId('onboardingScroll').props.contentContainerStyle)).toMatchObject({
+      flexGrow: 1,
     });
-    expect(StyleSheet.flatten(screen.getByRole('button', { name: /Crear cuenta/i }).props.style)).toMatchObject({ minHeight: 48 });
-    expect(StyleSheet.flatten(screen.getByRole('button', { name: /Ya tengo cuenta/i }).props.style)).toMatchObject({ minHeight: 44 });
+    expect(StyleSheet.flatten(screen.getByTestId('onboardingScroll').props.contentContainerStyle).justifyContent).toBeUndefined();
+    expect(StyleSheet.flatten(screen.getByTestId('onboardingPanel').props.style)).toMatchObject({
+      width: '100%',
+      marginVertical: 'auto',
+    });
   });
 });

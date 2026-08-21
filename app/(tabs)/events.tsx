@@ -26,6 +26,8 @@ import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
 import { impactLight } from '../../src/utils/haptics';
+import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
+import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -47,7 +49,7 @@ export default function EventsScreen() {
   const qc = useQueryClient();
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
-  const { locale, timezone, countryCode } = useUserSettings();
+  const { partyId, locale, timezone, countryCode } = useUserSettings();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
   const [discoveryScope, setDiscoveryScope] = useState<DiscoveryScope>('subscribed');
@@ -102,7 +104,7 @@ export default function EventsScreen() {
 
   const saveToggleMutation = useMutation({
     mutationFn: (eventId: string) => toggleSavedEvent(eventId),
-    onSuccess: (_data, eventId) => {
+    onSuccess: async (_data, eventId) => {
       const wasSaved = savedEventIds.includes(eventId);
       void impactLight();
       analytics.capture('feature_favorite_changed', {
@@ -110,6 +112,11 @@ export default function EventsScreen() {
         event_id: eventId,
         action: wasSaved ? 'unsaved' : 'saved',
       });
+      if (!wasSaved && await markFirstValueCompleted(partyId, 'event_saved')) {
+        analytics.capture('first_value_completed', { platform: 'mobile', value: 'event_saved' });
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'event_saved' });
+        if (partyId) await markNewUserOnboardingCompleted(partyId);
+      }
       qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
       qc.invalidateQueries({ queryKey: ['saved-events'] });
     }

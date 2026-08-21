@@ -13,7 +13,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   removeItem: jest.fn(),
 }));
 
-describe('ticket checkout idempotency storage', () => {
+describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout idempotency storage', () => {
   const storage: Record<string, string> = {};
 
   beforeEach(() => {

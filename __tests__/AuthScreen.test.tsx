@@ -11,11 +11,15 @@ const mockGoogleSignIn = jest.fn();
 const mockGoogleSignOut = jest.fn();
 const mockLoadNativeGoogleSignin = jest.fn();
 const mockReplace = jest.fn();
+const mockMarkSignupCompleted = jest.fn();
+const mockAttachPendingIntentToParty = jest.fn();
+const mockPersistOnboardingIntent = jest.fn();
 let mockAuthConfig = {
   GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
   GOOGLE_IOS_CLIENT_ID: 'ios-client-id.apps.googleusercontent.com',
   GOOGLE_IOS_URL_SCHEME: 'com.googleusercontent.apps.123456',
 };
+let mockSearchParams: Record<string, string> = {};
 
 jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: jest.fn(() => ({
@@ -25,6 +29,17 @@ jest.mock('../src/providers/AuthProvider', () => ({
     setToken: mockSetToken,
     clearToken: mockClearToken,
   })),
+}));
+
+jest.mock('../src/providers/UserSettingsProvider', () => ({
+  useUserSettings: () => ({
+    locale: 'es',
+    getCatalogItems: () => [
+      { id: 'locale-es', code: 'es' },
+      { id: 'locale-en', code: 'en' },
+    ],
+    setRegionalPreferences: jest.fn(),
+  }),
 }));
 
 jest.mock('../src/theme/ThemeProvider', () => {
@@ -77,9 +92,22 @@ jest.mock('../src/lib/nativeGoogleSignin', () => ({
   loadNativeGoogleSignin: () => mockLoadNativeGoogleSignin(),
 }));
 
+jest.mock('../src/lib/firstRunFlags', () => ({
+  markSignupCompleted: (...args: unknown[]) => mockMarkSignupCompleted(...args),
+}));
+
+jest.mock('../src/lib/onboardingIntent', () => {
+  const actual = jest.requireActual('../src/lib/onboardingIntent');
+  return {
+    ...actual,
+    attachPendingIntentToParty: (...args: unknown[]) => mockAttachPendingIntentToParty(...args),
+    persistOnboardingIntent: (...args: unknown[]) => mockPersistOnboardingIntent(...args),
+  };
+});
+
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace }),
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockSearchParams,
 }));
 
 const AuthScreen = require('../app/auth').default;
@@ -87,6 +115,7 @@ const AuthScreen = require('../app/auth').default;
 describe('Auth screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSearchParams = {};
     mockReplace.mockReset();
     mockAuthConfig.GOOGLE_WEB_CLIENT_ID = 'web-client-id.apps.googleusercontent.com';
     mockAuthConfig.GOOGLE_IOS_CLIENT_ID = 'ios-client-id.apps.googleusercontent.com';
@@ -150,6 +179,16 @@ describe('Auth screen', () => {
     await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
   });
 
+  it('drops a syntactically safe returnTo when the returned session cannot use it', async () => {
+    mockSearchParams = { returnTo: '/createArtistProfile' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
+    fireEvent.press(screen.getByTestId('loginButton'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events'));
+  });
+
   it('exposes associated field labels, input guidance, and validation errors', async () => {
     render(<AuthScreen />);
     await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
@@ -166,13 +205,17 @@ describe('Auth screen', () => {
     const passwordInput = screen.getByLabelText('Contraseña');
 
     expect(emailInput).toBeTruthy();
-    expect(passwordInput.props.accessibilityHint).toBe('Usa al menos 8 caracteres.');
+    expect(passwordInput.props.accessibilityHint).toBe(
+      'Usa al menos 8 caracteres y como máximo 72 bytes UTF-8, sin caracteres de control ni formato oculto.',
+    );
 
     fireEvent.changeText(emailInput, 'correo-invalido');
     fireEvent.changeText(passwordInput, 'corta');
 
     expect(screen.getByText('Ingresa un correo electrónico válido.').props.accessibilityRole).toBe('alert');
-    expect(screen.getByText('La contraseña debe tener al menos 8 caracteres.').props.accessibilityRole).toBe('alert');
+    expect(screen.getByText(
+      'Usa al menos 8 caracteres y como máximo 72 bytes UTF-8, sin caracteres de control ni formato oculto.',
+    ).props.accessibilityRole).toBe('alert');
   });
 
   it('creates an account without caller-selected roles and stores the returned session', async () => {
@@ -189,6 +232,7 @@ describe('Auth screen', () => {
     fireEvent.changeText(screen.getByPlaceholderText('Tu apellido'), 'Paz');
     fireEvent.changeText(screen.getByPlaceholderText('tu@correo.com'), 'ANA@example.com');
     fireEvent.changeText(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password-seguro');
+    fireEvent.press(screen.getByTestId('termsCheckbox'));
     fireEvent.press(screen.getByTestId('signupButton'));
 
     await waitFor(() => expect(mockSignupRequest).toHaveBeenCalledWith({
@@ -196,9 +240,34 @@ describe('Auth screen', () => {
       lastName: 'Paz',
       email: 'ana@example.com',
       password: 'password-seguro',
+      marketingOptIn: false,
+      termsAccepted: true,
+      termsVersion: 'tdf-account-terms-v1',
     }));
+    expect(mockMarkSignupCompleted).toHaveBeenCalledWith('88');
+    expect(mockAttachPendingIntentToParty).toHaveBeenCalledWith('88', 'events');
     expect(mockSetToken).toHaveBeenCalledWith('Bearer new-fan-token', 88, { roles: ['Fan'], modules: [] });
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');
+  });
+
+  it('uses product intent for the next step without sending it as a security role', async () => {
+    mockSignupRequest.mockResolvedValue({ token: 'token', partyId: 91, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByText('Crear cuenta'));
+    fireEvent.changeText(screen.getByPlaceholderText('Tu nombre'), 'Lina');
+    fireEvent.changeText(screen.getByPlaceholderText('tu@correo.com'), 'lina@example.com');
+    fireEvent.changeText(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password-seguro');
+    fireEvent.press(screen.getByText('Crear perfil de artista'));
+    fireEvent.press(screen.getByTestId('termsCheckbox'));
+    fireEvent.press(screen.getByTestId('signupButton'));
+
+    await waitFor(() => expect(mockSignupRequest).toHaveBeenCalled());
+    expect(mockSignupRequest.mock.calls[0]?.[0]).not.toHaveProperty('roles');
+    expect(mockAttachPendingIntentToParty).toHaveBeenCalledWith('91', 'artist_profile');
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/access-requests/new',
+      params: { feature: 'artist.onboarding', action: 'create' },
+    });
   });
 
   it('submits Google login and stores the returned token', async () => {

@@ -31,8 +31,8 @@ export function AppProviders({ children }: PropsWithChildren) {
             <AnalyticsProvider>
               <UserSettingsProvider>
                 <AppThemeProvider>
-                  {/* FirstRunProvider derives the new-user cohort used by
-                      single-feature-onboarding-v1 and persists install/signup seen flags. */}
+                  {/* FirstRunProvider derives the 24-hour post-signup cohort
+                      and persists durable onboarding completion. */}
                   <FirstRunProvider>
                     {/* ExperimentProvider sits inside Analytics so assignment events have a destination. */}
                     <ExperimentProvider>

@@ -34,6 +34,8 @@ import {
   toggleMomentFeedReaction,
 } from '../lib/eventMomentsRepository';
 import { resolvePartyId } from '../lib/identity';
+import { markFirstValueCompleted } from '../lib/onboardingIntent';
+import { markExperimentExposedOnce } from '../lib/firstRunFlags';
 import { MOBILE_LANDING_ROUTE } from '../navigation/mobileSurface';
 import { useAuth } from '../providers/AuthProvider';
 import { useFirstRun } from '../providers/FirstRunProvider';
@@ -45,6 +47,9 @@ import type {
 } from '../types';
 import { useExperiments } from './ExperimentProvider';
 import { useExperimentEvent } from './useExperimentEvent';
+import { useAnalytics } from '../analytics/AnalyticsProvider';
+import { experimentCopy, onboardingLanguage } from '../localization/onboardingCopy';
+import { useNetwork } from '../providers/NetworkProvider';
 
 const EXPERIMENT_ID = 'single-feature-onboarding-v1';
 const TREATMENT = 'treatment_singlefeature';
@@ -72,11 +77,14 @@ const pickAnchorEvent = (events: SocialEvent[] | undefined): SocialEvent | null 
 
 export function NewUserOnboardingGate({ children }: Props) {
   const router = useRouter();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const { isReady: experimentsReady, getVariant } = useExperiments();
-  const { cohortReady, isNewUser } = useFirstRun();
+  const { isReady: experimentsReady, getVariant, isExperimentEnabled } = useExperiments();
+  const { isConnected } = useNetwork();
+  const { cohortReady, isNewUser, completeOnboarding } = useFirstRun();
   const { token, partyId: authPartyId } = useAuth();
   const { partyId: settingsPartyId, displayName, locale, getCatalogItems } = useUserSettings();
+  const copy = experimentCopy[onboardingLanguage(locale)];
   const { track } = useExperimentEvent();
   const reactionOptions = useMemo<EventMomentReactionOption[]>(
     () => getCatalogItems('reaction-types').flatMap((item) => {
@@ -105,24 +113,27 @@ export function NewUserOnboardingGate({ children }: Props) {
   const [treatmentExited, setTreatmentExited] = useState(false);
 
   const variant = experimentsReady ? getVariant(EXPERIMENT_ID) : null;
+  const experimentEnabled = isExperimentEnabled(EXPERIMENT_ID);
+  const eligibleForExperiment = experimentsReady && cohortReady && isNewUser && experimentEnabled;
   const gateEngaged =
-    experimentsReady &&
-    cohortReady &&
-    isNewUser &&
+    eligibleForExperiment &&
     variant === TREATMENT &&
     !treatmentExited;
 
   // Fire experiment_viewed exactly once when the gate first engages.
   const viewedRef = useRef(false);
   useEffect(() => {
-    if (!gateEngaged || viewedRef.current) return;
+    if (!eligibleForExperiment || !variant || viewedRef.current) return;
     viewedRef.current = true;
-    track('experiment_viewed', {
-      experimentId: EXPERIMENT_ID,
-      variant: TREATMENT,
-      userId: normalizedPartyId ?? undefined,
-    });
-  }, [gateEngaged, normalizedPartyId, track]);
+    void (async () => {
+      if (!normalizedPartyId || !await markExperimentExposedOnce(normalizedPartyId, EXPERIMENT_ID)) return;
+      track('experiment_viewed', {
+        experimentId: EXPERIMENT_ID,
+        variant,
+        userId: normalizedPartyId,
+      });
+    })();
+  }, [eligibleForExperiment, normalizedPartyId, track, variant]);
 
   // Pull a small window of recent events and anchor on the most recent past
   // one whose moments feed is non-empty. We fetch a slightly larger page
@@ -150,7 +161,7 @@ export function NewUserOnboardingGate({ children }: Props) {
         (a, b) =>
           Date.parse(String(b.startTime)) - Date.parse(String(a.startTime)),
       )
-      .slice(0, 5);
+      .slice(0, 3);
   }, [eventsQuery.data]);
 
   const candidateProbes = useQueries({
@@ -214,7 +225,14 @@ export function NewUserOnboardingGate({ children }: Props) {
       userId: normalizedPartyId ?? undefined,
       metadata: { value: 1, surface: 'gate_moment_reaction' },
     });
-  }, [normalizedPartyId, track]);
+    void (async () => {
+      if (await markFirstValueCompleted(normalizedPartyId, 'moment_reaction')) {
+        analytics.capture('first_value_completed', { platform: 'mobile', value: 'moment_reaction' });
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'moment_reaction' });
+      }
+      await completeOnboarding();
+    })();
+  }, [analytics, completeOnboarding, normalizedPartyId, track]);
 
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const handleChangeComment = useCallback((momentId: string, value: string) => {
@@ -250,8 +268,10 @@ export function NewUserOnboardingGate({ children }: Props) {
 
   const handleExplore = useCallback(() => {
     setTreatmentExited(true);
+    analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
+    void completeOnboarding();
     router.replace(MOBILE_LANDING_ROUTE);
-  }, [router]);
+  }, [analytics, completeOnboarding, router]);
 
   if (!gateEngaged) {
     return <>{children}</>;
@@ -261,23 +281,31 @@ export function NewUserOnboardingGate({ children }: Props) {
   const moments = momentsQuery.data ?? [];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>Bienvenido a TDF</Text>
-        <Text style={styles.title}>
+        <Text style={styles.eyebrow}>{copy.eyebrow}</Text>
+        <Text accessibilityRole="header" style={styles.title}>
           {featuredEvent
-            ? `Vive ${featuredEvent.title ?? 'el próximo evento'}`
-            : 'Vive el primer momento'}
+            ? `${locale.startsWith('en') ? 'Experience' : 'Vive'} ${featuredEvent.title ?? copy.eventFallback}`
+            : copy.titleFallback}
         </Text>
-        <Text style={styles.subtitle}>
-          Reacciona a un momento para empezar. Es la forma más rápida de sentir la vibra.
-        </Text>
+        <Text style={styles.subtitle}>{copy.subtitle}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {loadingFeed ? (
+      <ScrollView style={styles.feed} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {!isConnected ? (
+          <View style={styles.emptyCard}>
+            <Text accessibilityRole="header" style={styles.emptyTitle}>{copy.offlineTitle}</Text>
+            <Text style={styles.emptyBody}>{copy.offlineBody}</Text>
+          </View>
+        ) : eventsQuery.isError || momentsQuery.isError ? (
+          <View style={styles.emptyCard}>
+            <Text accessibilityRole="header" style={styles.emptyTitle}>{copy.errorTitle}</Text>
+            <Text style={styles.emptyBody}>{copy.errorBody}</Text>
+          </View>
+        ) : loadingFeed ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#2563eb" />
+            <ActivityIndicator accessibilityLabel={copy.loading} size="large" color="#2563eb" />
           </View>
         ) : moments.length > 0 ? (
           moments.slice(0, 3).map((moment, idx) => (
@@ -288,11 +316,7 @@ export function NewUserOnboardingGate({ children }: Props) {
               currentPartyId={normalizedPartyId ?? null}
               featured={idx === 0}
               reactionOptions={reactionOptions}
-              reactionUnavailableLabel={
-                locale === 'en'
-                  ? 'No synchronized reactions. Refresh catalogs to react.'
-                  : 'Sin reacciones sincronizadas. Actualiza los catálogos para reaccionar.'
-              }
+              reactionUnavailableLabel={copy.reactionsUnavailable}
               commentDraft={commentDrafts[moment.id] ?? ''}
               onChangeComment={handleChangeComment}
               onSubmitComment={() => {
@@ -314,17 +338,11 @@ export function NewUserOnboardingGate({ children }: Props) {
           ))
         ) : (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>Aún no hay momentos publicados</Text>
-            <Text style={styles.emptyBody}>
-              Cuando alguien suba el primer momento del evento lo verás aquí. Mientras tanto,
-              explora eventos, tickets, transmisiones y clubes de fans.
-            </Text>
+            <Text accessibilityRole="header" style={styles.emptyTitle}>{copy.emptyTitle}</Text>
+            <Text style={styles.emptyBody}>{copy.emptyBody}</Text>
             <View style={styles.emptyPreview}>
-              <Text style={styles.previewLabel}>Vista previa</Text>
-              <Text style={styles.previewBody}>
-                Un “momento” es una foto o video corto del evento. Reaccionas con las opciones
-                publicadas y conectas con quien lo subió.
-              </Text>
+              <Text style={styles.previewLabel}>{copy.previewLabel}</Text>
+              <Text style={styles.previewBody}>{copy.previewBody}</Text>
             </View>
           </View>
         )}
@@ -333,11 +351,11 @@ export function NewUserOnboardingGate({ children }: Props) {
       <View style={styles.footer}>
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel="Explorar más"
+          accessibilityLabel={copy.explore}
           style={styles.exploreBtn}
           onPress={handleExplore}
         >
-          <Text style={styles.exploreBtnText}>Ver eventos</Text>
+          <Text style={styles.exploreBtnText}>{copy.explore}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -363,7 +381,8 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 22, fontWeight: '800', color: '#0f172a', marginTop: 6 },
   subtitle: { fontSize: 14, color: '#475569', marginTop: 6, lineHeight: 20 },
-  scroll: { padding: 16, paddingBottom: 96 },
+  feed: { flex: 1 },
+  scroll: { padding: 16, paddingBottom: 24 },
   center: { paddingVertical: 48, alignItems: 'center' },
   emptyCard: {
     backgroundColor: '#fff',
@@ -381,24 +400,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
   },
   previewLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1,
-    color: '#64748b',
+    color: '#475569',
     textTransform: 'uppercase',
   },
   previewBody: { marginTop: 6, fontSize: 14, color: '#0f172a', lineHeight: 20 },
   footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     padding: 16,
     backgroundColor: 'rgba(255,255,255,0.96)',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
   },
   exploreBtn: {
+    minHeight: 48,
     backgroundColor: '#2563eb',
     paddingVertical: 14,
     borderRadius: 12,

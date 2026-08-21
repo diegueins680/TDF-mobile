@@ -31,6 +31,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'auth.resetPasswordSent': 'Te enviamos un enlace para restablecer tu contraseña.',
 
     // Tabs
+    'tabs.directory': 'Directorio',
     'tabs.events': 'Eventos',
     'tabs.social': 'Seguir',
     'tabs.explore': 'Explorar',
@@ -81,6 +82,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'auth.resetPasswordSent': 'We sent you a password reset link.',
 
     // Tabs
+    'tabs.directory': 'Directory',
     'tabs.events': 'Events',
     'tabs.social': 'Follow',
     'tabs.explore': 'Explore',

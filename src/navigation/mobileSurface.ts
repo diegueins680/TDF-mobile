@@ -1,9 +1,9 @@
 import { t } from '../i18n';
 
-export const MOBILE_LANDING_ROUTE = '/(tabs)/events' as const;
+export const MOBILE_LANDING_ROUTE = '/(tabs)/directory' as const;
 
 export const NEW_USER_VISIBLE_TABS = [
-  { name: 'events', title: t('tabs.events'), icon: 'calendar-star' },
+  { name: 'directory', title: t('tabs.directory'), icon: 'magnify' },
   { name: 'social', title: t('tabs.social'), icon: 'account-heart' },
   { name: 'more', title: t('tabs.explore'), icon: 'compass-outline' },
   { name: 'create', title: t('tabs.create'), icon: 'plus-circle-outline' },
@@ -11,6 +11,7 @@ export const NEW_USER_VISIBLE_TABS = [
 ];
 
 export const HIDDEN_INTERNAL_TABS = [
+  'events',
   'parties',
   'bookings',
   'pipelines',
@@ -20,13 +21,11 @@ export const HIDDEN_INTERNAL_TABS = [
 ] as const;
 
 export const NEW_USER_ALLOWED_FEATURES = [
-  'Eventos',
-  'Compra de tickets',
-  'vCards',
-  'Perfil',
-  'Seguir',
-  'Video streaming',
-  'Club de fans',
+  'Directorio y clasificados musicales',
+  'Eventos y venues públicos',
+  'Perfiles públicos',
+  'Búsquedas guardadas y alertas',
+  'Comunidad y conexiones',
   'Explorar funciones autorizadas',
   'Creación rápida autorizada',
 ] as const;

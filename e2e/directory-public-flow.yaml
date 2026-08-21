@@ -1,0 +1,18 @@
+# Maestro E2E flow for the anonymous primary music-directory experience.
+# Run: maestro test tdf-mobile/e2e/directory-public-flow.yaml
+# Requires a development build pointed at an isolated API fixture.
+
+appId: com.tdfrecords.app
+---
+- launchApp:
+    clearState: true
+- openLink: "tdf://directory"
+- assertVisible: "Encuentra tu próxima conexión musical"
+- assertVisible: "Quito"
+- tapOn: "Buscar en el directorio musical"
+- inputText: "productor"
+- assertVisible: "Todo"
+- assertVisible: "Perfiles"
+- tapOn: "Mapa"
+- assertVisible: "Mapa abierto de OpenStreetMap"
+- takeScreenshot: directory-public-map

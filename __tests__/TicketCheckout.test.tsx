@@ -112,7 +112,7 @@ const paidOrder = {
 };
 let mockOrders: Array<typeof paidOrder> = [];
 
-describe('Ticket checkout', () => {
+describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     const storage: Record<string, string> = {};

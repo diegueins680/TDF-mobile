@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -26,6 +27,24 @@ import FormField from '../src/components/FormField';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../src/theme/ThemeProvider';
+import { useUserSettings } from '../src/providers/UserSettingsProvider';
+import { markSignupCompleted } from '../src/lib/firstRunFlags';
+import {
+  attachPendingIntentToParty,
+  DEFAULT_ONBOARDING_INTENT,
+  ONBOARDING_INTENT_OPTIONS,
+  parseOnboardingIntent,
+  persistOnboardingIntent,
+  resolveMobileIntentDestination,
+  type OnboardingIntent,
+} from '../src/lib/onboardingIntent';
+import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
+import { authCopy, onboardingLanguage } from '../src/localization/onboardingCopy';
+import { isValidSignupPassword } from '../src/lib/passwordPolicy';
+
+const ACCOUNT_TERMS_VERSION = 'tdf-account-terms-v1';
+const TERMS_URL = 'https://tdf-app.pages.dev/mobile-app/terms.html';
+const PRIVACY_URL = 'https://tdf-app.pages.dev/mobile-app/privacy.html';
 
 const readErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
@@ -35,29 +54,58 @@ const readErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const resolveAuthorizedReturnTo = (
+  candidate: Href | null,
+  roles: readonly string[],
+  modules: readonly string[],
+): Href | null => {
+  if (!candidate) return null;
+  const path = typeof candidate === 'string' ? candidate : candidate.pathname;
+  const features = getFeaturesByMobilePath(path);
+  if (features.length === 0) return null;
+  return features.some((feature) => evaluateFeatureAccess(
+    feature,
+    { authenticated: true, roles, modules },
+    feature.routeAction,
+  ).state === 'allowed') ? candidate : null;
+};
+
 export default function AuthScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
-  const params = useLocalSearchParams<{ mode?: string | string[]; returnTo?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    mode?: string | string[];
+    returnTo?: string | string[];
+    intent?: string | string[];
+    roles?: string | string[];
+  }>();
   const { token, loading, setToken, clearToken } = useAuth();
   const analytics = useAnalytics();
+  const { locale, getCatalogItems, setRegionalPreferences } = useUserSettings();
+  const language = onboardingLanguage(locale);
+  const english = language === 'en';
+  const copy = authCopy[language];
   const requestedMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
+  const rawIntent = Array.isArray(params.intent) ? params.intent[0] : params.intent;
+  const legacyRoles = Array.isArray(params.roles) ? params.roles[0] : params.roles;
+  const initialIntent = parseOnboardingIntent(rawIntent) ?? parseOnboardingIntent(legacyRoles) ?? DEFAULT_ONBOARDING_INTENT;
   const rawReturnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
-  const returnTo = rawReturnTo?.startsWith('/') && !rawReturnTo.startsWith('//') && rawReturnTo.length <= 500
+  const safeReturnTo = rawReturnTo?.startsWith('/') && !rawReturnTo.startsWith('//') && rawReturnTo.length <= 500
     ? rawReturnTo as Href
-    : MOBILE_LANDING_ROUTE;
+    : null;
   const [mode, setMode] = useState<'login' | 'signup' | 'forgotPassword'>(requestedMode === 'signup' ? 'signup' : 'login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'Fan' | 'Artista' | 'Teacher'>('Fan');
+  const [selectedIntent, setSelectedIntent] = useState<OnboardingIntent>(initialIntent);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const lastNameInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
-  const phoneInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const forgotPasswordEmailInputRef = useRef<TextInput>(null);
 
@@ -75,19 +123,21 @@ export default function AuthScreen() {
 
   const hasToken = Boolean(token?.trim());
   const canSubmitPassword = username.trim().length > 0 && password.length > 0 && !isPasswordSubmitting;
-  const canSubmitSignup =
-    firstName.trim().length > 0 &&
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim()) &&
-    password.trim().length >= 8 &&
-    !isSignupSubmitting;
   const canSubmitForgotPassword =
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotPasswordEmail.trim()) && !isForgotPasswordSubmitting;
   const signupEmailError = signupEmail.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim())
-    ? 'Ingresa un correo electrónico válido.'
+    ? copy.invalidEmail
     : null;
-  const signupPasswordError = mode === 'signup' && password.length > 0 && password.trim().length < 8
-    ? 'La contraseña debe tener al menos 8 caracteres.'
+  const signupPasswordError = mode === 'signup' && password.length > 0 && !isValidSignupPassword(password)
+    ? copy.passwordHint
     : null;
+  const canSubmitSignup =
+    firstName.trim().length > 0 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim()) &&
+    isValidSignupPassword(password) &&
+    !signupPasswordError &&
+    termsAccepted &&
+    !isSignupSubmitting;
   const isGoogleLoginAvailable =
     Platform.OS !== 'web' &&
     Boolean(googleSigninModule) &&
@@ -95,6 +145,25 @@ export default function AuthScreen() {
     (Platform.OS !== 'ios' || Boolean(GOOGLE_IOS_URL_SCHEME));
   const showLoginActions = !loading && !hasToken;
   const showGoogleLogin = showLoginActions && isGoogleLoginAvailable;
+
+  const chooseLanguage = (code: 'es' | 'en') => {
+    const option = getCatalogItems('locales').find((item) => item.code === code);
+    if (option) setRegionalPreferences({ localeId: option.id });
+  };
+
+  useEffect(() => {
+    analytics.capture('auth_mode_viewed', {
+      platform: 'mobile',
+      mode: requestedMode === 'signup' ? 'signup' : 'login',
+      intent: initialIntent,
+    });
+    if (requestedMode === 'signup') {
+      analytics.capture('signup_started', { platform: 'mobile', entry: 'deeplink', intent: initialIntent });
+    }
+    void persistOnboardingIntent(initialIntent);
+    // Screen-entry instrumentation must fire once for this route instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -140,17 +209,25 @@ export default function AuthScreen() {
       });
       setPassword('');
       analytics.capture('login_completed', { platform: 'mobile', method: 'password' });
-      setFeedbackMessage('Sesión iniciada.');
-      router.replace(returnTo);
+      setFeedbackMessage(copy.loginSuccess);
+      router.replace(resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []) ?? MOBILE_LANDING_ROUTE);
     } catch (error) {
-      setErrorMessage(readErrorMessage(error, 'No pudimos iniciar sesión.'));
+      analytics.capture('login_failed', { platform: 'mobile', method: 'password' });
+      setErrorMessage(readErrorMessage(error, copy.loginFailure));
     } finally {
       setIsPasswordSubmitting(false);
     }
   };
 
   const handleSignup = async () => {
-    if (!canSubmitSignup) return;
+    if (!canSubmitSignup) {
+      analytics.capture('signup_validation_failed', {
+        platform: 'mobile',
+        intent: selectedIntent,
+        reason: !termsAccepted ? 'terms_not_accepted' : 'invalid_required_fields',
+      });
+      return;
+    }
 
     setErrorMessage(null);
     setFeedbackMessage(null);
@@ -161,18 +238,42 @@ export default function AuthScreen() {
         lastName: lastName.trim(),
         email: signupEmail.trim().toLowerCase(),
         password,
-        phone: phone.trim() || undefined,
+        marketingOptIn,
+        termsAccepted: true,
+        termsVersion: ACCOUNT_TERMS_VERSION,
       });
+      const sessionPartyId = session.partyId ? String(session.partyId) : '';
+      if (sessionPartyId) {
+        await Promise.all([
+          markSignupCompleted(sessionPartyId),
+          attachPendingIntentToParty(sessionPartyId, selectedIntent),
+        ]);
+      }
       setToken(session.token, session.partyId ?? null, {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
       setPassword('');
-      analytics.capture('signup_completed', { platform: 'mobile', method: 'password' });
-      setFeedbackMessage('Cuenta creada. Ya puedes elegir tus entradas.');
-      router.replace(returnTo);
+      const intentDestination = resolveMobileIntentDestination(
+        selectedIntent,
+        session.roles ?? [],
+        session.modules ?? [],
+      );
+      const authorizedReturnTo = resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []);
+      const destination = (selectedIntent === 'artist_profile' || selectedIntent === 'internships')
+        ? intentDestination
+        : authorizedReturnTo ?? intentDestination;
+      analytics.capture('signup_completed', {
+        platform: 'mobile',
+        method: 'password',
+        intent: selectedIntent,
+        destination_kind: typeof destination === 'string' ? destination : destination.pathname,
+      });
+      setFeedbackMessage(copy.signupSuccess);
+      router.replace(destination);
     } catch (error) {
-      setErrorMessage(readErrorMessage(error, 'No pudimos crear tu cuenta.'));
+      analytics.capture('signup_failed', { platform: 'mobile', method: 'password', intent: selectedIntent });
+      setErrorMessage(readErrorMessage(error, copy.signupFailure));
     } finally {
       setIsSignupSubmitting(false);
     }
@@ -183,7 +284,7 @@ export default function AuthScreen() {
     setFeedbackMessage(null);
 
     if (!isGoogleLoginAvailable || !googleSigninModule) {
-      setErrorMessage('Google login requiere la build instalada de TDF Records; Expo Go no incluye Google Sign-In nativo.');
+      setErrorMessage(copy.googleUnavailable);
       return;
     }
 
@@ -197,41 +298,69 @@ export default function AuthScreen() {
       const response = await googleSigninModule.GoogleSignin.signIn();
 
       if (!googleSigninModule.isSuccessResponse(response)) {
-        setFeedbackMessage('Inicio con Google cancelado.');
+        setFeedbackMessage(copy.googleCancelled);
         return;
       }
 
       if (!response.data.idToken) {
-        throw new Error('Google no devolvió un idToken válido.');
+        throw new Error(copy.googleMissingToken);
       }
 
-      const session = await googleLoginRequest({ idToken: response.data.idToken });
+      const session = await googleLoginRequest({
+        idToken: response.data.idToken,
+        ...(mode === 'signup' ? {
+          marketingOptIn,
+          termsAccepted: true,
+          termsVersion: ACCOUNT_TERMS_VERSION,
+        } : {}),
+      });
+      const googlePartyId = session.partyId ? String(session.partyId) : '';
+      if (mode === 'signup' && googlePartyId) {
+        await attachPendingIntentToParty(googlePartyId, selectedIntent);
+        if (session.accountCreated === true) await markSignupCompleted(googlePartyId);
+      }
       setToken(session.token, session.partyId ?? null, {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
       setPassword('');
-      setFeedbackMessage('Sesión con Google iniciada.');
-      router.replace(returnTo);
+      const googleCreatedAccount = session.accountCreated === true;
+      analytics.capture(googleCreatedAccount ? 'signup_completed' : 'login_completed', {
+        platform: 'mobile',
+        method: 'google',
+        ...(googleCreatedAccount ? { intent: selectedIntent } : {}),
+      });
+      setFeedbackMessage(copy.googleSuccess);
+      const authorizedReturnTo = resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []);
+      router.replace(
+        mode === 'signup' && (!authorizedReturnTo || selectedIntent === 'artist_profile' || selectedIntent === 'internships')
+          ? resolveMobileIntentDestination(selectedIntent, session.roles ?? [], session.modules ?? [])
+          : authorizedReturnTo ?? MOBILE_LANDING_ROUTE,
+      );
     } catch (error) {
       if (googleSigninModule.isErrorWithCode(error)) {
         if (error.code === googleSigninModule.statusCodes.SIGN_IN_CANCELLED) {
-          setFeedbackMessage('Inicio con Google cancelado.');
+          setFeedbackMessage(copy.googleCancelled);
           return;
         }
 
         if (error.code === googleSigninModule.statusCodes.IN_PROGRESS) {
-          setFeedbackMessage('Google login ya está en progreso.');
+          setFeedbackMessage(copy.googleInProgress);
           return;
         }
 
         if (error.code === googleSigninModule.statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-          setErrorMessage('Google Play Services no está disponible en este dispositivo.');
+          setErrorMessage(copy.googlePlayUnavailable);
           return;
         }
       }
 
-      setErrorMessage(readErrorMessage(error, 'No pudimos iniciar sesión con Google.'));
+      analytics.capture(mode === 'signup' ? 'signup_failed' : 'login_failed', {
+        platform: 'mobile',
+        method: 'google',
+        ...(mode === 'signup' ? { intent: selectedIntent } : {}),
+      });
+      setErrorMessage(readErrorMessage(error, copy.googleFailure));
     } finally {
       setIsGoogleSubmitting(false);
     }
@@ -239,7 +368,7 @@ export default function AuthScreen() {
 
   const handleClearSession = async () => {
     setErrorMessage(null);
-    setFeedbackMessage('Sesión cerrada.');
+    setFeedbackMessage(copy.sessionClosed);
 
     if (Platform.OS !== 'web' && googleSigninModule) {
       try {
@@ -264,7 +393,7 @@ export default function AuthScreen() {
       await requestPasswordReset(forgotPasswordEmail.trim().toLowerCase());
       setForgotPasswordSuccess(true);
     } catch (error) {
-      setForgotPasswordError(readErrorMessage(error, 'No pudimos enviar el enlace. Verifica el correo.'));
+      setForgotPasswordError(readErrorMessage(error, copy.resetFailure));
     } finally {
       setIsForgotPasswordSubmitting(false);
     }
@@ -278,15 +407,30 @@ export default function AuthScreen() {
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
+            <View style={styles.languageRow} accessibilityRole="radiogroup">
+              {(['es', 'en'] as const).map((code) => (
+                <TouchableOpacity
+                  key={code}
+                  style={[styles.languageButton, locale.startsWith(code) && styles.languageButtonActive]}
+                  onPress={() => chooseLanguage(code)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: locale.startsWith(code) }}
+                >
+                  <Text style={[styles.languageText, locale.startsWith(code) && styles.languageTextActive]}>
+                    {code === 'es' ? 'Español' : 'English'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <Text style={styles.title}>
-              {mode === 'signup' ? 'Crea tu cuenta' : mode === 'forgotPassword' ? 'Restablecer contraseña' : 'Inicia sesión'}
+              {mode === 'signup' ? copy.createTitle : mode === 'forgotPassword' ? copy.resetTitle : copy.loginTitle}
             </Text>
             <Text style={styles.subtitle}>
               {mode === 'signup'
-                ? 'Solo toma un minuto. Después volverás directo a elegir tus entradas.'
+                ? copy.createSubtitle
                 : mode === 'forgotPassword'
-                  ? 'Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña.'
-                  : 'Accede a tus eventos, compras y códigos QR con tu cuenta de TDF Records.'}
+                  ? copy.resetSubtitle
+                  : copy.loginSubtitle}
             </Text>
             {__DEV__ ? <Text style={styles.meta}>API base: {API_BASE}</Text> : null}
           </View>
@@ -303,7 +447,7 @@ export default function AuthScreen() {
                   accessibilityRole="tab"
                   accessibilityState={{ selected: mode === 'login' }}
                 >
-                  <Text style={[styles.modeButtonText, mode === 'login' && styles.modeButtonTextActive]}>Ingresar</Text>
+                  <Text style={[styles.modeButtonText, mode === 'login' && styles.modeButtonTextActive]}>{copy.loginTab}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modeButton, mode === 'signup' && styles.modeButtonActive]}
@@ -315,7 +459,7 @@ export default function AuthScreen() {
                   accessibilityRole="tab"
                   accessibilityState={{ selected: mode === 'signup' }}
                 >
-                  <Text style={[styles.modeButtonText, mode === 'signup' && styles.modeButtonTextActive]}>Crear cuenta</Text>
+                  <Text style={[styles.modeButtonText, mode === 'signup' && styles.modeButtonTextActive]}>{copy.signupTab}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -323,14 +467,14 @@ export default function AuthScreen() {
                 <>
                   <View style={styles.nameRow}>
                     <FormField
-                      label="Nombre"
+                      label={copy.firstName}
                       containerStyle={styles.nameField}
                       value={firstName}
                       onChangeText={(value) => {
                         setFirstName(value);
                         setErrorMessage(null);
                       }}
-                      placeholder="Tu nombre"
+                      placeholder={copy.firstNamePlaceholder}
                       autoCapitalize="words"
                       autoComplete="given-name"
                       textContentType="givenName"
@@ -341,7 +485,7 @@ export default function AuthScreen() {
                     />
                     <FormField
                       ref={lastNameInputRef}
-                      label="Apellido"
+                      label={copy.lastName}
                       optional
                       containerStyle={styles.nameField}
                       value={lastName}
@@ -349,7 +493,7 @@ export default function AuthScreen() {
                         setLastName(value);
                         setErrorMessage(null);
                       }}
-                      placeholder="Tu apellido"
+                      placeholder={copy.lastNamePlaceholder}
                       autoCapitalize="words"
                       autoComplete="family-name"
                       textContentType="familyName"
@@ -361,13 +505,13 @@ export default function AuthScreen() {
                   </View>
                   <FormField
                     ref={emailInputRef}
-                    label="Correo electrónico"
+                    label={copy.email}
                     value={signupEmail}
                     onChangeText={(value) => {
                       setSignupEmail(value);
                       setErrorMessage(null);
                     }}
-                    placeholder="tu@correo.com"
+                    placeholder={copy.emailPlaceholder}
                     autoCapitalize="none"
                     autoCorrect={false}
                     autoComplete="email"
@@ -377,39 +521,19 @@ export default function AuthScreen() {
                     error={signupEmailError}
                     returnKeyType="next"
                     blurOnSubmit={false}
-                    onSubmitEditing={() => phoneInputRef.current?.focus()}
-                  />
-                  <FormField
-                    ref={phoneInputRef}
-                    label="Teléfono"
-                    optional
-                    value={phone}
-                    onChangeText={(value) => {
-                      setPhone(value);
-                      setErrorMessage(null);
-                    }}
-                    placeholder="+57 300 123 4567"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="tel"
-                    textContentType="telephoneNumber"
-                    keyboardType="phone-pad"
-                    maxLength={30}
-                    returnKeyType="next"
-                    blurOnSubmit={false}
                     onSubmitEditing={() => passwordInputRef.current?.focus()}
                   />
                 </>
               ) : (
                 <FormField
                   testID="usernameInput"
-                  label="Usuario o correo"
+                  label={copy.username}
                   value={username}
                   onChangeText={(value) => {
                     setUsername(value);
                     setErrorMessage(null);
                   }}
-                  placeholder="usuario o correo"
+                  placeholder={copy.usernamePlaceholder}
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoComplete="username"
@@ -423,20 +547,20 @@ export default function AuthScreen() {
               <FormField
                 ref={passwordInputRef}
                 testID="passwordInput"
-                label="Contraseña"
+                label={copy.password}
                 value={password}
                 onChangeText={(value) => {
                   setPassword(value);
                   setErrorMessage(null);
                 }}
-                placeholder={mode === 'signup' ? 'Mínimo 8 caracteres' : 'Tu contraseña'}
+                placeholder={mode === 'signup' ? copy.newPasswordPlaceholder : copy.currentPasswordPlaceholder}
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoComplete={mode === 'signup' ? 'new-password' : 'password'}
                 textContentType={mode === 'signup' ? 'newPassword' : 'password'}
-                secureTextEntry
+                secureTextEntry={!showPassword}
                 error={signupPasswordError}
-                accessibilityHint={mode === 'signup' ? 'Usa al menos 8 caracteres.' : undefined}
+                accessibilityHint={mode === 'signup' ? copy.passwordHint : undefined}
                 returnKeyType="done"
                 onSubmitEditing={() => {
                   if (mode === 'signup') {
@@ -447,45 +571,85 @@ export default function AuthScreen() {
                 }}
               />
 
+              <TouchableOpacity
+                style={styles.inlineControl}
+                onPress={() => setShowPassword((current) => !current)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showPassword }}
+                accessibilityLabel={showPassword ? copy.hide : copy.show}
+              >
+                <Text style={styles.inlineControlText}>{showPassword ? copy.hide : copy.show}</Text>
+              </TouchableOpacity>
+
               {mode === 'signup' ? (
-                <View style={styles.roleSelectorContainer}>
-                  <Text style={[styles.label, { color: colors.textPrimary }]}>¿Cómo vas a usar TDF?</Text>
-                  <View style={styles.roleRow}>
-                    {([
-                      { key: 'Fan' as const, label: 'Fan' },
-                      { key: 'Artista' as const, label: 'Artista' },
-                      { key: 'Teacher' as const, label: 'Profesor' },
-                    ]).map(({ key, label }) => (
+                <>
+                  <View style={styles.intentSelectorContainer}>
+                    <Text style={[styles.label, { color: colors.textPrimary }]}>{copy.intentTitle}</Text>
+                    <Text style={styles.intentHint}>{copy.intentHint}</Text>
+                    <View style={styles.intentGrid} accessibilityRole="radiogroup">
+                      {ONBOARDING_INTENT_OPTIONS.map(({ id, labelEs, labelEn }) => (
                       <TouchableOpacity
-                        key={key}
+                        key={id}
                         style={[
-                          styles.roleButton,
+                          styles.intentButton,
                           {
-                            backgroundColor: selectedRole === key ? colors.actionPrimary : colors.surface,
-                            borderColor: selectedRole === key ? colors.actionPrimary : colors.border,
+                            backgroundColor: selectedIntent === id ? colors.selected : colors.surface,
+                            borderColor: selectedIntent === id ? colors.actionPrimary : colors.border,
                           },
                         ]}
                         onPress={() => {
-                          setSelectedRole(key);
+                          setSelectedIntent(id);
                           setErrorMessage(null);
+                          void persistOnboardingIntent(id);
+                          analytics.capture('onboarding_intent_selected', { platform: 'mobile', intent: id });
                         }}
                         accessibilityRole="radio"
-                        accessibilityState={{ selected: selectedRole === key }}
+                        accessibilityState={{ selected: selectedIntent === id }}
                       >
                         <Text
-                          style={[
-                            styles.roleButtonText,
-                            {
-                              color: selectedRole === key ? colors.actionPrimaryContrast : colors.textPrimary,
-                            },
-                          ]}
+                          style={[styles.intentButtonText, { color: selectedIntent === id ? colors.actionPrimary : colors.textPrimary }]}
                         >
-                          {label}
+                          {english ? labelEn : labelEs}
                         </Text>
                       </TouchableOpacity>
-                    ))}
+                      ))}
+                    </View>
                   </View>
-                </View>
+
+                  <TouchableOpacity
+                    testID="termsCheckbox"
+                    style={styles.checkboxRow}
+                    onPress={() => setTermsAccepted((current) => !current)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: termsAccepted }}
+                    accessibilityLabel={copy.accept}
+                  >
+                    <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+                      <Text style={styles.checkboxMark}>{termsAccepted ? '✓' : ''}</Text>
+                    </View>
+                    <Text style={styles.checkboxText}>{copy.accept}</Text>
+                  </TouchableOpacity>
+                  <View style={styles.legalLinks}>
+                    <TouchableOpacity accessibilityRole="link" onPress={() => void Linking.openURL(TERMS_URL)}>
+                      <Text style={styles.legalLink}>{copy.terms}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity accessibilityRole="link" onPress={() => void Linking.openURL(PRIVACY_URL)}>
+                      <Text style={styles.legalLink}>{copy.privacy}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.checkboxRow}
+                    onPress={() => setMarketingOptIn((current) => !current)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: marketingOptIn }}
+                    accessibilityLabel={copy.marketing}
+                  >
+                    <View style={[styles.checkbox, marketingOptIn && styles.checkboxChecked]}>
+                      <Text style={styles.checkboxMark}>{marketingOptIn ? '✓' : ''}</Text>
+                    </View>
+                    <Text style={styles.checkboxText}>{copy.marketing}</Text>
+                  </TouchableOpacity>
+                </>
               ) : null}
 
               {mode === 'login' ? (
@@ -499,7 +663,7 @@ export default function AuthScreen() {
                   }}
                   accessibilityRole="link"
                 >
-                  <Text style={styles.forgotPasswordLink}>¿Olvidaste tu contraseña?</Text>
+                  <Text style={styles.forgotPasswordLink}>{copy.forgot}</Text>
                 </TouchableOpacity>
               ) : null}
 
@@ -527,16 +691,16 @@ export default function AuthScreen() {
                   <ActivityIndicator color={colors.actionPrimaryContrast} />
                 ) : (
                   <Text style={styles.primaryButtonText}>
-                    {mode === 'signup' ? 'Crear cuenta y continuar' : 'Ingresar'}
+                    {mode === 'signup' ? copy.create : copy.login}
                   </Text>
                 )}
               </TouchableOpacity>
 
-              {showGoogleLogin && mode === 'login' ? (
+              {showGoogleLogin && (mode !== 'signup' || termsAccepted) ? (
                 <>
                   <View style={styles.dividerRow}>
                     <View style={styles.divider} />
-                    <Text style={styles.dividerText}>o</Text>
+                    <Text style={styles.dividerText}>{copy.divider}</Text>
                     <View style={styles.divider} />
                   </View>
 
@@ -552,7 +716,9 @@ export default function AuthScreen() {
                     {isGoogleSubmitting ? (
                       <ActivityIndicator color={colors.textPrimary} />
                     ) : (
-                      <Text style={styles.secondaryButtonText}>Continuar con Google</Text>
+                      <Text style={styles.secondaryButtonText}>
+                        {mode === 'signup' ? copy.googleCreate : copy.googleLogin}
+                      </Text>
                     )}
                   </TouchableOpacity>
 
@@ -576,7 +742,7 @@ export default function AuthScreen() {
               {forgotPasswordSuccess ? (
                 <>
                   <Text style={styles.successText} accessibilityLiveRegion="polite">
-                    Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada.
+                    {copy.resetSuccess}
                   </Text>
                   <TouchableOpacity
                     onPress={() => {
@@ -587,20 +753,20 @@ export default function AuthScreen() {
                     }}
                     accessibilityRole="link"
                   >
-                    <Text style={styles.forgotPasswordLink}>Volver al inicio de sesión</Text>
+                    <Text style={styles.forgotPasswordLink}>{copy.backToLogin}</Text>
                   </TouchableOpacity>
                 </>
               ) : (
                 <>
                   <FormField
                     ref={forgotPasswordEmailInputRef}
-                    label="Correo electrónico"
+                    label={copy.email}
                     value={forgotPasswordEmail}
                     onChangeText={(value) => {
                       setForgotPasswordEmail(value);
                       setForgotPasswordError(null);
                     }}
-                    placeholder="tu@correo.com"
+                    placeholder={copy.emailPlaceholder}
                     autoCapitalize="none"
                     autoCorrect={false}
                     autoComplete="email"
@@ -621,7 +787,7 @@ export default function AuthScreen() {
                     {isForgotPasswordSubmitting ? (
                       <ActivityIndicator color={colors.actionPrimaryContrast} />
                     ) : (
-                      <Text style={styles.primaryButtonText}>Enviar enlace</Text>
+                      <Text style={styles.primaryButtonText}>{copy.sendReset}</Text>
                     )}
                   </TouchableOpacity>
 
@@ -644,7 +810,7 @@ export default function AuthScreen() {
                     }}
                     accessibilityRole="link"
                   >
-                    <Text style={styles.forgotPasswordLink}>Volver al inicio de sesión</Text>
+                    <Text style={styles.forgotPasswordLink}>{copy.backToLogin}</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -652,16 +818,16 @@ export default function AuthScreen() {
           ) : null}
 
           <View style={styles.card}>
-            <Text style={styles.label}>Estado de sesión</Text>
+            <Text style={styles.label}>{copy.sessionStatus}</Text>
             {loading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={colors.actionPrimary} />
-                <Text style={styles.statusText}>Cargando sesión guardada…</Text>
+                <Text style={styles.statusText}>{copy.sessionLoading}</Text>
               </View>
             ) : (
               <>
                 <Text style={styles.statusText}>
-                  Sesión: {hasToken ? 'Activa' : 'No iniciada'}
+                  {copy.session}: {hasToken ? copy.sessionActive : copy.sessionInactive}
                 </Text>
                 {feedbackMessage ? (
                   <Text style={styles.successText} accessibilityLiveRegion="polite">
@@ -677,7 +843,7 @@ export default function AuthScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ disabled: !hasToken }}
                 >
-                  <Text style={styles.ghostButtonText}>Cerrar sesión</Text>
+                  <Text style={styles.ghostButtonText}>{copy.signOut}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -704,6 +870,20 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   subtitle: { color: colors.textSecondary, lineHeight: 20 },
   meta: { color: colors.actionPrimary, fontSize: 12, fontWeight: '600' },
   label: { fontWeight: '700', color: colors.textPrimary },
+  languageRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+  languageButton: {
+    minWidth: 72,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  languageButtonActive: { backgroundColor: colors.selected, borderColor: colors.actionPrimary },
+  languageText: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
+  languageTextActive: { color: colors.actionPrimary },
   modeSwitch: {
     flexDirection: 'row',
     gap: 6,
@@ -762,17 +942,35 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   divider: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
   forgotPasswordLink: { color: colors.actionPrimary, fontSize: 13, fontWeight: '600' },
+  inlineControl: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+  inlineControlText: { color: colors.actionPrimary, fontSize: 13, fontWeight: '600' },
   buttonDisabled: { opacity: 0.5 },
-  roleSelectorContainer: { gap: 8 },
-  roleRow: { flexDirection: 'row', gap: 8 },
-  roleButton: {
-    flex: 1,
-    minHeight: 40,
+  intentSelectorContainer: { gap: 8 },
+  intentHint: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
+  intentGrid: { gap: 8 },
+  intentButton: {
+    minHeight: 44,
     borderRadius: 8,
     borderWidth: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  intentButtonText: { fontSize: 13, fontWeight: '700' },
+  checkboxRow: { flexDirection: 'row', gap: 10, alignItems: 'center', minHeight: 44 },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    backgroundColor: colors.surfaceRaised,
   },
-  roleButtonText: { fontSize: 13, fontWeight: '700' },
+  checkboxChecked: { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary },
+  checkboxMark: { color: colors.actionPrimaryContrast, fontWeight: '900' },
+  checkboxText: { flex: 1, color: colors.textPrimary, fontSize: 13, lineHeight: 18 },
+  legalLinks: { flexDirection: 'row', gap: 20, paddingLeft: 34 },
+  legalLink: { color: colors.actionPrimary, minHeight: 44, textAlignVertical: 'center', fontWeight: '600', fontSize: 13 },
 });

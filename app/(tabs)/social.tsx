@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, View, Text, TouchableOpacity, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 
 import { Parties } from '../../src/api/parties';
 import { Social } from '../../src/api/social';
-import type { PartyFollow } from '../../src/types';
+import { Artists } from '../../src/api/artists';
+import type { ArtistProfile, PartyFollow } from '../../src/types';
 import type { PartyDTO } from '../../src/api/types';
 import { resolvePartyId } from '../../src/lib/identity';
 import { useAuth } from '../../src/providers/AuthProvider';
@@ -12,6 +14,8 @@ import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { impactMedium } from '../../src/utils/haptics';
+import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
+import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
 
 type TabKey = 'following' | 'followers';
 
@@ -19,11 +23,13 @@ const isPositivePartyId = (value: number): boolean =>
   Number.isSafeInteger(value) && value > 0;
 
 export default function SocialScreen() {
+  const router = useRouter();
   const qc = useQueryClient();
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
   const { token, partyId: authPartyId, loading } = useAuth();
-  const { partyId: settingsPartyId, displayName } = useUserSettings();
+  const { partyId: settingsPartyId, displayName, locale } = useUserSettings();
+  const english = locale.startsWith('en');
 
   const [activeTab, setActiveTab] = useState<TabKey>('following');
   const [refreshing, setRefreshing] = useState(false);
@@ -47,6 +53,13 @@ export default function SocialScreen() {
     queryFn: Social.listFollowing,
     enabled: canUseSocial
   });
+  const artistCandidatesQuery = useQuery({
+    queryKey: ['onboarding', 'artist-candidates'],
+    queryFn: () => Artists.list({ limit: 3 }),
+    enabled: canUseSocial,
+    retry: 1,
+  });
+  const [followedArtistIds, setFollowedArtistIds] = useState<Set<string>>(new Set());
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -72,16 +85,42 @@ export default function SocialScreen() {
       if (!isPositivePartyId(targetId)) throw new Error('No pudimos reconocer ese perfil.');
       await Social.addFriend(targetId);
     },
-    onSuccess: (_data, targetId) => {
+    onSuccess: async (_data, targetId) => {
       invalidateAll();
       void impactMedium();
       analytics.capture('artist_followed', { platform: 'mobile', target_party_id: targetId });
+      if (await markFirstValueCompleted(effectivePartyId, 'artist_followed')) {
+        analytics.capture('first_value_completed', { platform: 'mobile', value: 'artist_followed' });
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'artist_followed' });
+        if (effectivePartyId) await markNewUserOnboardingCompleted(effectivePartyId);
+      }
       Alert.alert('Listo', 'Ahora sigues a esta persona.');
     },
     onError: (err) => {
       const msg = err instanceof Error ? err.message : 'No pudimos seguir a esta persona.';
       Alert.alert('Error', msg);
     }
+  });
+
+  const artistFollowMutation = useMutation<void, Error, ArtistProfile>({
+    mutationFn: async (artist) => {
+      if (!effectivePartyId) throw new Error(english ? 'Sign in to follow an artist.' : 'Inicia sesión para seguir a un artista.');
+      await Artists.follow(artist.id, effectivePartyId);
+    },
+    onSuccess: async (_data, artist) => {
+      setFollowedArtistIds((current) => new Set(current).add(String(artist.id)));
+      void impactMedium();
+      analytics.capture('artist_followed', { platform: 'mobile', artist_id: String(artist.id) });
+      if (await markFirstValueCompleted(effectivePartyId, 'artist_followed')) {
+        analytics.capture('first_value_completed', { platform: 'mobile', value: 'artist_followed' });
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'artist_followed' });
+        if (effectivePartyId) await markNewUserOnboardingCompleted(effectivePartyId);
+      }
+    },
+    onError: (error) => Alert.alert(
+      english ? 'Could not follow artist' : 'No pudimos seguir al artista',
+      error instanceof Error ? error.message : (english ? 'Try again.' : 'Intenta de nuevo.'),
+    ),
   });
 
   const unfollowMutation = useMutation<void, Error, number>({
@@ -222,6 +261,54 @@ export default function SocialScreen() {
           </View>
 
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+            <Text maxFontSizeMultiplier={1.5} style={[styles.sectionTitle, { color: colors.textPrimary }]} accessibilityRole="header">
+              {english ? 'Start by following an artist' : 'Empieza siguiendo a un artista'}
+            </Text>
+            <Text maxFontSizeMultiplier={1.5} style={[styles.subtitle, { color: colors.textSecondary }]}>
+              {english ? 'Choose one now, or save an upcoming event instead.' : 'Elige uno ahora o guarda un próximo evento.'}
+            </Text>
+            {artistCandidatesQuery.isLoading ? (
+              <Text style={[styles.helper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">
+                {english ? 'Loading artists…' : 'Cargando artistas…'}
+              </Text>
+            ) : (artistCandidatesQuery.isError || (artistCandidatesQuery.data?.length ?? 0) === 0) ? (
+              <Text style={[styles.helper, { color: colors.textSecondary }]} accessibilityRole="alert">
+                {english ? 'Artists are unavailable right now. You can still save an event.' : 'Los artistas no están disponibles ahora. Aún puedes guardar un evento.'}
+              </Text>
+            ) : (
+              artistCandidatesQuery.data?.map((artist) => {
+                const followed = followedArtistIds.has(String(artist.id));
+                return (
+                  <View key={String(artist.id)} style={[styles.discoveryRow, { borderColor: colors.borderSubtle }]}>
+                    <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{artist.name}</Text>
+                    <TouchableOpacity
+                      style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }, followed && styles.buttonDisabled]}
+                      onPress={() => artistFollowMutation.mutate(artist)}
+                      disabled={followed || artistFollowMutation.isPending}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${english ? 'Follow' : 'Seguir a'} ${artist.name}`}
+                      accessibilityState={{ disabled: followed || artistFollowMutation.isPending, busy: artistFollowMutation.isPending }}
+                    >
+                      <Text style={[styles.primaryButtonText, { color: colors.actionPrimaryContrast }]}>
+                        {followed ? (english ? 'Following' : 'Siguiendo') : (english ? 'Follow' : 'Seguir')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.eventFallbackButton, { backgroundColor: colors.surfaceMuted }]}
+              onPress={() => router.push('/(tabs)/events')}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.secondaryButtonText, { color: colors.textPrimary }]}>
+                {english ? 'View upcoming events' : 'Ver próximos eventos'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
             <View style={[styles.tabs, { borderColor: colors.borderSubtle }]}>
               <TouchableOpacity
                 style={[styles.tab, { backgroundColor: colors.canvas }, activeTab === 'following' && [styles.tabActive, { backgroundColor: colors.selected }]]}
@@ -270,11 +357,12 @@ const styles = StyleSheet.create({
   wrap: { padding: 16, gap: 12 },
   card: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 10 },
   title: { fontSize: 20, fontWeight: '800' },
+  sectionTitle: { fontSize: 17, fontWeight: '800' },
   subtitle: { lineHeight: 20 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, fontWeight: '700' },
   helper: { fontSize: 13 },
-  primaryButton: { paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center' },
+  primaryButton: { minHeight: 44, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   primaryButtonText: { fontWeight: '700' },
   tabs: { flexDirection: 'row', borderRadius: 10, overflow: 'hidden', borderWidth: 1 },
   tab: { flex: 1, paddingVertical: 10 },
@@ -287,6 +375,8 @@ const styles = StyleSheet.create({
   itemMeta: { fontSize: 12, marginTop: 2 },
   tag: { fontSize: 12, marginTop: 4, fontWeight: '700' },
   secondaryButton: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
+  eventFallbackButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  discoveryRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderWidth: 1, borderRadius: 10, padding: 10 },
   secondaryButtonText: { fontWeight: '700', fontSize: 12 },
   followingBadge: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
   followingBadgeText: { fontWeight: '700', fontSize: 12 },

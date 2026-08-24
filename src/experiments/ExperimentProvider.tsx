@@ -13,6 +13,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getAnalyticsClient } from '../analytics/posthog';
+import { useAuth } from '../providers/AuthProvider';
 
 export type ExperimentVariant = 'control' | 'treatment' | string;
 
@@ -20,15 +21,18 @@ interface ExperimentConfig {
   id: string;
   variants: ExperimentVariant[];
   weights?: number[]; // Must sum to 1, defaults to equal
+  enabled?: boolean;
 }
 
 interface ExperimentContextType {
   getVariant: (experimentId: string) => ExperimentVariant | null;
+  isExperimentEnabled: (experimentId: string) => boolean;
   isReady: boolean;
 }
 
 const ExperimentContext = createContext<ExperimentContextType>({
   getVariant: () => null,
+  isExperimentEnabled: () => false,
   isReady: false,
 });
 
@@ -42,6 +46,10 @@ const ACTIVE_EXPERIMENTS: ExperimentConfig[] = [
     id: 'single-feature-onboarding-v1',
     variants: ['control', 'treatment_singlefeature'],
     weights: [0.5, 0.5],
+    // Paused until the remote moments feed and eligibility instrumentation
+    // meet the experiment's reliability threshold. Existing assignments are
+    // forced to control while paused.
+    enabled: false,
   },
 ];
 
@@ -65,11 +73,18 @@ function assignVariant(experiment: ExperimentConfig): ExperimentVariant {
 }
 
 export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { partyId } = useAuth();
   const [variants, setVariants] = useState<Record<string, ExperimentVariant>>({});
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     async function init() {
+      if (!partyId) {
+        setVariants({});
+        setIsReady(true);
+        return;
+      }
+      setIsReady(false);
       try {
         // Load existing assignments
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -81,20 +96,27 @@ export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const updated = { ...existing };
         const analytics = getAnalyticsClient();
         for (const exp of ACTIVE_EXPERIMENTS) {
-          if (!updated[exp.id]) {
+          const assignmentKey = `${partyId}:${exp.id}`;
+          if (exp.enabled === false) {
+            updated[assignmentKey] = 'control';
+            continue;
+          }
+          if (!updated[assignmentKey]) {
             const assigned = assignVariant(exp);
-            updated[exp.id] = assigned;
+            updated[assignmentKey] = assigned;
             analytics.capture('experiment_assigned', {
               experimentId: exp.id,
               variant: assigned,
-              source: 'client_local',
+              source: 'authenticated_identity_local',
             });
           }
         }
 
         // Save updated assignments
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        setVariants(updated);
+        setVariants(Object.fromEntries(
+          ACTIVE_EXPERIMENTS.map((exp) => [exp.id, updated[`${partyId}:${exp.id}`] ?? 'control']),
+        ));
       } catch (err) {
         console.error('Experiment init failed:', err);
       } finally {
@@ -103,14 +125,17 @@ export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
 
     init();
-  }, []);
+  }, [partyId]);
 
   const getVariant = (experimentId: string): ExperimentVariant | null => {
     return variants[experimentId] || null;
   };
 
+  const isExperimentEnabled = (experimentId: string): boolean =>
+    ACTIVE_EXPERIMENTS.some((experiment) => experiment.id === experimentId && experiment.enabled !== false);
+
   return (
-    <ExperimentContext.Provider value={{ getVariant, isReady }}>
+    <ExperimentContext.Provider value={{ getVariant, isExperimentEnabled, isReady }}>
       {children}
     </ExperimentContext.Provider>
   );

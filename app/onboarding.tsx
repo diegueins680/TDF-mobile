@@ -1,158 +1,124 @@
-import { useEffect, useState, type ComponentType, useRef } from 'react';
-import { AccessibilityInfo, Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View, type ViewProps } from 'react-native';
+import { useEffect, useRef, type ComponentType } from 'react';
+import {
+  AccessibilityInfo,
+  Animated,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  type ViewProps,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import type { Href } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { setOnboardingSeen } from '../src/lib/onboarding';
-
-type Step = {
-  title: string;
-  description: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  color: string;
-};
-
-const STEPS: Step[] = [
-  {
-    title: 'Eventos y tickets',
-    description: 'Encuentra eventos de TDF y compra tus entradas desde el móvil.',
-    icon: 'ticket-confirmation',
-    color: '#f8c96b'
-  },
-  {
-    title: 'Perfil, seguir y vCards',
-    description: 'Crea tu perfil, sigue artistas y comparte tu vCard con la comunidad.',
-    icon: 'account-heart',
-    color: '#7dd3fc'
-  },
-  {
-    title: 'Streaming y club de fans',
-    description: 'Accede a transmisiones, contenido exclusivo y espacios de fan club.',
-    icon: 'broadcast',
-    color: '#c4b5fd'
-  }
-] as const;
+import { useUserSettings } from '../src/providers/UserSettingsProvider';
+import { onboardingCopy, onboardingLanguage } from '../src/localization/onboardingCopy';
 
 const AnimatedView = Animated.createAnimatedComponent(View) as ComponentType<Animated.AnimatedProps<ViewProps>>;
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const analytics = useAnalytics();
+  const { locale, getCatalogItems, setRegionalPreferences } = useUserSettings();
+  const language = onboardingLanguage(locale);
+  const copy = onboardingCopy[language];
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+  const entryLanguage = useRef(language).current;
 
   useEffect(() => {
+    analytics.capture('onboarding_viewed', { platform: 'mobile', locale: entryLanguage });
     let active = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (active) setReduceMotionEnabled(enabled);
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduceMotion) => {
+      if (!active) return;
+      if (reduceMotion) {
+        fadeAnim.setValue(1);
+        return;
+      }
+      Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
     });
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotionEnabled);
     return () => {
       active = false;
-      subscription.remove();
+      fadeAnim.stopAnimation();
     };
-  }, []);
+  }, [analytics, entryLanguage, fadeAnim]);
 
-  useEffect(() => {
-    fadeAnim.stopAnimation();
-    if (reduceMotionEnabled) {
-      fadeAnim.setValue(1);
-      return;
-    }
-    fadeAnim.setValue(0);
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true
-    }).start();
-    return () => fadeAnim.stopAnimation();
-  }, [fadeAnim, reduceMotionEnabled]);
-
-  const complete = (path: Href) => {
+  const complete = (path: Href, action: 'create_account' | 'login') => {
+    analytics.capture('onboarding_primary_clicked', { platform: 'mobile', action });
+    if (action === 'login') analytics.capture('onboarding_skipped', { platform: 'mobile', reason: 'existing_account' });
     void setOnboardingSeen(true);
     router.replace(path);
+  };
+
+  const chooseLanguage = (code: 'es' | 'en') => {
+    const option = getCatalogItems('locales').find((item) => item.code === code);
+    if (option) setRegionalPreferences({ localeId: option.id });
   };
 
   return (
     <SafeAreaView style={styles.page}>
       <StatusBar style="light" />
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.hero}>
-          <TouchableOpacity
-            style={styles.skip}
-            onPress={() => complete('/auth')}
-            accessibilityRole="button"
-            accessibilityLabel="Ingresar con una cuenta existente"
-          >
-            <Text style={styles.skipText}>Ingresar</Text>
-          </TouchableOpacity>
+      <ScrollView testID="onboardingScroll" contentContainerStyle={styles.content}>
+        <View testID="onboardingPanel" style={styles.panel}>
+          <View style={styles.languageRow} accessibilityRole="radiogroup">
+            {(['es', 'en'] as const).map((code) => (
+              <TouchableOpacity
+                key={code}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: language === code }}
+                onPress={() => chooseLanguage(code)}
+                style={[styles.languageButton, language === code && styles.languageButtonActive]}
+              >
+                <Text style={[styles.languageText, language === code && styles.languageTextActive]}>
+                  {code === 'es' ? 'Español' : 'English'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           <AnimatedView
             style={[
-              styles.heroContent,
+              styles.hero,
               {
                 opacity: fadeAnim,
-                transform: [
-                  {
-                    translateY: fadeAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [12, 0]
-                    })
-                  }
-                ]
-              }
+                transform: [{
+                  translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }),
+                }],
+              },
             ]}
           >
-            <Text style={styles.kicker}>TDF Mobile</Text>
-            <Text accessibilityRole="header" style={styles.title}>Tu acceso a la comunidad musical</Text>
-            <Text style={styles.subtitle}>
-              Una interfaz mínima para descubrir eventos, seguir artistas y entrar a sus clubes de fans.
-            </Text>
-            <View style={styles.heroMeta}>
-              <View style={styles.metaPill}>
-                <Text style={styles.metaText}>Eventos</Text>
-              </View>
-              <View style={styles.metaPill}>
-                <Text style={styles.metaText}>Tickets</Text>
-              </View>
-              <View style={styles.metaPill}>
-                <Text style={styles.metaText}>Club de fans</Text>
-              </View>
-            </View>
+            <Text style={styles.kicker}>{copy.kicker}</Text>
+            <Text accessibilityRole="header" style={styles.title}>{copy.title}</Text>
+            <Text style={styles.subtitle}>{copy.subtitle}</Text>
           </AnimatedView>
-        </View>
 
-        <View style={styles.steps}>
-          {STEPS.map((step) => (
-            <View key={step.title} style={styles.stepCard}>
-              <View style={[styles.stepIcon, { borderColor: `${step.color}33` }]}>
-                <MaterialCommunityIcons name={step.icon} size={20} color={step.color} />
-              </View>
-              <View style={styles.stepBody}>
-                <Text style={styles.stepTitle}>{step.title}</Text>
-                <Text style={styles.stepText}>{step.description}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
+          <View style={styles.valueCard}>
+            <Text style={styles.valueTitle}>{copy.proofTitle}</Text>
+            <Text style={styles.valueBody}>{copy.proofBody}</Text>
+          </View>
 
-        <View style={styles.actionStack}>
-          <TouchableOpacity
-            testID="goToLoginButton"
-            style={styles.primaryButton}
-            onPress={() => complete({ pathname: '/auth', params: { mode: 'signup' } })}
-            accessibilityRole="button"
-          >
-            <Text style={styles.primaryText}>Crear cuenta</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => complete('/auth')}
-            accessibilityRole="button"
-          >
-            <Text style={styles.secondaryText}>Ya tengo cuenta</Text>
-          </TouchableOpacity>
+          <View style={styles.actions}>
+            <TouchableOpacity
+              testID="goToLoginButton"
+              style={styles.primaryButton}
+              onPress={() => complete({ pathname: '/auth', params: { mode: 'signup', intent: 'events' } }, 'create_account')}
+              accessibilityRole="button"
+              accessibilityLabel={copy.create}
+            >
+              <Text style={styles.primaryText}>{copy.create}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => complete('/auth', 'login')}
+              accessibilityRole="button"
+              accessibilityLabel={copy.login}
+            >
+              <Text style={styles.secondaryText}>{copy.login}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -160,144 +126,66 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: '#0b1220'
-  },
+  page: { flex: 1, backgroundColor: '#0b1220' },
   content: {
-    padding: 16,
-    gap: 16
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: Platform.select({ web: 44, default: 20 }),
   },
-  hero: {
-    position: 'relative',
-    borderRadius: 16,
-    padding: 20,
-    backgroundColor: '#111827',
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.2)',
-    overflow: 'hidden',
-    minHeight: 220,
-    justifyContent: 'center'
+  panel: {
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
+    marginVertical: 'auto',
+    gap: 18,
   },
-  heroContent: {
-    gap: 10
-  },
-  kicker: {
-    color: '#93c5fd',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1
-  },
-  title: {
-    color: '#f8fafc',
-    fontSize: 24,
-    fontWeight: '800'
-  },
-  subtitle: {
-    color: '#cbd5e1',
-    lineHeight: 20
-  },
-  heroMeta: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap'
-  },
-  metaPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.35)',
-    backgroundColor: 'rgba(15,23,42,0.6)'
-  },
-  metaText: {
-    color: '#e2e8f0',
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  steps: {
-    gap: 12
-  },
-  stepCard: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#111827',
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.18)'
-  },
-  stepIcon: {
-    width: 40,
-    height: 40,
+  languageRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+  languageButton: {
+    minHeight: 44,
+    minWidth: 76,
+    paddingHorizontal: 12,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#64748b',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    backgroundColor: 'rgba(15,23,42,0.7)'
   },
-  stepBody: {
-    flex: 1,
-    gap: 4
-  },
-  stepTitle: {
-    color: '#f8fafc',
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  stepText: {
-    color: '#cbd5e1',
-    lineHeight: 18
-  },
-  actionStack: {
-    gap: 10,
-    paddingBottom: 24
-  },
-  primaryButton: {
-    backgroundColor: '#2563eb',
-    minHeight: 48,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center'
-  },
-  primaryText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16
-  },
-  secondaryButton: {
+  languageButtonActive: { backgroundColor: '#1d4ed8', borderColor: '#60a5fa' },
+  languageText: { color: '#cbd5e1', fontWeight: '700' },
+  languageTextActive: { color: '#ffffff' },
+  hero: { gap: 12, paddingVertical: 8 },
+  kicker: { color: '#93c5fd', fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
+  title: { color: '#f8fafc', fontSize: 32, lineHeight: 38, fontWeight: '900' },
+  subtitle: { color: '#cbd5e1', fontSize: 17, lineHeight: 25 },
+  valueCard: {
+    gap: 8,
+    padding: 18,
+    borderRadius: 14,
+    backgroundColor: '#111827',
     borderWidth: 1,
     borderColor: '#334155',
-    minHeight: 44,
-    paddingVertical: 12,
+  },
+  valueTitle: { color: '#f8fafc', fontSize: 17, fontWeight: '800' },
+  valueBody: { color: '#cbd5e1', lineHeight: 21 },
+  actions: { gap: 10, paddingTop: 6 },
+  primaryButton: {
+    minHeight: 50,
     borderRadius: 12,
-    alignItems: 'center'
-  },
-  secondaryText: {
-    color: '#e2e8f0',
-    fontWeight: '600'
-  },
-  ghostButton: {
-    paddingVertical: 10,
-    alignItems: 'center'
-  },
-  ghostText: {
-    color: '#cbd5e1',
-    fontWeight: '600'
-  },
-  skip: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    zIndex: 2,
-    minWidth: 44,
-    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 16,
   },
-  skipText: {
-    color: '#cbd5e1',
-    fontWeight: '600'
-  }
+  primaryText: { color: '#ffffff', fontSize: 16, fontWeight: '800' },
+  secondaryButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#64748b',
+    paddingHorizontal: 16,
+  },
+  secondaryText: { color: '#f8fafc', fontSize: 15, fontWeight: '700' },
 });

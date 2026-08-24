@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,6 +26,7 @@ const slugify = (value: string) => value.toLowerCase().normalize('NFD').replace(
 
 export default function DirectoryManageScreen() {
   const router = useRouter();
+  const { create: rawCreate } = useLocalSearchParams<{ create?: string | string[] }>();
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
   const [mode, setMode] = useState<'profiles' | 'classifieds' | 'invitations'>('profiles');
@@ -46,6 +47,14 @@ export default function DirectoryManageScreen() {
   });
   const profileStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: string }) => Directory.transitionProfile(id, status), onSuccess: refresh });
   const classifiedStatus = useMutation({ mutationFn: ({ id, status }: { id: string; status: string }) => Directory.transitionClassified(id, status), onSuccess: refresh });
+
+  useEffect(() => {
+    const create = Array.isArray(rawCreate) ? rawCreate[0] : rawCreate;
+    if (create === 'classified') {
+      setMode('classifieds');
+      setShowForm(true);
+    }
+  }, [rawCreate]);
 
   if (profiles.isLoading || classifieds.isLoading || invitations.isLoading || taxonomies.isLoading) {
     return <SafeAreaView style={[styles.centered, { backgroundColor: colors.canvas }]}><ActivityIndicator color={colors.actionPrimary} /></SafeAreaView>;

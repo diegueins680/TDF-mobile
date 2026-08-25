@@ -8,9 +8,11 @@ import {
   type PropsWithChildren,
 } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '../theme/ThemeProvider';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useUserSettings } from './UserSettingsProvider';
 
 /* ------------------------------------------------------------------ */
 /*  Context                                                            */
@@ -90,8 +92,11 @@ export function NetworkProvider({ children }: PropsWithChildren) {
 export function NetworkBanner() {
   const { isConnected } = useNetwork();
   const { colors } = useAppTheme();
+  const { locale } = useUserSettings();
+  const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
   const [opacity] = useState(() => new Animated.Value(0));
+  const label = locale.startsWith('en') ? 'No connection' : 'Sin conexión';
 
   useEffect(() => {
     Animated.timing(opacity, {
@@ -105,12 +110,15 @@ export function NetworkBanner() {
     <Animated.View
       style={[
         styles.banner,
-        { backgroundColor: colors.dangerAction, opacity },
+        { backgroundColor: colors.dangerAction, opacity, top: insets.top },
       ]}
       pointerEvents="none"
+      accessible
+      accessibilityRole="alert"
+      accessibilityLiveRegion="assertive"
     >
       <Text style={[styles.bannerText, { color: colors.dangerActionContrast }]}>
-        Sin conexión
+        {label}
       </Text>
     </Animated.View>
   );
@@ -119,7 +127,6 @@ export function NetworkBanner() {
 const styles = StyleSheet.create({
   banner: {
     position: 'absolute',
-    top: 0,
     left: 0,
     right: 0,
     zIndex: 9999,

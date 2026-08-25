@@ -20,6 +20,7 @@ import { useAppTheme } from '../theme/ThemeProvider';
 export interface FormFieldProps extends Omit<TextInputProps, 'style'> {
   label: string;
   optional?: boolean;
+  optionalLabel?: string;
   hint?: ReactNode;
   error?: string | null;
   containerStyle?: StyleProp<ViewStyle>;
@@ -30,6 +31,7 @@ const FormField = forwardRef<TextInput, FormFieldProps>(function FormField(
   {
     label,
     optional = false,
+    optionalLabel = 'opcional',
     hint,
     error,
     containerStyle,
@@ -57,7 +59,7 @@ const FormField = forwardRef<TextInput, FormFieldProps>(function FormField(
       <Text nativeID={labelId} style={[styles.label, { color: colors.textPrimary }]}>
         {label}
         {optional ? (
-          <Text style={[styles.optional, { color: colors.textSecondary }]}> (opcional)</Text>
+          <Text style={[styles.optional, { color: colors.textSecondary }]}> ({optionalLabel})</Text>
         ) : null}
       </Text>
       <TextInput

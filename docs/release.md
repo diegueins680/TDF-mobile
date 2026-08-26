@@ -48,7 +48,9 @@ export EAS_PROJECT_ID=<expo-project-id>
 
 ```bash
 npm run release:assets
+npm run release:assets:check
 npm run release:check
+npm run doctor
 npx eas-cli@latest build --platform ios --profile production
 npx eas-cli@latest build --platform android --profile production
 npx eas-cli@latest submit --platform ios --profile production --latest
@@ -70,6 +72,10 @@ npx eas-cli@latest submit --platform android --profile production --latest
 ## Notes
 
 - `app.config.ts` is the single source of truth for Expo metadata.
+- The committed app icons and splash image are validated for format and dimensions by `release:assets:check` before every release gate.
+- The tracked native projects are intentional. `release-check.mjs` verifies their canonical app identifiers, while Expo Doctor's generic app-config/native-sync warning is disabled for this repository.
+- `react-native-webrtc` remains required for live broadcasts and is excluded only from Expo Doctor's directory-metadata check; native builds and broadcast tests remain authoritative.
+- `.github/workflows/mobile-validate.yml` runs the release gate, Jest, and official Expo Doctor for pull requests and `main`. The separately dispatched readiness workflow starts EAS builds only when an operator explicitly opts in and `EXPO_TOKEN` is configured.
 - `eas.json` defines `development`, `preview`, and `production` profiles.
 - `preview` and `production` profiles pin the release API and upload endpoints so cloud builds never fall back to `localhost`.
 - EAS remote versioning owns iOS build numbers and Android version codes for release builds.

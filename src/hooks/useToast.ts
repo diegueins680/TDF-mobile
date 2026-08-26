@@ -7,13 +7,13 @@ import { Animated } from 'react-native';
 export function useToast() {
   const opacity = useRef(new Animated.Value(0)).current;
   const messageRef = useRef('');
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const show = useCallback((message: string, duration = 2500) => {
     messageRef.current = message;
-    
+
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    
+
     Animated.sequence([
       Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
       Animated.delay(duration),

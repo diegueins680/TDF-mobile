@@ -63,6 +63,7 @@ npm run lint
 npm run typecheck
 npm run test
 npm run release:assets
+npm run release:assets:check
 npm run release:check
 npm run doctor
 npm run expo:config
@@ -98,6 +99,7 @@ npm run submit:android:production
 - Store-ready app identifiers are `com.tdfrecords.app` for iOS and `com.tdf.records` for Android.
 - EAS production builds use remote versioning from `eas.json`; do not set local build numbers for release builds.
 - Release assets are generated from shared TDF branding in the parent workspace by `scripts/generate_release_assets.py`.
+- The release gate validates the committed app icon, adaptive icons, favicon, and splash dimensions without requiring that parent workspace.
 - The `/about` screen shows the resolved API base, health status, and version info.
 - Auth now uses username/password and Google login in-app; the old bearer-token flow is no longer the primary path.
 

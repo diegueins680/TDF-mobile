@@ -1,0 +1,70 @@
+name: Mobile Release Readiness
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Optional EAS build target
+        required: true
+        default: all
+        type: choice
+        options: [all, ios, android]
+      profile:
+        description: EAS profile to validate or build
+        required: true
+        default: production
+        type: choice
+        options: [production, preview]
+      start_eas_build:
+        description: Start a cloud build after validation
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run release checks
+        run: npm run release:check
+
+      - name: Run tests
+        run: npm test -- --watch=false
+
+      - name: Run Expo Doctor
+        run: npm run doctor
+
+      - name: Report missing Expo token
+        if: ${{ inputs.start_eas_build && env.EXPO_TOKEN == '' }}
+        run: echo "Skipping EAS build because EXPO_TOKEN is not configured."
+
+      - name: Verify EAS authentication
+        if: ${{ inputs.start_eas_build && env.EXPO_TOKEN != '' }}
+        run: npx eas-cli@latest whoami
+
+      - name: Start Android EAS build
+        if: ${{ inputs.start_eas_build && env.EXPO_TOKEN != '' && (inputs.platform == 'all' || inputs.platform == 'android') }}
+        run: npx eas-cli@latest build --platform android --profile "${{ inputs.profile }}" --non-interactive --no-wait
+
+      - name: Start iOS EAS build
+        if: ${{ inputs.start_eas_build && env.EXPO_TOKEN != '' && (inputs.platform == 'all' || inputs.platform == 'ios') }}
+        run: npx eas-cli@latest build --platform ios --profile "${{ inputs.profile }}" --non-interactive --no-wait

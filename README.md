@@ -4,7 +4,9 @@ Expo/React Native app for TDF Records operations. The current app covers booking
 
 ## Environment
 
-Local development falls back to `http://localhost:8080` and `http://localhost:8080/drive/upload` if these are unset, but you can export them explicitly:
+The repo uses a local `.npm-cache/` via `.npmrc`, so clean installs do not depend on `~/.npm`.
+
+Local development falls back to `http://localhost:8080` and `http://localhost:8080/drive/upload` if these are unset, but you can export them explicitly or start from `.env.example`:
 
 ```bash
 export EXPO_PUBLIC_API_BASE=http://localhost:8080
@@ -36,7 +38,9 @@ npm run lint
 npm run typecheck
 npm run test
 npm run release:assets
+npm run release:assets:check
 npm run release:check
+npx expo-doctor
 ```
 
 ## Release Files
@@ -59,4 +63,5 @@ npm run release:check
 - Expo config is centralized in `app.config.ts`.
 - Store-ready app identifiers are `com.tdfrecords.app` for both iOS and Android.
 - EAS production builds use remote versioning from `eas.json`; do not set local build numbers for release builds.
-- Release assets are generated from shared TDF branding in the parent workspace by `scripts/generate_release_assets.py`.
+- Canonical release assets are stored in `assets/release-source/`; `npm run release:assets` syncs those committed files into the app paths referenced by `app.config.ts`.
+- `npx expo-doctor` is provided by the repo and checks the release-blocking Expo peer, duplicate native module, and SDK alignment issues that matter for this app's CI gate.

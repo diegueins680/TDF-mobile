@@ -1,0 +1,60 @@
+name: Mobile Validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      NPM_CONFIG_CACHE: ${{ github.workspace }}/.npm-cache
+      npm_config_cache: ${{ github.workspace }}/.npm-cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Restore npm cache
+        uses: actions/cache@v4
+        with:
+          path: .npm-cache
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check release assets
+        run: npm run release:assets:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Validate Expo config
+        run: npx expo config --type public
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run Expo doctor
+        run: npx expo-doctor

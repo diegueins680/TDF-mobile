@@ -12,20 +12,23 @@
   },
   "main": "expo-router/entry",
   "scripts": {
+    "postinstall": "node scripts/link_local_bins.mjs",
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "deploy": "npx expo export -p web && npx eas-cli@latest deploy",
-    "release:assets": "python3 scripts/generate_release_assets.py",
-    "release:check": "npm run lint && npm run typecheck && npx expo config --type public",
+    "release:assets": "node scripts/sync_release_assets.mjs",
+    "release:assets:check": "node scripts/sync_release_assets.mjs --check",
+    "release:check": "npm run release:assets:check && npm run lint && npm run typecheck && npx expo config --type public",
     "release:prepare": "npm run release:assets && npm run release:check",
+    "release:doctor": "npx expo-doctor",
     "eas:build:ios": "npx eas-cli@latest build --platform ios --profile production",
     "eas:build:android": "npx eas-cli@latest build --platform android --profile production",
     "eas:submit:ios": "npx eas-cli@latest submit --platform ios --profile production --latest",
     "eas:submit:android": "npx eas-cli@latest submit --platform android --profile production --latest",
     "lint": "eslint . --ext ts,tsx --max-warnings=0",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "jest --runInBand"
   },
   "dependencies": {
@@ -34,9 +37,10 @@
     "@testomatio/reporter": "0.7.6",
     "axios": "^1.12.2",
     "expo": "~54.0.25",
-    "expo-barcode-scanner": "^13.0.1",
+    "expo-camera": "~17.0.9",
+    "expo-constants": "~18.0.10",
     "expo-image-picker": "~15.0.6",
-    "expo-linking": "^8.0.9",
+    "expo-linking": "~8.0.9",
     "expo-location": "~17.0.1",
     "expo-router": "~6.0.15",
     "expo-status-bar": "~2.0.0",
@@ -50,7 +54,7 @@
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
-    "react-native-web": "^0.21.0",
+    "react-native-web": "~0.21.0",
     "react-native-worklets": "^0.6.1",
     "zod": "^3.25.76"
   },
@@ -60,6 +64,7 @@
     "@testing-library/jest-native": "^5.4.3",
     "@testing-library/react-native": "^12.5.3",
     "@types/jest": "^29.5.12",
+    "@types/node": "^24.10.1",
     "@typescript-eslint/eslint-plugin": "^8.9.0",
     "@typescript-eslint/parser": "^8.9.0",
     "eslint": "^9.14.0",
@@ -73,6 +78,9 @@
     "typescript": "~5.9.2"
   },
   "overrides": {
-    "react-native-reanimated": "~4.1.1"
+    "react-native-reanimated": "~4.1.1",
+    "react-native-calendars": {
+      "react-native-safe-area-context": "~5.6.0"
+    }
   }
 }

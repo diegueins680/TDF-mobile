@@ -59,10 +59,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     [
-      'expo-barcode-scanner',
+      'expo-camera',
       {
         cameraPermission: 'Allow TDF Records to use your camera to scan QR codes and capture inventory images.',
-        microphonePermission: false
+        microphonePermission: false,
+        recordAudioAndroid: false
       }
     ],
     [

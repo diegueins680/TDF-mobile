@@ -1,0 +1,12 @@
+{
+  "requiredDirectDependencies": {
+    "expo-router": ["expo-constants"]
+  },
+  "allowedVersionWarnings": {
+    "@react-native-async-storage/async-storage": "Pinned to the 1.x API surface used throughout the app. Plan the Expo SDK 54 storage upgrade separately so it can be validated against persisted session data.",
+    "expo-image-picker": "The repo is locked to the currently shipped image flow. Upgrade together with a device-level permission regression pass.",
+    "expo-location": "The venue explorer depends on the existing permission/request behavior. Upgrade with a targeted simulator/device verification pass.",
+    "expo-status-bar": "Status bar behavior is stable in the current app shell. Upgrade alongside the broader Expo module refresh.",
+    "react-native-worklets": "The current lockfile is pinned to 0.6.1 with Reanimated 4.1.1. Revisit during the next Expo SDK uplift when the full animation stack can move together."
+  }
+}

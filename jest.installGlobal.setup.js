@@ -3,6 +3,21 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
+jest.mock('expo-image', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const React = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Image: ReactNativeImage } = require('react-native');
+  const ExpoImage = (props) => React.createElement(ReactNativeImage, props);
+  ExpoImage.prefetch = jest.fn(async () => true);
+  return { Image: ExpoImage };
+});
+
+jest.mock('expo-image-manipulator', () => ({
+  manipulateAsync: jest.fn(),
+  SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
+}));
+
 const BUILTIN_SYMBOL = Symbol.for('expo.builtin');
 
 const markExpoBuiltin = (value) => {

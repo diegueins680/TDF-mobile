@@ -14,6 +14,7 @@ import {
   AppState,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Image as ExpoImage } from 'expo-image';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -34,6 +35,11 @@ import {
   listFeaturedMoments,
 } from '../src/lib/eventMoments';
 import { countLiveBroadcasts } from '../src/lib/liveBroadcasts';
+import {
+  MAX_MOMENT_MEDIA_SELECTION,
+  prepareMomentMediaForUpload,
+  type DraftMomentMedia,
+} from '../src/lib/momentMedia';
 import {
   endLiveBroadcastSession,
   heartbeatLiveBroadcastSession,
@@ -63,13 +69,35 @@ import type {
   EventLiveBroadcastQuality,
   EventInvitationStatus,
   EventMoment,
+  EventMomentMedia,
   EventMomentReactionOption,
   ID,
   RSVPStatus,
 } from '../src/types';
 
 type EventDetailTab = 'details' | 'moments' | 'live';
-type DraftMomentMedia = EventMoment['media'] & { fileName?: string | null };
+type MomentSubmission = {
+  caption: string;
+  media: DraftMomentMedia[];
+  optimisticIds: string[];
+};
+type MomentPublishSuccess = {
+  index: number;
+  status: 'fulfilled';
+  moment: EventMoment;
+  source: 'remote' | 'local';
+  notices: string[];
+};
+type MomentPublishFailure = {
+  index: number;
+  status: 'rejected';
+  message: string;
+};
+type MomentPublishOutcome = MomentPublishSuccess | MomentPublishFailure;
+type MomentPublishFeedback = {
+  tone: 'success' | 'warning';
+  text: string;
+};
 type ActiveLiveBroadcastRecord = {
   eventId: string;
   broadcastId: string;
@@ -80,6 +108,10 @@ type CloseLiveBroadcastOptions = {
   updateState?: boolean;
 };
 const LIVE_QUALITY_OPTIONS: EventLiveBroadcastQuality[] = ['auto', '720p', '480p'];
+const MOMENT_UPLOAD_CONCURRENCY = 2;
+
+const createOptimisticMomentId = (): string =>
+  `pending-moment-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const parsePositivePartyId = (value: string | null | undefined): number | null => {
   if (!value || !/^\d+$/.test(value.trim())) return null;
@@ -126,7 +158,12 @@ export default function EventDetailScreen() {
   const [inviteMessage, setInviteMessage] = useState('');
   const [showMomentComposer, setShowMomentComposer] = useState(false);
   const [momentCaption, setMomentCaption] = useState('');
-  const [momentMedia, setMomentMedia] = useState<DraftMomentMedia | null>(null);
+  const [momentMedia, setMomentMedia] = useState<DraftMomentMedia[]>([]);
+  const [pendingMoments, setPendingMoments] = useState<EventMoment[]>([]);
+  const [previewMedia, setPreviewMedia] = useState<EventMomentMedia | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const [momentPublishFeedback, setMomentPublishFeedback] = useState<MomentPublishFeedback | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [selectedLiveArtistId, setSelectedLiveArtistId] = useState<string | null>(null);
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -164,8 +201,13 @@ export default function EventDetailScreen() {
     enabled: Boolean(eventId),
   });
 
+  const momentsQueryKey = useMemo(
+    () => ['event-moments', eventId, shouldPreferRemoteMoments ? 'remote' : 'local'] as const,
+    [eventId, shouldPreferRemoteMoments],
+  );
+
   const momentsQuery = useQuery({
-    queryKey: ['event-moments', eventId, shouldPreferRemoteMoments ? 'remote' : 'local'],
+    queryKey: momentsQueryKey,
     queryFn: () => listMomentFeed(eventId as ID, { preferRemote: shouldPreferRemoteMoments }),
     enabled: Boolean(eventId && activeTab === 'moments'),
   });
@@ -209,6 +251,17 @@ export default function EventDetailScreen() {
     () => listFeaturedMoments(momentsQuery.data ?? [], 3),
     [momentsQuery.data],
   );
+  const displayedMoments = useMemo(() => {
+    const pendingIds = new Set(pendingMoments.map((moment) => moment.id));
+    return [
+      ...pendingMoments,
+      ...(momentsQuery.data ?? []).filter((moment) => !pendingIds.has(moment.id)),
+    ];
+  }, [momentsQuery.data, pendingMoments]);
+  const pendingMomentIds = useMemo(
+    () => new Set(pendingMoments.map((moment) => moment.id)),
+    [pendingMoments],
+  );
   const featuredMomentIds = useMemo(
     () => new Set(featuredMoments.map((moment) => moment.id)),
     [featuredMoments],
@@ -246,6 +299,21 @@ export default function EventDetailScreen() {
     const mine = rsvpQuery.data.find((r) => String(r.userId) === normalizedPartyId);
     setRsvpStatus(mine?.status ?? 'NONE');
   }, [normalizedPartyId, rsvpQuery.data]);
+
+  useEffect(() => {
+    const thumbnailUrls = (momentsQuery.data ?? [])
+      .filter((moment) => moment.media.kind === 'image' && /^https?:\/\//i.test(moment.media.uri))
+      .slice(0, 6)
+      .map((moment) => moment.media.uri);
+    if (thumbnailUrls.length === 0) return;
+    void ExpoImage.prefetch(thumbnailUrls, { cachePolicy: 'memory-disk' }).catch(() => undefined);
+  }, [momentsQuery.data]);
+
+  useEffect(() => {
+    if (!momentPublishFeedback) return undefined;
+    const timer = setTimeout(() => setMomentPublishFeedback(null), 7000);
+    return () => clearTimeout(timer);
+  }, [momentPublishFeedback]);
 
   useEffect(() => {
     if (followedLiveArtists.length === 0) {
@@ -343,58 +411,137 @@ export default function EventDetailScreen() {
   });
 
   const createMomentMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (submission: MomentSubmission): Promise<MomentPublishOutcome[]> => {
       if (!eventId) throw new Error('Event not found');
-      if (!momentMedia) throw new Error('Selecciona una imagen o video antes de publicar.');
-
-      let mediaUri = momentMedia.uri;
-      let uploadNotice: string | null = null;
-
-      if (token?.trim()) {
-        try {
-          mediaUri = await uploadMedia({
-            uri: momentMedia.uri,
-            mimeType: momentMedia.mimeType,
-            fileName: momentMedia.fileName ?? undefined,
-            uploadLabel: momentMedia.kind === 'video' ? 'video' : 'imagen',
-          });
-        } catch (error) {
-          uploadNotice =
-            error instanceof Error
-              ? `${error.message} Guardamos el momento solo en este dispositivo.`
-              : 'Guardamos el momento solo en este dispositivo.';
-        }
+      if (submission.media.length === 0) {
+        throw new Error('Selecciona una imagen o video antes de publicar.');
       }
 
-      const result = await createMomentFeedItem({
-        eventId,
-        authorName: currentActor.displayName,
-        authorPartyId: currentActor.partyId,
-        caption: momentCaption,
-        media: { ...momentMedia, uri: mediaUri },
-      }, { preferRemote: shouldPreferRemoteMoments });
+      const outcomes = new Array<MomentPublishOutcome>(submission.media.length);
+      let nextIndex = 0;
 
-      return { uploadNotice, source: result.source, fallbackReason: result.fallbackReason };
-    },
-    onSuccess: ({ uploadNotice, source, fallbackReason }) => {
-      setMomentCaption('');
-      setMomentMedia(null);
-      setShowMomentComposer(false);
-      qc.invalidateQueries({ queryKey: ['event-moments', eventId] });
-      const notices = [
-        uploadNotice,
-        source === 'local' && shouldPreferRemoteMoments
-          ? fallbackReason ?? 'No pudimos sincronizarlo con el backend. Lo guardamos solo en este dispositivo.'
-          : null,
-      ].filter((value): value is string => Boolean(value));
-      Alert.alert(
-        'Publicado',
-        notices.join('\n\n') || 'Tu momento ya aparece en el feed del evento.',
+      const publishNext = async (): Promise<void> => {
+        while (nextIndex < submission.media.length) {
+          const index = nextIndex;
+          nextIndex += 1;
+          const originalMedia = submission.media[index];
+
+          try {
+            let mediaForMoment = originalMedia;
+            let preferRemote = shouldPreferRemoteMoments;
+            const notices: string[] = [];
+
+            if (token?.trim()) {
+              const preparedMedia = await prepareMomentMediaForUpload(originalMedia);
+              try {
+                const mediaUri = await uploadMedia({
+                  uri: preparedMedia.uri,
+                  mimeType: preparedMedia.mimeType,
+                  fileName: preparedMedia.fileName ?? undefined,
+                  uploadLabel: preparedMedia.kind === 'video' ? 'video' : 'imagen',
+                });
+                mediaForMoment = { ...preparedMedia, uri: mediaUri };
+              } catch (error) {
+                preferRemote = false;
+                notices.push(
+                  error instanceof Error
+                    ? `${error.message} Guardamos ese momento solo en este dispositivo.`
+                    : 'Guardamos ese momento solo en este dispositivo.',
+                );
+              }
+            }
+
+            const result = await createMomentFeedItem({
+              eventId,
+              authorName: currentActor.displayName,
+              authorPartyId: currentActor.partyId,
+              caption: submission.caption,
+              media: mediaForMoment,
+            }, { preferRemote });
+
+            if (result.source === 'local' && shouldPreferRemoteMoments && result.fallbackReason) {
+              notices.push(result.fallbackReason);
+            }
+
+            outcomes[index] = {
+              index,
+              status: 'fulfilled',
+              moment: result.moment,
+              source: result.source,
+              notices,
+            };
+          } catch (error) {
+            outcomes[index] = {
+              index,
+              status: 'rejected',
+              message: error instanceof Error ? error.message : 'No pudimos publicar este momento.',
+            };
+          }
+        }
+      };
+
+      await Promise.all(
+        Array.from(
+          { length: Math.min(MOMENT_UPLOAD_CONCURRENCY, submission.media.length) },
+          () => publishNext(),
+        ),
       );
+      return outcomes;
     },
-    onError: (error) => {
+    onSuccess: (outcomes, submission) => {
+      const fulfilled = outcomes.filter((outcome): outcome is MomentPublishSuccess => outcome.status === 'fulfilled');
+      const rejected = outcomes.filter((outcome): outcome is MomentPublishFailure => outcome.status === 'rejected');
+      const submittedIds = new Set(submission.optimisticIds);
+
+      setPendingMoments((current) => current.filter((moment) => !submittedIds.has(moment.id)));
+
+      if (fulfilled.length > 0) {
+        qc.setQueryData<EventMoment[]>(momentsQueryKey, (current = []) => {
+          const publishedIds = new Set(fulfilled.map((outcome) => outcome.moment.id));
+          return [
+            ...fulfilled.map((outcome) => outcome.moment),
+            ...current.filter((moment) => !publishedIds.has(moment.id)),
+          ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+        });
+        qc.invalidateQueries({ queryKey: ['event-moments', eventId] });
+      }
+
+      if (rejected.length > 0) {
+        setMomentMedia(rejected.map((outcome) => submission.media[outcome.index]));
+        setMomentCaption(submission.caption);
+        setShowMomentComposer(true);
+      }
+
+      const localCount = fulfilled.filter((outcome) => outcome.source === 'local').length;
+      const notices = [...new Set(fulfilled.flatMap((outcome) => outcome.notices))];
+      const rejectedMessages = [...new Set(rejected.map((outcome) => outcome.message))];
+      const summary = [
+        fulfilled.length > 0
+          ? `${fulfilled.length} ${fulfilled.length === 1 ? 'momento publicado' : 'momentos publicados'}.`
+          : null,
+        localCount > 0
+          ? `${localCount} ${localCount === 1 ? 'quedó guardado' : 'quedaron guardados'} solo en este dispositivo.`
+          : null,
+        rejected.length > 0
+          ? `${rejected.length} ${rejected.length === 1 ? 'archivo volvió' : 'archivos volvieron'} al editor para reintentar.`
+          : null,
+        ...notices,
+        ...rejectedMessages,
+      ].filter((value): value is string => Boolean(value));
+
+      setMomentPublishFeedback({
+        tone: rejected.length > 0 ? 'warning' : 'success',
+        text: summary.join(' '),
+      });
+    },
+    onError: (error, submission) => {
+      const submittedIds = new Set(submission.optimisticIds);
+      setPendingMoments((current) => current.filter((moment) => !submittedIds.has(moment.id)));
+      setMomentMedia(submission.media);
+      setMomentCaption(submission.caption);
+      setShowMomentComposer(true);
       const message = error instanceof Error ? error.message : 'No pudimos publicar tu momento.';
-      Alert.alert('Error', message);
+      setMomentPublishFeedback({ tone: 'warning', text: message });
     },
   });
 
@@ -618,8 +765,15 @@ export default function EventDetailScreen() {
     }
   }, []);
 
-  const handleOpenMomentMedia = useCallback((uri: string) => {
-    Linking.openURL(uri).catch(() => {
+  const handleOpenMomentMedia = useCallback((media: EventMomentMedia) => {
+    if (media.kind === 'image') {
+      setPreviewFailed(false);
+      setPreviewLoading(true);
+      setPreviewMedia(media);
+      return;
+    }
+
+    Linking.openURL(media.uri).catch(() => {
       Alert.alert('Error', 'No pudimos abrir este archivo.');
     });
   }, []);
@@ -660,48 +814,104 @@ export default function EventDetailScreen() {
     saveEventMutation.mutate();
   }, [saveEventMutation]);
 
-  const selectMomentMedia = useCallback(async (mode: 'camera' | 'library'): Promise<DraftMomentMedia | null> => {
+  const selectMomentMedia = useCallback(async (
+    mode: 'camera' | 'photos' | 'video',
+    selectionLimit = 1,
+  ): Promise<DraftMomentMedia[]> => {
     if (mode === 'camera') {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permiso requerido', 'Activa el acceso a la cámara para tomar fotos del evento.');
-        return null;
+        return [];
       }
     }
 
     const result =
       mode === 'camera'
         ? await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             quality: 0.8,
           })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.All,
-            allowsEditing: false,
-            quality: 0.8,
-            videoMaxDuration: 20,
-          });
+        : mode === 'photos'
+          ? await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsMultipleSelection: true,
+              orderedSelection: true,
+              selectionLimit,
+              quality: 0.8,
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['videos'],
+              allowsMultipleSelection: false,
+              quality: 0.8,
+              videoMaxDuration: 20,
+            });
 
-    if (result.canceled) return null;
-    const asset = result.assets[0];
-    const kind = asset.type === 'video' ? 'video' : 'image';
-    return {
-      kind,
-      uri: asset.uri,
-      mimeType: asset.mimeType ?? (kind === 'video' ? 'video/mp4' : 'image/jpeg'),
-      width: asset.width ?? null,
-      height: asset.height ?? null,
-      durationMs: asset.duration ?? null,
-      fileName: asset.fileName,
-    };
+    if (result.canceled) return [];
+    return result.assets.map((asset) => {
+      const kind = asset.type === 'video' ? 'video' : 'image';
+      return {
+        kind,
+        uri: asset.uri,
+        mimeType: asset.mimeType ?? (kind === 'video' ? 'video/mp4' : 'image/jpeg'),
+        width: asset.width > 0 ? asset.width : null,
+        height: asset.height > 0 ? asset.height : null,
+        durationMs: asset.duration ?? null,
+        fileName: asset.fileName,
+      };
+    });
   }, []);
 
-  const pickMomentMedia = useCallback(async (mode: 'camera' | 'library') => {
-    const media = await selectMomentMedia(mode);
-    if (!media) return;
-    setMomentMedia(media);
-  }, [selectMomentMedia]);
+  const pickMomentMedia = useCallback(async (mode: 'camera' | 'photos' | 'video') => {
+    const remaining = MAX_MOMENT_MEDIA_SELECTION - momentMedia.length;
+    if (remaining <= 0) {
+      Alert.alert('Galería completa', `Puedes publicar hasta ${MAX_MOMENT_MEDIA_SELECTION} archivos a la vez.`);
+      return;
+    }
+
+    const selected = await selectMomentMedia(mode, mode === 'photos' ? remaining : 1);
+    if (selected.length === 0) return;
+
+    setMomentMedia((current) => {
+      const knownUris = new Set(current.map((media) => media.uri));
+      const additions = selected.filter((media) => !knownUris.has(media.uri));
+      return [...current, ...additions].slice(0, MAX_MOMENT_MEDIA_SELECTION);
+    });
+  }, [momentMedia.length, selectMomentMedia]);
+
+  const removeMomentMedia = useCallback((uri: string) => {
+    setMomentMedia((current) => current.filter((media) => media.uri !== uri));
+  }, []);
+
+  const handlePublishMoments = useCallback(() => {
+    if (!eventId || momentMedia.length === 0 || createMomentMutation.isPending) return;
+
+    const optimisticIds = momentMedia.map(() => createOptimisticMomentId());
+    const now = Date.now();
+    const optimisticMoments = momentMedia.map<EventMoment>((media, index) => ({
+      id: optimisticIds[index],
+      eventId,
+      authorName: currentActor.displayName,
+      authorPartyId: currentActor.partyId,
+      caption: momentCaption.trim() || null,
+      media,
+      createdAt: new Date(now + index).toISOString(),
+      reactions: {},
+      comments: [],
+    })).reverse();
+    const submission: MomentSubmission = {
+      caption: momentCaption,
+      media: [...momentMedia],
+      optimisticIds,
+    };
+
+    setPendingMoments((current) => [...optimisticMoments, ...current]);
+    setMomentCaption('');
+    setMomentMedia([]);
+    setShowMomentComposer(false);
+    createMomentMutation.mutate(submission);
+  }, [createMomentMutation, currentActor, eventId, momentCaption, momentMedia]);
 
   const handleCommentChange = useCallback((momentId: string, value: string) => {
     setCommentDrafts((current) => ({ ...current, [momentId]: value }));
@@ -757,7 +967,7 @@ export default function EventDetailScreen() {
   const rsvpCount = rsvpQuery.data ? countGoingRsvps(rsvpQuery.data) : (event.rsvpCount ?? 0);
   const invitations = invitationsQuery.data ?? [];
   const isSaved = savedEventIdsQuery.data?.includes(String(event.id)) ?? false;
-  const momentCount = momentsQuery.data?.length ?? 0;
+  const momentCount = displayedMoments.length;
   const liveBroadcasts = liveBroadcastsQuery.data ?? [];
   const liveBroadcastCount = countLiveBroadcasts(liveBroadcasts);
   const activeBroadcast = activeBroadcastId
@@ -985,6 +1195,29 @@ export default function EventDetailScreen() {
                   {token?.trim() ? '' : ' · sin token el momento queda guardado localmente'}
                 </Text>
               </View>
+              {momentPublishFeedback ? (
+                <View
+                  style={[
+                    styles.momentFeedback,
+                    momentPublishFeedback.tone === 'warning' && styles.momentFeedbackWarning,
+                  ]}
+                  accessibilityLiveRegion="polite"
+                >
+                  <MaterialCommunityIcons
+                    name={momentPublishFeedback.tone === 'warning' ? 'alert-circle-outline' : 'check-circle-outline'}
+                    size={18}
+                    color={momentPublishFeedback.tone === 'warning' ? '#9a3412' : '#166534'}
+                  />
+                  <Text
+                    style={[
+                      styles.momentFeedbackText,
+                      momentPublishFeedback.tone === 'warning' && styles.momentFeedbackTextWarning,
+                    ]}
+                  >
+                    {momentPublishFeedback.text}
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             {featuredMoments.length > 0 ? (
@@ -1008,7 +1241,7 @@ export default function EventDetailScreen() {
 
             <View style={styles.section}>
               <Text style={styles.label}>Feed</Text>
-              {momentsQuery.isLoading ? (
+              {momentsQuery.isLoading && pendingMoments.length === 0 ? (
                 <ActivityIndicator color="#2563eb" />
               ) : momentCount === 0 ? (
                 <View style={styles.emptyMomentsCard}>
@@ -1020,13 +1253,15 @@ export default function EventDetailScreen() {
                 </View>
               ) : (
                 <View style={styles.momentList}>
-                  {(momentsQuery.data ?? []).map((moment) => (
+                  {displayedMoments.map((moment, index) => (
                     <EventMomentCard
                       key={moment.id}
                       moment={moment}
                       currentActorKey={currentActor.actorKey}
                       currentPartyId={currentActor.partyId}
                       featured={featuredMomentIds.has(moment.id)}
+                      pending={pendingMomentIds.has(moment.id)}
+                      imagePriority={index < 2 ? 'high' : 'normal'}
                       reactionDisabled={reactionMutation.isPending}
                       reactionOptions={reactionOptions}
                       reactionUnavailableLabel={
@@ -1218,6 +1453,58 @@ export default function EventDetailScreen() {
       </ScrollView>
 
       <Modal
+        visible={Boolean(previewMedia)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewMedia(null)}
+        accessibilityViewIsModal
+      >
+        <SafeAreaView style={styles.previewModal}>
+          <View style={styles.previewHeader}>
+            <TouchableOpacity
+              style={styles.previewCloseButton}
+              onPress={() => setPreviewMedia(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar vista previa"
+            >
+              <MaterialCommunityIcons name="close" size={26} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.previewBody}>
+            {previewLoading && !previewFailed ? (
+              <ActivityIndicator style={styles.previewLoader} size="large" color="#fff" />
+            ) : null}
+            {previewFailed ? (
+              <View style={styles.previewError}>
+                <MaterialCommunityIcons name="image-off-outline" size={42} color="#cbd5e1" />
+                <Text style={styles.previewErrorText}>No pudimos cargar esta foto.</Text>
+              </View>
+            ) : previewMedia ? (
+              <ExpoImage
+                source={{
+                  uri: previewMedia.uri,
+                  width: previewMedia.width,
+                  height: previewMedia.height,
+                }}
+                style={styles.previewImage}
+                contentFit="contain"
+                cachePolicy="memory-disk"
+                priority="high"
+                transition={100}
+                onDisplay={() => setPreviewLoading(false)}
+                onError={() => {
+                  setPreviewLoading(false);
+                  setPreviewFailed(true);
+                }}
+                accessibilityRole="image"
+                accessibilityLabel="Vista previa de la foto"
+              />
+            ) : null}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal
         visible={showMomentComposer}
         transparent
         animationType="slide"
@@ -1239,32 +1526,61 @@ export default function EventDetailScreen() {
           </View>
           <View style={styles.modalContent}>
             <Text style={styles.modalMessage}>
-              Elige una foto o video corto y publícalo desde este evento. Si el upload falla, guardaremos el momento en
-              este dispositivo para no perderlo.
+              Elige hasta {MAX_MOMENT_MEDIA_SELECTION} fotos o agrega un video corto. Verás cada archivo en el feed de
+              inmediato mientras se optimiza y publica en segundo plano.
             </Text>
 
             <View style={styles.momentMediaActions}>
               <TouchableOpacity style={styles.secondaryActionButton} onPress={() => void pickMomentMedia('camera')}>
                 <Text style={styles.secondaryActionButtonText}>Tomar foto</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.secondaryActionButton} onPress={() => void pickMomentMedia('library')}>
-                <Text style={styles.secondaryActionButtonText}>Elegir foto o video</Text>
+              <TouchableOpacity style={styles.secondaryActionButton} onPress={() => void pickMomentMedia('photos')}>
+                <Text style={styles.secondaryActionButtonText}>Elegir fotos</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryActionButton} onPress={() => void pickMomentMedia('video')}>
+                <Text style={styles.secondaryActionButtonText}>Agregar video</Text>
               </TouchableOpacity>
             </View>
 
-            {momentMedia ? (
+            {momentMedia.length > 0 ? (
               <View style={styles.selectedMomentCard}>
-                {momentMedia.kind === 'image' ? (
-                  <Image source={{ uri: momentMedia.uri }} style={styles.selectedMomentImage} />
-                ) : (
-                  <View style={styles.selectedVideoBox}>
-                    <MaterialCommunityIcons name="play-circle-outline" size={34} color="#f8fafc" />
-                    <Text style={styles.selectedVideoText}>Video listo para publicar</Text>
-                  </View>
-                )}
-                <TouchableOpacity style={styles.clearMediaButton} onPress={() => setMomentMedia(null)}>
-                  <Text style={styles.clearMediaButtonText}>Quitar archivo</Text>
-                </TouchableOpacity>
+                <Text style={styles.selectedMomentSummary} accessibilityLiveRegion="polite">
+                  {momentMedia.length} {momentMedia.length === 1 ? 'archivo listo' : 'archivos listos'}
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.selectedMomentList}
+                >
+                  {momentMedia.map((media, index) => (
+                    <View key={media.uri} style={styles.selectedMomentTile}>
+                      {media.kind === 'image' ? (
+                        <ExpoImage
+                          source={{ uri: media.uri, width: media.width, height: media.height }}
+                          style={styles.selectedMomentThumbnail}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                          transition={80}
+                          accessibilityRole="image"
+                          accessibilityLabel={`Foto seleccionada ${index + 1}`}
+                        />
+                      ) : (
+                        <View style={styles.selectedVideoThumbnail}>
+                          <MaterialCommunityIcons name="play-circle-outline" size={30} color="#f8fafc" />
+                          <Text style={styles.selectedVideoText}>Video</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.removeMediaButton}
+                        onPress={() => removeMomentMedia(media.uri)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Quitar archivo ${index + 1}`}
+                      >
+                        <MaterialCommunityIcons name="close-circle" size={24} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
               </View>
             ) : null}
 
@@ -1281,15 +1597,19 @@ export default function EventDetailScreen() {
               <TouchableOpacity
                 style={[
                   styles.primaryButton,
-                  (!momentMedia || createMomentMutation.isPending) && styles.buttonDisabled,
+                  (momentMedia.length === 0 || createMomentMutation.isPending) && styles.buttonDisabled,
                 ]}
-                onPress={() => createMomentMutation.mutate()}
-                disabled={!momentMedia || createMomentMutation.isPending}
+                onPress={handlePublishMoments}
+                disabled={momentMedia.length === 0 || createMomentMutation.isPending}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: !momentMedia || createMomentMutation.isPending }}
+                accessibilityState={{ disabled: momentMedia.length === 0 || createMomentMutation.isPending }}
               >
                 <Text style={styles.primaryButtonText}>
-                  {createMomentMutation.isPending ? 'Publicando…' : 'Publicar momento'}
+                  {createMomentMutation.isPending
+                    ? 'Publicando…'
+                    : momentMedia.length > 1
+                      ? `Publicar ${momentMedia.length} momentos`
+                      : 'Publicar momento'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1807,6 +2127,31 @@ const styles = StyleSheet.create({
   momentHintRow: {
     marginTop: 2,
   },
+  momentFeedback: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  momentFeedbackWarning: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#fed7aa',
+  },
+  momentFeedbackText: {
+    flex: 1,
+    color: '#166534',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  momentFeedbackTextWarning: {
+    color: '#9a3412',
+  },
   primaryPillButton: {
     alignSelf: 'flex-start',
     borderRadius: 999,
@@ -1864,6 +2209,45 @@ const styles = StyleSheet.create({
   momentList: {
     gap: 12,
   },
+  previewModal: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.98)',
+  },
+  previewHeader: {
+    minHeight: 56,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  previewCloseButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+  },
+  previewBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  previewLoader: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  previewError: {
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+  },
+  previewErrorText: {
+    color: '#e2e8f0',
+    fontWeight: '600',
+  },
   modal: { flex: 1, backgroundColor: '#fff' },
   modalHeader: {
     flexDirection: 'row',
@@ -1905,30 +2289,47 @@ const styles = StyleSheet.create({
   selectedMomentCard: {
     gap: 10,
   },
-  selectedMomentImage: {
-    width: '100%',
-    height: 220,
+  selectedMomentSummary: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  selectedMomentList: {
+    gap: 10,
+    paddingRight: 4,
+  },
+  selectedMomentTile: {
+    width: 104,
+    height: 104,
     borderRadius: 14,
+    overflow: 'hidden',
     backgroundColor: '#e2e8f0',
   },
-  selectedVideoBox: {
-    height: 180,
-    borderRadius: 14,
+  selectedMomentThumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  selectedVideoThumbnail: {
+    flex: 1,
     backgroundColor: '#0f172a',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 4,
   },
   selectedVideoText: {
     color: '#f8fafc',
     fontWeight: '700',
   },
-  clearMediaButton: {
-    alignSelf: 'flex-start',
-  },
-  clearMediaButtonText: {
-    color: '#2563eb',
-    fontWeight: '700',
+  removeMediaButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
   },
   invitationList: { gap: 8 },
   invitationItem: {

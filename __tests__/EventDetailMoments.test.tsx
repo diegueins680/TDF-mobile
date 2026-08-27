@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import EventDetailScreen from '../app/eventDetail';
 
@@ -94,6 +94,7 @@ jest.mock('../src/lib/liveBroadcastPublishing', () => ({
 
 describe('EventDetail moments tab', () => {
   const useQuery = jest.mocked(require('@tanstack/react-query').useQuery as jest.Mock);
+  const imagePicker = jest.mocked(require('expo-image-picker'));
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -228,6 +229,68 @@ describe('EventDetail moments tab', () => {
     expect(screen.getByText('Top moment')).toBeTruthy();
     expect(screen.getByText('Conectar')).toBeTruthy();
     expect(screen.getByText('Publicas como Cuco')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Ver foto de Andrea'));
+    expect(screen.getByLabelText('Cerrar vista previa')).toBeTruthy();
+    expect(screen.getByLabelText('Vista previa de la foto')).toBeTruthy();
+  });
+
+  it('adds several gallery photos with immediate thumbnails and one publish action', async () => {
+    imagePicker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///library/first.jpg',
+          type: 'image',
+          mimeType: 'image/jpeg',
+          width: 2400,
+          height: 1600,
+          fileName: 'first.jpg',
+        },
+        {
+          uri: 'file:///library/second.heic',
+          type: 'image',
+          mimeType: 'image/heic',
+          width: 3024,
+          height: 4032,
+          fileName: 'second.heic',
+        },
+      ],
+    });
+
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByText('Compartir'));
+    fireEvent.press(screen.getByText('Elegir fotos'));
+
+    await waitFor(() => {
+      expect(screen.getByText('2 archivos listos')).toBeTruthy();
+      expect(screen.getByLabelText('Foto seleccionada 1')).toBeTruthy();
+      expect(screen.getByLabelText('Foto seleccionada 2')).toBeTruthy();
+    });
+
+    expect(imagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({
+      allowsMultipleSelection: true,
+      orderedSelection: true,
+      selectionLimit: 6,
+      mediaTypes: ['images'],
+    }));
+
+    fireEvent.press(screen.getByText('Publicar 2 momentos'));
+
+    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({
+      caption: '',
+      media: expect.arrayContaining([
+        expect.objectContaining({ uri: 'file:///library/first.jpg' }),
+        expect.objectContaining({ uri: 'file:///library/second.heic' }),
+      ]),
+      optimisticIds: expect.arrayContaining([
+        expect.stringMatching(/^pending-moment-/),
+        expect.stringMatching(/^pending-moment-/),
+      ]),
+    }));
+    expect(screen.getByText('Momentos (3)')).toBeTruthy();
+    expect(screen.getAllByText('Publicando…')).toHaveLength(2);
   });
 
   it('renders fanclub live broadcasts for followed event artists', () => {

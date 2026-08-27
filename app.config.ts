@@ -93,7 +93,7 @@ const plugins: NonNullable<ExpoConfig['plugins']> = [
   [
     'expo-image-picker',
     {
-      photosPermission: 'Allow TDF Records to access your photos so you can attach inventory images.',
+      photosPermission: 'Allow TDF Records to access your photos so you can share event moments and attach inventory images.',
       cameraPermission: 'Allow TDF Records to use your camera to scan vCard QR codes, capture inventory images, and broadcast live video.'
     }
   ],

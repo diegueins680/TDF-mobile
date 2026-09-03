@@ -28,6 +28,7 @@ import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard
 import { EventMomentCard } from '../src/components/EventMomentCard';
 import { TicketPurchaseCard } from '../src/components/tickets/TicketPurchaseCard';
 import { ExperienceReviews } from '../src/components/reviews/ExperienceReviews';
+import { PartySelector, type PartySelectorOption } from '../src/components/PartySelector';
 import { formatTicketMoney, isEventTicketPurchaseEligible } from '../src/lib/tickets';
 import {
   buildMomentActor,
@@ -154,7 +155,7 @@ export default function EventDetailScreen() {
   const [activeTab, setActiveTab] = useState<EventDetailTab>('details');
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('NONE');
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteeId, setInviteeId] = useState('');
+  const [invitee, setInvitee] = useState<PartySelectorOption | null>(null);
   const [inviteMessage, setInviteMessage] = useState('');
   const [showMomentComposer, setShowMomentComposer] = useState(false);
   const [momentCaption, setMomentCaption] = useState('');
@@ -361,17 +362,17 @@ export default function EventDetailScreen() {
   const invitationMutation = useMutation({
     mutationFn: async () => {
       if (!eventId) throw new Error('Event not found');
-      const target = inviteeId.trim();
-      if (!target) throw new Error('Ingresa el ID de la persona a invitar');
+      const target = invitee?.partyId;
+      if (!target) throw new Error('Selecciona la persona a invitar');
       return Events.sendInvitation({
         eventId,
-        toUserId: target,
+        toUserId: String(target),
         fromUserId: normalizedPartyId ?? undefined,
         message: inviteMessage.trim() || undefined,
       });
     },
     onSuccess: () => {
-      setInviteeId('');
+      setInvitee(null);
       setInviteMessage('');
       qc.invalidateQueries({ queryKey: ['event-invitations', eventId] });
       setShowInviteModal(false);
@@ -1638,21 +1639,9 @@ export default function EventDetailScreen() {
             <View style={{ width: 60 }} />
           </View>
           <View style={styles.modalContent}>
-            <Text style={styles.modalMessage}>
-              Usa el Party ID de tus contactos para enviarles la invitación.{'\n'}
-              {normalizedPartyId
-                ? `Se enviará como ${displayName ?? 'contacto'} #${normalizedPartyId}.`
-                : 'Guarda tu Party ID en tu perfil para aparecer como remitente.'}
-            </Text>
+            <Text style={styles.modalMessage}>Busca a la persona por nombre o @username para enviarle la invitación.</Text>
             <View style={styles.inputGroup}>
-              <TextInput
-                placeholder="Party ID del invitado"
-                accessibilityLabel="Party ID del invitado"
-                value={inviteeId}
-                onChangeText={setInviteeId}
-                style={styles.input}
-                keyboardType="number-pad"
-              />
+              <PartySelector value={invitee} onChange={setInvitee} excludedPartyIds={normalizedPartyId ? [Number(normalizedPartyId)] : []} label="Persona a invitar" />
               <TextInput
                 placeholder="Mensaje (opcional)"
                 accessibilityLabel="Mensaje opcional"
@@ -1662,11 +1651,11 @@ export default function EventDetailScreen() {
                 multiline
               />
               <TouchableOpacity
-                style={[styles.primaryButton, invitationMutation.isPending && styles.buttonDisabled]}
+                style={[styles.primaryButton, (invitationMutation.isPending || !invitee) && styles.buttonDisabled]}
                 onPress={() => invitationMutation.mutate()}
-                disabled={invitationMutation.isPending}
+                disabled={invitationMutation.isPending || !invitee}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: invitationMutation.isPending }}
+                accessibilityState={{ disabled: invitationMutation.isPending || !invitee }}
               >
                 <Text style={styles.primaryButtonText}>
                   {invitationMutation.isPending ? 'Enviando…' : 'Enviar invitación'}

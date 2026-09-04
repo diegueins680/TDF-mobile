@@ -14,13 +14,14 @@ type PartySelectorPage = { items: PartySelectorOption[]; nextCursor: number | nu
 
 export async function searchPartiesForSelector(
   query: string,
-  options: { kind?: 'any' | 'person' | 'organization'; accountOnly?: boolean; excludedPartyIds?: number[]; cursor?: number; limit?: number; signal?: AbortSignal } = {},
+  options: { context?: 'event_invitation' | 'social_connection'; kind?: 'any' | 'person' | 'organization'; accountOnly?: boolean; excludedPartyIds?: number[]; cursor?: number; limit?: number; signal?: AbortSignal } = {},
 ): Promise<PartySelectorPage> {
   try {
     const response = await http.get<PartySelectorPage>('/parties/search', {
       signal: options.signal,
       params: {
         q: query,
+        context: options.context ?? 'event_invitation',
         kind: options.kind ?? 'person',
         accountOnly: options.accountOnly ?? true,
         excludePartyId: options.excludedPartyIds ?? [],

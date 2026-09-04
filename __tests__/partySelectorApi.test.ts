@@ -29,6 +29,7 @@ describe('mobile party selector API', () => {
       signal,
       params: {
         q: 'Ána',
+        context: 'event_invitation',
         kind: 'person',
         accountOnly: true,
         excludePartyId: [7],

@@ -6,6 +6,7 @@ const liveBroadcasts = readFileSync(path.join(process.cwd(), 'src/lib/liveBroadc
 const socialScreen = readFileSync(path.join(process.cwd(), 'app/(tabs)/social.tsx'), 'utf8');
 const eventMomentCard = readFileSync(path.join(process.cwd(), 'src/components/EventMomentCard.tsx'), 'utf8');
 const eventMoments = readFileSync(path.join(process.cwd(), 'src/lib/eventMoments.ts'), 'utf8');
+const vcardScreen = readFileSync(path.join(process.cwd(), 'app/(tabs)/vcard.tsx'), 'utf8');
 
 describe('mobile Party identity copy', () => {
   it('never asks a person to configure or save a Party ID', () => {
@@ -30,5 +31,11 @@ describe('mobile Party identity copy', () => {
     expect(eventMomentCard).not.toMatch(/Party\s*#/i);
     expect(eventMoments).not.toMatch(/Party\s*#/i);
     expect(eventMomentCard).toContain('moment.authorName');
+  });
+
+  it('keeps the canonical identifier inside vCard payloads instead of rendering it', () => {
+    expect(vcardScreen).not.toContain('Party ID:');
+    expect(vcardScreen).toContain('partyId: parsePositivePartyId(effectivePartyId)');
+    expect(vcardScreen).toContain('exchangeVCard(scanned.partyId)');
   });
 });

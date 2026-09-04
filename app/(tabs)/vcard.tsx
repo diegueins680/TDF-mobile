@@ -177,7 +177,6 @@ export default function VCardScreen() {
             {scanned.name && <Text style={styles.rowText}>{scanned.name}</Text>}
             {scanned.email && <Text style={styles.rowText}>{scanned.email}</Text>}
             {scanned.phone && <Text style={styles.rowText}>{scanned.phone}</Text>}
-            {scanned.partyId && <Text style={styles.rowText}>Party ID: {scanned.partyId}</Text>}
             <Button
               title={isSending ? 'Enviando…' : 'Enviar intercambio al CRM'}
               onPress={() => void handleExchange()}

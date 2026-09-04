@@ -589,7 +589,7 @@ export default function EventDetailScreen() {
   const connectMomentAuthorMutation = useMutation({
     mutationFn: async (partyId: string) => {
       const numericPartyId = parsePositivePartyId(partyId);
-      if (numericPartyId === null) throw new Error('No hay un Party ID válido para conectar.');
+      if (numericPartyId === null) throw new Error('Este perfil ya no está disponible para conectar.');
       return Social.addFriend(numericPartyId);
     },
     onSuccess: () => {

@@ -83,7 +83,6 @@ export function EventMomentCard({
           </View>
           <Text style={styles.metaText}>
             {new Date(moment.createdAt).toLocaleString()}
-            {moment.authorPartyId ? ` · Party #${moment.authorPartyId}` : ''}
           </Text>
         </View>
         {canConnect ? (

@@ -4,6 +4,8 @@ import path from 'node:path';
 const eventDetail = readFileSync(path.join(process.cwd(), 'app/eventDetail.tsx'), 'utf8');
 const liveBroadcasts = readFileSync(path.join(process.cwd(), 'src/lib/liveBroadcasts.ts'), 'utf8');
 const socialScreen = readFileSync(path.join(process.cwd(), 'app/(tabs)/social.tsx'), 'utf8');
+const eventMomentCard = readFileSync(path.join(process.cwd(), 'src/components/EventMomentCard.tsx'), 'utf8');
+const eventMoments = readFileSync(path.join(process.cwd(), 'src/lib/eventMoments.ts'), 'utf8');
 
 describe('mobile Party identity copy', () => {
   it('never asks a person to configure or save a Party ID', () => {
@@ -22,5 +24,11 @@ describe('mobile Party identity copy', () => {
     expect(socialScreen).not.toContain('ID #{targetId}');
     expect(socialScreen).toContain('item.pfFollowerName');
     expect(socialScreen).toContain('item.pfFollowingName');
+  });
+
+  it('does not expose an author Party ID in event moment cards', () => {
+    expect(eventMomentCard).not.toMatch(/Party\s*#/i);
+    expect(eventMoments).not.toMatch(/Party\s*#/i);
+    expect(eventMomentCard).toContain('moment.authorName');
   });
 });

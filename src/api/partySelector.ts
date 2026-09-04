@@ -1,4 +1,10 @@
 import { http, normalizeApiError } from './client';
+import type { operations } from './generated/types';
+
+export type PartySelectorContext = Extract<
+  NonNullable<operations['searchPartiesForSelector']['parameters']['query']['context']>,
+  'event_invitation' | 'social_connection'
+>;
 
 export type PartySelectorOption = {
   partyId: number;
@@ -14,7 +20,7 @@ type PartySelectorPage = { items: PartySelectorOption[]; nextCursor: number | nu
 
 export async function searchPartiesForSelector(
   query: string,
-  options: { context?: 'event_invitation' | 'social_connection'; kind?: 'any' | 'person' | 'organization'; accountOnly?: boolean; excludedPartyIds?: number[]; cursor?: number; limit?: number; signal?: AbortSignal } = {},
+  options: { context?: PartySelectorContext; kind?: 'any' | 'person' | 'organization'; accountOnly?: boolean; excludedPartyIds?: number[]; cursor?: number; limit?: number; signal?: AbortSignal } = {},
 ): Promise<PartySelectorPage> {
   try {
     const response = await http.get<PartySelectorPage>('/parties/search', {

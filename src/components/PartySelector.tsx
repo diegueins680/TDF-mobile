@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { searchPartiesForSelector, type PartySelectorOption } from '../api/partySelector';
+import { searchPartiesForSelector, type PartySelectorContext, type PartySelectorOption } from '../api/partySelector';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useAuth } from '../providers/AuthProvider';
 
 export type { PartySelectorOption } from '../api/partySelector';
 
-type PartySearchContext = 'event_invitation' | 'social_connection';
-
 type CommonProps = {
   excludedPartyIds?: number[];
   label?: string;
-  context?: PartySearchContext;
+  context?: PartySelectorContext;
 };
 
 type Props = CommonProps & {
@@ -27,7 +25,7 @@ type MultiProps = CommonProps & {
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
 
-function usePartySearch(excludedPartyIds: number[], context: PartySearchContext) {
+function usePartySearch(excludedPartyIds: number[], context: PartySelectorContext) {
   const [text, setText] = useState('');
   const normalizedText = text.trim();
   const deferred = useDebouncedValue(normalizedText, 300);

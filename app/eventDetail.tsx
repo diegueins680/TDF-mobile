@@ -1641,7 +1641,7 @@ export default function EventDetailScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalMessage}>Busca a la persona por nombre o @username para enviarle la invitación.</Text>
             <View style={styles.inputGroup}>
-              <PartySelector value={invitee} onChange={setInvitee} excludedPartyIds={normalizedPartyId ? [Number(normalizedPartyId)] : []} label="Persona a invitar" />
+              <PartySelector value={invitee} onChange={setInvitee} excludedPartyIds={normalizedPartyId ? [Number(normalizedPartyId)] : []} label="Persona a invitar" context="event_invitation" />
               <TextInput
                 placeholder="Mensaje (opcional)"
                 accessibilityLabel="Mensaje opcional"

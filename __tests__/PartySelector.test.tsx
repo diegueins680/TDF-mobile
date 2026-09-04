@@ -32,7 +32,12 @@ jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: () => ({ partyId: '42', roles: ['admin'], modules: ['crm'] }),
 }));
 
-const { PartySelector } = require('../src/components/PartySelector') as typeof import('../src/components/PartySelector');
+const { PartyMultiSelector, PartySelector } = require('../src/components/PartySelector') as typeof import('../src/components/PartySelector');
+
+function MultiHarness() {
+  const [value, setValue] = React.useState<import('../src/api/partySelector').PartySelectorOption[]>([]);
+  return <PartyMultiSelector value={value} onChange={setValue} label="Personas invitadas" />;
+}
 
 describe('mobile PartySelector', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -56,5 +61,18 @@ describe('mobile PartySelector', () => {
     fireEvent.changeText(screen.getByLabelText('Persona a invitar'), 'Ana');
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.queryByLabelText(/Seleccionado:/)).toBeNull();
+  });
+
+  it('keeps multiple selections, prevents duplicate IDs, and removes each chip accessibly', () => {
+    render(<MultiHarness />);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Seleccionar Ana María Ruiz' }));
+    expect(screen.getAllByLabelText('Seleccionado: Ana María Ruiz')).toHaveLength(1);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Seleccionar Ana María Ruiz' }));
+    expect(screen.getAllByLabelText('Seleccionado: Ana María Ruiz')).toHaveLength(1);
+
+    fireEvent.press(screen.getByRole('button', { name: 'Quitar a Ana María Ruiz' }));
+    expect(screen.queryByLabelText('Seleccionado: Ana María Ruiz')).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { searchPartiesForSelector, type PartySelectorOption } from '../api/partySelector';
@@ -7,17 +7,27 @@ import { useAuth } from '../providers/AuthProvider';
 
 export type { PartySelectorOption } from '../api/partySelector';
 
-type Props = {
-  value: PartySelectorOption | null;
-  onChange: (party: PartySelectorOption | null) => void;
+type PartySearchContext = 'event_invitation' | 'social_connection';
+
+type CommonProps = {
   excludedPartyIds?: number[];
   label?: string;
+  context?: PartySearchContext;
+};
+
+type Props = CommonProps & {
+  value: PartySelectorOption | null;
+  onChange: (party: PartySelectorOption | null) => void;
+};
+
+type MultiProps = CommonProps & {
+  value: PartySelectorOption[];
+  onChange: (parties: PartySelectorOption[]) => void;
 };
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
 
-/** A mobile relationship picker. Free text is never treated as a Party ID. */
-export function PartySelector({ value, onChange, excludedPartyIds = [], label = 'Buscar persona' }: Props) {
+function usePartySearch(excludedPartyIds: number[], context: PartySearchContext) {
   const [text, setText] = useState('');
   const normalizedText = text.trim();
   const deferred = useDebouncedValue(normalizedText, 300);
@@ -29,8 +39,9 @@ export function PartySelector({ value, onChange, excludedPartyIds = [], label = 
     [modules, partyId, roles],
   );
   const query = useInfiniteQuery({
-    queryKey: ['party-selector', cacheScope, activeQuery, exclusionKey],
+    queryKey: ['party-selector', cacheScope, context, activeQuery, exclusionKey],
     queryFn: ({ pageParam, signal }) => searchPartiesForSelector(activeQuery, {
+      context,
       excludedPartyIds,
       cursor: pageParam,
       signal,
@@ -47,16 +58,28 @@ export function PartySelector({ value, onChange, excludedPartyIds = [], label = 
     query.data?.pages.forEach((page) => page.items.forEach((option) => byId.set(option.partyId, option)));
     return Array.from(byId.values());
   }, [query.data?.pages]);
-  const waitingForDebounce = normalizedText.length >= 2 && activeQuery.length < 2;
-  const searchFailed = query.isError || query.isFetchNextPageError;
 
-  if (value) {
-    return <View style={styles.selected} accessibilityLabel={`Seleccionado: ${value.displayName}`}>
-      <Avatar option={value} />
-      <Text style={styles.selectedName} numberOfLines={1}>{value.displayName}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Quitar a ${value.displayName}`} onPress={() => onChange(null)}><Text style={styles.remove}>Quitar</Text></Pressable>
-    </View>;
-  }
+  return {
+    text,
+    setText,
+    normalizedText,
+    activeQuery,
+    options,
+    query,
+    waitingForDebounce: normalizedText.length >= 2 && activeQuery.length < 2,
+    searchFailed: query.isError || query.isFetchNextPageError,
+  };
+}
+
+type ResultsProps = {
+  label: string;
+  search: ReturnType<typeof usePartySearch>;
+  onSelect: (party: PartySelectorOption) => void;
+};
+
+function PartySearchResults({ label, search, onSelect }: ResultsProps) {
+  const { activeQuery, normalizedText, options, query, searchFailed, setText, text, waitingForDebounce } = search;
+  const loading = waitingForDebounce || (query.isFetching && !query.isFetchingNextPage);
 
   return <View>
     <Text style={styles.label}>{label}</Text>
@@ -69,10 +92,13 @@ export function PartySelector({ value, onChange, excludedPartyIds = [], label = 
       style={styles.input}
     />
     {normalizedText.length > 0 && normalizedText.length < 2 ? <Text style={styles.help}>Escribe al menos dos caracteres.</Text> : null}
-    {(waitingForDebounce || (query.isFetching && !query.isFetchingNextPage)) ? <ActivityIndicator style={styles.loading} accessibilityLabel="Buscando personas" /> : null}
+    {loading ? <ActivityIndicator style={styles.loading} accessibilityLabel="Buscando personas" /> : null}
+    <Text style={styles.screenReaderStatus} accessibilityLiveRegion="polite">
+      {loading ? 'Buscando personas.' : `${options.length} resultados disponibles.`}
+    </Text>
     {searchFailed ? <Pressable onPress={() => { void (query.isFetchNextPageError ? query.fetchNextPage() : query.refetch()); }} accessibilityRole="button" accessibilityLabel="Reintentar búsqueda"><Text style={styles.error}>No pudimos buscar. Toca para reintentar.</Text></Pressable> : null}
     {activeQuery.length >= 2 && !query.isFetching && !searchFailed && options.length === 0 ? <Text style={styles.help}>No encontramos coincidencias.</Text> : null}
-    {options.map((option) => <Pressable key={option.partyId} style={styles.option} onPress={() => { onChange(option); setText(''); }} accessibilityRole="button" accessibilityLabel={`Seleccionar ${option.displayName}`}>
+    {options.map((option) => <Pressable key={option.partyId} style={styles.option} onPress={() => { onSelect(option); setText(''); }} accessibilityRole="button" accessibilityLabel={`Seleccionar ${option.displayName}`}>
       <Avatar option={option} />
       <View style={styles.optionText}><Text style={styles.name}>{option.displayName}</Text><Text style={styles.meta} numberOfLines={1}>{[option.username ? `@${option.username}` : null, option.secondaryLabel].filter(Boolean).join(' · ')}</Text></View>
     </Pressable>)}
@@ -82,17 +108,74 @@ export function PartySelector({ value, onChange, excludedPartyIds = [], label = 
   </View>;
 }
 
+/** A mobile relationship picker. Free text is never treated as a Party ID. */
+export function PartySelector({ value, onChange, excludedPartyIds = [], label = 'Buscar persona', context = 'event_invitation' }: Props) {
+  const search = usePartySearch(excludedPartyIds, context);
+
+  if (value) {
+    return <View style={styles.selected} accessibilityLabel={`Seleccionado: ${value.displayName}`}>
+      <Avatar option={value} />
+      <View style={styles.selectedIdentity}>
+        <Text style={styles.selectedName} numberOfLines={1}>{value.displayName}</Text>
+        {value.username ? <Text style={styles.meta} numberOfLines={1}>@{value.username}</Text> : null}
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Quitar a ${value.displayName}`} onPress={() => onChange(null)}><Text style={styles.remove}>Quitar</Text></Pressable>
+    </View>;
+  }
+
+  return <PartySearchResults label={label} search={search} onSelect={onChange} />;
+}
+
+/** Multiple picker that keeps existing selections and prevents duplicate IDs. */
+export function PartyMultiSelector({ value, onChange, excludedPartyIds = [], label = 'Buscar personas', context = 'event_invitation' }: MultiProps) {
+  const selectedIds = useMemo(() => value.map((party) => party.partyId), [value]);
+  const effectiveExclusions = useMemo(
+    () => [...new Set([...excludedPartyIds, ...selectedIds])],
+    [excludedPartyIds, selectedIds],
+  );
+  const search = usePartySearch(effectiveExclusions, context);
+
+  return <View>
+    {value.map((party) => <View key={party.partyId} style={styles.selected} accessibilityLabel={`Seleccionado: ${party.displayName}`}>
+      <Avatar option={party} />
+      <View style={styles.selectedIdentity}>
+        <Text style={styles.selectedName} numberOfLines={1}>{party.displayName}</Text>
+        {party.username ? <Text style={styles.meta} numberOfLines={1}>@{party.username}</Text> : null}
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Quitar a ${party.displayName}`}
+        onPress={() => onChange(value.filter((selected) => selected.partyId !== party.partyId))}
+      >
+        <Text style={styles.remove}>Quitar</Text>
+      </Pressable>
+    </View>)}
+    <PartySearchResults
+      label={label}
+      search={search}
+      onSelect={(party) => {
+        if (!value.some((selected) => selected.partyId === party.partyId)) onChange([...value, party]);
+      }}
+    />
+  </View>;
+}
+
 function Avatar({ option }: { option: PartySelectorOption }) {
-  return option.avatarUrl ? <Image source={{ uri: option.avatarUrl }} style={styles.avatar} accessibilityIgnoresInvertColors /> : <View style={styles.avatarFallback}><Text style={styles.avatarText}>{initials(option.displayName)}</Text></View>;
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [option.avatarUrl]);
+  return option.avatarUrl && !failed
+    ? <Image source={{ uri: option.avatarUrl }} style={styles.avatar} onError={() => setFailed(true)} accessibilityIgnoresInvertColors />
+    : <View style={styles.avatarFallback}><Text style={styles.avatarText}>{initials(option.displayName)}</Text></View>;
 }
 
 const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#1f2937', marginBottom: 6 },
   input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#fff', color: '#111827' },
   help: { marginTop: 6, color: '#6b7280', fontSize: 13 }, error: { marginTop: 6, color: '#b91c1c', fontSize: 13 }, loading: { marginTop: 8 },
+  screenReaderStatus: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   option: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#e5e7eb' },
   more: { alignItems: 'center', paddingVertical: 12 }, moreText: { color: '#1d4ed8', fontWeight: '600' },
   optionText: { flex: 1, minWidth: 0 }, name: { color: '#111827', fontWeight: '600' }, meta: { color: '#6b7280', fontSize: 13, marginTop: 2 },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#e5e7eb' }, avatarFallback: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center' }, avatarText: { color: '#1d4ed8', fontWeight: '700' },
-  selected: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff', borderRadius: 10, padding: 8 }, selectedName: { flex: 1, color: '#1e3a8a', fontWeight: '600' }, remove: { color: '#1d4ed8', fontWeight: '600' },
+  selected: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff', borderRadius: 10, padding: 8, marginBottom: 6 }, selectedIdentity: { flex: 1, minWidth: 0 }, selectedName: { color: '#1e3a8a', fontWeight: '600' }, remove: { color: '#1d4ed8', fontWeight: '600' },
 });

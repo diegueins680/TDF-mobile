@@ -37,9 +37,23 @@ export function CategoryPriorityList({ locale = 'es', contextKind = 'general' }:
   const { featureFlags } = useAuth();
   const queryClient = useQueryClient();
   const enabled = featureFlags.includes('CONTEXTUAL_REPUTATION_ENABLED');
-  const categories = useQuery({ queryKey: ['reputation-categories', locale], queryFn: () => Reputation.categories(locale) });
+  const copy = locale === 'en'
+    ? {
+      unavailable: 'Contextual reputation is not enabled for this account yet.', loading: 'Loading categories', loadError: 'We could not load the categories. Please try again.',
+      help: 'Your order defines personal compatibility; it does not change public reputation.', saving: 'Saving preference draft.', saved: 'Preference draft saved.',
+      saveError: 'We could not save the draft. You can retry without losing the order.', moveUp: 'Move up', moveDown: 'Move down', save: 'Save draft', undo: 'Undo', restored: 'Previous order restored.',
+      priority: (name: string, position: number) => `${name} is now priority ${position}.`,
+    }
+    : {
+      unavailable: 'La reputación contextual todavía no está habilitada para esta cuenta.', loading: 'Cargando categorías', loadError: 'No pudimos cargar las categorías. Inténtalo nuevamente.',
+      help: 'Tu orden define compatibilidad personal; no modifica la reputación pública.', saving: 'Guardando borrador de preferencias.', saved: 'Borrador de preferencias guardado.',
+      saveError: 'No pudimos guardar el borrador. Puedes reintentar sin perder el orden.', moveUp: 'Subir', moveDown: 'Bajar', save: 'Guardar borrador', undo: 'Deshacer', restored: 'Orden anterior restaurado.',
+      priority: (name: string, position: number) => `${name} ahora tiene prioridad ${position}.`,
+    };
+  const categories = useQuery({ queryKey: ['reputation-categories', locale], queryFn: () => Reputation.categories(locale), enabled });
   const preference = useQuery({ queryKey: ['my-reputation-preference', contextKind], queryFn: () => Reputation.getMyPreferences(contextKind), enabled, retry: false });
   const [order, setOrder] = useState<ReputationCategory[]>([]);
+  const [previous, setPrevious] = useState<ReputationCategory[] | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [savedRevision, setSavedRevision] = useState<number | null>(null);
   const pendingIdempotencyKey = useRef<string | null>(null);
@@ -60,32 +74,33 @@ export function CategoryPriorityList({ locale = 'es', contextKind = 'general' }:
         categories: order.map((category, index) => ({ categoryId: category.id, position: index + 1, weight: weights[index] ?? 0, notApplicable: false })),
       }, idempotencyKey);
     },
-    onMutate: () => setAnnouncement('Guardando borrador de preferencias.'),
+    onMutate: () => setAnnouncement(copy.saving),
     onSuccess: (saved) => {
       pendingIdempotencyKey.current = null;
       setSavedRevision(saved.revision);
       queryClient.setQueryData(['my-reputation-preference', contextKind], saved);
-      setAnnouncement('Borrador de preferencias guardado.');
+      setAnnouncement(copy.saved);
     },
-    onError: () => setAnnouncement('No se pudo guardar el borrador. Puedes reintentar sin perder el orden.'),
+    onError: () => setAnnouncement(copy.saveError),
   });
   const move = (index: number, delta: number) => {
     const nextIndex = index + delta;
     if (nextIndex < 0 || nextIndex >= order.length) return;
     const next = [...order]; [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-    setOrder(next); setAnnouncement(`${next[nextIndex].name} ahora tiene prioridad ${nextIndex + 1}.`);
+    setPrevious(order); setOrder(next); setAnnouncement(copy.priority(next[nextIndex].name, nextIndex + 1));
   };
-  if (categories.isLoading) return <ActivityIndicator accessibilityLabel="Cargando categorías" color={colors.actionPrimary} />;
-  if (categories.isError) return <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>No pudimos cargar las categorías. Inténtalo nuevamente.</Text>;
+  if (!enabled) return <Text accessibilityRole="alert" style={[styles.error, { color: colors.textSecondary }]}>{copy.unavailable}</Text>;
+  if (categories.isLoading) return <ActivityIndicator accessibilityLabel={copy.loading} color={colors.actionPrimary} />;
+  if (categories.isError) return <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{copy.loadError}</Text>;
   return <View accessibilityLiveRegion="polite">
-    <Text style={[styles.help, { color: colors.textSecondary }]}>Tu orden define compatibilidad personal; no modifica la reputación pública.</Text>
+    <Text style={[styles.help, { color: colors.textSecondary }]}>{copy.help}</Text>
     <Text accessibilityRole="alert" style={styles.srOnly}>{announcement}</Text>
-    {saveDraft.isError && <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>No pudimos guardar el borrador. Inténtalo nuevamente.</Text>}
+    {saveDraft.isError && <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{copy.saveError}</Text>}
     {order.map((category, index) => <View key={category.id} style={[styles.card, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSubtle }]}>
       <View style={styles.header}><Text style={[styles.position, { color: colors.textPrimary }]}>{index + 1}</Text><View style={styles.copy}><Text style={[styles.name, { color: colors.textPrimary }]}>{category.name}</Text><Text style={[styles.description, { color: colors.textSecondary }]}>{category.description}</Text></View><Text style={[styles.weight, { color: colors.actionPrimary }]}>{weights[index].toFixed(1)}%</Text></View>
-      <View style={styles.actions}><Pressable accessibilityRole="button" accessibilityLabel={`Subir ${category.name}`} disabled={index === 0} onPress={() => move(index, -1)} style={({ pressed }) => [styles.button, { borderColor: colors.border }, (pressed || index === 0) && styles.muted]}><Text style={{ color: colors.textPrimary }}>Subir</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Bajar ${category.name}`} disabled={index === order.length - 1} onPress={() => move(index, 1)} style={({ pressed }) => [styles.button, { borderColor: colors.border }, (pressed || index === order.length - 1) && styles.muted]}><Text style={{ color: colors.textPrimary }}>Bajar</Text></Pressable></View>
+      <View style={styles.actions}><Pressable accessibilityRole="button" accessibilityLabel={`${copy.moveUp} ${category.name}`} disabled={index === 0} onPress={() => move(index, -1)} style={({ pressed }) => [styles.button, { borderColor: colors.border }, (pressed || index === 0) && styles.muted]}><Text style={{ color: colors.textPrimary }}>{copy.moveUp}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`${copy.moveDown} ${category.name}`} disabled={index === order.length - 1} onPress={() => move(index, 1)} style={({ pressed }) => [styles.button, { borderColor: colors.border }, (pressed || index === order.length - 1) && styles.muted]}><Text style={{ color: colors.textPrimary }}>{copy.moveDown}</Text></Pressable></View>
     </View>)}
-    <Pressable accessibilityRole="button" accessibilityLabel="Guardar borrador de preferencias" disabled={!enabled || order.length === 0 || saveDraft.isPending} onPress={() => saveDraft.mutate()} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.actionPrimary }, (pressed || !enabled || saveDraft.isPending) && styles.muted]}><Text style={[styles.saveButtonText, { color: colors.actionPrimaryContrast }]}>{saveDraft.isPending ? 'Guardando…' : 'Guardar borrador'}</Text></Pressable>
+    <View style={styles.actions}><Pressable accessibilityRole="button" accessibilityLabel={copy.undo} disabled={!previous || saveDraft.isPending} onPress={() => { if (previous) { setOrder(previous); setPrevious(null); setAnnouncement(copy.restored); } }} style={({ pressed }) => [styles.button, { borderColor: colors.border }, (pressed || !previous) && styles.muted]}><Text style={{ color: colors.textPrimary }}>{copy.undo}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={copy.save} disabled={order.length === 0 || saveDraft.isPending} onPress={() => saveDraft.mutate()} style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.actionPrimary, flex: 1, marginTop: 0 }, (pressed || saveDraft.isPending) && styles.muted]}><Text style={[styles.saveButtonText, { color: colors.actionPrimaryContrast }]}>{saveDraft.isPending ? copy.saving : copy.save}</Text></Pressable></View>
   </View>;
 }
 

@@ -14,7 +14,7 @@ type PartySelectorPage = { items: PartySelectorOption[]; nextCursor: number | nu
 
 export async function searchPartiesForSelector(
   query: string,
-  options: { kind?: 'any' | 'person' | 'organization'; accountOnly?: boolean; excludedPartyIds?: number[]; signal?: AbortSignal } = {},
+  options: { kind?: 'any' | 'person' | 'organization'; accountOnly?: boolean; excludedPartyIds?: number[]; cursor?: number; limit?: number; signal?: AbortSignal } = {},
 ): Promise<PartySelectorPage> {
   try {
     const response = await http.get<PartySelectorPage>('/parties/search', {
@@ -24,7 +24,8 @@ export async function searchPartiesForSelector(
         kind: options.kind ?? 'person',
         accountOnly: options.accountOnly ?? true,
         excludePartyId: options.excludedPartyIds ?? [],
-        limit: 15,
+        cursor: options.cursor,
+        limit: options.limit ?? 15,
       },
     });
     return response.data;

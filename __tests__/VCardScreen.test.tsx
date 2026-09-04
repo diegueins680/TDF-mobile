@@ -14,10 +14,11 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
 }));
 
 describe('VCard screen', () => {
-  it('hydrates the saved identity into the shared card', async () => {
+  it('uses the saved identity without exposing an editable Party ID', async () => {
     render(<VCardScreen />);
 
     await waitFor(() => expect(screen.getByDisplayValue('Saved User')).toBeTruthy());
-    expect(screen.getByDisplayValue('42')).toBeTruthy();
+    expect(screen.queryByDisplayValue('42')).toBeNull();
+    expect(screen.getByText('Tu identidad TDF se incluye automáticamente.')).toBeTruthy();
   });
 });

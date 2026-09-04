@@ -9,7 +9,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
 import type { ID, SocialEvent } from '../src/types';
-import { normalizePartyId } from '../src/lib/identity';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, unsaveEvent } from '../src/lib/savedEvents';
 import { formatTicketMoney } from '../src/lib/tickets';
@@ -19,7 +18,7 @@ import { useAuth } from '../src/providers/AuthProvider';
 export default function UserProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { token } = useAuth();
+  const { token, partyId: authenticatedPartyId, session } = useAuth();
   const {
     colors,
     preferenceId: themePreferenceId,
@@ -28,7 +27,7 @@ export default function UserProfileScreen() {
     setPreferenceById: setThemePreferenceById,
   } = useAppTheme();
   const {
-    partyId, displayName, setIdentity, clearIdentity, loading,
+    partyId: legacyPartyId, displayName: legacyDisplayName, loading,
     localeId, locale, currencyId, currency, timezone, countryId, countryCode,
     getCatalogItems,
     setRegionalPreferences,
@@ -37,16 +36,13 @@ export default function UserProfileScreen() {
   const localeOptions = useMemo(() => getCatalogItems('locales'), [getCatalogItems]);
   const currencyOptions = useMemo(() => getCatalogItems('currencies'), [getCatalogItems]);
   const [activeTab, setActiveTab] = useState<'artist' | 'events' | 'saved'>('artist');
-  const [draftPartyId, setDraftPartyId] = useState(partyId ?? '');
-  const [draftName, setDraftName] = useState(displayName ?? '');
+  // Keep a legacy persisted ID only as a transition fallback. New identities
+  // always come from the authenticated session and are never entered here.
+  const partyId = authenticatedPartyId ?? legacyPartyId;
+  const displayName = session?.displayName ?? legacyDisplayName;
   const [draftTimezone, setDraftTimezone] = useState(timezone);
   const [draftCountryId, setDraftCountryId] = useState(countryId ?? '');
   const [countrySearch, setCountrySearch] = useState(countryCode ?? '');
-
-  useEffect(() => {
-    setDraftPartyId(partyId ?? '');
-    setDraftName(displayName ?? '');
-  }, [partyId, displayName]);
 
   useEffect(() => {
     setDraftTimezone(timezone);
@@ -126,7 +122,7 @@ export default function UserProfileScreen() {
 
   const handleCreateArtistProfile = useCallback(() => {
     if (!partyId) {
-      Alert.alert('Party ID requerido', 'Guarda tu Party ID antes de crear tu perfil de artista.');
+      Alert.alert('Inicia sesión', 'Inicia sesión para crear tu perfil de artista.');
       return;
     }
     router.push('/createArtistProfile');
@@ -134,7 +130,7 @@ export default function UserProfileScreen() {
 
   const handleEditArtistProfile = useCallback(() => {
     if (!partyId) {
-      Alert.alert('Party ID requerido', 'Guarda tu Party ID antes de editar tu perfil de artista.');
+      Alert.alert('Inicia sesión', 'Inicia sesión para editar tu perfil de artista.');
       return;
     }
     if (artistQuery.data) {
@@ -150,26 +146,6 @@ export default function UserProfileScreen() {
     unsaveMutation.mutate(eventId);
   }, [unsaveMutation]);
 
-  const handleSaveIdentity = useCallback(() => {
-    if (!draftPartyId.trim()) {
-      Alert.alert('Party ID requerido', 'Ingresa tu Party ID para conectar RSVP e invitaciones.');
-      return;
-    }
-    const normalizedPartyId = normalizePartyId(draftPartyId);
-    if (!normalizedPartyId) {
-      Alert.alert('Party ID inválido', 'Ingresa un Party ID numérico positivo.');
-      return;
-    }
-    setIdentity(normalizedPartyId, draftName.trim());
-    Alert.alert('Guardado', 'Actualizamos tu Party ID.');
-  }, [draftPartyId, draftName, setIdentity]);
-
-  const handleClearIdentity = useCallback(() => {
-    clearIdentity();
-    setDraftPartyId('');
-    setDraftName('');
-  }, [clearIdentity]);
-
   const handleSaveRegion = useCallback(() => {
     if (countrySearch.trim() && !draftCountryId) {
       Alert.alert('Selecciona un país', 'Elige una coincidencia del catálogo o borra la búsqueda para continuar sin país.');
@@ -179,8 +155,8 @@ export default function UserProfileScreen() {
     Alert.alert('Guardado', 'Actualizamos tus preferencias regionales.');
   }, [countrySearch, draftCountryId, draftTimezone, setRegionalPreferences]);
 
-  const headerName = draftName || displayName || 'Tu perfil';
-  const headerSubtitle = partyId ? `Party ID: ${partyId}` : 'Agrega tu Party ID para RSVP e invitaciones';
+  const headerName = displayName || 'Tu perfil';
+  const headerSubtitle = partyId ? 'Sesión conectada' : 'Inicia sesión para usar RSVP e invitaciones';
 
   if (loading) {
     return (
@@ -248,30 +224,11 @@ export default function UserProfileScreen() {
 
         <View style={styles.identityCard}>
           <Text style={styles.sectionTitle}>Identidad social</Text>
-          <TextInput
-            placeholder="Party ID"
-            value={draftPartyId}
-            onChangeText={setDraftPartyId}
-            style={styles.input}
-            keyboardType="number-pad"
-          />
-          <TextInput
-            placeholder="Nombre para mostrar (opcional)"
-            value={draftName}
-            onChangeText={setDraftName}
-            style={styles.input}
-          />
-          <View style={styles.identityActions}>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSaveIdentity}>
-              <Text style={styles.saveButtonText}>Guardar</Text>
-            </TouchableOpacity>
-            {partyId && (
-              <TouchableOpacity style={styles.clearButton} onPress={handleClearIdentity}>
-                <Text style={styles.clearButtonText}>Limpiar</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <Text style={styles.helperText}>Usaremos estos datos en RSVP, invitaciones y vCard.</Text>
+          <Text style={styles.helperText}>
+            {partyId
+              ? 'Tu identidad se obtiene de la sesión autenticada y se usará en RSVP, invitaciones y vCard.'
+              : 'Inicia sesión para usar RSVP, invitaciones y vCard.'}
+          </Text>
         </View>
 
         <View style={styles.identityCard}>
@@ -427,7 +384,7 @@ export default function UserProfileScreen() {
         {activeTab === 'artist' && (
           <View style={styles.section}>
             {!partyId ? (
-              <Text style={styles.noDataText}>Guarda tu Party ID para enlazar tu perfil de artista.</Text>
+              <Text style={styles.noDataText}>Inicia sesión para enlazar tu perfil de artista.</Text>
             ) : artistQuery.isLoading ? (
               <ActivityIndicator size="large" color="#2563eb" />
             ) : artistQuery.data ? (
@@ -476,7 +433,7 @@ export default function UserProfileScreen() {
               </>
             ) : (
               <Text style={styles.noDataText}>
-                Aún no hay eventos disponibles. Guarda tu Party ID para usar RSVP e invitaciones.
+                Aún no hay eventos disponibles. Inicia sesión para usar RSVP e invitaciones.
               </Text>
             )}
           </View>

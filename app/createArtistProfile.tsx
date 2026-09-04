@@ -79,7 +79,7 @@ export default function CreateArtistProfileScreen() {
       return;
     }
     if (!effectivePartyId) {
-      Alert.alert('Validation', 'Set your Party ID in profile or auth before creating an artist profile.');
+      Alert.alert('Validation', 'Sign in before creating an artist profile.');
       return;
     }
 
@@ -100,7 +100,7 @@ export default function CreateArtistProfileScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Create Artist Profile</Text>
         <Text style={styles.identityText}>
-          Party ID: {effectivePartyId ?? 'Not configured'}
+          {effectivePartyId ? 'Connected identity' : 'Sign in to connect your identity'}
         </Text>
 
         <View style={styles.field}>

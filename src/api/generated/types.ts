@@ -7698,7 +7698,10 @@ export interface components {
         };
         PartySelectorPage: {
             items: components["schemas"]["PartySelectorOption"][];
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Opaque cursor for the next relevance-ordered page.
+             */
             nextCursor?: number | null;
         };
         ChatThread: {
@@ -12575,6 +12578,7 @@ export interface operations {
                 kind?: "any" | "person" | "organization";
                 accountOnly?: boolean;
                 excludePartyId?: number[];
+                /** @description Opaque bounded cursor returned by the previous page. */
                 cursor?: number;
                 limit?: number;
             };

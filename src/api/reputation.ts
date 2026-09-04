@@ -1,4 +1,4 @@
-import { get } from './client';
+import { get, put } from './client';
 
 export type ReputationCategory = {
   id: string;
@@ -10,7 +10,36 @@ export type ReputationCategory = {
   version: number;
 };
 
+export type ReputationPreferenceCategory = {
+  categoryId: string;
+  slug: string;
+  position: number;
+  weight: number;
+  notApplicable: boolean;
+};
+
+export type ReputationPreference = {
+  contextKind: string;
+  status: 'draft' | 'active' | 'archived';
+  revision: number;
+  formulaVersion: string;
+  categories: ReputationPreferenceCategory[];
+};
+
+export type ReputationPreferenceSave = {
+  contextKind: string;
+  expectedRevision: number;
+  activate: boolean;
+  categories: Array<Omit<ReputationPreferenceCategory, 'slug'>>;
+};
+
 export const Reputation = {
   categories: (locale: 'es' | 'en' = 'es') =>
     get<ReputationCategory[]>(`/reputation/categories?locale=${locale}`),
+  getMyPreferences: (contextKind = 'general') =>
+    get<ReputationPreference>(`/reputation/preferences?contextKind=${encodeURIComponent(contextKind)}`),
+  saveMyPreferences: (input: ReputationPreferenceSave, idempotencyKey: string) =>
+    put<ReputationPreference>('/reputation/preferences', input, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    }),
 };

@@ -135,8 +135,8 @@ export async function post<T>(path: string, body: unknown, config?: AxiosRequest
   return requestData(http.post<T>(path, body, config));
 }
 
-export async function put<T>(path: string, body: unknown): Promise<T> {
-  return requestData(http.put<T>(path, body));
+export async function put<T>(path: string, body: unknown, config?: AxiosRequestConfig): Promise<T> {
+  return requestData(http.put<T>(path, body, config));
 }
 
 export async function del<T>(path: string): Promise<T> {

@@ -208,7 +208,7 @@ export async function createEventLiveBroadcast(
   if (!artistId) throw new Error('Selecciona el artista del fanclub.');
   if (!artistName) throw new Error('No pudimos identificar el artista.');
   if (!broadcasterName) throw new Error('Agrega un nombre para transmitir.');
-  if (!broadcasterPartyId) throw new Error('Configura tu Party ID para transmitir como fan.');
+  if (!broadcasterPartyId) throw new Error('Tu sesión no tiene una identidad vinculada para transmitir como fan.');
   if (title.length > MAX_TITLE_LENGTH) {
     throw new Error(`El título no puede exceder ${MAX_TITLE_LENGTH} caracteres.`);
   }

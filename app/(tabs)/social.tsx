@@ -1,13 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, FlatList, View, Text, TouchableOpacity, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
-import { Parties } from '../../src/api/parties';
 import { Social } from '../../src/api/social';
 import { Artists } from '../../src/api/artists';
 import type { ArtistProfile, PartyFollow } from '../../src/types';
-import type { PartyDTO } from '../../src/api/types';
 import { resolvePartyId } from '../../src/lib/identity';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
@@ -37,12 +35,6 @@ export default function SocialScreen() {
   const canUseSocial = !loading && hasToken;
   const effectivePartyId = resolvePartyId(authPartyId, settingsPartyId);
 
-  const partiesQuery = useQuery({
-    queryKey: ['parties'],
-    queryFn: () => Parties.list(),
-    enabled: canUseSocial
-  });
-
   const followersQuery = useQuery({
     queryKey: ['social-followers'],
     queryFn: Social.listFollowers,
@@ -65,7 +57,6 @@ export default function SocialScreen() {
     setRefreshing(true);
     try {
       await Promise.all([
-        partiesQuery.refetch(),
         followersQuery.refetch(),
         followingQuery.refetch(),
       ]);
@@ -143,12 +134,6 @@ export default function SocialScreen() {
     }
   });
 
-  const byId = useMemo(() => {
-    const map = new Map<number, PartyDTO>();
-    (partiesQuery.data ?? []).forEach((p) => map.set(p.partyId, p));
-    return map;
-  }, [partiesQuery.data]);
-
   const tabData: Record<TabKey, { data?: PartyFollow[]; empty: string }> = {
     following: { data: followingQuery.data, empty: 'No sigues a nadie todavía.' },
     followers: { data: followersQuery.data, empty: 'Aún no tienes seguidores.' },
@@ -156,21 +141,16 @@ export default function SocialScreen() {
 
   const activeData = tabData[activeTab].data ?? [];
 
-  const formatParty = (partyId: number) => {
-    const party = byId.get(partyId);
-    if (!party) return `Party #${partyId}`;
-    return party.displayName ?? party.legalName ?? `Party #${partyId}`;
-  };
-
   const renderItem = ({ item }: { item: PartyFollow }) => {
     const targetId = activeTab === 'followers' ? item.pfFollowerId : item.pfFollowingId;
-    const label = formatParty(targetId);
+    const label = (activeTab === 'followers' ? item.pfFollowerName : item.pfFollowingName)
+      ?? 'Perfil no disponible';
     const isFollowing = followingQuery.data?.some((f) => f.pfFollowingId === targetId) ?? false;
     return (
-      <View style={[styles.item, { borderColor: colors.borderSubtle }]} accessibilityRole="summary" accessibilityLabel={`${label}, ID ${targetId}`}>
+      <View style={[styles.item, { borderColor: colors.borderSubtle }]} accessibilityRole="summary" accessibilityLabel={label}>
         <View style={{ flex: 1 }}>
           <Text maxFontSizeMultiplier={1.5} style={[styles.itemTitle, { color: colors.textPrimary }]}>{label}</Text>
-          <Text maxFontSizeMultiplier={1.5} style={[styles.itemMeta, { color: colors.textSecondary }]}>ID #{targetId} · Desde {item.pfStartedAt}</Text>
+          <Text maxFontSizeMultiplier={1.5} style={[styles.itemMeta, { color: colors.textSecondary }]}>Desde {item.pfStartedAt}</Text>
           {item.pfViaNfc && <Text maxFontSizeMultiplier={1.5} style={[styles.tag, { color: colors.actionPrimary }]}>Intercambio NFC</Text>}
         </View>
         {activeTab === 'followers' ? (
@@ -231,7 +211,7 @@ export default function SocialScreen() {
     );
   };
 
-  const showList = canUseSocial && !followersQuery.isLoading && !followingQuery.isLoading && !partiesQuery.isLoading && activeData.length > 0;
+  const showList = canUseSocial && !followersQuery.isLoading && !followingQuery.isLoading && activeData.length > 0;
 
   return (
     <FlatList
@@ -250,7 +230,7 @@ export default function SocialScreen() {
               Consulta a quién sigues y quién te sigue. Para seguir artistas, entra a un evento o perfil de artista y toca Seguir.
             </Text>
             <View style={styles.badges}>
-              <Text maxFontSizeMultiplier={1.5} style={[styles.badge, { backgroundColor: colors.surfaceMuted, color: colors.actionPrimary }]}>Party ID: {effectivePartyId ?? 'No configurado'}</Text>
+              <Text maxFontSizeMultiplier={1.5} style={[styles.badge, { backgroundColor: colors.surfaceMuted, color: colors.actionPrimary }]}>{effectivePartyId ? 'Cuenta vinculada' : 'Inicia sesión'}</Text>
               {!!displayName && <Text maxFontSizeMultiplier={1.5} style={[styles.badge, { backgroundColor: colors.surfaceMuted, color: colors.actionPrimary }]}>Nombre: {displayName}</Text>}
             </View>
             {loading ? (
@@ -339,7 +319,7 @@ export default function SocialScreen() {
                 <Text maxFontSizeMultiplier={1.5} style={[styles.helper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">
                   {loading ? 'Cargando acceso…' : 'Acceso restringido para ver tus conexiones.'}
                 </Text>
-              ) : (followersQuery.isLoading || followingQuery.isLoading || partiesQuery.isLoading) ? (
+              ) : (followersQuery.isLoading || followingQuery.isLoading) ? (
                 <Text maxFontSizeMultiplier={1.5} style={[styles.helper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">Cargando conexiones…</Text>
               ) : activeData.length === 0 ? (
                 <Text maxFontSizeMultiplier={1.5} style={[styles.helper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">{tabData[activeTab].empty}</Text>

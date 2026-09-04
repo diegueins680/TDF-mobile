@@ -1,3 +1,5 @@
+import type { components } from '../api/generated/types';
+
 export type ID = string | number;
 
 export type Party = {
@@ -514,12 +516,7 @@ export type EventLiveBroadcastHeartbeatInput = {
   viewerDelta?: number;
 };
 
-export type PartyFollow = {
-  pfFollowerId: number;
-  pfFollowingId: number;
-  pfViaNfc: boolean;
-  pfStartedAt: string; // ISO date
-};
+export type PartyFollow = components['schemas']['PartyFollow'];
 
 export type SuggestedFriend = {
   sfPartyId: number;

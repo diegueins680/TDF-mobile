@@ -344,7 +344,7 @@ export default function EventDetailScreen() {
   const rsvpMutation = useMutation({
     mutationFn: (status: RSVPStatus) => {
       if (!eventId) throw new Error('Event not found');
-      if (!normalizedPartyId) throw new Error('Party ID requerido para RSVP');
+      if (!normalizedPartyId) throw new Error('Inicia sesión con una cuenta vinculada para confirmar asistencia.');
       return Events.rsvp({ eventId, userId: normalizedPartyId, status });
     },
     onSuccess: (_data, status) => {
@@ -656,7 +656,7 @@ export default function EventDetailScreen() {
     mutationFn: async () => {
       if (!eventId) throw new Error('Event not found');
       if (!token?.trim()) throw new Error('Inicia sesión para transmitir al fanclub.');
-      if (!currentActor.partyId) throw new Error('Configura tu Party ID para transmitir como fan.');
+      if (!currentActor.partyId) throw new Error('Tu sesión no tiene una identidad vinculada para transmitir como fan.');
       if (!selectedLiveArtist) throw new Error('Sigue a un artista del lineup para transmitir a su fanclub.');
 
       let created:
@@ -805,7 +805,7 @@ export default function EventDetailScreen() {
 
   const handleRsvpPress = useCallback((status: RSVPStatus) => {
     if (!normalizedPartyId) {
-      Alert.alert('Configura tu Party ID', 'Ve a tu perfil y guarda tu Party ID para confirmar asistencia.');
+      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para confirmar asistencia.');
       return;
     }
     rsvpMutation.mutate(status);
@@ -1111,7 +1111,7 @@ export default function EventDetailScreen() {
             <View style={styles.section}>
               <Text style={styles.label}>¿Asistirás? ({rsvpCount})</Text>
               {!normalizedPartyId ? (
-                <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para confirmar asistencia.</Text>
+                <Text style={styles.helperText}>Inicia sesión con una cuenta vinculada para confirmar asistencia.</Text>
               ) : null}
               {rsvpQuery.isLoading ? <Text style={styles.text}>Cargando RSVP...</Text> : null}
               <View style={styles.rsvpButtons}>
@@ -1327,7 +1327,7 @@ export default function EventDetailScreen() {
                 <Text style={styles.helperText}>Inicia sesión para transmitir al fanclub.</Text>
               ) : null}
               {!currentActor.partyId ? (
-                <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para transmitir.</Text>
+                <Text style={styles.helperText}>Tu sesión necesita una identidad vinculada para transmitir.</Text>
               ) : null}
               {eventArtists.length === 0 ? (
                 <Text style={styles.text}>Este evento todavía no tiene artistas asociados.</Text>

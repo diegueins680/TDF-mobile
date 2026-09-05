@@ -19,6 +19,8 @@ const mockPresentPaymentSheet = jest.fn();
 let mockTierPriceCents = 2500;
 let mockIncludeUnavailableTier = false;
 let mockTierQueryError = false;
+let mockAuthToken: string | null = 'Bearer token';
+let mockAuthPartyId: string | null = '7';
 
 const mockMutationRunner = jest.fn((options) => ({
   mutate: () => {
@@ -54,7 +56,12 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('../src/providers/AuthProvider', () => ({
-  useAuth: () => ({ token: 'Bearer token', partyId: '7', loading: false }),
+  useAuth: () => ({
+    token: mockAuthToken,
+    partyId: mockAuthPartyId,
+    loading: false,
+    clearToken: jest.fn(),
+  }),
 }));
 
 jest.mock('../src/providers/UserSettingsProvider', () => ({
@@ -126,6 +133,8 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
     mockTierPriceCents = 2500;
     mockIncludeUnavailableTier = false;
     mockTierQueryError = false;
+    mockAuthToken = 'Bearer token';
+    mockAuthPartyId = '7';
     mockOrders = [];
     mockInitStripe.mockResolvedValue(undefined);
     mockInitPaymentSheet.mockResolvedValue({});
@@ -216,6 +225,26 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
         };
       }
       return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
+    });
+  });
+
+  it('offers intent-preserving signup and login instead of spinning for anonymous buyers', async () => {
+    mockAuthToken = null;
+    mockAuthPartyId = null;
+
+    render(<TicketCheckoutScreen />);
+
+    expect(await screen.findByText('Inicia sesión para comprar entradas')).toBeTruthy();
+    expect(screen.getByText(/TDF Showcase/)).toBeTruthy();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Crear cuenta para comprar entradas' }));
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/auth',
+      params: {
+        mode: 'signup',
+        intent: 'events',
+        returnTo: '/ticketCheckout?eventId=42',
+      },
     });
   });
 

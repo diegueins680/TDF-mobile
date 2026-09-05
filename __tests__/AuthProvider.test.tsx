@@ -232,6 +232,25 @@ describe('AuthProvider', () => {
     expect(result.current.partyId).toBe('42');
   });
 
+  it('clears a stored token when the authoritative session response is null', async () => {
+    getSecureItemMock.mockResolvedValueOnce('Bearer revoked-token');
+    getMock.mockResolvedValueOnce(null as never);
+    const queryClient = createTestQueryClient();
+    const clearSpy = jest.spyOn(queryClient, 'clear');
+
+    const { result } = renderAuthProvider(queryClient);
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.token).toBeNull());
+
+    expect(result.current.partyId).toBeNull();
+    expect(result.current.session).toBeNull();
+    expect(setAuthTokenMock).toHaveBeenLastCalledWith(null);
+    expect(deleteSecureItemMock).toHaveBeenCalledWith('tdf-auth-token');
+    expect(removeLegacyItemMock).toHaveBeenCalledWith('tdf-auth-token');
+    expect(clearSpy).toHaveBeenCalled();
+  });
+
   it('hydrates normalized roles, modules, and feature flags from the authoritative session endpoint', async () => {
     getSecureItemMock.mockResolvedValueOnce('Bearer saved-token');
     getMock.mockResolvedValueOnce({

@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 const fetchNextPage = jest.fn();
 const refetch = jest.fn();
+const mockCapture = jest.fn();
 const mockUseInfiniteQuery = jest.fn((_options: unknown) => ({
   data: {
     pages: [{
@@ -30,6 +31,16 @@ const mockUseInfiniteQuery = jest.fn((_options: unknown) => ({
 jest.mock('@tanstack/react-query', () => ({ useInfiniteQuery: (options: unknown) => mockUseInfiniteQuery(options) }));
 jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: () => ({ partyId: '42', roles: ['admin'], modules: ['crm'] }),
+}));
+jest.mock('../src/analytics/posthog', () => ({
+  getAnalyticsClient: () => ({
+    ready: true,
+    capture: mockCapture,
+    identify: jest.fn(),
+    reset: jest.fn(),
+    screen: jest.fn(),
+    __raw: null,
+  }),
 }));
 
 const { PartyMultiSelector, PartySelector } = require('../src/components/PartySelector') as typeof import('../src/components/PartySelector');
@@ -74,5 +85,14 @@ describe('mobile PartySelector', () => {
 
     fireEvent.press(screen.getByRole('button', { name: 'Quitar a Ana María Ruiz' }));
     expect(screen.queryByLabelText('Seleccionado: Ana María Ruiz')).toBeNull();
+    expect(mockCapture).toHaveBeenCalledWith('party_selector_selection_changed', {
+      platform: 'mobile', context: 'event_invitation', mode: 'multiple', action: 'selected',
+    });
+    expect(mockCapture).toHaveBeenCalledWith('party_selector_selection_changed', {
+      platform: 'mobile', context: 'event_invitation', mode: 'multiple', action: 'duplicate_rejected',
+    });
+    expect(mockCapture).toHaveBeenCalledWith('party_selector_selection_changed', {
+      platform: 'mobile', context: 'event_invitation', mode: 'multiple', action: 'removed',
+    });
   });
 });

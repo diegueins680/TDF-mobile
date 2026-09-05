@@ -2,6 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { searchPartiesForSelector, type PartySelectorContext, type PartySelectorOption } from '../api/partySelector';
+import { getAnalyticsClient } from '../analytics/posthog';
+import {
+  observePartySelectorSearch,
+  recordPartySelectorAvatarFailure,
+  recordPartySelectorSelection,
+  recordPartySelectorSelectionFailure,
+  type PartySelectorSelectionAction,
+} from '../analytics/partySelectorTelemetry';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useAuth } from '../providers/AuthProvider';
 
@@ -25,6 +33,29 @@ type MultiProps = CommonProps & {
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
 
+function commitSelection<T>({
+  context,
+  mode,
+  action,
+  onChange,
+  value,
+}: {
+  context: PartySelectorContext;
+  mode: 'single' | 'multiple';
+  action: PartySelectorSelectionAction;
+  onChange: (value: T) => void;
+  value: T;
+}) {
+  const analytics = getAnalyticsClient();
+  try {
+    onChange(value);
+    recordPartySelectorSelection(analytics, { context, mode, action });
+  } catch (error) {
+    recordPartySelectorSelectionFailure(analytics, { context, mode });
+    throw error;
+  }
+}
+
 function usePartySearch(excludedPartyIds: number[], context: PartySelectorContext) {
   const [text, setText] = useState('');
   const normalizedText = text.trim();
@@ -36,13 +67,19 @@ function usePartySearch(excludedPartyIds: number[], context: PartySelectorContex
     () => [partyId ?? 'anonymous', ...roles, ...modules].join(':'),
     [modules, partyId, roles],
   );
+  const analytics = getAnalyticsClient();
   const query = useInfiniteQuery({
     queryKey: ['party-selector', cacheScope, context, activeQuery, exclusionKey],
-    queryFn: ({ pageParam, signal }) => searchPartiesForSelector(activeQuery, {
+    queryFn: ({ pageParam, signal }) => observePartySelectorSearch({
+      analytics,
       context,
-      excludedPartyIds,
-      cursor: pageParam,
-      signal,
+      pageKind: pageParam == null ? 'initial' : 'load_more',
+      request: () => searchPartiesForSelector(activeQuery, {
+        context,
+        excludedPartyIds,
+        cursor: pageParam,
+        signal,
+      }),
     }),
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (page) => page.nextCursor ?? undefined,
@@ -58,6 +95,7 @@ function usePartySearch(excludedPartyIds: number[], context: PartySelectorContex
   }, [query.data?.pages]);
 
   return {
+    context,
     text,
     setText,
     normalizedText,
@@ -97,7 +135,7 @@ function PartySearchResults({ label, search, onSelect }: ResultsProps) {
     {searchFailed ? <Pressable onPress={() => { void (query.isFetchNextPageError ? query.fetchNextPage() : query.refetch()); }} accessibilityRole="button" accessibilityLabel="Reintentar búsqueda"><Text style={styles.error}>No pudimos buscar. Toca para reintentar.</Text></Pressable> : null}
     {activeQuery.length >= 2 && !query.isFetching && !searchFailed && options.length === 0 ? <Text style={styles.help}>No encontramos coincidencias.</Text> : null}
     {options.map((option) => <Pressable key={option.partyId} style={styles.option} onPress={() => { onSelect(option); setText(''); }} accessibilityRole="button" accessibilityLabel={`Seleccionar ${option.displayName}`}>
-      <Avatar option={option} />
+      <Avatar option={option} context={search.context} />
       <View style={styles.optionText}><Text style={styles.name}>{option.displayName}</Text><Text style={styles.meta} numberOfLines={1}>{[option.username ? `@${option.username}` : null, option.secondaryLabel].filter(Boolean).join(' · ')}</Text></View>
     </Pressable>)}
     {query.hasNextPage ? <Pressable style={styles.more} onPress={() => { void query.fetchNextPage(); }} disabled={query.isFetchingNextPage} accessibilityRole="button" accessibilityLabel="Ver más resultados">
@@ -112,16 +150,30 @@ export function PartySelector({ value, onChange, excludedPartyIds = [], label = 
 
   if (value) {
     return <View style={styles.selected} accessibilityLabel={`Seleccionado: ${value.displayName}`}>
-      <Avatar option={value} />
+      <Avatar option={value} context={context} />
       <View style={styles.selectedIdentity}>
         <Text style={styles.selectedName} numberOfLines={1}>{value.displayName}</Text>
         {value.username ? <Text style={styles.meta} numberOfLines={1}>@{value.username}</Text> : null}
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Quitar a ${value.displayName}`} onPress={() => onChange(null)}><Text style={styles.remove}>Quitar</Text></Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Quitar a ${value.displayName}`}
+        onPress={() => commitSelection({ context, mode: 'single', action: 'removed', onChange, value: null })}
+      >
+        <Text style={styles.remove}>Quitar</Text>
+      </Pressable>
     </View>;
   }
 
-  return <PartySearchResults label={label} search={search} onSelect={onChange} />;
+  return (
+    <PartySearchResults
+      label={label}
+      search={search}
+      onSelect={(party) => commitSelection({
+        context, mode: 'single', action: 'selected', onChange, value: party,
+      })}
+    />
+  );
 }
 
 /** Multiple picker that keeps existing selections and prevents duplicate IDs. */
@@ -135,7 +187,7 @@ export function PartyMultiSelector({ value, onChange, excludedPartyIds = [], lab
 
   return <View>
     {value.map((party) => <View key={party.partyId} style={styles.selected} accessibilityLabel={`Seleccionado: ${party.displayName}`}>
-      <Avatar option={party} />
+      <Avatar option={party} context={context} />
       <View style={styles.selectedIdentity}>
         <Text style={styles.selectedName} numberOfLines={1}>{party.displayName}</Text>
         {party.username ? <Text style={styles.meta} numberOfLines={1}>@{party.username}</Text> : null}
@@ -143,7 +195,13 @@ export function PartyMultiSelector({ value, onChange, excludedPartyIds = [], lab
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Quitar a ${party.displayName}`}
-        onPress={() => onChange(value.filter((selected) => selected.partyId !== party.partyId))}
+        onPress={() => commitSelection({
+          context,
+          mode: 'multiple',
+          action: 'removed',
+          onChange,
+          value: value.filter((selected) => selected.partyId !== party.partyId),
+        })}
       >
         <Text style={styles.remove}>Quitar</Text>
       </Pressable>
@@ -152,17 +210,33 @@ export function PartyMultiSelector({ value, onChange, excludedPartyIds = [], lab
       label={label}
       search={search}
       onSelect={(party) => {
-        if (!value.some((selected) => selected.partyId === party.partyId)) onChange([...value, party]);
+        if (value.some((selected) => selected.partyId === party.partyId)) {
+          recordPartySelectorSelection(getAnalyticsClient(), {
+            context, mode: 'multiple', action: 'duplicate_rejected',
+          });
+          return;
+        }
+        commitSelection({
+          context, mode: 'multiple', action: 'selected', onChange, value: [...value, party],
+        });
       }}
     />
   </View>;
 }
 
-function Avatar({ option }: { option: PartySelectorOption }) {
+function Avatar({ option, context }: { option: PartySelectorOption; context: PartySelectorContext }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [option.avatarUrl]);
   return option.avatarUrl && !failed
-    ? <Image source={{ uri: option.avatarUrl }} style={styles.avatar} onError={() => setFailed(true)} accessibilityIgnoresInvertColors />
+    ? <Image
+        source={{ uri: option.avatarUrl }}
+        style={styles.avatar}
+        onError={() => {
+          setFailed(true);
+          recordPartySelectorAvatarFailure(getAnalyticsClient(), { context, partyType: option.partyType });
+        }}
+        accessibilityIgnoresInvertColors
+      />
     : <View style={styles.avatarFallback}><Text style={styles.avatarText}>{initials(option.displayName)}</Text></View>;
 }
 

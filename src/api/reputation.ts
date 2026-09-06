@@ -1,4 +1,7 @@
 import { get, put } from './client';
+import type { components } from './generated/types';
+
+export type PublicReputation = components['schemas']['PublicReputation'];
 
 export type ReputationCategory = {
   id: string;
@@ -34,6 +37,7 @@ export type ReputationPreferenceSave = {
 };
 
 export const Reputation = {
+  getPublic: (partyId: number) => get<PublicReputation>(`/reputation/profiles/${encodeURIComponent(String(partyId))}`),
   categories: (locale: 'es' | 'en' = 'es') =>
     get<ReputationCategory[]>(`/reputation/categories?locale=${locale}`),
   getMyPreferences: (contextKind = 'general') =>

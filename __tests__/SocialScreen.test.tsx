@@ -5,20 +5,16 @@ const mockMutate = jest.fn();
 const mockPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockUseQuery = jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
-  if (queryKey[0] === 'parties') {
-    return {
-      data: [
-        { partyId: 7, displayName: 'Fan Uno' },
-        { partyId: 9, displayName: 'Fan Dos' },
-      ],
-      isLoading: false,
-      isError: false,
-    };
-  }
-
   if (queryKey[0] === 'social-following') {
     return {
-      data: [{ pfFollowerId: 42, pfFollowingId: 7, pfStartedAt: '2026-06-18', pfViaNfc: false }],
+      data: [{
+        pfFollowerId: 42,
+        pfFollowingId: 7,
+        pfFollowerName: 'Demo Fan',
+        pfFollowingName: 'Fan Uno',
+        pfStartedAt: '2026-06-18',
+        pfViaNfc: false,
+      }],
       isLoading: false,
       isError: false,
     };
@@ -26,7 +22,14 @@ const mockUseQuery = jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
 
   if (queryKey[0] === 'social-followers') {
     return {
-      data: [{ pfFollowerId: 9, pfFollowingId: 42, pfStartedAt: '2026-06-18', pfViaNfc: false }],
+      data: [{
+        pfFollowerId: 9,
+        pfFollowingId: 42,
+        pfFollowerName: 'Fan Dos',
+        pfFollowingName: 'Demo Fan',
+        pfStartedAt: '2026-06-18',
+        pfViaNfc: false,
+      }],
       isLoading: false,
       isError: false,
     };
@@ -79,6 +82,9 @@ describe('Social screen', () => {
     expect(screen.getByText(/Siguiendo \(1\)/i)).toBeTruthy();
     expect(screen.getByText(/Seguidores \(1\)/i)).toBeTruthy();
     expect(screen.getByText('Fan Uno')).toBeTruthy();
+    expect(mockUseQuery).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['parties'] }),
+    );
 
     expect(screen.queryByText(/Agregar amigo/i)).toBeNull();
     expect(screen.queryByText(/Sugerencias/i)).toBeNull();

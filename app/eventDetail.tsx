@@ -28,6 +28,7 @@ import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard
 import { EventMomentCard } from '../src/components/EventMomentCard';
 import { TicketPurchaseCard } from '../src/components/tickets/TicketPurchaseCard';
 import { ExperienceReviews } from '../src/components/reviews/ExperienceReviews';
+import { PartySelector, type PartySelectorOption } from '../src/components/PartySelector';
 import { formatTicketMoney, isEventTicketPurchaseEligible } from '../src/lib/tickets';
 import {
   buildMomentActor,
@@ -154,7 +155,7 @@ export default function EventDetailScreen() {
   const [activeTab, setActiveTab] = useState<EventDetailTab>('details');
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('NONE');
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteeId, setInviteeId] = useState('');
+  const [invitee, setInvitee] = useState<PartySelectorOption | null>(null);
   const [inviteMessage, setInviteMessage] = useState('');
   const [showMomentComposer, setShowMomentComposer] = useState(false);
   const [momentCaption, setMomentCaption] = useState('');
@@ -343,7 +344,7 @@ export default function EventDetailScreen() {
   const rsvpMutation = useMutation({
     mutationFn: (status: RSVPStatus) => {
       if (!eventId) throw new Error('Event not found');
-      if (!normalizedPartyId) throw new Error('Party ID requerido para RSVP');
+      if (!normalizedPartyId) throw new Error('Inicia sesión con una cuenta vinculada para confirmar asistencia.');
       return Events.rsvp({ eventId, userId: normalizedPartyId, status });
     },
     onSuccess: (_data, status) => {
@@ -361,17 +362,17 @@ export default function EventDetailScreen() {
   const invitationMutation = useMutation({
     mutationFn: async () => {
       if (!eventId) throw new Error('Event not found');
-      const target = inviteeId.trim();
-      if (!target) throw new Error('Ingresa el ID de la persona a invitar');
+      const target = invitee?.partyId;
+      if (!target) throw new Error('Selecciona la persona a invitar');
       return Events.sendInvitation({
         eventId,
-        toUserId: target,
+        toUserId: String(target),
         fromUserId: normalizedPartyId ?? undefined,
         message: inviteMessage.trim() || undefined,
       });
     },
     onSuccess: () => {
-      setInviteeId('');
+      setInvitee(null);
       setInviteMessage('');
       qc.invalidateQueries({ queryKey: ['event-invitations', eventId] });
       setShowInviteModal(false);
@@ -588,7 +589,7 @@ export default function EventDetailScreen() {
   const connectMomentAuthorMutation = useMutation({
     mutationFn: async (partyId: string) => {
       const numericPartyId = parsePositivePartyId(partyId);
-      if (numericPartyId === null) throw new Error('No hay un Party ID válido para conectar.');
+      if (numericPartyId === null) throw new Error('Este perfil ya no está disponible para conectar.');
       return Social.addFriend(numericPartyId);
     },
     onSuccess: () => {
@@ -655,7 +656,7 @@ export default function EventDetailScreen() {
     mutationFn: async () => {
       if (!eventId) throw new Error('Event not found');
       if (!token?.trim()) throw new Error('Inicia sesión para transmitir al fanclub.');
-      if (!currentActor.partyId) throw new Error('Configura tu Party ID para transmitir como fan.');
+      if (!currentActor.partyId) throw new Error('Tu sesión no tiene una identidad vinculada para transmitir como fan.');
       if (!selectedLiveArtist) throw new Error('Sigue a un artista del lineup para transmitir a su fanclub.');
 
       let created:
@@ -804,7 +805,7 @@ export default function EventDetailScreen() {
 
   const handleRsvpPress = useCallback((status: RSVPStatus) => {
     if (!normalizedPartyId) {
-      Alert.alert('Configura tu Party ID', 'Ve a tu perfil y guarda tu Party ID para confirmar asistencia.');
+      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para confirmar asistencia.');
       return;
     }
     rsvpMutation.mutate(status);
@@ -1110,7 +1111,7 @@ export default function EventDetailScreen() {
             <View style={styles.section}>
               <Text style={styles.label}>¿Asistirás? ({rsvpCount})</Text>
               {!normalizedPartyId ? (
-                <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para confirmar asistencia.</Text>
+                <Text style={styles.helperText}>Inicia sesión con una cuenta vinculada para confirmar asistencia.</Text>
               ) : null}
               {rsvpQuery.isLoading ? <Text style={styles.text}>Cargando RSVP...</Text> : null}
               <View style={styles.rsvpButtons}>
@@ -1326,7 +1327,7 @@ export default function EventDetailScreen() {
                 <Text style={styles.helperText}>Inicia sesión para transmitir al fanclub.</Text>
               ) : null}
               {!currentActor.partyId ? (
-                <Text style={styles.helperText}>Guarda tu Party ID en tu perfil para transmitir.</Text>
+                <Text style={styles.helperText}>Tu sesión necesita una identidad vinculada para transmitir.</Text>
               ) : null}
               {eventArtists.length === 0 ? (
                 <Text style={styles.text}>Este evento todavía no tiene artistas asociados.</Text>
@@ -1638,21 +1639,9 @@ export default function EventDetailScreen() {
             <View style={{ width: 60 }} />
           </View>
           <View style={styles.modalContent}>
-            <Text style={styles.modalMessage}>
-              Usa el Party ID de tus contactos para enviarles la invitación.{'\n'}
-              {normalizedPartyId
-                ? `Se enviará como ${displayName ?? 'contacto'} #${normalizedPartyId}.`
-                : 'Guarda tu Party ID en tu perfil para aparecer como remitente.'}
-            </Text>
+            <Text style={styles.modalMessage}>Busca a la persona por nombre o @username para enviarle la invitación.</Text>
             <View style={styles.inputGroup}>
-              <TextInput
-                placeholder="Party ID del invitado"
-                accessibilityLabel="Party ID del invitado"
-                value={inviteeId}
-                onChangeText={setInviteeId}
-                style={styles.input}
-                keyboardType="number-pad"
-              />
+              <PartySelector value={invitee} onChange={setInvitee} excludedPartyIds={normalizedPartyId ? [Number(normalizedPartyId)] : []} label="Persona a invitar" context="event_invitation" />
               <TextInput
                 placeholder="Mensaje (opcional)"
                 accessibilityLabel="Mensaje opcional"
@@ -1662,11 +1651,11 @@ export default function EventDetailScreen() {
                 multiline
               />
               <TouchableOpacity
-                style={[styles.primaryButton, invitationMutation.isPending && styles.buttonDisabled]}
+                style={[styles.primaryButton, (invitationMutation.isPending || !invitee) && styles.buttonDisabled]}
                 onPress={() => invitationMutation.mutate()}
-                disabled={invitationMutation.isPending}
+                disabled={invitationMutation.isPending || !invitee}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: invitationMutation.isPending }}
+                accessibilityState={{ disabled: invitationMutation.isPending || !invitee }}
               >
                 <Text style={styles.primaryButtonText}>
                   {invitationMutation.isPending ? 'Enviando…' : 'Enviar invitación'}
@@ -1684,7 +1673,7 @@ export default function EventDetailScreen() {
                 invitations.map((inv) => (
                   <View key={String(inv.id)} style={styles.invitationItem}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.invitationTitle}>Para #{inv.toUserId}</Text>
+                      <Text style={styles.invitationTitle}>Invitación a una cuenta TDF</Text>
                       <Text style={styles.invitationMeta}>
                         Estado: <Text style={styles.invitationStatus}>{inv.status}</Text>
                       </Text>

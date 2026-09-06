@@ -222,7 +222,7 @@ export function buildMomentActor(input: {
   displayName?: string | null;
 }): EventMomentActor {
   const partyId = normalizePartyId(input.partyId);
-  const displayName = normalizeText(input.displayName) ?? (partyId ? `Party #${partyId}` : 'Invitado');
+  const displayName = normalizeText(input.displayName) ?? (partyId ? 'Cuenta TDF' : 'Invitado');
   const slug = displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
   return {

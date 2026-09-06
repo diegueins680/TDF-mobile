@@ -4,6 +4,46 @@
  */
 
 export interface paths {
+    "/social/followers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List parties following the authenticated party
+         * @description Returns only relationships visible to the authenticated party, enriched with minimal display names so clients do not download the Party directory.
+         */
+        get: operations["listSocialFollowers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/following": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List parties followed by the authenticated party
+         * @description Returns only relationships visible to the authenticated party, enriched with minimal display names so clients do not download the Party directory.
+         */
+        get: operations["listSocialFollowing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/social-events/events": {
         parameters: {
             query?: never;
@@ -1325,6 +1365,26 @@ export interface paths {
          * @description Updates mutable fields such as contact info, notes, or flags.
          */
         put: operations["updateParty"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parties/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search parties for a relationship selector
+         * @description Minimal paginated selector data; no contact details are returned.
+         */
+        get: operations["searchPartiesForSelector"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -4889,6 +4949,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reputation/profiles/{partyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get aggregated public reputation without evaluator identities */
+        get: operations["getPublicReputation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reputation/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active official reputation categories */
+        get: operations["listReputationCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reputation/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the authenticated viewer's private category preferences
+         * @description Returns only the caller's personal relevance preferences. It never returns private rankings or evaluator identities.
+         */
+        get: operations["getMyReputationPreferences"];
+        /**
+         * Save the authenticated viewer's private category preferences
+         * @description Idempotent, optimistic-concurrency save. Personal priorities never alter public reputation.
+         */
+        put: operations["saveMyReputationPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reviews/eligibility": {
         parameters: {
             query?: never;
@@ -7575,6 +7693,41 @@ export interface components {
             /** @description Present when the party is linked to a band/project. */
             band?: Record<string, never> | null;
         };
+        PartyFollow: {
+            /** Format: int64 */
+            pfFollowerId: number;
+            /** Format: int64 */
+            pfFollowingId: number;
+            pfFollowerName?: string | null;
+            pfFollowingName?: string | null;
+            pfViaNfc: boolean;
+            /** Format: date */
+            pfStartedAt: string;
+        };
+        PartySelectorOption: {
+            /**
+             * Format: int64
+             * @description Canonical Party identifier; persist this value only.
+             */
+            partyId: number;
+            /** @enum {string} */
+            partyType: "person" | "organization";
+            displayName: string;
+            username?: string | null;
+            /** Format: uri */
+            avatarUrl?: string | null;
+            secondaryLabel?: string | null;
+            /** @enum {string} */
+            accountStatus: "active" | "inactive" | "no-account";
+        };
+        PartySelectorPage: {
+            items: components["schemas"]["PartySelectorOption"][];
+            /**
+             * Format: int64
+             * @description Opaque cursor for the next relevance-ordered page.
+             */
+            nextCursor?: number | null;
+        };
         ChatThread: {
             /** Format: int64 */
             ctThreadId?: number;
@@ -10035,6 +10188,63 @@ export interface components {
             /** Format: uuid */
             nextCursor?: string | null;
         };
+        PublicReputation: {
+            /** Format: int64 */
+            partyId: number;
+            formulaVersion: string;
+            /** @enum {string} */
+            status: "forming" | "published";
+            score?: number | null;
+            verifiedInteractions: number;
+            /** @enum {string} */
+            confidence: "forming" | "low" | "moderate" | "high";
+            categories: {
+                slug: string;
+                score: number;
+                lowerBound: number;
+                upperBound: number;
+                verifiedCount: number;
+                /** @enum {string} */
+                confidence: "forming" | "low" | "moderate" | "high";
+            }[];
+        };
+        ReputationCategory: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            name: string;
+            description: string;
+            defaultPosition: number;
+            institutionalWeight: number;
+            version: number;
+        };
+        ReputationPreference: {
+            contextKind: string;
+            /** @enum {string} */
+            status: "draft" | "active" | "archived";
+            revision: number;
+            formulaVersion: string;
+            categories: {
+                /** Format: uuid */
+                categoryId: string;
+                slug: string;
+                position: number;
+                weight: number;
+                notApplicable: boolean;
+            }[];
+        };
+        ReputationPreferenceSave: {
+            contextKind: string;
+            expectedRevision: number;
+            activate: boolean;
+            categories: {
+                /** Format: uuid */
+                categoryId: string;
+                position: number;
+                weight: number;
+                notApplicable: boolean;
+            }[];
+        };
         ExperienceReviewEligibility: {
             targetKind: components["schemas"]["ExperienceReviewTargetKind"];
             targetId: string;
@@ -10126,6 +10336,60 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listSocialFollowers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visible follower relationships */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartyFollow"][];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listSocialFollowing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Visible following relationships */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartyFollow"][];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listSocialEvents: {
         parameters: {
             query?: {
@@ -12351,6 +12615,66 @@ export interface operations {
             };
             /** @description Party not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    searchPartiesForSelector: {
+        parameters: {
+            query: {
+                q: string;
+                /** @description Functional authorization context; public discovery contexts are forced to active person accounts and exclude the actor. */
+                context?: "crm_assignment" | "booking" | "booking_engineer" | "billing_contact" | "artist_link" | "campaign_enrollment" | "event_invitation" | "social_connection" | "operations" | "internal_feedback" | "live_session" | "event_logistics";
+                /** @description Required domain scope for contexts that authorize against a concrete resource. For event_logistics this is the event ID. */
+                scopeId?: string;
+                kind?: "any" | "person" | "organization";
+                accountOnly?: boolean;
+                excludePartyId?: number[];
+                /** @description Opaque bounded cursor returned by the previous page. */
+                cursor?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Minimal party selector results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartySelectorPage"];
+                };
+            };
+            /** @description Invalid selector query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Required module or resource-scope access missing for the declared context */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated social discovery quota exceeded */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19659,6 +19983,147 @@ export interface operations {
             };
             /** @description Review target not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPublicReputation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aggregate public reputation, or a formation state below the sample threshold */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicReputation"];
+                };
+            };
+            /** @description Profile not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listReputationCategories: {
+        parameters: {
+            query?: {
+                locale?: "es" | "en";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active categories only; proposals and archived entries are excluded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReputationCategory"][];
+                };
+            };
+        };
+    };
+    getMyReputationPreferences: {
+        parameters: {
+            query?: {
+                contextKind?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private saved preference profile, or an empty draft for the context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReputationPreference"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Contextual reputation is not enabled for this deployment */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    saveMyReputationPreferences: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReputationPreferenceSave"];
+            };
+        };
+        responses: {
+            /** @description Saved private preference profile; identical retries return the original response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReputationPreference"];
+                };
+            };
+            /** @description Invalid category positions */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Contextual reputation is not enabled for this deployment */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Preference revision conflict or idempotency key conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

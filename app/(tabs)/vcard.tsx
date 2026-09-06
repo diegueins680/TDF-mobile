@@ -10,7 +10,8 @@ import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 
 type ScanEvent = Pick<BarcodeScanningResult, 'data'>;
 
-const parsePositivePartyId = (value: string): number | undefined => {
+const parsePositivePartyId = (value: string | null): number | undefined => {
+  if (!value) return undefined;
   const trimmed = value.trim();
   if (!/^\d+$/.test(trimmed)) return undefined;
   const parsed = Number.parseInt(trimmed, 10);
@@ -20,12 +21,11 @@ const parsePositivePartyId = (value: string): number | undefined => {
 export default function VCardScreen() {
   const { token, partyId: authPartyId } = useAuth();
   const { partyId: settingsPartyId, displayName } = useUserSettings();
-  const hydratedDefaultsRef = useRef({ name: false, partyId: false });
+  const hydratedDefaultsRef = useRef({ name: false });
   const scanLockRef = useRef(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [partyId, setPartyId] = useState('');
   const effectivePartyId = useMemo(
     () => resolvePartyId(authPartyId, settingsPartyId),
     [authPartyId, settingsPartyId],
@@ -43,20 +43,9 @@ export default function VCardScreen() {
     setName(displayName);
   }, [displayName]);
 
-  useEffect(() => {
-    if (!effectivePartyId || hydratedDefaultsRef.current.partyId) return;
-    hydratedDefaultsRef.current.partyId = true;
-    setPartyId(effectivePartyId);
-  }, [effectivePartyId]);
-
   const handleNameChange = useCallback((value: string) => {
     hydratedDefaultsRef.current.name = true;
     setName(value);
-  }, []);
-
-  const handlePartyIdChange = useCallback((value: string) => {
-    hydratedDefaultsRef.current.partyId = true;
-    setPartyId(value);
   }, []);
 
   const qrValue = useMemo(
@@ -65,9 +54,9 @@ export default function VCardScreen() {
         name,
         email,
         phone,
-        partyId: parsePositivePartyId(partyId),
+        partyId: parsePositivePartyId(effectivePartyId),
       }),
-    [name, email, phone, partyId],
+    [name, email, phone, effectivePartyId],
   );
 
   const openScanner = useCallback(async () => {
@@ -150,13 +139,9 @@ export default function VCardScreen() {
         <TextInput placeholder="Nombre" value={name} onChangeText={handleNameChange} style={styles.input} />
         <TextInput placeholder="Correo" value={email} onChangeText={setEmail} style={styles.input} autoCapitalize="none" />
         <TextInput placeholder="Teléfono" value={phone} onChangeText={setPhone} style={styles.input} keyboardType="phone-pad" />
-        <TextInput
-          placeholder="Party ID (opcional)"
-          value={partyId}
-          onChangeText={handlePartyIdChange}
-          style={styles.input}
-          keyboardType="number-pad"
-        />
+        <Text style={styles.identityHint}>
+          {effectivePartyId ? 'Tu identidad TDF se incluye automáticamente.' : 'Inicia sesión para incluir tu identidad TDF.'}
+        </Text>
         <View style={styles.qrBox}>
           <QRCode value={qrValue} size={180} />
           <Text style={styles.qrHint}>Comparte este QR para que te agreguen rápido.</Text>
@@ -192,7 +177,6 @@ export default function VCardScreen() {
             {scanned.name && <Text style={styles.rowText}>{scanned.name}</Text>}
             {scanned.email && <Text style={styles.rowText}>{scanned.email}</Text>}
             {scanned.phone && <Text style={styles.rowText}>{scanned.phone}</Text>}
-            {scanned.partyId && <Text style={styles.rowText}>Party ID: {scanned.partyId}</Text>}
             <Button
               title={isSending ? 'Enviando…' : 'Enviar intercambio al CRM'}
               onPress={() => void handleExchange()}
@@ -226,6 +210,7 @@ const styles = StyleSheet.create({
   },
   qrBox: { alignItems: 'center', gap: 8, paddingVertical: 8 },
   qrHint: { color: '#666', fontSize: 12 },
+  identityHint: { color: '#666', fontSize: 12 },
   scannerBox: {
     height: 260,
     borderRadius: 12,

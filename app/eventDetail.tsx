@@ -1673,7 +1673,7 @@ export default function EventDetailScreen() {
                 invitations.map((inv) => (
                   <View key={String(inv.id)} style={styles.invitationItem}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.invitationTitle}>Para #{inv.toUserId}</Text>
+                      <Text style={styles.invitationTitle}>Invitación a una cuenta TDF</Text>
                       <Text style={styles.invitationMeta}>
                         Estado: <Text style={styles.invitationStatus}>{inv.status}</Text>
                       </Text>

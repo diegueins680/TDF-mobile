@@ -27,6 +27,11 @@ describe('mobile Party identity copy', () => {
     expect(socialScreen).toContain('item.pfFollowingName');
   });
 
+  it('does not expose recipient Party IDs in invitation history', () => {
+    expect(eventDetail).not.toContain('Para #{inv.toUserId}');
+    expect(eventDetail).toContain('Invitación a una cuenta TDF');
+  });
+
   it('does not expose an author Party ID in event moment cards', () => {
     expect(eventMomentCard).not.toMatch(/Party\s*#/i);
     expect(eventMoments).not.toMatch(/Party\s*#/i);

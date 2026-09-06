@@ -377,6 +377,7 @@ describe('Auth screen', () => {
 
     await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists'));
     await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/social');
   });
 
   it('retains pending intent when authentication fails', async () => {

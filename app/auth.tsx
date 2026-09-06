@@ -22,7 +22,6 @@ import {
   GOOGLE_WEB_CLIENT_ID
 } from '../src/lib/authConfig';
 import { loadNativeGoogleSignin, type NativeGoogleSigninModule } from '../src/lib/nativeGoogleSignin';
-import { MOBILE_LANDING_ROUTE } from '../src/navigation/mobileSurface';
 import FormField from '../src/components/FormField';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
@@ -235,7 +234,10 @@ export default function AuthScreen() {
       setPassword('');
       analytics.capture('login_completed', { platform: 'mobile', method: 'password' });
       setFeedbackMessage(copy.loginSuccess);
-      router.replace(resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []) ?? MOBILE_LANDING_ROUTE);
+      router.replace(
+        resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? [])
+          ?? resolveMobileIntentDestination(selectedIntent, session.roles ?? [], session.modules ?? []),
+      );
     } catch (error) {
       analytics.capture('login_failed', { platform: 'mobile', method: 'password' });
       setErrorMessage(readErrorMessage(error, copy.loginFailure));
@@ -356,7 +358,8 @@ export default function AuthScreen() {
       router.replace(
         mode === 'signup' && (!authorizedReturnTo || selectedIntent === 'artist_profile' || selectedIntent === 'internships')
           ? resolveMobileIntentDestination(selectedIntent, session.roles ?? [], session.modules ?? [])
-          : authorizedReturnTo ?? MOBILE_LANDING_ROUTE,
+          : authorizedReturnTo
+            ?? resolveMobileIntentDestination(selectedIntent, session.roles ?? [], session.modules ?? []),
       );
     } catch (error) {
       if (googleSigninModule.isErrorWithCode(error)) {

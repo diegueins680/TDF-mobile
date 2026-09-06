@@ -28,16 +28,17 @@ import { useAuth } from '../src/providers/AuthProvider';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
-import { markSignupCompleted } from '../src/lib/firstRunFlags';
 import {
-  attachPendingIntentToParty,
+  clearPendingOnboardingIntent,
   DEFAULT_ONBOARDING_INTENT,
   ONBOARDING_INTENT_OPTIONS,
   parseOnboardingIntent,
   persistOnboardingIntent,
+  readPendingOnboardingIntent,
   resolveMobileIntentDestination,
   type OnboardingIntent,
 } from '../src/lib/onboardingIntent';
+import { updateOnboardingIntent } from '../src/api/onboarding';
 import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
 import { authCopy, onboardingLanguage } from '../src/localization/onboardingCopy';
 import { isValidSignupPassword } from '../src/lib/passwordPolicy';
@@ -89,7 +90,8 @@ export default function AuthScreen() {
   const requestedMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const rawIntent = Array.isArray(params.intent) ? params.intent[0] : params.intent;
   const legacyRoles = Array.isArray(params.roles) ? params.roles[0] : params.roles;
-  const initialIntent = parseOnboardingIntent(rawIntent) ?? parseOnboardingIntent(legacyRoles) ?? DEFAULT_ONBOARDING_INTENT;
+  const requestedIntent = parseOnboardingIntent(rawIntent) ?? parseOnboardingIntent(legacyRoles);
+  const initialIntent = requestedIntent ?? DEFAULT_ONBOARDING_INTENT;
   const rawReturnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
   const safeReturnTo = rawReturnTo?.startsWith('/') && !rawReturnTo.startsWith('//') && rawReturnTo.length <= 500
     ? rawReturnTo as Href
@@ -152,18 +154,40 @@ export default function AuthScreen() {
   };
 
   useEffect(() => {
-    analytics.capture('auth_mode_viewed', {
-      platform: 'mobile',
-      mode: requestedMode === 'signup' ? 'signup' : 'login',
-      intent: initialIntent,
-    });
-    if (requestedMode === 'signup') {
-      analytics.capture('signup_started', { platform: 'mobile', entry: 'deeplink', intent: initialIntent });
-    }
-    void persistOnboardingIntent(initialIntent);
+    let active = true;
+    void (async () => {
+      const restoredIntent = requestedIntent ?? await readPendingOnboardingIntent();
+      const entryIntent = restoredIntent ?? DEFAULT_ONBOARDING_INTENT;
+      if (!active) return;
+      setSelectedIntent(entryIntent);
+      analytics.capture('auth_mode_viewed', {
+        platform: 'mobile',
+        mode: requestedMode === 'signup' ? 'signup' : 'login',
+        intent: entryIntent,
+      });
+      if (requestedMode === 'signup') {
+        analytics.capture('signup_started', { platform: 'mobile', entry: 'deeplink', intent: entryIntent });
+      }
+      if (requestedIntent) await persistOnboardingIntent(requestedIntent);
+    })();
+    return () => {
+      active = false;
+    };
     // Screen-entry instrumentation must fire once for this route instance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const persistIntentForExistingAccount = async () => {
+    const pendingIntent = requestedIntent ?? await readPendingOnboardingIntent();
+    if (pendingIntent) {
+      try {
+        await updateOnboardingIntent(pendingIntent);
+      } catch {
+        // Personalization sync must not turn a successful login into failure.
+      }
+    }
+    await clearPendingOnboardingIntent();
+  };
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -207,6 +231,7 @@ export default function AuthScreen() {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
+      void persistIntentForExistingAccount();
       setPassword('');
       analytics.capture('login_completed', { platform: 'mobile', method: 'password' });
       setFeedbackMessage(copy.loginSuccess);
@@ -241,18 +266,13 @@ export default function AuthScreen() {
         marketingOptIn,
         termsAccepted: true,
         termsVersion: ACCOUNT_TERMS_VERSION,
+        onboardingIntent: selectedIntent,
       });
-      const sessionPartyId = session.partyId ? String(session.partyId) : '';
-      if (sessionPartyId) {
-        await Promise.all([
-          markSignupCompleted(sessionPartyId),
-          attachPendingIntentToParty(sessionPartyId, selectedIntent),
-        ]);
-      }
       setToken(session.token, session.partyId ?? null, {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
+      await clearPendingOnboardingIntent();
       setPassword('');
       const intentDestination = resolveMobileIntentDestination(
         selectedIntent,
@@ -312,19 +332,20 @@ export default function AuthScreen() {
           marketingOptIn,
           termsAccepted: true,
           termsVersion: ACCOUNT_TERMS_VERSION,
+          onboardingIntent: selectedIntent,
         } : {}),
       });
-      const googlePartyId = session.partyId ? String(session.partyId) : '';
-      if (mode === 'signup' && googlePartyId) {
-        await attachPendingIntentToParty(googlePartyId, selectedIntent);
-        if (session.accountCreated === true) await markSignupCompleted(googlePartyId);
-      }
       setToken(session.token, session.partyId ?? null, {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
       setPassword('');
       const googleCreatedAccount = session.accountCreated === true;
+      if (googleCreatedAccount) {
+        await clearPendingOnboardingIntent();
+      } else {
+        void persistIntentForExistingAccount();
+      }
       analytics.capture(googleCreatedAccount ? 'signup_completed' : 'login_completed', {
         platform: 'mobile',
         method: 'google',

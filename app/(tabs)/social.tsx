@@ -13,7 +13,6 @@ import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { impactMedium } from '../../src/utils/haptics';
 import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
-import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
 
 type TabKey = 'following' | 'followers';
 
@@ -83,7 +82,6 @@ export default function SocialScreen() {
       if (await markFirstValueCompleted(effectivePartyId, 'artist_followed')) {
         analytics.capture('first_value_completed', { platform: 'mobile', value: 'artist_followed' });
         analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'artist_followed' });
-        if (effectivePartyId) await markNewUserOnboardingCompleted(effectivePartyId);
       }
       Alert.alert('Listo', 'Ahora sigues a esta persona.');
     },
@@ -105,7 +103,6 @@ export default function SocialScreen() {
       if (await markFirstValueCompleted(effectivePartyId, 'artist_followed')) {
         analytics.capture('first_value_completed', { platform: 'mobile', value: 'artist_followed' });
         analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'artist_followed' });
-        if (effectivePartyId) await markNewUserOnboardingCompleted(effectivePartyId);
       }
     },
     onError: (error) => Alert.alert(

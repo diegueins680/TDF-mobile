@@ -1,21 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Href } from 'expo-router';
 
+import {
+  completeOnboardingProgress,
+  type OnboardingFirstValue,
+  type OnboardingIntent,
+} from '../api/onboarding';
 import { MOBILE_LANDING_ROUTE } from '../navigation/mobileSurface';
-import { resolveNewUserCohort } from './firstRunFlags';
 
-export type OnboardingIntent =
-  | 'events'
-  | 'follow_artists'
-  | 'artist_profile'
-  | 'internships'
-  | 'learning'
-  | 'professional_tools';
+export type { OnboardingIntent } from '../api/onboarding';
 
 export const DEFAULT_ONBOARDING_INTENT: OnboardingIntent = 'events';
 export const PENDING_INTENT_KEY = 'tdf-onboarding-intent:pending';
-export const PARTY_INTENT_PREFIX = 'tdf-onboarding-intent:party:';
-export const FIRST_VALUE_PREFIX = 'tdf-first-value-completed:';
 
 const INTENTS = new Set<OnboardingIntent>([
   'events',
@@ -66,40 +62,43 @@ export const ONBOARDING_INTENT_OPTIONS: readonly {
   { id: 'professional_tools', labelEs: 'Usar herramientas profesionales', labelEn: 'Use professional tools' },
 ] as const;
 
-const partyIntentKey = (partyId: string) => `${PARTY_INTENT_PREFIX}${partyId}`;
-const firstValueKey = (partyId: string) => `${FIRST_VALUE_PREFIX}${partyId}`;
-
-export async function persistOnboardingIntent(intent: OnboardingIntent, partyId?: string | null) {
+export async function persistOnboardingIntent(intent: OnboardingIntent) {
   try {
-    await AsyncStorage.setItem(partyId ? partyIntentKey(partyId) : PENDING_INTENT_KEY, intent);
+    await AsyncStorage.setItem(PENDING_INTENT_KEY, intent);
   } catch {
     // Intent improves routing but must never block account creation.
   }
 }
 
-export async function attachPendingIntentToParty(partyId: string, intent: OnboardingIntent) {
-  if (!partyId) return;
+export async function readPendingOnboardingIntent(): Promise<OnboardingIntent | null> {
   try {
-    await AsyncStorage.multiSet([
-      [partyIntentKey(partyId), intent],
-      [PENDING_INTENT_KEY, intent],
-    ]);
+    const stored = await AsyncStorage.getItem(PENDING_INTENT_KEY);
+    const intent = parseOnboardingIntent(stored);
+    if (stored && !intent) {
+      await AsyncStorage.removeItem(PENDING_INTENT_KEY);
+    }
+    return intent;
   } catch {
-    // Best effort only.
+    return null;
+  }
+}
+
+export async function clearPendingOnboardingIntent(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(PENDING_INTENT_KEY);
+  } catch {
+    // Authentication must not fail because best-effort cleanup failed.
   }
 }
 
 export async function markFirstValueCompleted(
   partyId: string | null | undefined,
-  value: string,
+  value: OnboardingFirstValue,
 ): Promise<boolean> {
   if (!partyId) return false;
   try {
-    if (!await resolveNewUserCohort(partyId)) return false;
-    const key = firstValueKey(partyId);
-    if (await AsyncStorage.getItem(key)) return false;
-    await AsyncStorage.setItem(key, JSON.stringify({ value, completedAt: Date.now() }));
-    return true;
+    const result = await completeOnboardingProgress(value);
+    return result.newlyCompleted === true;
   } catch {
     return false;
   }

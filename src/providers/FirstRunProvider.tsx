@@ -3,12 +3,17 @@
  *
  * Owns the "is this user new?" derivation used by the
  * `single-feature-onboarding-v1` A/B test. Lives INSIDE AuthProvider so we
- * can observe partyId. Eligibility is tied to a successful signup timestamp,
- * expires after 24 hours, and ends permanently when onboarding completes.
+ * can observe partyId. Eligibility comes from the backend's account-bound
+ * signup marker, survives device changes, and ends permanently on completion.
  */
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useState } from 'react';
 
-import { markNewUserOnboardingCompleted, resolveNewUserCohort } from '../lib/firstRunFlags';
+import {
+  completeOnboardingProgress,
+  getOnboardingProgress,
+  type OnboardingCompletionResult,
+  type OnboardingFirstValue,
+} from '../api/onboarding';
 import { useAuth } from './AuthProvider';
 
 type FirstRunContextValue = {
@@ -16,13 +21,15 @@ type FirstRunContextValue = {
   cohortReady: boolean;
   /** Whether the active partyId qualifies as a brand-new user. */
   isNewUser: boolean;
-  completeOnboarding: () => Promise<void>;
+  completeOnboarding: (
+    firstValue?: OnboardingFirstValue,
+  ) => Promise<OnboardingCompletionResult | null>;
 };
 
 const FirstRunContext = createContext<FirstRunContextValue>({
   cohortReady: false,
   isNewUser: false,
-  completeOnboarding: async () => undefined,
+  completeOnboarding: async () => null,
 });
 
 export function FirstRunProvider({ children }: PropsWithChildren) {
@@ -41,7 +48,14 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     let cancelled = false;
     (async () => {
       setCohortReady(false);
-      const isNew = await resolveNewUserCohort(partyId);
+      let isNew = false;
+      try {
+        const progress = await getOnboardingProgress();
+        isNew = progress.eligible;
+      } catch {
+        // Fail closed: network errors and legacy servers must never classify
+        // an established account as a new-user experiment participant.
+      }
       if (cancelled) return;
       setIsNewUser(isNew);
       setCohortReady(true);
@@ -52,10 +66,18 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     };
   }, [partyId]);
 
-  const completeOnboarding = useCallback(async () => {
-    if (!partyId) return;
-    await markNewUserOnboardingCompleted(partyId);
-    setIsNewUser(false);
+  const completeOnboarding = useCallback(async (
+    firstValue?: OnboardingFirstValue,
+  ): Promise<OnboardingCompletionResult | null> => {
+    if (!partyId) return null;
+    try {
+      return await completeOnboardingProgress(firstValue);
+    } catch {
+      // Leaving optional onboarding must not trap the current app session.
+      return null;
+    } finally {
+      setIsNewUser(false);
+    }
   }, [partyId]);
 
   return (

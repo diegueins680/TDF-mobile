@@ -11,9 +11,10 @@ const mockGoogleSignIn = jest.fn();
 const mockGoogleSignOut = jest.fn();
 const mockLoadNativeGoogleSignin = jest.fn();
 const mockReplace = jest.fn();
-const mockMarkSignupCompleted = jest.fn();
-const mockAttachPendingIntentToParty = jest.fn();
+const mockClearPendingOnboardingIntent = jest.fn();
 const mockPersistOnboardingIntent = jest.fn();
+const mockReadPendingOnboardingIntent = jest.fn(() => Promise.resolve(null));
+const mockUpdateOnboardingIntent = jest.fn();
 let mockAuthConfig = {
   GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
   GOOGLE_IOS_CLIENT_ID: 'ios-client-id.apps.googleusercontent.com',
@@ -75,6 +76,10 @@ jest.mock('../src/api/auth', () => ({
   signupRequest: (...args: unknown[]) => mockSignupRequest(...args),
 }));
 
+jest.mock('../src/api/onboarding', () => ({
+  updateOnboardingIntent: (...args: unknown[]) => mockUpdateOnboardingIntent(...args),
+}));
+
 jest.mock('../src/lib/authConfig', () => ({
   __esModule: true,
   get GOOGLE_WEB_CLIENT_ID() {
@@ -92,16 +97,13 @@ jest.mock('../src/lib/nativeGoogleSignin', () => ({
   loadNativeGoogleSignin: () => mockLoadNativeGoogleSignin(),
 }));
 
-jest.mock('../src/lib/firstRunFlags', () => ({
-  markSignupCompleted: (...args: unknown[]) => mockMarkSignupCompleted(...args),
-}));
-
 jest.mock('../src/lib/onboardingIntent', () => {
   const actual = jest.requireActual('../src/lib/onboardingIntent');
   return {
     ...actual,
-    attachPendingIntentToParty: (...args: unknown[]) => mockAttachPendingIntentToParty(...args),
+    clearPendingOnboardingIntent: (...args: unknown[]) => mockClearPendingOnboardingIntent(...args),
     persistOnboardingIntent: (...args: unknown[]) => mockPersistOnboardingIntent(...args),
+    readPendingOnboardingIntent: () => mockReadPendingOnboardingIntent(),
   };
 });
 
@@ -115,6 +117,8 @@ const AuthScreen = require('../app/auth').default;
 describe('Auth screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockReadPendingOnboardingIntent.mockResolvedValue(null);
+    mockUpdateOnboardingIntent.mockResolvedValue({ eligible: false });
     mockSearchParams = {};
     mockReplace.mockReset();
     mockAuthConfig.GOOGLE_WEB_CLIENT_ID = 'web-client-id.apps.googleusercontent.com';
@@ -164,6 +168,7 @@ describe('Auth screen', () => {
       expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42, { roles: [], modules: [] });
       expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory');
     });
+    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Sesión iniciada.')).toBeTruthy();
   }, 10_000);
 
@@ -243,9 +248,9 @@ describe('Auth screen', () => {
       marketingOptIn: false,
       termsAccepted: true,
       termsVersion: 'tdf-account-terms-v1',
+      onboardingIntent: 'events',
     }));
-    expect(mockMarkSignupCompleted).toHaveBeenCalledWith('88');
-    expect(mockAttachPendingIntentToParty).toHaveBeenCalledWith('88', 'events');
+    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
     expect(mockSetToken).toHaveBeenCalledWith('Bearer new-fan-token', 88, { roles: ['Fan'], modules: [] });
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory');
   });
@@ -263,11 +268,32 @@ describe('Auth screen', () => {
 
     await waitFor(() => expect(mockSignupRequest).toHaveBeenCalled());
     expect(mockSignupRequest.mock.calls[0]?.[0]).not.toHaveProperty('roles');
-    expect(mockAttachPendingIntentToParty).toHaveBeenCalledWith('91', 'artist_profile');
+    expect(mockSignupRequest.mock.calls[0]?.[0]).toHaveProperty('onboardingIntent', 'artist_profile');
+    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
     expect(mockReplace).toHaveBeenCalledWith({
       pathname: '/access-requests/new',
       params: { feature: 'artist.onboarding', action: 'create' },
     });
+  });
+
+  it('restores an interrupted signup intent from bounded local storage', async () => {
+    mockSearchParams = { mode: 'signup' };
+    mockReadPendingOnboardingIntent.mockResolvedValueOnce('artist_profile');
+    mockSignupRequest.mockResolvedValue({ token: 'token', partyId: 92, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+
+    await waitFor(() => expect(
+      screen.getByRole('radio', { name: 'Crear perfil de artista' }).props.accessibilityState,
+    ).toEqual({ selected: true }));
+    fireEvent.changeText(screen.getByPlaceholderText('Tu nombre'), 'Lina');
+    fireEvent.changeText(screen.getByPlaceholderText('tu@correo.com'), 'lina@example.com');
+    fireEvent.changeText(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password-seguro');
+    fireEvent.press(screen.getByTestId('termsCheckbox'));
+    fireEvent.press(screen.getByTestId('signupButton'));
+
+    await waitFor(() => expect(mockSignupRequest).toHaveBeenCalledWith(expect.objectContaining({
+      onboardingIntent: 'artist_profile',
+    })));
   });
 
   it('submits Google login and stores the returned token', async () => {
@@ -306,7 +332,62 @@ describe('Auth screen', () => {
     );
     await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token', 77, { roles: [], modules: [] }));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory'));
+    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
     expect(screen.getByText('Sesión con Google iniciada.')).toBeTruthy();
+  });
+
+  it('sends onboarding intent for Google signup and clears it after success', async () => {
+    mockGoogleSignIn.mockResolvedValue({
+      type: 'success',
+      data: { idToken: 'google-signup-token' },
+    });
+    mockGoogleLoginRequest.mockResolvedValue({
+      token: 'Bearer created-token',
+      partyId: 78,
+      roles: ['Customer'],
+      modules: [],
+      accountCreated: true,
+    });
+    mockSearchParams = { mode: 'signup', intent: 'follow_artists' };
+
+    render(<AuthScreen />);
+    fireEvent.press(await screen.findByTestId('termsCheckbox'));
+    const googleButton = screen.getByText(/cuenta con Google/i).parent;
+    if (!googleButton) throw new Error('Google button not found');
+    fireEvent.press(googleButton);
+
+    await waitFor(() => expect(mockGoogleLoginRequest).toHaveBeenCalledWith({
+      idToken: 'google-signup-token',
+      marketingOptIn: false,
+      termsAccepted: true,
+      termsVersion: 'tdf-account-terms-v1',
+      onboardingIntent: 'follow_artists',
+    }));
+    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/social');
+  });
+
+  it('persists explicit product intent after existing-account login', async () => {
+    mockSearchParams = { intent: 'follow_artists' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 79, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'demo-user');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'demo-pass');
+    fireEvent.press(screen.getByTestId('loginButton'));
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists'));
+    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
+  });
+
+  it('retains pending intent when authentication fails', async () => {
+    mockLoginRequest.mockRejectedValueOnce(new Error('invalid'));
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'demo-user');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'demo-pass');
+    fireEvent.press(screen.getByTestId('loginButton'));
+
+    await waitFor(() => expect(screen.getByText('invalid')).toBeTruthy());
+    expect(mockClearPendingOnboardingIntent).not.toHaveBeenCalled();
   });
 
   it('hides Google login when this build has no Google client id configured', async () => {

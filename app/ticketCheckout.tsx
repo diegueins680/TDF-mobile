@@ -46,7 +46,6 @@ import {
   rotateTicketCheckoutKey,
 } from '../src/lib/ticketCheckoutIdempotency';
 import { useAuth } from '../src/providers/AuthProvider';
-import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
 import type {
   EventTicketOrder,
@@ -87,12 +86,12 @@ export default function TicketCheckoutScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const { token, partyId, loading: authLoading, clearToken } = useAuth();
-  const { displayName } = useUserSettings();
+  const { token, partyId, session, loading: authLoading, clearToken } = useAuth();
+  const displayName = session?.displayName ?? '';
 
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [buyerName, setBuyerName] = useState(displayName ?? '');
+  const [buyerName, setBuyerName] = useState(displayName);
   const [buyerEmail, setBuyerEmail] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
   const [promoExpanded, setPromoExpanded] = useState(false);

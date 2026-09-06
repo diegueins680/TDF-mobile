@@ -21,6 +21,7 @@ let mockIncludeUnavailableTier = false;
 let mockTierQueryError = false;
 let mockAuthToken: string | null = 'Bearer token';
 let mockAuthPartyId: string | null = '7';
+let mockAuthDisplayName: string | null = 'Ana';
 
 const mockMutationRunner = jest.fn((options) => ({
   mutate: () => {
@@ -59,6 +60,7 @@ jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: () => ({
     token: mockAuthToken,
     partyId: mockAuthPartyId,
+    session: mockAuthDisplayName ? { displayName: mockAuthDisplayName } : null,
     loading: false,
     clearToken: jest.fn(),
   }),
@@ -135,6 +137,7 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
     mockTierQueryError = false;
     mockAuthToken = 'Bearer token';
     mockAuthPartyId = '7';
+    mockAuthDisplayName = 'Ana';
     mockOrders = [];
     mockInitStripe.mockResolvedValue(undefined);
     mockInitPaymentSheet.mockResolvedValue({});
@@ -231,6 +234,7 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
   it('offers intent-preserving signup and login instead of spinning for anonymous buyers', async () => {
     mockAuthToken = null;
     mockAuthPartyId = null;
+    mockAuthDisplayName = null;
 
     render(<TicketCheckoutScreen />);
 

@@ -7,6 +7,17 @@ const socialScreen = readFileSync(path.join(process.cwd(), 'app/(tabs)/social.ts
 const eventMomentCard = readFileSync(path.join(process.cwd(), 'src/components/EventMomentCard.tsx'), 'utf8');
 const eventMoments = readFileSync(path.join(process.cwd(), 'src/lib/eventMoments.ts'), 'utf8');
 const vcardScreen = readFileSync(path.join(process.cwd(), 'app/(tabs)/vcard.tsx'), 'utf8');
+const authenticatedIdentityConsumers = [
+  eventDetail,
+  socialScreen,
+  vcardScreen,
+  readFileSync(path.join(process.cwd(), 'app/(tabs)/events.tsx'), 'utf8'),
+  readFileSync(path.join(process.cwd(), 'app/artistDetail.tsx'), 'utf8'),
+  readFileSync(path.join(process.cwd(), 'app/createArtistProfile.tsx'), 'utf8'),
+  readFileSync(path.join(process.cwd(), 'app/ticketCheckout.tsx'), 'utf8'),
+  readFileSync(path.join(process.cwd(), 'app/userProfile.tsx'), 'utf8'),
+  readFileSync(path.join(process.cwd(), 'src/experiments/NewUserOnboardingGate.tsx'), 'utf8'),
+];
 
 describe('mobile Party identity copy', () => {
   it('never asks a person to configure or save a Party ID', () => {
@@ -42,5 +53,13 @@ describe('mobile Party identity copy', () => {
     expect(vcardScreen).not.toContain('Party ID:');
     expect(vcardScreen).toContain('partyId: parsePositivePartyId(effectivePartyId)');
     expect(vcardScreen).toContain('exchangeVCard(scanned.partyId)');
+  });
+
+  it('never falls back to a Party ID persisted outside the authenticated session', () => {
+    authenticatedIdentityConsumers.forEach((source) => {
+      expect(source).not.toContain('settingsPartyId');
+      expect(source).not.toContain('legacyPartyId');
+      expect(source).not.toMatch(/resolvePartyId\(auth/);
+    });
   });
 });

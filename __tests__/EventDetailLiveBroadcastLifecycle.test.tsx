@@ -54,7 +54,7 @@ jest.mock('@stripe/stripe-react-native', () => ({
 }));
 
 jest.mock('../src/providers/AuthProvider', () => ({
-  useAuth: () => ({ token: 'Bearer test-token', partyId: '7' }),
+  useAuth: () => ({ token: 'Bearer test-token', partyId: '7', session: { displayName: 'Cuco' } }),
 }));
 
 jest.mock('../src/providers/UserSettingsProvider', () => ({

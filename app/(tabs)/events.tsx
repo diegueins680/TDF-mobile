@@ -22,6 +22,7 @@ import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import type { EventCityInput, SocialEvent } from '../../src/types';
 import { listSavedEventIds, toggleSavedEvent } from '../../src/lib/savedEvents';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
+import { useAuth } from '../../src/providers/AuthProvider';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
@@ -48,7 +49,8 @@ export default function EventsScreen() {
   const qc = useQueryClient();
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
-  const { partyId, locale, timezone, countryCode } = useUserSettings();
+  const { partyId } = useAuth();
+  const { locale, timezone, countryCode } = useUserSettings();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
   const [discoveryScope, setDiscoveryScope] = useState<DiscoveryScope>('subscribed');

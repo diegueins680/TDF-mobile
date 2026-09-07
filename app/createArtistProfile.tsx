@@ -8,7 +8,6 @@ import { useRouter } from 'expo-router';
 import { usePreventRemove, useNavigation } from '@react-navigation/native';
 
 import { Artists } from '../src/api/artists';
-import { resolvePartyId } from '../src/lib/identity';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
@@ -16,9 +15,9 @@ import { useUserSettings } from '../src/providers/UserSettingsProvider';
 export default function CreateArtistProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { partyId: authPartyId } = useAuth();
+  const { partyId: effectivePartyId } = useAuth();
   const analytics = useAnalytics();
-  const { partyId: settingsPartyId, getCatalogItems, catalogSyncing } = useUserSettings();
+  const { getCatalogItems, catalogSyncing } = useUserSettings();
   const genreOptions = getCatalogItems('genres');
 
   const [name, setName] = useState('');
@@ -27,8 +26,6 @@ export default function CreateArtistProfileScreen() {
   const [instagramHandle, setInstagramHandle] = useState('');
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [selectedGenreIds, setSelectedGenreIds] = useState<string[]>([]);
-  const effectivePartyId = resolvePartyId(authPartyId, settingsPartyId);
-
   const nameRef = useRef<TextInput>(null);
   const bioRef = useRef<TextInput>(null);
   const imageUrlRef = useRef<TextInput>(null);

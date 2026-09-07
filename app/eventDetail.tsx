@@ -58,7 +58,6 @@ import {
   listMomentFeed,
   toggleMomentFeedReaction,
 } from '../src/lib/eventMomentsRepository';
-import { resolvePartyId } from '../src/lib/identity';
 import { normalizeRouteParam } from '../src/lib/routeParams';
 import { countGoingRsvps } from '../src/lib/rsvp';
 import { useAuth } from '../src/providers/AuthProvider';
@@ -125,8 +124,9 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const eventId = normalizeRouteParam(rawEventId);
-  const { token, partyId: authPartyId } = useAuth();
-  const { partyId: settingsPartyId, displayName, locale, timezone, currency, getCatalogItems } = useUserSettings();
+  const { token, partyId: normalizedPartyId, session } = useAuth();
+  const { locale, timezone, currency, getCatalogItems } = useUserSettings();
+  const displayName = session?.displayName ?? null;
   const reactionOptions = useMemo<EventMomentReactionOption[]>(
     () => getCatalogItems('reaction-types').flatMap((item) => {
       const emoji = item.displaySymbol?.trim();
@@ -142,7 +142,6 @@ export default function EventDetailScreen() {
     [getCatalogItems],
   );
   const displayCurrency = currency || process.env.EXPO_PUBLIC_DEFAULT_CURRENCY || 'USD';
-  const normalizedPartyId = resolvePartyId(authPartyId, settingsPartyId);
   const currentActor = useMemo(
     () => buildMomentActor({ partyId: normalizedPartyId, displayName }),
     [displayName, normalizedPartyId],
@@ -1673,7 +1672,7 @@ export default function EventDetailScreen() {
                 invitations.map((inv) => (
                   <View key={String(inv.id)} style={styles.invitationItem}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.invitationTitle}>Para #{inv.toUserId}</Text>
+                      <Text style={styles.invitationTitle}>Invitación a una cuenta TDF</Text>
                       <Text style={styles.invitationMeta}>
                         Estado: <Text style={styles.invitationStatus}>{inv.status}</Text>
                       </Text>

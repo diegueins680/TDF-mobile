@@ -33,7 +33,6 @@ import {
   listMomentFeed,
   toggleMomentFeedReaction,
 } from '../lib/eventMomentsRepository';
-import { resolvePartyId } from '../lib/identity';
 import { markExperimentExposedOnce } from '../lib/firstRunFlags';
 import { useAuth } from '../providers/AuthProvider';
 import { useFirstRun } from '../providers/FirstRunProvider';
@@ -80,8 +79,9 @@ export function NewUserOnboardingGate({ children }: Props) {
   const { isReady: experimentsReady, getVariant, isExperimentEnabled } = useExperiments();
   const { isConnected } = useNetwork();
   const { cohortReady, isNewUser, completeOnboarding } = useFirstRun();
-  const { token, partyId: authPartyId } = useAuth();
-  const { partyId: settingsPartyId, displayName, locale, getCatalogItems } = useUserSettings();
+  const { token, partyId: normalizedPartyId, session } = useAuth();
+  const { locale, getCatalogItems } = useUserSettings();
+  const displayName = session?.displayName ?? null;
   const copy = experimentCopy[onboardingLanguage(locale)];
   const { track } = useExperimentEvent();
   const reactionOptions = useMemo<EventMomentReactionOption[]>(
@@ -99,7 +99,6 @@ export function NewUserOnboardingGate({ children }: Props) {
     [getCatalogItems],
   );
 
-  const normalizedPartyId = resolvePartyId(authPartyId, settingsPartyId);
   const currentActor = useMemo(
     () => buildMomentActor({ partyId: normalizedPartyId, displayName }),
     [displayName, normalizedPartyId],

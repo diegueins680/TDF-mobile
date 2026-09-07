@@ -18,7 +18,7 @@ import { useAuth } from '../src/providers/AuthProvider';
 export default function UserProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { token, partyId: authenticatedPartyId, session } = useAuth();
+  const { token, partyId, session } = useAuth();
   const {
     colors,
     preferenceId: themePreferenceId,
@@ -27,7 +27,7 @@ export default function UserProfileScreen() {
     setPreferenceById: setThemePreferenceById,
   } = useAppTheme();
   const {
-    partyId: legacyPartyId, displayName: legacyDisplayName, loading,
+    loading,
     localeId, locale, currencyId, currency, timezone, countryId, countryCode,
     getCatalogItems,
     setRegionalPreferences,
@@ -36,10 +36,7 @@ export default function UserProfileScreen() {
   const localeOptions = useMemo(() => getCatalogItems('locales'), [getCatalogItems]);
   const currencyOptions = useMemo(() => getCatalogItems('currencies'), [getCatalogItems]);
   const [activeTab, setActiveTab] = useState<'artist' | 'events' | 'saved'>('artist');
-  // Keep a legacy persisted ID only as a transition fallback. New identities
-  // always come from the authenticated session and are never entered here.
-  const partyId = authenticatedPartyId ?? legacyPartyId;
-  const displayName = session?.displayName ?? legacyDisplayName;
+  const displayName = session?.displayName ?? null;
   const [draftTimezone, setDraftTimezone] = useState(timezone);
   const [draftCountryId, setDraftCountryId] = useState(countryId ?? '');
   const [countrySearch, setCountrySearch] = useState(countryCode ?? '');

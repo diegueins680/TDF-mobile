@@ -4,9 +4,7 @@ import { CameraView, type BarcodeScanningResult, useCameraPermissions } from 'ex
 import QRCode from 'react-native-qrcode-svg';
 
 import { buildVCardSharePayload, exchangeVCard, parseVCardPayload, type ScannedVCard } from '../../src/api/social';
-import { resolvePartyId } from '../../src/lib/identity';
 import { useAuth } from '../../src/providers/AuthProvider';
-import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 
 type ScanEvent = Pick<BarcodeScanningResult, 'data'>;
 
@@ -19,18 +17,13 @@ const parsePositivePartyId = (value: string | null): number | undefined => {
 };
 
 export default function VCardScreen() {
-  const { token, partyId: authPartyId } = useAuth();
-  const { partyId: settingsPartyId, displayName } = useUserSettings();
+  const { token, partyId: effectivePartyId, session } = useAuth();
+  const displayName = session?.displayName ?? null;
   const hydratedDefaultsRef = useRef({ name: false });
   const scanLockRef = useRef(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const effectivePartyId = useMemo(
-    () => resolvePartyId(authPartyId, settingsPartyId),
-    [authPartyId, settingsPartyId],
-  );
-
   const [isScanning, setIsScanning] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState<ScannedVCard | null>(null);

@@ -73,14 +73,15 @@ export default function UserProfileScreen() {
   });
 
   const savedEventIdsQuery = useQuery({
-    queryKey: ['saved-event-ids'],
-    queryFn: listSavedEventIds
+    queryKey: ['saved-event-ids', partyId],
+    queryFn: () => listSavedEventIds(partyId as string),
+    enabled: Boolean(partyId),
   });
 
   const savedEventIds = useMemo(() => savedEventIdsQuery.data ?? [], [savedEventIdsQuery.data]);
 
   const savedEventsQuery = useQuery({
-    queryKey: ['saved-events', savedEventIds],
+    queryKey: ['saved-events', partyId, savedEventIds],
     enabled: savedEventIds.length > 0,
     queryFn: async () => {
       const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
@@ -107,12 +108,14 @@ export default function UserProfileScreen() {
   }, [savedEventIds, savedEventsQuery.data]);
 
   const unsaveMutation = useMutation({
-    mutationFn: (eventId: ID) => unsaveEvent(eventId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
-      qc.invalidateQueries({ queryKey: ['saved-events'] });
+    mutationFn: ({ eventId, ownerPartyId }: { eventId: ID; ownerPartyId: string }) =>
+      unsaveEvent(ownerPartyId, eventId),
+    onSuccess: (_ids, { ownerPartyId }) => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
     },
-    onError: () => {
+    onError: (_error, { ownerPartyId }) => {
+      if (partyId !== ownerPartyId) return;
       Alert.alert('Error', 'No pudimos remover el evento guardado.');
     }
   });
@@ -140,8 +143,12 @@ export default function UserProfileScreen() {
   }, [router]);
 
   const handleUnsaveEvent = useCallback((eventId: ID) => {
-    unsaveMutation.mutate(eventId);
-  }, [unsaveMutation]);
+    if (!partyId) {
+      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para cambiar tus eventos guardados.');
+      return;
+    }
+    unsaveMutation.mutate({ eventId, ownerPartyId: partyId });
+  }, [partyId, unsaveMutation]);
 
   const handleSaveRegion = useCallback(() => {
     if (countrySearch.trim() && !draftCountryId) {
@@ -440,6 +447,20 @@ export default function UserProfileScreen() {
           <View style={styles.section}>
             {savedEventIdsQuery.isLoading ? (
               <ActivityIndicator size="large" color="#2563eb" />
+            ) : savedEventIdsQuery.isError ? (
+              <>
+                <Text style={styles.noDataText} accessibilityLiveRegion="polite">
+                  No pudimos cargar tus eventos guardados.
+                </Text>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => void savedEventIdsQuery.refetch()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reintentar cargar eventos guardados"
+                >
+                  <Text style={styles.actionButtonText}>Reintentar</Text>
+                </TouchableOpacity>
+              </>
             ) : savedEventIds.length === 0 ? (
               <Text style={styles.noDataText}>Aún no hay eventos guardados. Toca Guardar evento dentro de cualquier evento.</Text>
             ) : savedEventsQuery.isLoading ? (

@@ -2,7 +2,28 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { ID } from '../types';
 
-const STORAGE_KEY = 'tdf-saved-event-ids';
+// Deliberately leave the former `tdf-saved-event-ids` key unread and untouched.
+// Its values have no account provenance and therefore cannot be imported safely.
+const ACCOUNT_STORAGE_KEY_PREFIX = 'tdf-saved-event-ids:party:';
+
+const normalizePartyId = (partyId: unknown): string => {
+  if (typeof partyId === 'number') {
+    return Number.isSafeInteger(partyId) && partyId > 0 ? String(partyId) : '';
+  }
+  if (typeof partyId !== 'string') return '';
+  const trimmed = partyId.trim();
+  if (!/^\d+$/.test(trimmed)) return '';
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? String(parsed) : '';
+};
+
+const requireStorageKey = (partyId: ID): string => {
+  const normalizedPartyId = normalizePartyId(partyId);
+  if (!normalizedPartyId) {
+    throw new Error('A valid authenticated Party ID is required to access saved events.');
+  }
+  return `${ACCOUNT_STORAGE_KEY_PREFIX}${normalizedPartyId}`;
+};
 
 const normalizeEventId = (eventId: unknown): string => {
   if (typeof eventId === 'number') {
@@ -18,103 +39,106 @@ const normalizeEventId = (eventId: unknown): string => {
   return trimmed;
 };
 
+const requireEventId = (eventId: ID): string => {
+  const normalized = normalizeEventId(eventId);
+  if (!normalized) throw new Error('A valid event ID is required.');
+  return normalized;
+};
+
 type ParsedStoredIds = {
   ids: string[];
   sanitized: boolean;
 };
 
 const parseStoredIds = (raw: string): ParsedStoredIds => {
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return { ids: [], sanitized: true };
-
-    const seen = new Set<string>();
-    const ids: string[] = [];
-    let sanitized = false;
-
-    parsed.forEach((value) => {
-      const normalized = normalizeEventId(value);
-      if (!normalized) {
-        sanitized = true;
-        return;
-      }
-      if (seen.has(normalized)) {
-        sanitized = true;
-        return;
-      }
-      seen.add(normalized);
-      ids.push(normalized);
-      if (typeof value !== 'string' || normalized !== value.trim()) {
-        sanitized = true;
-      }
-    });
-
-    return { ids, sanitized };
+    parsed = JSON.parse(raw) as unknown;
   } catch {
-    return { ids: [], sanitized: true };
+    throw new Error('Saved events data is corrupted and was left unchanged.');
   }
-};
 
-async function writeIds(ids: string[]): Promise<void> {
-  try {
-    if (ids.length === 0) {
-      await AsyncStorage.removeItem(STORAGE_KEY);
+  if (!Array.isArray(parsed)) {
+    throw new Error('Saved events data has an unexpected format and was left unchanged.');
+  }
+
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  let sanitized = false;
+
+  parsed.forEach((value) => {
+    const normalized = normalizeEventId(value);
+    if (!normalized) {
+      sanitized = true;
       return;
     }
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
-  } catch {
-    // Ignore storage write failures so save/unsave UX still responds.
+    if (seen.has(normalized)) {
+      sanitized = true;
+      return;
+    }
+    seen.add(normalized);
+    ids.push(normalized);
+    if (typeof value !== 'string' || normalized !== value.trim()) {
+      sanitized = true;
+    }
+  });
+
+  return { ids, sanitized };
+};
+
+async function writeIds(storageKey: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) {
+    await AsyncStorage.removeItem(storageKey);
+    return;
   }
+  await AsyncStorage.setItem(storageKey, JSON.stringify(ids));
 }
 
-export async function listSavedEventIds(): Promise<string[]> {
-  let raw: string | null = null;
-  try {
-    raw = await AsyncStorage.getItem(STORAGE_KEY);
-  } catch {
-    return [];
-  }
+export async function listSavedEventIds(partyId: ID): Promise<string[]> {
+  const storageKey = requireStorageKey(partyId);
+  const raw = await AsyncStorage.getItem(storageKey);
   if (!raw) return [];
   const { ids, sanitized } = parseStoredIds(raw);
   if (ids.length === 0) {
-    await writeIds([]);
+    await writeIds(storageKey, []);
     return [];
   }
   if (sanitized) {
-    await writeIds(ids);
+    await writeIds(storageKey, ids);
   }
   return ids;
 }
 
-export async function saveEvent(eventId: ID): Promise<string[]> {
-  const normalized = normalizeEventId(eventId);
-  if (!normalized) return listSavedEventIds();
-
-  const current = await listSavedEventIds();
+export async function saveEvent(partyId: ID, eventId: ID): Promise<string[]> {
+  const storageKey = requireStorageKey(partyId);
+  const normalized = requireEventId(eventId);
+  const current = await listSavedEventIds(partyId);
   const withoutCurrent = current.filter((id) => id !== normalized);
   const next = [normalized, ...withoutCurrent];
-  await writeIds(next);
+  await writeIds(storageKey, next);
   return next;
 }
 
-export async function unsaveEvent(eventId: ID): Promise<string[]> {
-  const normalized = normalizeEventId(eventId);
-  const current = await listSavedEventIds();
+export async function unsaveEvent(partyId: ID, eventId: ID): Promise<string[]> {
+  const storageKey = requireStorageKey(partyId);
+  const normalized = requireEventId(eventId);
+  const current = await listSavedEventIds(partyId);
   const next = current.filter((id) => id !== normalized);
-  await writeIds(next);
+  await writeIds(storageKey, next);
   return next;
 }
 
-export async function toggleSavedEvent(eventId: ID): Promise<{ saved: boolean; ids: string[] }> {
-  const normalized = normalizeEventId(eventId);
-  if (!normalized) return { saved: false, ids: await listSavedEventIds() };
-
-  const current = await listSavedEventIds();
+export async function toggleSavedEvent(partyId: ID, eventId: ID): Promise<{ saved: boolean; ids: string[] }> {
+  const storageKey = requireStorageKey(partyId);
+  const normalized = requireEventId(eventId);
+  const current = await listSavedEventIds(partyId);
   if (current.includes(normalized)) {
-    const ids = await unsaveEvent(normalized);
+    const ids = current.filter((id) => id !== normalized);
+    await writeIds(storageKey, ids);
     return { saved: false, ids };
   }
 
-  const ids = await saveEvent(normalized);
+  const ids = [normalized, ...current];
+  await writeIds(storageKey, ids);
   return { saved: true, ids };
 }

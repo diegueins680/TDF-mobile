@@ -191,8 +191,9 @@ export default function EventDetailScreen() {
   });
 
   const savedEventIdsQuery = useQuery({
-    queryKey: ['saved-event-ids'],
-    queryFn: listSavedEventIds,
+    queryKey: ['saved-event-ids', normalizedPartyId],
+    queryFn: () => listSavedEventIds(normalizedPartyId as string),
+    enabled: Boolean(normalizedPartyId),
   });
 
   const ticketTiersQuery = useQuery({
@@ -397,15 +398,21 @@ export default function EventDetailScreen() {
   });
 
   const saveEventMutation = useMutation({
-    mutationFn: () => {
-      if (!eventId) throw new Error('Event not found');
-      return toggleSavedEvent(eventId);
+    mutationFn: ({ targetEventId, ownerPartyId }: { targetEventId: string; ownerPartyId: string }) => {
+      return toggleSavedEvent(ownerPartyId, targetEventId);
     },
-    onSuccess: ({ saved }) => {
-      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
-      Alert.alert('Listo', saved ? 'Evento guardado en tu perfil.' : 'Evento removido de guardados.');
+    onSuccess: ({ saved }, { ownerPartyId }) => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      if (normalizedPartyId !== ownerPartyId) return;
+      Alert.alert(
+        'Listo',
+        saved
+          ? 'Evento guardado en este dispositivo para esta cuenta.'
+          : 'Evento removido de los guardados de esta cuenta en este dispositivo.',
+      );
     },
-    onError: () => {
+    onError: (_error, { ownerPartyId }) => {
+      if (normalizedPartyId !== ownerPartyId) return;
       Alert.alert('Error', 'No pudimos actualizar tus eventos guardados.');
     },
   });
@@ -810,9 +817,27 @@ export default function EventDetailScreen() {
     rsvpMutation.mutate(status);
   }, [normalizedPartyId, rsvpMutation]);
 
-  const handleToggleSaved = useCallback(() => {
-    saveEventMutation.mutate();
-  }, [saveEventMutation]);
+  const handleToggleSaved = useCallback(async () => {
+    if (!eventId) {
+      Alert.alert('Error', 'No encontramos este evento.');
+      return;
+    }
+    if (!normalizedPartyId) {
+      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para guardar eventos.');
+      return;
+    }
+    if (savedEventIdsQuery.isError) {
+      const result = await savedEventIdsQuery.refetch();
+      if (result.isError) {
+        Alert.alert(
+          'No pudimos cargar tus guardados',
+          'Comprueba el almacenamiento del dispositivo e inténtalo nuevamente.',
+        );
+      }
+      return;
+    }
+    saveEventMutation.mutate({ targetEventId: eventId, ownerPartyId: normalizedPartyId });
+  }, [eventId, normalizedPartyId, saveEventMutation, savedEventIdsQuery]);
 
   const selectMomentMedia = useCallback(async (
     mode: 'camera' | 'photos' | 'video',
@@ -1151,11 +1176,18 @@ export default function EventDetailScreen() {
                   isSaved && styles.saveEventButtonActive,
                   saveEventMutation.isPending && styles.buttonDisabled,
                 ]}
-                onPress={handleToggleSaved}
+                onPress={() => void handleToggleSaved()}
                 disabled={saveEventMutation.isPending}
+                accessibilityState={{ disabled: saveEventMutation.isPending }}
               >
                 <Text style={[styles.saveEventButtonText, isSaved && styles.saveEventButtonTextActive]}>
-                  {saveEventMutation.isPending ? 'Guardando…' : isSaved ? 'Guardado' : 'Guardar evento'}
+                  {saveEventMutation.isPending
+                    ? 'Guardando…'
+                    : savedEventIdsQuery.isError
+                      ? 'Reintentar guardados'
+                      : isSaved
+                        ? 'Guardado'
+                        : 'Guardar evento'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.inviteButton} onPress={() => setShowInviteModal(true)}>

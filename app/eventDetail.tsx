@@ -64,6 +64,8 @@ import { useAuth } from '../src/providers/AuthProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
+import { markFirstValueCompleted } from '../src/lib/onboardingIntent';
 import type {
   EventLiveBroadcast,
   EventLiveBroadcastQuality,
@@ -123,6 +125,7 @@ export default function EventDetailScreen() {
   const { eventId: rawEventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const analytics = useAnalytics();
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: normalizedPartyId, session } = useAuth();
   const { locale, timezone, currency, getCatalogItems } = useUserSettings();
@@ -401,14 +404,25 @@ export default function EventDetailScreen() {
     mutationFn: ({ targetEventId, ownerPartyId }: { targetEventId: string; ownerPartyId: string }) => {
       return toggleSavedEvent(ownerPartyId, targetEventId);
     },
-    onSuccess: ({ saved }, { ownerPartyId }) => {
+    onSuccess: async ({ saved, serverAcknowledged }, { targetEventId, ownerPartyId }) => {
       qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
       if (normalizedPartyId !== ownerPartyId) return;
+      if (serverAcknowledged) {
+        analytics.capture('feature_favorite_changed', {
+          platform: 'mobile',
+          event_id: targetEventId,
+          action: saved ? 'saved' : 'unsaved',
+        });
+        if (saved && await markFirstValueCompleted(ownerPartyId, 'event_saved')) {
+          analytics.capture('first_value_completed', { platform: 'mobile', value: 'event_saved' });
+          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'event_saved' });
+        }
+      }
       Alert.alert(
-        'Listo',
-        saved
-          ? 'Evento guardado en este dispositivo para esta cuenta.'
-          : 'Evento removido de los guardados de esta cuenta en este dispositivo.',
+        serverAcknowledged ? 'Listo' : 'Cambio pendiente de sincronización',
+        serverAcknowledged
+          ? (saved ? 'Evento guardado en tu cuenta.' : 'Evento removido de los guardados de tu cuenta.')
+          : 'Lo guardamos en este dispositivo y lo sincronizaremos con tu cuenta cuando vuelva la conexión.',
       );
     },
     onError: (_error, { ownerPartyId }) => {
@@ -831,7 +845,7 @@ export default function EventDetailScreen() {
       if (result.isError) {
         Alert.alert(
           'No pudimos cargar tus guardados',
-          'Comprueba el almacenamiento del dispositivo e inténtalo nuevamente.',
+          'Comprueba tu conexión, sesión y almacenamiento e inténtalo nuevamente.',
         );
       }
       return;

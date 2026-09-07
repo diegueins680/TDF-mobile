@@ -107,11 +107,18 @@ export default function EventsScreen() {
   const saveToggleMutation = useMutation({
     mutationFn: ({ eventId, ownerPartyId }: { eventId: string; ownerPartyId: string }) =>
       toggleSavedEvent(ownerPartyId, eventId),
-    onSuccess: async ({ saved }, { eventId, ownerPartyId }) => {
+    onSuccess: async ({ saved, serverAcknowledged }, { eventId, ownerPartyId }) => {
       qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
       qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
       if (partyId !== ownerPartyId) return;
       void impactLight();
+      if (!serverAcknowledged) {
+        Alert.alert(
+          'Cambio pendiente de sincronización',
+          'Lo guardamos en este dispositivo y lo sincronizaremos con tu cuenta cuando vuelva la conexión.',
+        );
+        return;
+      }
       analytics.capture('feature_favorite_changed', {
         platform: 'mobile',
         event_id: eventId,
@@ -126,7 +133,7 @@ export default function EventsScreen() {
       if (partyId !== ownerPartyId) return;
       Alert.alert(
         'No pudimos actualizar tus guardados',
-        'El cambio no se guardó. Comprueba el almacenamiento del dispositivo e inténtalo nuevamente.',
+        'El cambio no se pudo guardar ni poner en cola. Comprueba la sesión y el almacenamiento e inténtalo nuevamente.',
       );
     },
   });
@@ -267,7 +274,7 @@ export default function EventsScreen() {
       if (result.isError) {
         Alert.alert(
           'No pudimos cargar tus guardados',
-          'Comprueba el almacenamiento del dispositivo e inténtalo nuevamente.',
+          'Comprueba tu conexión, sesión y almacenamiento e inténtalo nuevamente.',
         );
       }
       return;

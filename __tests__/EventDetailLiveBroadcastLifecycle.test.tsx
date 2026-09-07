@@ -78,6 +78,12 @@ jest.mock('../src/api/events', () => ({
   },
 }));
 
+jest.mock('../src/api/directoryFavorites', () => ({
+  listDirectoryEventFavorites: jest.fn(async () => []),
+  saveDirectoryEventFavorite: jest.fn(async () => undefined),
+  deleteDirectoryEventFavorite: jest.fn(async () => undefined),
+}));
+
 jest.mock('../src/api/artists', () => ({
   Artists: {
     listFollowers: jest.fn(),
@@ -200,8 +206,8 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
 
     await waitFor(() => {
       expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-        'tdf-saved-event-ids:party:7',
-        JSON.stringify(['42']),
+        'tdf-saved-event-outbox:party:7',
+        JSON.stringify([{ eventId: '42', desiredSaved: true }]),
       );
       expect(alertSpy).toHaveBeenCalledWith(
         'Error',

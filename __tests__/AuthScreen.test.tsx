@@ -168,7 +168,7 @@ describe('Auth screen', () => {
       expect(mockSetToken).toHaveBeenCalledWith('Bearer mobile-token', 42, { roles: [], modules: [] });
       expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory');
     });
-    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
+    expect(mockClearPendingOnboardingIntent).not.toHaveBeenCalled();
     expect(await screen.findByText('Sesión iniciada.')).toBeTruthy();
   }, 10_000);
 
@@ -332,8 +332,36 @@ describe('Auth screen', () => {
     );
     await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer google-mobile-token', 77, { roles: [], modules: [] }));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory'));
-    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
+    expect(mockClearPendingOnboardingIntent).not.toHaveBeenCalled();
     expect(screen.getByText('Sesión con Google iniciada.')).toBeTruthy();
+  });
+
+  it('uses and retains a restored intent when Google persistence fails', async () => {
+    mockReadPendingOnboardingIntent.mockResolvedValue('internships');
+    mockUpdateOnboardingIntent.mockRejectedValueOnce(new Error('offline'));
+    mockGoogleSignIn.mockResolvedValue({
+      type: 'success',
+      data: { idToken: 'google-login-token' },
+    });
+    mockGoogleLoginRequest.mockResolvedValue({
+      token: 'Bearer existing-token',
+      partyId: 76,
+      roles: ['Customer'],
+      modules: [],
+      accountCreated: false,
+    });
+
+    render(<AuthScreen />);
+    const googleButton = (await screen.findByText(/Continuar con Google/i)).parent;
+    if (!googleButton) throw new Error('Google button not found');
+    fireEvent.press(googleButton);
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('internships'));
+    expect(mockClearPendingOnboardingIntent).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/access-requests/new',
+      params: { feature: 'internships', action: 'view' },
+    });
   });
 
   it('sends onboarding intent for Google signup and clears it after success', async () => {
@@ -378,6 +406,56 @@ describe('Auth screen', () => {
     await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists'));
     await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/social');
+  });
+
+  it('retains a validated pending intent when authenticated persistence fails', async () => {
+    mockSearchParams = { intent: 'follow_artists' };
+    mockUpdateOnboardingIntent.mockRejectedValueOnce(new Error('offline'));
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 80, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'demo-user');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'demo-pass');
+    fireEvent.press(screen.getByTestId('loginButton'));
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists'));
+    expect(mockClearPendingOnboardingIntent).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/social');
+  });
+
+  it('uses a restored validated intent when login has no safe return destination', async () => {
+    mockReadPendingOnboardingIntent.mockResolvedValue('internships');
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 81, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'demo-user');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'demo-pass');
+    fireEvent.press(screen.getByTestId('loginButton'));
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('internships'));
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/access-requests/new',
+      params: { feature: 'internships', action: 'view' },
+    });
+    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
+  });
+
+  it('exposes internships as a signup intent without treating it as a role', async () => {
+    mockSignupRequest.mockResolvedValue({ token: 'token', partyId: 82, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByText('Crear cuenta'));
+    fireEvent.changeText(screen.getByPlaceholderText('Tu nombre'), 'Sofía');
+    fireEvent.changeText(screen.getByPlaceholderText('tu@correo.com'), 'sofia@example.com');
+    fireEvent.changeText(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password-seguro');
+    fireEvent.press(screen.getByRole('radio', { name: 'Buscar prácticas' }));
+    fireEvent.press(screen.getByTestId('termsCheckbox'));
+    fireEvent.press(screen.getByTestId('signupButton'));
+
+    await waitFor(() => expect(mockSignupRequest).toHaveBeenCalled());
+    expect(mockSignupRequest.mock.calls[0]?.[0]).toHaveProperty('onboardingIntent', 'internships');
+    expect(mockSignupRequest.mock.calls[0]?.[0]).not.toHaveProperty('roles');
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/access-requests/new',
+      params: { feature: 'internships', action: 'view' },
+    });
   });
 
   it('retains pending intent when authentication fails', async () => {

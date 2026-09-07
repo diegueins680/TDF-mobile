@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   clearPendingOnboardingIntent,
   markFirstValueCompleted,
+  ONBOARDING_INTENT_OPTIONS,
   parseOnboardingIntent,
   persistOnboardingIntent,
   readPendingOnboardingIntent,
@@ -23,6 +24,16 @@ describe('onboarding intent', () => {
     expect(parseOnboardingIntent('Fan')).toBe('follow_artists');
     expect(parseOnboardingIntent('Artista')).toBe('artist_profile');
     expect(parseOnboardingIntent('Admin')).toBeNull();
+  });
+
+  it('offers every supported public intent, including internships, as personalization', () => {
+    expect(ONBOARDING_INTENT_OPTIONS).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'internships',
+        labelEs: 'Buscar prácticas',
+        labelEn: 'Find internships',
+      }),
+    ]));
   });
 
   it('routes governed intents to access requests unless the returned session is authorized', () => {

@@ -58,6 +58,7 @@ export const ONBOARDING_INTENT_OPTIONS: readonly {
   { id: 'events', labelEs: 'Descubrir eventos', labelEn: 'Discover events' },
   { id: 'follow_artists', labelEs: 'Seguir artistas', labelEn: 'Follow artists' },
   { id: 'artist_profile', labelEs: 'Crear perfil de artista', labelEn: 'Create an artist profile' },
+  { id: 'internships', labelEs: 'Buscar prácticas', labelEn: 'Find internships' },
   { id: 'learning', labelEs: 'Aprender o enseñar', labelEn: 'Learn or teach' },
   { id: 'professional_tools', labelEs: 'Usar herramientas profesionales', labelEn: 'Use professional tools' },
 ] as const;

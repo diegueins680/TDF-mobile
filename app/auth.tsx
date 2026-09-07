@@ -176,16 +176,16 @@ export default function AuthScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const persistIntentForExistingAccount = async () => {
-    const pendingIntent = requestedIntent ?? await readPendingOnboardingIntent();
-    if (pendingIntent) {
-      try {
-        await updateOnboardingIntent(pendingIntent);
-      } catch {
-        // Personalization sync must not turn a successful login into failure.
-      }
+  const persistIntentForExistingAccount = async (pendingIntent: OnboardingIntent | null) => {
+    if (!pendingIntent) return;
+
+    try {
+      await updateOnboardingIntent(pendingIntent);
+      await clearPendingOnboardingIntent();
+    } catch {
+      // Keep the validated pending intent for a later retry. Personalization
+      // sync must not turn a successful login into an authentication failure.
     }
-    await clearPendingOnboardingIntent();
   };
 
   useEffect(() => {
@@ -219,24 +219,31 @@ export default function AuthScreen() {
     setErrorMessage(null);
     setFeedbackMessage(null);
     setIsPasswordSubmitting(true);
+    const pendingIntentPromise = requestedIntent
+      ? Promise.resolve(requestedIntent)
+      : readPendingOnboardingIntent();
 
     try {
-      const session = await loginRequest({
-        username: username.trim(),
-        password
-      });
+      const [session, pendingIntent] = await Promise.all([
+        loginRequest({
+          username: username.trim(),
+          password
+        }),
+        pendingIntentPromise,
+      ]);
+      const postLoginIntent = pendingIntent ?? selectedIntent;
 
       setToken(session.token, session.partyId ?? null, {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
-      void persistIntentForExistingAccount();
+      void persistIntentForExistingAccount(pendingIntent);
       setPassword('');
       analytics.capture('login_completed', { platform: 'mobile', method: 'password' });
       setFeedbackMessage(copy.loginSuccess);
       router.replace(
         resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? [])
-          ?? resolveMobileIntentDestination(selectedIntent, session.roles ?? [], session.modules ?? []),
+          ?? resolveMobileIntentDestination(postLoginIntent, session.roles ?? [], session.modules ?? []),
       );
     } catch (error) {
       analytics.capture('login_failed', { platform: 'mobile', method: 'password' });
@@ -311,6 +318,11 @@ export default function AuthScreen() {
     }
 
     setIsGoogleSubmitting(true);
+    const pendingIntentPromise = mode === 'signup'
+      ? Promise.resolve(selectedIntent)
+      : requestedIntent
+        ? Promise.resolve(requestedIntent)
+        : readPendingOnboardingIntent();
 
     try {
       if (Platform.OS === 'android') {
@@ -343,10 +355,12 @@ export default function AuthScreen() {
       });
       setPassword('');
       const googleCreatedAccount = session.accountCreated === true;
+      const pendingIntent = await pendingIntentPromise;
+      const postLoginIntent = pendingIntent ?? selectedIntent;
       if (googleCreatedAccount) {
         await clearPendingOnboardingIntent();
       } else {
-        void persistIntentForExistingAccount();
+        void persistIntentForExistingAccount(pendingIntent);
       }
       analytics.capture(googleCreatedAccount ? 'signup_completed' : 'login_completed', {
         platform: 'mobile',
@@ -359,7 +373,7 @@ export default function AuthScreen() {
         mode === 'signup' && (!authorizedReturnTo || selectedIntent === 'artist_profile' || selectedIntent === 'internships')
           ? resolveMobileIntentDestination(selectedIntent, session.roles ?? [], session.modules ?? [])
           : authorizedReturnTo
-            ?? resolveMobileIntentDestination(selectedIntent, session.roles ?? [], session.modules ?? []),
+            ?? resolveMobileIntentDestination(postLoginIntent, session.roles ?? [], session.modules ?? []),
       );
     } catch (error) {
       if (googleSigninModule.isErrorWithCode(error)) {

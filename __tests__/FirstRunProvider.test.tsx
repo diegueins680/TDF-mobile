@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Text, TouchableOpacity } from 'react-native';
 
 const mockGetOnboardingProgress = jest.fn();
@@ -18,10 +19,16 @@ jest.mock('../src/providers/AuthProvider', () => ({
 import { FirstRunProvider, useFirstRun } from '../src/providers/FirstRunProvider';
 
 function Probe() {
-  const { cohortReady, isNewUser, completeOnboarding } = useFirstRun();
+  const {
+    cohortReady,
+    isNewUser,
+    completeOnboarding,
+    replayedFirstValueCompletion,
+  } = useFirstRun();
   return (
     <>
       <Text>{`${cohortReady}:${isNewUser}`}</Text>
+      <Text>{replayedFirstValueCompletion?.value ?? 'no-replay'}</Text>
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel="Complete first value"
@@ -40,6 +47,7 @@ const renderProvider = () => render(
 describe('FirstRunProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(AsyncStorage.getItem).mockResolvedValue(null);
     mockPartyId = '42';
   });
 
@@ -73,6 +81,22 @@ describe('FirstRunProvider', () => {
 
     await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledWith('artist_followed'));
     await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+  });
+
+  it('replays a durable first-value handshake for the active Party before exposing the cohort', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
+    jest.mocked(AsyncStorage.getItem).mockResolvedValue('moment_reaction');
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false },
+    });
+
+    renderProvider();
+
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(screen.getByText('moment_reaction')).toBeTruthy();
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledWith('moment_reaction');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-first-value:party:42');
   });
 
   it('does not load or complete progress without an authenticated party', async () => {

@@ -2,11 +2,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   clearPendingOnboardingIntent,
+  completeFirstValueWithRetry,
   markFirstValueCompleted,
   ONBOARDING_INTENT_OPTIONS,
+  PENDING_FIRST_VALUE_PREFIX,
   parseOnboardingIntent,
   persistOnboardingIntent,
   readPendingOnboardingIntent,
+  retryPendingFirstValueCompletion,
   resolveMobileIntentDestination,
 } from '../src/lib/onboardingIntent';
 
@@ -83,5 +86,60 @@ describe('onboarding intent', () => {
     await expect(markFirstValueCompleted('9', 'event_saved')).resolves.toBe(false);
     await expect(markFirstValueCompleted(null, 'event_saved')).resolves.toBe(false);
     expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      `${PENDING_FIRST_VALUE_PREFIX}9`,
+      'event_saved',
+    );
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(`${PENDING_FIRST_VALUE_PREFIX}9`);
+  });
+
+  it('retries a Party-scoped completion handshake and clears it after server acknowledgement', async () => {
+    jest.mocked(AsyncStorage.getItem).mockResolvedValue('moment_reaction');
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false },
+    });
+
+    await expect(retryPendingFirstValueCompletion('party/9')).resolves.toEqual({
+      value: 'moment_reaction',
+      result: {
+        newlyCompleted: true,
+        progress: { eligible: false },
+      },
+    });
+
+    const key = `${PENDING_FIRST_VALUE_PREFIX}party%2F9`;
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith(key);
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledWith('moment_reaction');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(key);
+  });
+
+  it('removes invalid pending first-value state without sending it to the server', async () => {
+    jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce('admin_granted');
+
+    await expect(retryPendingFirstValueCompletion('9')).resolves.toBeNull();
+
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(`${PENDING_FIRST_VALUE_PREFIX}9`);
+    expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
+  });
+
+  it('does not clear or attribute a completion after the active Party changes', async () => {
+    let stillOwnsParty = true;
+    mockCompleteOnboardingProgress.mockImplementationOnce(async () => {
+      stillOwnsParty = false;
+      return { newlyCompleted: true, progress: { eligible: false } };
+    });
+
+    await expect(completeFirstValueWithRetry(
+      '9',
+      'moment_reaction',
+      () => stillOwnsParty,
+    )).resolves.toBeNull();
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      `${PENDING_FIRST_VALUE_PREFIX}9`,
+      'moment_reaction',
+    );
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(`${PENDING_FIRST_VALUE_PREFIX}9`);
   });
 });

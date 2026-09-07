@@ -8,6 +8,10 @@ const mockCompleteOnboarding = jest.fn(() => Promise.resolve({
   newlyCompleted: true,
   progress: { eligible: false },
 }));
+const mockToggleMomentFeedReaction = jest.fn(() => Promise.resolve({
+  source: 'remote',
+  selected: true,
+}));
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockMarkExperimentExposedOnce = jest.fn(
@@ -19,6 +23,7 @@ let mockVariant = 'treatment_singlefeature';
 let mockEventsState: Record<string, unknown>;
 let mockMomentsState: Record<string, unknown>;
 let mockProbeState: Record<string, unknown>[];
+let mockReplayedFirstValueCompletion: Record<string, unknown> | null = null;
 
 const pastEvent = { id: 'event-1', title: 'Festival Uno', startTime: '2026-01-01T00:00:00.000Z' };
 const moment = { id: 'moment-1', eventId: 'event-1', body: 'Primer momento' };
@@ -38,7 +43,7 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('../src/api/events', () => ({ Events: { list: jest.fn() } }));
 jest.mock('../src/lib/eventMomentsRepository', () => ({
   listMomentFeed: jest.fn(),
-  toggleMomentFeedReaction: jest.fn(),
+  toggleMomentFeedReaction: mockToggleMomentFeedReaction,
 }));
 jest.mock('../src/lib/eventMoments', () => ({
   buildMomentActor: () => ({ actorKey: 'party:42' }),
@@ -52,7 +57,12 @@ jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: () => ({ token: 'Bearer token', partyId: '42', session: { displayName: 'Ana' } }),
 }));
 jest.mock('../src/providers/FirstRunProvider', () => ({
-  useFirstRun: () => ({ cohortReady: true, isNewUser: true, completeOnboarding: mockCompleteOnboarding }),
+  useFirstRun: () => ({
+    cohortReady: true,
+    isNewUser: true,
+    completeOnboarding: mockCompleteOnboarding,
+    replayedFirstValueCompletion: mockReplayedFirstValueCompletion,
+  }),
 }));
 jest.mock('../src/providers/UserSettingsProvider', () => ({
   useUserSettings: () => ({
@@ -78,14 +88,23 @@ jest.mock('../src/components/EventMomentCard', () => {
   return {
     EventMomentCard: ({
       moment: item,
+      onToggleReaction,
       onReactionPosted,
     }: {
       moment: { id: string };
+      onToggleReaction: (momentId: string, reaction: Record<string, string>) => Promise<boolean | void>;
       onReactionPosted?: () => void;
     }) => (
       ReactModule.createElement(
         NativeTouchableOpacity,
-        { accessibilityRole: 'button', accessibilityLabel: 'Post reaction', onPress: onReactionPosted },
+        {
+          accessibilityRole: 'button',
+          accessibilityLabel: 'Post reaction',
+          onPress: async () => {
+            const countsAsPosted = await onToggleReaction(item.id, { id: 'like' });
+            if (countsAsPosted !== false) onReactionPosted?.();
+          },
+        },
         ReactModule.createElement(NativeText, null, `Moment card ${item.id}`),
       )
     ),
@@ -106,6 +125,7 @@ describe('NewUserOnboardingGate states', () => {
     mockEventsState = { data: [], isLoading: false, isError: false };
     mockMomentsState = { data: [], isLoading: false, isError: false };
     mockProbeState = [];
+    mockReplayedFirstValueCompletion = null;
   });
 
   it('records one-shot treatment exposure after identity and persists explicit exit', async () => {
@@ -201,5 +221,51 @@ describe('NewUserOnboardingGate states', () => {
     expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
     expect(mockCapture).not.toHaveBeenCalledWith('first_value_completed', expect.anything());
     expect(mockCapture).not.toHaveBeenCalledWith('onboarding_completed', expect.anything());
+  });
+
+  it('does not claim conversion for a local fallback', async () => {
+    mockToggleMomentFeedReaction.mockResolvedValueOnce({ source: 'local', selected: true });
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+
+    await waitFor(() => expect(mockToggleMomentFeedReaction).toHaveBeenCalled());
+    expect(mockCompleteOnboarding).not.toHaveBeenCalledWith('moment_reaction');
+    expect(mockCapture).not.toHaveBeenCalledWith('first_value_completed', expect.anything());
+  });
+
+  it('does not claim conversion when the acknowledged remote toggle removes a reaction', async () => {
+    mockToggleMomentFeedReaction.mockResolvedValueOnce({ source: 'remote', selected: false });
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+
+    await waitFor(() => expect(mockToggleMomentFeedReaction).toHaveBeenCalled());
+    expect(mockCompleteOnboarding).not.toHaveBeenCalledWith('moment_reaction');
+    expect(mockCapture).not.toHaveBeenCalledWith('first_value_completed', expect.anything());
+  });
+
+  it('emits one conversion when a durable completion handshake succeeds on replay', async () => {
+    mockReplayedFirstValueCompletion = {
+      value: 'moment_reaction',
+      result: { newlyCompleted: true, progress: { eligible: false } },
+    };
+
+    renderGate();
+
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_converted',
+      expect.objectContaining({ experimentId: 'single-feature-onboarding-v1' }),
+    ));
+    expect(mockCapture).toHaveBeenCalledWith(
+      'first_value_completed',
+      { platform: 'mobile', value: 'moment_reaction' },
+    );
   });
 });

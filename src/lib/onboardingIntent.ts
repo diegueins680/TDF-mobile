@@ -3,6 +3,7 @@ import type { Href } from 'expo-router';
 
 import {
   completeOnboardingProgress,
+  type OnboardingCompletionResult,
   type OnboardingFirstValue,
   type OnboardingIntent,
 } from '../api/onboarding';
@@ -12,6 +13,7 @@ export type { OnboardingIntent } from '../api/onboarding';
 
 export const DEFAULT_ONBOARDING_INTENT: OnboardingIntent = 'events';
 export const PENDING_INTENT_KEY = 'tdf-onboarding-intent:pending';
+export const PENDING_FIRST_VALUE_PREFIX = 'tdf-onboarding-first-value:party:';
 
 const INTENTS = new Set<OnboardingIntent>([
   'events',
@@ -20,6 +22,13 @@ const INTENTS = new Set<OnboardingIntent>([
   'internships',
   'learning',
   'professional_tools',
+]);
+
+const FIRST_VALUES = new Set<OnboardingFirstValue>([
+  'artist_followed',
+  'access_requested',
+  'event_saved',
+  'moment_reaction',
 ]);
 
 const LEGACY_INTENTS: Record<string, OnboardingIntent> = {
@@ -96,12 +105,86 @@ export async function markFirstValueCompleted(
   partyId: string | null | undefined,
   value: OnboardingFirstValue,
 ): Promise<boolean> {
-  if (!partyId) return false;
+  const result = await completeFirstValueWithRetry(partyId, value);
+  return result?.newlyCompleted === true;
+}
+
+const firstValueKey = (partyId: string): string =>
+  `${PENDING_FIRST_VALUE_PREFIX}${encodeURIComponent(partyId)}`;
+
+async function clearPendingFirstValueIfCurrent(
+  partyId: string,
+  value: OnboardingFirstValue,
+): Promise<void> {
+  try {
+    const key = firstValueKey(partyId);
+    if (await AsyncStorage.getItem(key) === value) {
+      await AsyncStorage.removeItem(key);
+    }
+  } catch {
+    // A later retry is harmless because the completion endpoint is idempotent.
+  }
+}
+
+export async function completeFirstValueWithRetry(
+  rawPartyId: string | null | undefined,
+  value: OnboardingFirstValue,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<OnboardingCompletionResult | null> {
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return null;
+  try {
+    await AsyncStorage.setItem(firstValueKey(partyId), value);
+  } catch {
+    // Still attempt the authoritative handshake when local persistence is unavailable.
+  }
+  if (!stillOwnsParty()) return null;
   try {
     const result = await completeOnboardingProgress(value);
-    return result.newlyCompleted === true;
+    if (!stillOwnsParty()) return null;
+    await clearPendingFirstValueIfCurrent(partyId, value);
+    return result;
   } catch {
-    return false;
+    return null;
+  }
+}
+
+export type RetriedFirstValueCompletion = {
+  value: OnboardingFirstValue;
+  result: OnboardingCompletionResult;
+};
+
+export async function retryPendingFirstValueCompletion(
+  rawPartyId: string | null | undefined,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<RetriedFirstValueCompletion | null> {
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return null;
+  const key = firstValueKey(partyId);
+  let stored: string | null;
+  try {
+    stored = await AsyncStorage.getItem(key);
+  } catch {
+    return null;
+  }
+  if (!stored) return null;
+  if (!FIRST_VALUES.has(stored as OnboardingFirstValue)) {
+    try {
+      await AsyncStorage.removeItem(key);
+    } catch {
+      // Best-effort cleanup of invalid local state.
+    }
+    return null;
+  }
+  const value = stored as OnboardingFirstValue;
+  if (!stillOwnsParty()) return null;
+  try {
+    const result = await completeOnboardingProgress(value);
+    if (!stillOwnsParty()) return null;
+    await clearPendingFirstValueIfCurrent(partyId, value);
+    return { value, result };
+  } catch {
+    return null;
   }
 }
 

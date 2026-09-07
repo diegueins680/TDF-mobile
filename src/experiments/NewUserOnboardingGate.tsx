@@ -78,7 +78,12 @@ export function NewUserOnboardingGate({ children }: Props) {
   const queryClient = useQueryClient();
   const { isReady: experimentsReady, getVariant, isExperimentEnabled } = useExperiments();
   const { isConnected } = useNetwork();
-  const { cohortReady, isNewUser, completeOnboarding } = useFirstRun();
+  const {
+    cohortReady,
+    isNewUser,
+    completeOnboarding,
+    replayedFirstValueCompletion,
+  } = useFirstRun();
   const { token, partyId: normalizedPartyId, session } = useAuth();
   const { locale, getCatalogItems } = useUserSettings();
   const displayName = session?.displayName ?? null;
@@ -214,6 +219,28 @@ export function NewUserOnboardingGate({ children }: Props) {
   // successfully posts a reaction via the moment card.
   const convertedRef = useRef(false);
   const conversionInFlightRef = useRef(false);
+  const recordMomentConversion = useCallback(() => {
+    if (convertedRef.current) return;
+    convertedRef.current = true;
+    track('experiment_converted', {
+      experimentId: EXPERIMENT_ID,
+      variant: TREATMENT,
+      userId: normalizedPartyId ?? undefined,
+      metadata: { value: 1, surface: 'gate_moment_reaction' },
+    });
+    analytics.capture('first_value_completed', { platform: 'mobile', value: 'moment_reaction' });
+    analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'moment_reaction' });
+  }, [analytics, normalizedPartyId, track]);
+
+  useEffect(() => {
+    if (
+      replayedFirstValueCompletion?.value === 'moment_reaction'
+      && replayedFirstValueCompletion.result.newlyCompleted
+    ) {
+      recordMomentConversion();
+    }
+  }, [recordMomentConversion, replayedFirstValueCompletion]);
+
   const handleConversion = useCallback(() => {
     if (convertedRef.current || conversionInFlightRef.current) return;
     conversionInFlightRef.current = true;
@@ -221,21 +248,13 @@ export function NewUserOnboardingGate({ children }: Props) {
       try {
         const result = await completeOnboarding('moment_reaction');
         if (!result) return;
-        convertedRef.current = true;
         if (!result.newlyCompleted) return;
-        track('experiment_converted', {
-          experimentId: EXPERIMENT_ID,
-          variant: TREATMENT,
-          userId: normalizedPartyId ?? undefined,
-          metadata: { value: 1, surface: 'gate_moment_reaction' },
-        });
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'moment_reaction' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'moment_reaction' });
+        recordMomentConversion();
       } finally {
         conversionInFlightRef.current = false;
       }
     })();
-  }, [analytics, completeOnboarding, normalizedPartyId, track]);
+  }, [completeOnboarding, recordMomentConversion]);
 
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const handleChangeComment = useCallback((momentId: string, value: string) => {
@@ -246,7 +265,7 @@ export function NewUserOnboardingGate({ children }: Props) {
     async (momentId: string, reaction: EventMomentReactionOption) => {
       if (!featuredEvent?.id) return;
       try {
-        await toggleMomentFeedReaction(
+        const result = await toggleMomentFeedReaction(
           {
             eventId: featuredEvent.id as ID,
             momentId,
@@ -255,6 +274,7 @@ export function NewUserOnboardingGate({ children }: Props) {
           },
           { preferRemote: shouldPreferRemoteMoments },
         );
+        return result.source === 'remote' && result.selected === true;
       } finally {
         queryClient.invalidateQueries({
           queryKey: [

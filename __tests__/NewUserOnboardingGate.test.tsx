@@ -40,14 +40,15 @@ jest.mock('../src/lib/eventMomentsRepository', () => ({
 jest.mock('../src/lib/eventMoments', () => ({
   buildMomentActor: () => ({ actorKey: 'party:42' }),
 }));
-jest.mock('../src/lib/identity', () => ({ resolvePartyId: () => '42' }));
 jest.mock('../src/lib/onboardingIntent', () => ({ markFirstValueCompleted: jest.fn(() => Promise.resolve(true)) }));
 jest.mock('../src/lib/firstRunFlags', () => ({
   markExperimentExposedOnce: (partyId: string, experimentId: string) => (
     mockMarkExperimentExposedOnce(partyId, experimentId)
   ),
 }));
-jest.mock('../src/providers/AuthProvider', () => ({ useAuth: () => ({ token: 'Bearer token', partyId: '42' }) }));
+jest.mock('../src/providers/AuthProvider', () => ({
+  useAuth: () => ({ token: 'Bearer token', partyId: '42', session: { displayName: 'Ana' } }),
+}));
 jest.mock('../src/providers/FirstRunProvider', () => ({
   useFirstRun: () => ({ cohortReady: true, isNewUser: true, completeOnboarding: mockCompleteOnboarding }),
 }));

@@ -61,7 +61,12 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('../src/providers/AuthProvider', () => ({
-  useAuth: jest.fn(() => ({ token: 'Bearer demo', partyId: '42', loading: false })),
+  useAuth: jest.fn(() => ({
+    token: 'Bearer demo',
+    partyId: '42',
+    session: { displayName: 'Demo Fan' },
+    loading: false,
+  })),
 }));
 
 jest.mock('../src/providers/UserSettingsProvider', () => ({

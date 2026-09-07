@@ -17,11 +17,7 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('../src/providers/AuthProvider', () => ({
-  useAuth: jest.fn(() => ({ partyId: null })),
-}));
-
-jest.mock('../src/providers/UserSettingsProvider', () => ({
-  useUserSettings: jest.fn(() => ({ partyId: '42' })),
+  useAuth: jest.fn(() => ({ partyId: '42' })),
 }));
 
 jest.mock('../src/api/artists', () => ({
@@ -78,7 +74,7 @@ describe('ArtistDetail screen', () => {
     });
   });
 
-  it('uses the saved party id fallback for follow actions', async () => {
+  it('uses the authenticated party id for follow actions', async () => {
     render(<ArtistDetailScreen />);
 
     fireEvent.press(screen.getByText('Seguir'));

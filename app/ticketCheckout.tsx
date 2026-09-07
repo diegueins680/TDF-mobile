@@ -46,7 +46,6 @@ import {
   rotateTicketCheckoutKey,
 } from '../src/lib/ticketCheckoutIdempotency';
 import { useAuth } from '../src/providers/AuthProvider';
-import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
 import type {
   EventTicketOrder,
@@ -87,12 +86,12 @@ export default function TicketCheckoutScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const { token, partyId, loading: authLoading, clearToken } = useAuth();
-  const { displayName } = useUserSettings();
+  const { token, partyId, session, loading: authLoading, clearToken } = useAuth();
+  const displayName = session?.displayName ?? '';
 
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [buyerName, setBuyerName] = useState(displayName ?? '');
+  const [buyerName, setBuyerName] = useState(displayName);
   const [buyerEmail, setBuyerEmail] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
   const [promoExpanded, setPromoExpanded] = useState(false);
@@ -121,7 +120,7 @@ export default function TicketCheckoutScreen() {
   const eventQuery = useQuery({
     queryKey: ['event', eventId],
     queryFn: () => Events.getById(eventId as ID),
-    enabled: Boolean(eventId && token?.trim()),
+    enabled: Boolean(eventId),
   });
 
   const tiersQuery = useQuery({
@@ -489,11 +488,58 @@ export default function TicketCheckoutScreen() {
     });
   }, [eventQuery.data?.ticketUrl]);
 
-  if (authLoading || !token?.trim()) {
+  if (authLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#7c3aed" accessibilityLabel="Abriendo inicio de sesión" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!token?.trim()) {
+    const returnTo = eventId
+      ? `/ticketCheckout?eventId=${encodeURIComponent(eventId)}`
+      : '/events';
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}>
+          <View style={[styles.stateCard, styles.authStateCard]} accessibilityRole="summary">
+            <MaterialCommunityIcons name="ticket-confirmation-outline" size={36} color="#7c3aed" />
+            <Text style={styles.sectionTitle}>Inicia sesión para comprar entradas</Text>
+            <Text style={styles.helperText}>
+              {eventQuery.data?.title
+                ? `Continuarás con ${eventQuery.data.title} después de ingresar.`
+                : 'Conservaremos este evento para que continúes después de ingresar.'}
+            </Text>
+            <TouchableOpacity
+              style={[styles.primaryButton, styles.authAction]}
+              onPress={() => router.replace({
+                pathname: '/auth',
+                params: { mode: 'signup', intent: 'events', returnTo },
+              })}
+              accessibilityRole="button"
+              accessibilityLabel="Crear cuenta para comprar entradas"
+            >
+              <Text style={styles.primaryButtonText}>Crear cuenta</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.authAction]}
+              onPress={() => router.replace({ pathname: '/auth', params: { returnTo } })}
+              accessibilityRole="button"
+              accessibilityLabel="Iniciar sesión para comprar entradas"
+            >
+              <Text style={styles.secondaryButtonText}>Ya tengo cuenta</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.authBackAction}
+              onPress={() => router.back()}
+              accessibilityRole="button"
+            >
+              <Text style={styles.secondaryButtonText}>Volver al evento</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -994,6 +1040,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
+  authStateCard: { width: '100%', maxWidth: 520 },
+  authAction: { width: '100%' },
+  authBackAction: { minHeight: 44, alignSelf: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   section: {
     borderRadius: 16,
     borderWidth: 1,

@@ -6,7 +6,6 @@ import { useRouter } from 'expo-router';
 import { Social } from '../../src/api/social';
 import { Artists } from '../../src/api/artists';
 import type { ArtistProfile, PartyFollow } from '../../src/types';
-import { resolvePartyId } from '../../src/lib/identity';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
@@ -25,15 +24,14 @@ export default function SocialScreen() {
   const qc = useQueryClient();
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
-  const { token, partyId: authPartyId, loading } = useAuth();
-  const { partyId: settingsPartyId, displayName, locale } = useUserSettings();
+  const { token, partyId: effectivePartyId, session, loading } = useAuth();
+  const { locale } = useUserSettings();
   const english = locale.startsWith('en');
 
   const [activeTab, setActiveTab] = useState<TabKey>('following');
   const [refreshing, setRefreshing] = useState(false);
   const hasToken = Boolean(token?.trim());
   const canUseSocial = !loading && hasToken;
-  const effectivePartyId = resolvePartyId(authPartyId, settingsPartyId);
 
   const followersQuery = useQuery({
     queryKey: ['social-followers'],
@@ -231,7 +229,7 @@ export default function SocialScreen() {
             </Text>
             <View style={styles.badges}>
               <Text maxFontSizeMultiplier={1.5} style={[styles.badge, { backgroundColor: colors.surfaceMuted, color: colors.actionPrimary }]}>{effectivePartyId ? 'Cuenta vinculada' : 'Inicia sesión'}</Text>
-              {!!displayName && <Text maxFontSizeMultiplier={1.5} style={[styles.badge, { backgroundColor: colors.surfaceMuted, color: colors.actionPrimary }]}>Nombre: {displayName}</Text>}
+              {!!session?.displayName && <Text maxFontSizeMultiplier={1.5} style={[styles.badge, { backgroundColor: colors.surfaceMuted, color: colors.actionPrimary }]}>Nombre: {session.displayName}</Text>}
             </View>
             {loading ? (
               <Text maxFontSizeMultiplier={1.5} style={[styles.helper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">Cargando acceso…</Text>

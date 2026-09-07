@@ -217,8 +217,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     try {
-      const sessionValue = await get<SessionSnapshot>('/session');
+      const sessionValue = await get<SessionSnapshot | null>('/session');
       if (isMountedRef.current && lookupId === profileLookupIdRef.current) {
+        if (sessionValue === null) {
+          authVersionRef.current += 1;
+          applyAuthState(null);
+          await persistStoredToken(null);
+          return;
+        }
         const normalizedSession = normalizeSessionSnapshot(sessionValue, fallbackPartyId ?? null);
         setPartyIdState(normalizedSession.partyId);
         setSessionState(normalizedSession);

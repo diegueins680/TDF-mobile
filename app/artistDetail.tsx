@@ -4,13 +4,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../src/providers/AuthProvider';
-import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 
 import { Artists, type ArtistFollower } from '../src/api/artists';
 import { Events } from '../src/api/events';
 import { ArtistDetailSkeleton } from '../src/components/skeletons/ArtistCardSkeleton';
-import { resolvePartyId } from '../src/lib/identity';
 import { normalizeRouteParam } from '../src/lib/routeParams';
 import { Reviews } from '../src/api/reviews';
 import { DirectoryProfileReviews } from '../src/components/reviews/DirectoryProfileReviews';
@@ -19,11 +17,9 @@ export default function ArtistDetailScreen() {
   const { colors } = useAppTheme();
   const { artistId: rawArtistId } = useLocalSearchParams<{ artistId?: string | string[] }>();
   const router = useRouter();
-  const { partyId: authPartyId } = useAuth();
-  const { partyId: settingsPartyId } = useUserSettings();
+  const { partyId } = useAuth();
   const qc = useQueryClient();
   const artistId = normalizeRouteParam(rawArtistId);
-  const partyId = resolvePartyId(authPartyId, settingsPartyId);
   const [refreshing, setRefreshing] = useState(false);
 
   const artistQuery = useQuery({

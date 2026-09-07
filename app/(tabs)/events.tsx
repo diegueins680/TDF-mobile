@@ -28,7 +28,6 @@ import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
 import { impactLight } from '../../src/utils/haptics';
 import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
-import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -117,7 +116,6 @@ export default function EventsScreen() {
       if (!wasSaved && await markFirstValueCompleted(partyId, 'event_saved')) {
         analytics.capture('first_value_completed', { platform: 'mobile', value: 'event_saved' });
         analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'event_saved' });
-        if (partyId) await markNewUserOnboardingCompleted(partyId);
       }
       qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
       qc.invalidateQueries({ queryKey: ['saved-events'] });

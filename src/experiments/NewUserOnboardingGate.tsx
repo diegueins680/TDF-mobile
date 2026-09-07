@@ -33,7 +33,6 @@ import {
   listMomentFeed,
   toggleMomentFeedReaction,
 } from '../lib/eventMomentsRepository';
-import { markFirstValueCompleted } from '../lib/onboardingIntent';
 import { markExperimentExposedOnce } from '../lib/firstRunFlags';
 import { useAuth } from '../providers/AuthProvider';
 import { useFirstRun } from '../providers/FirstRunProvider';
@@ -214,21 +213,27 @@ export function NewUserOnboardingGate({ children }: Props) {
   // Conversion detection: fire experiment_converted the first time the user
   // successfully posts a reaction via the moment card.
   const convertedRef = useRef(false);
+  const conversionInFlightRef = useRef(false);
   const handleConversion = useCallback(() => {
-    if (convertedRef.current) return;
-    convertedRef.current = true;
-    track('experiment_converted', {
-      experimentId: EXPERIMENT_ID,
-      variant: TREATMENT,
-      userId: normalizedPartyId ?? undefined,
-      metadata: { value: 1, surface: 'gate_moment_reaction' },
-    });
+    if (convertedRef.current || conversionInFlightRef.current) return;
+    conversionInFlightRef.current = true;
     void (async () => {
-      if (await markFirstValueCompleted(normalizedPartyId, 'moment_reaction')) {
+      try {
+        const result = await completeOnboarding('moment_reaction');
+        if (!result) return;
+        convertedRef.current = true;
+        if (!result.newlyCompleted) return;
+        track('experiment_converted', {
+          experimentId: EXPERIMENT_ID,
+          variant: TREATMENT,
+          userId: normalizedPartyId ?? undefined,
+          metadata: { value: 1, surface: 'gate_moment_reaction' },
+        });
         analytics.capture('first_value_completed', { platform: 'mobile', value: 'moment_reaction' });
         analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'moment_reaction' });
+      } finally {
+        conversionInFlightRef.current = false;
       }
-      await completeOnboarding();
     })();
   }, [analytics, completeOnboarding, normalizedPartyId, track]);
 
@@ -266,9 +271,12 @@ export function NewUserOnboardingGate({ children }: Props) {
 
   const handleExplore = useCallback(() => {
     setTreatmentExited(true);
-    analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
-    void completeOnboarding();
     router.replace('/(tabs)/events');
+    void completeOnboarding().then((result) => {
+      if (result?.newlyCompleted) {
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
+      }
+    });
   }, [analytics, completeOnboarding, router]);
 
   if (!gateEngaged) {

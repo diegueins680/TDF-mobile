@@ -522,6 +522,38 @@ describe('Social API mapper sanitization', () => {
     expect(result.reactions[reactionTypeId]).toEqual(['party:7']);
   });
 
+  it('preserves anonymous reaction counts without reconstructing other Party identities', async () => {
+    const reactionTypeId = '50800000-0000-4000-8000-000000000001';
+    post.mockResolvedValueOnce({
+      emId: '77',
+      emEventId: '42',
+      emAuthorName: 'Andrea',
+      emMediaUrl: 'https://example.com/moment.jpg',
+      emMediaType: 'image',
+      emCreatedAt: '2026-04-10T21:00:00.000Z',
+      emReactions: [
+        { emrReactionTypeId: reactionTypeId, emrPartyId: '7' },
+        { emrReactionTypeId: reactionTypeId, emrPartyId: null },
+        { emrReactionTypeId: reactionTypeId, emrPartyId: null },
+      ],
+      emComments: [],
+    });
+
+    const result = await Events.reactToMoment('42', '77', {
+      id: reactionTypeId,
+      code: 'fire',
+      label: 'Fuego',
+      nameEs: 'Fuego',
+      nameEn: 'Fire',
+      emoji: '🔥',
+    }, true);
+
+    expect(result.reactions[reactionTypeId]).toHaveLength(3);
+    expect(result.reactions[reactionTypeId]).toContain('party:7');
+    expect(result.reactions[reactionTypeId]).not.toContain('party:8');
+    expect(result.reactions[reactionTypeId]).not.toContain('party:9');
+  });
+
   it('Events.listTicketOrders filters by buyer party id and maps orders', async () => {
     get.mockResolvedValueOnce([
       {

@@ -6,6 +6,11 @@ import {
   type OnboardingFirstValue,
   type OnboardingIntent,
 } from '../api/onboarding';
+import {
+  assertAuthSession,
+  authSessionRequestConfig,
+  captureAuthSession,
+} from '../api/client';
 import { MOBILE_LANDING_ROUTE } from '../navigation/mobileSurface';
 
 export type { OnboardingIntent } from '../api/onboarding';
@@ -95,10 +100,15 @@ export async function clearPendingOnboardingIntent(): Promise<void> {
 export async function markFirstValueCompleted(
   partyId: string | null | undefined,
   value: OnboardingFirstValue,
+  authToken?: string | null,
 ): Promise<boolean> {
   if (!partyId) return false;
   try {
-    const result = await completeOnboardingProgress(value);
+    const binding = authToken ? captureAuthSession(authToken) : null;
+    const result = binding
+      ? await completeOnboardingProgress(value, authSessionRequestConfig(binding))
+      : await completeOnboardingProgress(value);
+    if (binding) assertAuthSession(binding);
     return result.newlyCompleted === true;
   } catch {
     return false;

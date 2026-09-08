@@ -16,6 +16,8 @@ export const normalizeAuthToken = (token?: string | null) => {
 };
 
 let currentToken: string | undefined = normalizeAuthToken(process.env.EXPO_PUBLIC_API_TOKEN);
+let authSessionVersion = 0;
+let authSessionAbortController = new AbortController();
 
 export const http = axios.create({
   baseURL: API_BASE,
@@ -34,12 +36,69 @@ const applyAuthHeader = (token?: string) => {
 applyAuthHeader(currentToken);
 
 export function setAuthToken(token: string | null | undefined) {
-  currentToken = normalizeAuthToken(token);
+  const nextToken = normalizeAuthToken(token);
+  if (nextToken !== currentToken) {
+    authSessionAbortController.abort();
+    authSessionAbortController = new AbortController();
+    authSessionVersion += 1;
+  }
+  currentToken = nextToken;
   applyAuthHeader(currentToken);
 }
 
 export function getAuthToken(): string | undefined {
   return currentToken;
+}
+
+export class AuthSessionChangedError extends Error {
+  constructor() {
+    super('Tu sesión cambió. Vuelve a intentar esta acción con la cuenta activa.');
+    this.name = 'AuthSessionChangedError';
+  }
+}
+
+export type AuthSessionBinding = {
+  authorization: string;
+  signal: AbortSignal;
+  version: number;
+};
+
+export function captureAuthSession(expectedToken: string | null | undefined): AuthSessionBinding {
+  const authorization = normalizeAuthToken(expectedToken);
+  if (!authorization || authorization !== currentToken) {
+    throw new AuthSessionChangedError();
+  }
+  return {
+    authorization,
+    signal: authSessionAbortController.signal,
+    version: authSessionVersion,
+  };
+}
+
+export function assertAuthSession(binding: AuthSessionBinding): void {
+  if (
+    binding.version !== authSessionVersion
+    || binding.authorization !== currentToken
+    || binding.signal.aborted
+  ) {
+    throw new AuthSessionChangedError();
+  }
+}
+
+export function authSessionRequestConfig(binding: AuthSessionBinding): AxiosRequestConfig {
+  return {
+    headers: { Authorization: binding.authorization },
+    signal: binding.signal,
+  };
+}
+
+export function isConnectivityApiError(error: unknown): boolean {
+  return axios.isAxiosError(error) && (
+    !error.response
+    || error.code === 'ECONNABORTED'
+    || error.code === 'ERR_NETWORK'
+    || error.code === 'ETIMEDOUT'
+  );
 }
 
 const readResponseMessage = (value: unknown): string | null => {
@@ -127,8 +186,8 @@ const requestData = async <T>(request: Promise<{ data: T }>): Promise<T> => {
   }
 };
 
-export async function get<T>(path: string): Promise<T> {
-  return requestData(http.get<T>(path));
+export async function get<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
+  return requestData(http.get<T>(path, config));
 }
 
 export async function post<T>(path: string, body: unknown, config?: AxiosRequestConfig): Promise<T> {
@@ -139,8 +198,8 @@ export async function put<T>(path: string, body: unknown, config?: AxiosRequestC
   return requestData(http.put<T>(path, body, config));
 }
 
-export async function del<T>(path: string): Promise<T> {
-  return requestData(http.delete<T>(path));
+export async function del<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
+  return requestData(http.delete<T>(path, config));
 }
 
 export async function patch<T>(path: string, body: unknown): Promise<T> {

@@ -1,9 +1,10 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 
 import EventDetailScreen from '../app/eventDetail';
+import { Directory } from '../src/api/directory';
+import { setAuthToken } from '../src/api/client';
 
 const mockInvalidateQueries = jest.fn();
 const mockStopPublisher = jest.fn();
@@ -75,6 +76,14 @@ jest.mock('../src/api/events', () => ({
     rsvp: jest.fn(),
     sendInvitation: jest.fn(),
     respondToInvitation: jest.fn(),
+  },
+}));
+
+jest.mock('../src/api/directory', () => ({
+  Directory: {
+    favorites: jest.fn(),
+    addFavorite: jest.fn(),
+    removeFavorite: jest.fn(),
   },
 }));
 
@@ -166,6 +175,7 @@ const startedBroadcast = {
 describe('EventDetail persistence and live broadcast lifecycle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    setAuthToken('Bearer test-token');
     mockStopPublisher.mockResolvedValue(undefined);
     mockStartPublisher.mockResolvedValue({ previewUrl: 'webrtc://local-preview', stop: mockStopPublisher });
     mockBroadcastsRepo.startLiveBroadcastSession.mockResolvedValue({
@@ -173,6 +183,7 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
       broadcast: startedBroadcast,
     });
     mockBroadcastsRepo.endLiveBroadcastSession.mockResolvedValue({ source: 'remote' });
+    jest.mocked(Directory.addFavorite).mockResolvedValue(undefined);
 
     mockUseQuery.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
       if (queryKey[0] === 'event') {
@@ -180,7 +191,13 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
       }
       if (queryKey[0] === 'event-rsvps') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-invitations') return { data: [], isLoading: false };
-      if (queryKey[0] === 'saved-event-ids') return { data: [], isLoading: false };
+      if (queryKey[0] === 'saved-event-ids') {
+        return {
+          data: { ids: [], pendingImportIds: [], pendingImportError: null, source: 'server', cachedAt: null },
+          isLoading: false,
+          isError: false,
+        };
+      }
       if (queryKey[0] === 'event-ticket-tiers') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-ticket-orders') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-moments') return { data: [], isLoading: false };
@@ -190,22 +207,25 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
     });
   });
 
-  it('does not claim that an event was saved when account-scoped persistence fails', async () => {
+  it('does not claim that an event was saved when server persistence fails', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce(null);
-    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('write failed'));
+    jest.mocked(Directory.addFavorite).mockRejectedValueOnce(new Error('write failed'));
 
     render(<EventDetailScreen />);
     fireEvent.press(screen.getByText('Guardar evento'));
 
     await waitFor(() => {
-      expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-        'tdf-saved-event-ids:party:7',
-        JSON.stringify(['42']),
+      expect(Directory.addFavorite).toHaveBeenCalledWith(
+        'event',
+        '42',
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer test-token' },
+          signal: expect.anything(),
+        }),
       );
       expect(alertSpy).toHaveBeenCalledWith(
-        'Error',
-        'No pudimos actualizar tus eventos guardados.',
+        'No pudimos actualizar tus guardados',
+        'write failed',
       );
     });
     expect(alertSpy).not.toHaveBeenCalledWith('Listo', expect.any(String));

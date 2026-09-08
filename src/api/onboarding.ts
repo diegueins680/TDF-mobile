@@ -1,5 +1,6 @@
 import { get, post, put } from './client';
 import type { components } from './generated/types';
+import type { AxiosRequestConfig } from 'axios';
 
 export type OnboardingIntent = components['schemas']['OnboardingIntent'];
 export type OnboardingFirstValue = NonNullable<
@@ -18,9 +19,10 @@ export const updateOnboardingIntent = (
 
 export async function completeOnboardingProgress(
   firstValue?: OnboardingFirstValue,
+  config?: AxiosRequestConfig,
 ): Promise<OnboardingCompletionResult> {
-  return post<OnboardingCompletionResult>(
-    '/session/onboarding/complete',
-    firstValue ? { firstValue } : {},
-  );
+  const body = firstValue ? { firstValue } : {};
+  return config
+    ? post<OnboardingCompletionResult>('/session/onboarding/complete', body, config)
+    : post<OnboardingCompletionResult>('/session/onboarding/complete', body);
 }

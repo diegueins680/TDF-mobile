@@ -194,6 +194,26 @@ describe('Auth screen', () => {
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory'));
   });
 
+  it('resumes an authorized internal route with its event query intact', async () => {
+    mockSearchParams = { returnTo: '/ticketCheckout?eventId=42' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
+    fireEvent.press(screen.getByTestId('loginButton'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/ticketCheckout?eventId=42'));
+  });
+
+  it('rejects an external return target before session authorization', async () => {
+    mockSearchParams = { returnTo: '//evil.example/tickets' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
+    fireEvent.press(screen.getByTestId('loginButton'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory'));
+  });
+
   it('exposes associated field labels, input guidance, and validation errors', async () => {
     render(<AuthScreen />);
     await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());

@@ -41,6 +41,7 @@ import { updateOnboardingIntent } from '../src/api/onboarding';
 import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
 import { authCopy, onboardingLanguage } from '../src/localization/onboardingCopy';
 import { isValidSignupPassword } from '../src/lib/passwordPolicy';
+import { safeInternalRoute } from '../src/navigation/deepLinks';
 
 const ACCOUNT_TERMS_VERSION = 'tdf-account-terms-v1';
 const TERMS_URL = 'https://tdf-app.pages.dev/mobile-app/terms.html';
@@ -92,9 +93,7 @@ export default function AuthScreen() {
   const requestedIntent = parseOnboardingIntent(rawIntent) ?? parseOnboardingIntent(legacyRoles);
   const initialIntent = requestedIntent ?? DEFAULT_ONBOARDING_INTENT;
   const rawReturnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
-  const safeReturnTo = rawReturnTo?.startsWith('/') && !rawReturnTo.startsWith('//') && rawReturnTo.length <= 500
-    ? rawReturnTo as Href
-    : null;
+  const safeReturnTo = safeInternalRoute(rawReturnTo) as Href | null;
   const [mode, setMode] = useState<'login' | 'signup' | 'forgotPassword'>(requestedMode === 'signup' ? 'signup' : 'login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

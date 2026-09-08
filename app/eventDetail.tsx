@@ -55,6 +55,7 @@ import {
 import {
   addMomentFeedComment,
   createMomentFeedItem,
+  isRemoteReactionActive,
   listMomentFeed,
   toggleMomentFeedReaction,
 } from '../src/lib/eventMomentsRepository';
@@ -211,13 +212,21 @@ export default function EventDetailScreen() {
   });
 
   const momentsQueryKey = useMemo(
-    () => ['event-moments', eventId, shouldPreferRemoteMoments ? 'remote' : 'local'] as const,
-    [eventId, shouldPreferRemoteMoments],
+    () => [
+      'event-moments',
+      eventId,
+      currentActor.actorKey,
+      shouldPreferRemoteMoments ? 'remote' : 'local',
+    ] as const,
+    [currentActor.actorKey, eventId, shouldPreferRemoteMoments],
   );
 
   const momentsQuery = useQuery({
     queryKey: momentsQueryKey,
-    queryFn: () => listMomentFeed(eventId as ID, { preferRemote: shouldPreferRemoteMoments }),
+    queryFn: () => listMomentFeed(eventId as ID, {
+      preferRemote: shouldPreferRemoteMoments,
+      storageScope: currentActor.actorKey,
+    }),
     enabled: Boolean(eventId && activeTab === 'moments'),
   });
 
@@ -513,7 +522,7 @@ export default function EventDetailScreen() {
               authorPartyId: currentActor.partyId,
               caption: submission.caption,
               media: mediaForMoment,
-            }, { preferRemote });
+            }, { preferRemote, storageScope: currentActor.actorKey });
 
             if (result.source === 'local' && shouldPreferRemoteMoments && result.fallbackReason) {
               notices.push(result.fallbackReason);
@@ -602,17 +611,47 @@ export default function EventDetailScreen() {
   });
 
   const reactionMutation = useMutation({
-    mutationFn: ({ momentId, reaction }: { momentId: string; reaction: EventMomentReactionOption }) => {
+    mutationFn: ({
+      momentId,
+      reaction,
+      actorKey,
+      active,
+    }: {
+      momentId: string;
+      reaction: EventMomentReactionOption;
+      actorKey: string;
+      active: boolean;
+      ownerPartyId: string;
+      authToken: string;
+    }) => {
       if (!eventId) throw new Error('Event not found');
       return toggleMomentFeedReaction({
         eventId,
         momentId,
-        actorKey: currentActor.actorKey,
+        actorKey,
         reaction,
-      }, { preferRemote: shouldPreferRemoteMoments });
+        active,
+      }, {
+        preferRemote: shouldPreferRemoteMoments,
+        storageScope: actorKey,
+      });
     },
-    onSuccess: () => {
+    onSuccess: (result, { reaction, actorKey, ownerPartyId, authToken }) => {
       qc.invalidateQueries({ queryKey: ['event-moments', eventId] });
+      if (
+        normalizedPartyId !== ownerPartyId
+        || token !== authToken
+        || !isRemoteReactionActive(result, reaction.id, actorKey)
+      ) return;
+      void markFirstValueCompleted(ownerPartyId, 'moment_reaction', authToken).then((completed) => {
+        if (!completed) return;
+        analytics.capture('first_value_completed', { platform: 'mobile', value: 'moment_reaction' });
+        analytics.capture('onboarding_completed', {
+          platform: 'mobile',
+          reason: 'first_value',
+          value: 'moment_reaction',
+        });
+      });
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'No pudimos registrar tu reacción.';
@@ -629,7 +668,10 @@ export default function EventDetailScreen() {
         authorName: currentActor.displayName,
         authorPartyId: currentActor.partyId,
         body,
-      }, { preferRemote: shouldPreferRemoteMoments });
+      }, {
+        preferRemote: shouldPreferRemoteMoments,
+        storageScope: currentActor.actorKey,
+      });
     },
     onSuccess: (_data, variables) => {
       setCommentDrafts((current) => ({ ...current, [variables.momentId]: '' }));
@@ -1391,7 +1433,17 @@ export default function EventDetailScreen() {
                       commentDraft={commentDrafts[moment.id] ?? ''}
                       onChangeComment={handleCommentChange}
                       onSubmitComment={handleCommentSubmit}
-                      onToggleReaction={(momentId, reaction) => reactionMutation.mutate({ momentId, reaction })}
+                      onToggleReaction={(momentId, reaction, active) => {
+                        if (!normalizedPartyId || !token) return;
+                        reactionMutation.mutate({
+                          momentId,
+                          reaction,
+                          actorKey: currentActor.actorKey,
+                          active,
+                          ownerPartyId: normalizedPartyId,
+                          authToken: token,
+                        });
+                      }}
                       onConnectAuthor={handleConnectAuthor}
                       onOpenMedia={handleOpenMomentMedia}
                     />

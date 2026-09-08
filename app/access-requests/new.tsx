@@ -49,7 +49,7 @@ export default function NewAccessRequestScreen() {
     mutationFn: () => submitAccessRequest({ featureId: feature?.id ?? '', action: selection?.action ?? 'view', justification: justification.trim() || null }),
     onSuccess: async (request) => {
       analytics.capture('feature_access_request_submitted', { feature_id: request.featureId, feature_action: request.action, platform: 'mobile' });
-      if (await markFirstValueCompleted(partyId, 'access_requested')) {
+      if (await markFirstValueCompleted(partyId, 'access_requested', token)) {
         analytics.capture('first_value_completed', { platform: 'mobile', value: 'access_requested' });
         analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'access_requested' });
       }

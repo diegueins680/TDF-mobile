@@ -30,6 +30,7 @@ import { Events } from '../api/events';
 import { EventMomentCard } from '../components/EventMomentCard';
 import { buildMomentActor } from '../lib/eventMoments';
 import {
+  isRemoteReactionActive,
   listMomentFeed,
   toggleMomentFeedReaction,
 } from '../lib/eventMomentsRepository';
@@ -166,12 +167,14 @@ export function NewUserOnboardingGate({ children }: Props) {
       queryKey: [
         'exp-single-feature-onboarding',
         'probe',
+        currentActor.actorKey,
         event.id,
         shouldPreferRemoteMoments ? 'remote' : 'local',
       ] as const,
       queryFn: () =>
         listMomentFeed(event.id as ID, {
           preferRemote: shouldPreferRemoteMoments,
+          storageScope: currentActor.actorKey,
         }),
       enabled: gateEngaged,
     })),
@@ -199,19 +202,21 @@ export function NewUserOnboardingGate({ children }: Props) {
     queryKey: [
       'exp-single-feature-onboarding',
       'moments',
+      currentActor.actorKey,
       featuredEvent?.id ?? null,
       shouldPreferRemoteMoments ? 'remote' : 'local',
     ],
     queryFn: () =>
       listMomentFeed(featuredEvent!.id as ID, {
         preferRemote: shouldPreferRemoteMoments,
+        storageScope: currentActor.actorKey,
       }),
     enabled: gateEngaged && Boolean(featuredEvent?.id),
     initialData: featuredProbe?.data,
   });
 
-  // Conversion detection: fire experiment_converted the first time the user
-  // successfully posts a reaction via the moment card.
+  // Conversion detection: fire experiment_converted only after the server
+  // acknowledges that the authenticated Party now has the selected reaction.
   const convertedRef = useRef(false);
   const conversionInFlightRef = useRef(false);
   const handleConversion = useCallback(() => {
@@ -221,7 +226,7 @@ export function NewUserOnboardingGate({ children }: Props) {
       try {
         const result = await completeOnboarding('moment_reaction');
         if (!result) return;
-        convertedRef.current = true;
+        convertedRef.current = !result.progress.eligible;
         if (!result.newlyCompleted) return;
         track('experiment_converted', {
           experimentId: EXPERIMENT_ID,
@@ -243,23 +248,29 @@ export function NewUserOnboardingGate({ children }: Props) {
   }, []);
 
   const handleToggleReaction = useCallback(
-    async (momentId: string, reaction: EventMomentReactionOption) => {
+    async (momentId: string, reaction: EventMomentReactionOption, active: boolean) => {
       if (!featuredEvent?.id) return;
       try {
-        await toggleMomentFeedReaction(
+        const result = await toggleMomentFeedReaction(
           {
             eventId: featuredEvent.id as ID,
             momentId,
             actorKey: currentActor.actorKey,
             reaction,
+            active,
           },
-          { preferRemote: shouldPreferRemoteMoments },
+          {
+            preferRemote: shouldPreferRemoteMoments,
+            storageScope: currentActor.actorKey,
+          },
         );
+        return isRemoteReactionActive(result, reaction.id, currentActor.actorKey);
       } finally {
         queryClient.invalidateQueries({
           queryKey: [
             'exp-single-feature-onboarding',
             'moments',
+            currentActor.actorKey,
             featuredEvent.id,
             shouldPreferRemoteMoments ? 'remote' : 'local',
           ],

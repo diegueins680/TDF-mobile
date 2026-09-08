@@ -29,7 +29,11 @@ type EventMomentCardProps = {
   commentDraft: string;
   onChangeComment: (momentId: string, value: string) => void;
   onSubmitComment: (momentId: string) => void;
-  onToggleReaction: (momentId: string, reaction: EventMomentReactionOption) => void;
+  onToggleReaction: (
+    momentId: string,
+    reaction: EventMomentReactionOption,
+    active: boolean,
+  ) => boolean | void | Promise<boolean | void>;
   onReactionPosted?: () => void;
   onConnectAuthor?: (partyId: string) => void;
   onOpenMedia?: (media: EventMomentMedia) => void;
@@ -171,11 +175,11 @@ export function EventMomentCard({
               ]}
               onPress={async () => {
                 try {
-                  await onToggleReaction(moment.id, reaction);
-                  onReactionPosted?.();
+                  const reactionActivated = await onToggleReaction(moment.id, reaction, !active);
+                  if (reactionActivated) onReactionPosted?.();
                 } catch {
                   // Swallow — the parent owns error surfacing for the toggle
-                  // mutation; we only fire the conversion callback on success.
+                  // mutation; conversion requires an acknowledged activation.
                 }
               }}
               disabled={reactionDisabled || pending}

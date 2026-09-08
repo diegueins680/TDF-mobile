@@ -684,10 +684,14 @@ export const Events = {
     eventId: ID,
     momentId: string,
     reaction: EventMomentReactionOption,
+    active: boolean,
   ): Promise<EventMoment> => {
     const dto = await post<BackendMomentDTO>(
       `/social-events/events/${eventId}/moments/${encodeURIComponent(momentId)}/reactions`,
-      { emrrReactionTypeId: requireCatalogUuid(reaction.id, 'emrrReactionTypeId') },
+      {
+        emrrReactionTypeId: requireCatalogUuid(reaction.id, 'emrrReactionTypeId'),
+        emrrActive: active,
+      },
     );
     return mapMomentDto(dto, eventId);
   },

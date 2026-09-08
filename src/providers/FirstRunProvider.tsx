@@ -14,6 +14,12 @@ import {
   type OnboardingCompletionResult,
   type OnboardingFirstValue,
 } from '../api/onboarding';
+import {
+  assertAuthSession,
+  authSessionRequestConfig,
+  captureAuthSession,
+  type AuthSessionBinding,
+} from '../api/client';
 import { useAuth } from './AuthProvider';
 
 type FirstRunContextValue = {
@@ -33,13 +39,13 @@ const FirstRunContext = createContext<FirstRunContextValue>({
 });
 
 export function FirstRunProvider({ children }: PropsWithChildren) {
-  const { partyId } = useAuth();
+  const { partyId, token } = useAuth();
 
   const [cohortReady, setCohortReady] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
 
   useEffect(() => {
-    if (!partyId) {
+    if (!partyId || !token) {
       setCohortReady(true);
       setIsNewUser(false);
       return;
@@ -50,7 +56,9 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       setCohortReady(false);
       let isNew = false;
       try {
-        const progress = await getOnboardingProgress();
+        const binding = captureAuthSession(token);
+        const progress = await getOnboardingProgress(authSessionRequestConfig(binding));
+        assertAuthSession(binding);
         isNew = progress.eligible;
       } catch {
         // Fail closed: network errors and legacy servers must never classify
@@ -64,21 +72,38 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     return () => {
       cancelled = true;
     };
-  }, [partyId]);
+  }, [partyId, token]);
 
   const completeOnboarding = useCallback(async (
     firstValue?: OnboardingFirstValue,
   ): Promise<OnboardingCompletionResult | null> => {
-    if (!partyId) return null;
+    if (!partyId || !token) return null;
+    let binding: AuthSessionBinding;
     try {
-      return await completeOnboardingProgress(firstValue);
+      binding = captureAuthSession(token);
     } catch {
-      // Leaving optional onboarding must not trap the current app session.
       return null;
-    } finally {
-      setIsNewUser(false);
     }
-  }, [partyId]);
+    try {
+      const result = await completeOnboardingProgress(
+        firstValue,
+        authSessionRequestConfig(binding),
+      );
+      assertAuthSession(binding);
+      setIsNewUser(result.progress.eligible);
+      return result;
+    } catch {
+      try {
+        assertAuthSession(binding);
+        // A failed optional exit must not trap this app session. First-value
+        // failures retain eligibility so the user can retry the real action.
+        if (!firstValue) setIsNewUser(false);
+      } catch {
+        // A replaced session owns its own eligibility state.
+      }
+      return null;
+    }
+  }, [partyId, token]);
 
   return (
     <FirstRunContext.Provider value={{ cohortReady, isNewUser, completeOnboarding }}>

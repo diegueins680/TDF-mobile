@@ -17,6 +17,7 @@ import {
 
 type RemoteModeOptions = {
   preferRemote?: boolean;
+  storageScope?: string;
 };
 
 export type MomentMutationResult = {
@@ -27,6 +28,19 @@ export type MomentMutationResult = {
 export type CreateMomentMutationResult = MomentMutationResult & {
   moment: EventMoment;
 };
+
+export type MomentReactionMutationResult = MomentMutationResult & {
+  moment?: EventMoment;
+};
+
+export function isRemoteReactionActive(
+  result: MomentReactionMutationResult,
+  reactionTypeId: string,
+  actorKey: string,
+): boolean {
+  return result.source === 'remote'
+    && Boolean(result.moment?.reactions[reactionTypeId]?.includes(actorKey));
+}
 
 const LOCAL_MOMENT_PREFIX = 'moment-';
 
@@ -68,7 +82,7 @@ const getFallbackReason = (error: unknown): string | undefined => {
 };
 
 export async function listMomentFeed(eventId: ID, options?: RemoteModeOptions): Promise<EventMoment[]> {
-  const localMoments = await listLocalMoments(eventId);
+  const localMoments = await listLocalMoments(eventId, options?.storageScope);
 
   if (!options?.preferRemote) {
     return localMoments;
@@ -90,7 +104,7 @@ export async function createMomentFeedItem(
   options?: RemoteModeOptions,
 ): Promise<CreateMomentMutationResult> {
   if (!options?.preferRemote) {
-    const moment = await createLocalMoment(input);
+    const moment = await createLocalMoment(input, options?.storageScope);
     return { moment, source: 'local' };
   }
 
@@ -102,7 +116,7 @@ export async function createMomentFeedItem(
       throw error;
     }
 
-    const moment = await createLocalMoment(input);
+    const moment = await createLocalMoment(input, options?.storageScope);
     return {
       moment,
       source: 'local',
@@ -116,21 +130,33 @@ export async function toggleMomentFeedReaction(input: {
   momentId: string;
   actorKey: string;
   reaction: EventMomentReactionOption;
-}, options?: RemoteModeOptions): Promise<MomentMutationResult> {
+  active: boolean;
+}, options?: RemoteModeOptions): Promise<MomentReactionMutationResult> {
   if (!options?.preferRemote || isLocalMomentId(input.momentId)) {
-    await toggleLocalMomentReaction({ ...input, reactionTypeId: input.reaction.id });
+    await toggleLocalMomentReaction(
+      { ...input, reactionTypeId: input.reaction.id },
+      options?.storageScope,
+    );
     return { source: 'local' };
   }
 
   try {
-    await Events.reactToMoment(input.eventId, input.momentId, input.reaction);
-    return { source: 'remote' };
+    const moment = await Events.reactToMoment(
+      input.eventId,
+      input.momentId,
+      input.reaction,
+      input.active,
+    );
+    return { moment, source: 'remote' };
   } catch (error) {
     if (!shouldFallbackToLocal(error)) {
       throw error;
     }
 
-    await toggleLocalMomentReaction({ ...input, reactionTypeId: input.reaction.id });
+    await toggleLocalMomentReaction(
+      { ...input, reactionTypeId: input.reaction.id },
+      options?.storageScope,
+    );
     return {
       source: 'local',
       fallbackReason: getFallbackReason(error),
@@ -143,7 +169,7 @@ export async function addMomentFeedComment(
   options?: RemoteModeOptions,
 ): Promise<MomentMutationResult> {
   if (!options?.preferRemote || isLocalMomentId(input.momentId)) {
-    await addLocalMomentComment(input);
+    await addLocalMomentComment(input, options?.storageScope);
     return { source: 'local' };
   }
 
@@ -155,7 +181,7 @@ export async function addMomentFeedComment(
       throw error;
     }
 
-    await addLocalMomentComment(input);
+    await addLocalMomentComment(input, options?.storageScope);
     return {
       source: 'local',
       fallbackReason: getFallbackReason(error),

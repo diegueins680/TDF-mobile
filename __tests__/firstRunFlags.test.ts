@@ -1,14 +1,30 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+const mockRecordExperimentExposure = jest.fn();
 
-import { markExperimentExposedOnce } from '../src/lib/firstRunFlags';
+jest.mock('../src/api/experiments', () => ({
+  recordExperimentExposure: mockRecordExperimentExposure,
+}));
+
+const { markExperimentExposedOnce } = require('../src/lib/firstRunFlags');
 
 describe('first-run experiment exposure', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('records experiment exposure only once per party and experiment', async () => {
-    jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce(null).mockResolvedValueOnce('2000');
+    mockRecordExperimentExposure
+      .mockResolvedValueOnce({ assignment: { experimentEligible: true }, newlyExposed: true })
+      .mockResolvedValueOnce({ assignment: { experimentEligible: true }, newlyExposed: false });
     await expect(markExperimentExposedOnce('9', 'onboarding-v1')).resolves.toBe(true);
     await expect(markExperimentExposedOnce('9', 'onboarding-v1')).resolves.toBe(false);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('tdf-experiment-exposed:9:onboarding-v1', expect.any(String));
+    expect(mockRecordExperimentExposure).toHaveBeenCalledTimes(2);
+    expect(mockRecordExperimentExposure).toHaveBeenCalledWith('onboarding-v1');
+  });
+
+  it('fails closed for a paused or ineligible server assignment', async () => {
+    mockRecordExperimentExposure.mockResolvedValueOnce({
+      assignment: { experimentEligible: false },
+      newlyExposed: false,
+    });
+
+    await expect(markExperimentExposedOnce('9', 'onboarding-v1')).resolves.toBe(false);
   });
 });

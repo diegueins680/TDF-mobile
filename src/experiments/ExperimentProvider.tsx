@@ -2,7 +2,7 @@
  * ExperimentProvider.tsx
  *
  * React Context for A/B testing in tdf-mobile.
- * Assigns users to experiment variants and persists in AsyncStorage.
+ * Loads server-authoritative, Party-bound experiment assignments.
  *
  * Usage:
  *   const { getVariant } = useExperiments();
@@ -10,18 +10,15 @@
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getAnalyticsClient } from '../analytics/posthog';
+import { getExperimentAssignment } from '../api/experiments';
 import { useAuth } from '../providers/AuthProvider';
 
 export type ExperimentVariant = 'control' | 'treatment' | string;
 
 interface ExperimentConfig {
   id: string;
-  variants: ExperimentVariant[];
-  weights?: number[]; // Must sum to 1, defaults to equal
-  enabled?: boolean;
 }
 
 interface ExperimentContextType {
@@ -44,98 +41,74 @@ const ACTIVE_EXPERIMENTS: ExperimentConfig[] = [
     // tighter first-run focus improves D1 activation (first reaction
     // within 24h of signup).
     id: 'single-feature-onboarding-v1',
-    variants: ['control', 'treatment_singlefeature'],
-    weights: [0.5, 0.5],
-    // Paused until the remote moments feed and eligibility instrumentation
-    // meet the experiment's reliability threshold. Existing assignments are
-    // forced to control while paused.
-    enabled: false,
+    // The backend rollout flag remains false until activation is explicitly approved.
   },
 ];
-
-const STORAGE_KEY = '@experiments:variants';
-
-function assignVariant(experiment: ExperimentConfig): ExperimentVariant {
-  const weights = experiment.weights ||
-    Array(experiment.variants.length).fill(1 / experiment.variants.length);
-
-  const random = Math.random();
-  let cumulative = 0;
-
-  for (let i = 0; i < experiment.variants.length; i++) {
-    cumulative += weights[i];
-    if (random <= cumulative) {
-      return experiment.variants[i];
-    }
-  }
-
-  return experiment.variants[0];
-}
 
 export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { partyId } = useAuth();
   const [variants, setVariants] = useState<Record<string, ExperimentVariant>>({});
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [resolvedPartyId, setResolvedPartyId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     async function init() {
       if (!partyId) {
         setVariants({});
+        setEnabled({});
+        setResolvedPartyId(null);
         setIsReady(true);
         return;
       }
       setIsReady(false);
+      const nextVariants: Record<string, ExperimentVariant> = {};
+      const nextEnabled: Record<string, boolean> = {};
       try {
-        // Load existing assignments
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        const existing: Record<string, ExperimentVariant> = stored ? JSON.parse(stored) : {};
-
-        // Assign new variants for experiments not yet seen, and emit an
-        // analytics event for each *new* assignment so PostHog dashboards
-        // can bucket downstream events by variant.
-        const updated = { ...existing };
         const analytics = getAnalyticsClient();
         for (const exp of ACTIVE_EXPERIMENTS) {
-          const assignmentKey = `${partyId}:${exp.id}`;
-          if (exp.enabled === false) {
-            updated[assignmentKey] = 'control';
-            continue;
-          }
-          if (!updated[assignmentKey]) {
-            const assigned = assignVariant(exp);
-            updated[assignmentKey] = assigned;
+          const assignment = await getExperimentAssignment(exp.id);
+          if (cancelled) return;
+          nextVariants[exp.id] = assignment.variant;
+          nextEnabled[exp.id] = assignment.experimentEnabled && assignment.experimentEligible;
+          if (assignment.newlyAssigned) {
             analytics.capture('experiment_assigned', {
               experimentId: exp.id,
-              variant: assigned,
-              source: 'authenticated_identity_local',
+              experimentVersion: assignment.experimentVersion,
+              variant: assignment.variant,
+              source: 'authenticated_identity_server',
             });
           }
         }
-
-        // Save updated assignments
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        setVariants(Object.fromEntries(
-          ACTIVE_EXPERIMENTS.map((exp) => [exp.id, updated[`${partyId}:${exp.id}`] ?? 'control']),
-        ));
       } catch (err) {
-        console.error('Experiment init failed:', err);
+        if (!cancelled) console.error('Experiment init failed:', err);
       } finally {
-        setIsReady(true);
+        if (!cancelled) {
+          setVariants(nextVariants);
+          setEnabled(nextEnabled);
+          setResolvedPartyId(partyId);
+          setIsReady(true);
+        }
       }
     }
 
-    init();
+    void init();
+    return () => {
+      cancelled = true;
+    };
   }, [partyId]);
 
-  const getVariant = (experimentId: string): ExperimentVariant | null => {
-    return variants[experimentId] || null;
-  };
+  const identityReady = isReady && resolvedPartyId === partyId;
+
+  const getVariant = (experimentId: string): ExperimentVariant | null =>
+    identityReady ? variants[experimentId] || null : null;
 
   const isExperimentEnabled = (experimentId: string): boolean =>
-    ACTIVE_EXPERIMENTS.some((experiment) => experiment.id === experimentId && experiment.enabled !== false);
+    identityReady && enabled[experimentId] === true;
 
   return (
-    <ExperimentContext.Provider value={{ getVariant, isExperimentEnabled, isReady }}>
+    <ExperimentContext.Provider value={{ getVariant, isExperimentEnabled, isReady: identityReady }}>
       {children}
     </ExperimentContext.Provider>
   );

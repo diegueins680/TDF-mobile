@@ -124,7 +124,12 @@ export function NewUserOnboardingGate({ children }: Props) {
 
   // Fire experiment_viewed exactly once when the gate first engages.
   const viewedRef = useRef(false);
+  const viewedPartyIdRef = useRef<string | null>(null);
   useEffect(() => {
+    if (viewedPartyIdRef.current !== normalizedPartyId) {
+      viewedPartyIdRef.current = normalizedPartyId;
+      viewedRef.current = false;
+    }
     if (!eligibleForExperiment || !variant || viewedRef.current) return;
     viewedRef.current = true;
     void (async () => {

@@ -9,8 +9,12 @@ export type OnboardingFirstValue = NonNullable<
 export type OnboardingProgress = components['schemas']['OnboardingProgress'];
 export type OnboardingCompletionResult = components['schemas']['OnboardingCompletionResult'];
 
-export const getOnboardingProgress = (): Promise<OnboardingProgress> =>
-  get<OnboardingProgress>('/session/onboarding');
+export const getOnboardingProgress = (
+  config?: AxiosRequestConfig,
+): Promise<OnboardingProgress> =>
+  config
+    ? get<OnboardingProgress>('/session/onboarding', config)
+    : get<OnboardingProgress>('/session/onboarding');
 
 export const updateOnboardingIntent = (
   onboardingIntent: OnboardingIntent,

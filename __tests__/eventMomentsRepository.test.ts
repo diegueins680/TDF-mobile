@@ -1,6 +1,7 @@
 import {
   addMomentFeedComment,
   createMomentFeedItem,
+  isRemoteReactionActive,
   listMomentFeed,
   toggleMomentFeedReaction,
 } from '../src/lib/eventMomentsRepository';
@@ -139,6 +140,7 @@ describe('event moments repository', () => {
             nameEn: 'Fire',
             emoji: '🔥',
           },
+          active: true,
         },
         { preferRemote: true },
       ),
@@ -146,7 +148,73 @@ describe('event moments repository', () => {
 
     expect(mockEvents.reactToMoment).not.toHaveBeenCalled();
     expect(mockLocalMoments.toggleMomentReaction).toHaveBeenCalledTimes(1);
-    expect(mockLocalMoments.toggleMomentReaction).toHaveBeenCalledWith(expect.objectContaining({ reactionTypeId: '50800000-0000-4000-8000-000000000001' }));
+    expect(mockLocalMoments.toggleMomentReaction).toHaveBeenCalledWith(
+      expect.objectContaining({ reactionTypeId: '50800000-0000-4000-8000-000000000001' }),
+      undefined,
+    );
+  });
+
+  it('retains the acknowledged remote reaction state for activation decisions', async () => {
+    const reaction = {
+      id: '50800000-0000-4000-8000-000000000001',
+      code: 'fire',
+      label: 'Fuego',
+      nameEs: 'Fuego',
+      nameEn: 'Fire',
+      emoji: '🔥',
+    };
+    mockEvents.reactToMoment.mockResolvedValue({
+      id: '77',
+      eventId: '42',
+      authorName: 'Andrea',
+      media: { kind: 'image', uri: 'https://example.com/moment.jpg', mimeType: 'image/jpeg' },
+      createdAt: '2026-04-10T21:00:00.000Z',
+      reactions: { [reaction.id]: ['party:7'] },
+      comments: [],
+    });
+
+    const result = await toggleMomentFeedReaction({
+      eventId: '42',
+      momentId: '77',
+      actorKey: 'party:7',
+      reaction,
+      active: true,
+    }, { preferRemote: true });
+
+    expect(result).toMatchObject({ source: 'remote', moment: { id: '77' } });
+    expect(isRemoteReactionActive(result, reaction.id, 'party:7')).toBe(true);
+    expect(isRemoteReactionActive(result, reaction.id, 'party:8')).toBe(false);
+    expect(isRemoteReactionActive({ source: 'local' }, reaction.id, 'party:7')).toBe(false);
+  });
+
+  it('treats an acknowledged toggle-off response as removal, not activation', async () => {
+    const reaction = {
+      id: '50800000-0000-4000-8000-000000000001',
+      code: 'fire',
+      label: 'Fuego',
+      nameEs: 'Fuego',
+      nameEn: 'Fire',
+      emoji: '🔥',
+    };
+    mockEvents.reactToMoment.mockResolvedValue({
+      id: '77',
+      eventId: '42',
+      authorName: 'Andrea',
+      media: { kind: 'image', uri: 'https://example.com/moment.jpg', mimeType: 'image/jpeg' },
+      createdAt: '2026-04-10T21:00:00.000Z',
+      reactions: {},
+      comments: [],
+    });
+
+    const result = await toggleMomentFeedReaction({
+      eventId: '42',
+      momentId: '77',
+      actorKey: 'party:7',
+      reaction,
+      active: false,
+    }, { preferRemote: true });
+
+    expect(isRemoteReactionActive(result, reaction.id, 'party:7')).toBe(false);
   });
 
   it('does not silently downgrade backend validation errors to local comments', async () => {

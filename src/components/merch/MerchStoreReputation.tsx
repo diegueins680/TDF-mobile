@@ -2,7 +2,6 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { MerchReputation, type MerchReputationSummary } from '../../api/merchReputation';
-import { useUserSettings } from '../../providers/UserSettingsProvider';
 import { useAppTheme } from '../../theme/ThemeProvider';
 
 export function MerchStoreReputation({ summary, english = false }: {
@@ -55,11 +54,11 @@ export function MerchStoreReputation({ summary, english = false }: {
   );
 }
 
-export function MerchReputationPreview({ subjectKind, subjectId }: {
+export function MerchReputationPreview({ subjectKind, subjectId, english = false }: {
   subjectKind: 'store' | 'product';
   subjectId: string;
+  english?: boolean;
 }) {
-  const { locale } = useUserSettings();
   const query = useQuery({
     queryKey: ['merch-reputation-preview', subjectKind, subjectId],
     queryFn: () => subjectKind === 'store'
@@ -67,13 +66,14 @@ export function MerchReputationPreview({ subjectKind, subjectId }: {
       : MerchReputation.product(subjectId),
     retry: false,
   });
-  return query.data ? <MerchStoreReputation summary={query.data} english={locale.startsWith('en')} /> : null;
+  return query.data ? <MerchStoreReputation summary={query.data} english={english} /> : null;
 }
 
-export function ArtistMerchStores({ artistPartyId }: { artistPartyId: string | number }) {
+export function ArtistMerchStores({ artistPartyId, english = false }: {
+  artistPartyId: string | number;
+  english?: boolean;
+}) {
   const { colors } = useAppTheme();
-  const { locale } = useUserSettings();
-  const english = locale.startsWith('en');
   const query = useQuery({
     queryKey: ['artist-merch-stores', artistPartyId],
     queryFn: () => MerchReputation.artistStores(artistPartyId),

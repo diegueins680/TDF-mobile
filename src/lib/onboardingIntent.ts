@@ -3,6 +3,7 @@ import type { Href } from 'expo-router';
 
 import {
   completeOnboardingProgress,
+  type OnboardingCompletionResult,
   type OnboardingFirstValue,
   type OnboardingIntent,
 } from '../api/onboarding';
@@ -17,6 +18,24 @@ export type { OnboardingIntent } from '../api/onboarding';
 
 export const DEFAULT_ONBOARDING_INTENT: OnboardingIntent = 'events';
 export const PENDING_INTENT_KEY = 'tdf-onboarding-intent:pending';
+export const PENDING_FIRST_VALUE_KEY_PREFIX = 'tdf-onboarding-first-value:pending:';
+
+const FIRST_VALUES = new Set<OnboardingFirstValue>([
+  'artist_followed',
+  'access_requested',
+  'event_saved',
+  'moment_reaction',
+]);
+
+type PendingFirstValueRecord = {
+  version: 1;
+  value: OnboardingFirstValue;
+};
+
+export type PendingFirstValueCompletionResult = {
+  value: OnboardingFirstValue;
+  result: OnboardingCompletionResult;
+};
 
 const INTENTS = new Set<OnboardingIntent>([
   'events',
@@ -97,22 +116,155 @@ export async function clearPendingOnboardingIntent(): Promise<void> {
   }
 }
 
+const normalizePartyId = (partyId: string | null | undefined): string | null => {
+  const normalized = partyId?.trim() ?? '';
+  return /^[1-9]\d*$/.test(normalized) ? normalized : null;
+};
+
+const pendingFirstValueKey = (partyId: string): string =>
+  `${PENDING_FIRST_VALUE_KEY_PREFIX}${partyId}`;
+
+const parsePendingFirstValue = (raw: string | null): OnboardingFirstValue | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<PendingFirstValueRecord> | null;
+    if (
+      !parsed
+      || parsed.version !== 1
+      || typeof parsed.value !== 'string'
+      || !FIRST_VALUES.has(parsed.value as OnboardingFirstValue)
+    ) return null;
+    return parsed.value as OnboardingFirstValue;
+  } catch {
+    return null;
+  }
+};
+
+async function readPendingFirstValue(partyId: string): Promise<OnboardingFirstValue | null> {
+  const key = pendingFirstValueKey(partyId);
+  const raw = await AsyncStorage.getItem(key);
+  const value = parsePendingFirstValue(raw);
+  if (raw && !value) await AsyncStorage.removeItem(key);
+  return value;
+}
+
+async function persistPendingFirstValue(
+  partyId: string,
+  value: OnboardingFirstValue,
+): Promise<void> {
+  const record: PendingFirstValueRecord = { version: 1, value };
+  await AsyncStorage.setItem(pendingFirstValueKey(partyId), JSON.stringify(record));
+}
+
+export async function clearPendingFirstValueCompletion(
+  partyId: string | null | undefined,
+  authToken: string | null | undefined,
+): Promise<void> {
+  const normalizedPartyId = normalizePartyId(partyId);
+  if (!normalizedPartyId || !authToken) return;
+  let binding;
+  try {
+    binding = captureAuthSession(authToken);
+    await AsyncStorage.removeItem(pendingFirstValueKey(normalizedPartyId));
+    assertAuthSession(binding);
+  } catch {
+    // Keep a marker on storage failure. A later idempotent replay can clear it.
+  }
+}
+
+async function requestPendingFirstValueCompletion(
+  partyId: string,
+  value: OnboardingFirstValue,
+  authToken: string,
+): Promise<OnboardingCompletionResult | null> {
+  let binding;
+  try {
+    binding = captureAuthSession(authToken);
+  } catch {
+    return null;
+  }
+
+  try {
+    const result = await completeOnboardingProgress(
+      value,
+      authSessionRequestConfig(binding),
+    );
+    assertAuthSession(binding);
+    if (!result.progress.eligible) {
+      try {
+        await AsyncStorage.removeItem(pendingFirstValueKey(partyId));
+      } catch {
+        // Completion is authoritative even if best-effort marker cleanup fails.
+      }
+    }
+    assertAuthSession(binding);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+export async function completeFirstValueWithRecovery(
+  partyId: string | null | undefined,
+  value: OnboardingFirstValue,
+  authToken: string | null | undefined,
+): Promise<OnboardingCompletionResult | null> {
+  const normalizedPartyId = normalizePartyId(partyId);
+  if (!normalizedPartyId || !authToken) return null;
+
+  let binding;
+  try {
+    binding = captureAuthSession(authToken);
+  } catch {
+    return null;
+  }
+
+  try {
+    await persistPendingFirstValue(normalizedPartyId, value);
+  } catch {
+    // Storage can be unavailable. Still attempt the authoritative handshake;
+    // only relaunch recovery is degraded, not the already-completed action.
+  }
+  try {
+    assertAuthSession(binding);
+  } catch {
+    return null;
+  }
+
+  return requestPendingFirstValueCompletion(normalizedPartyId, value, authToken);
+}
+
+export async function retryPendingFirstValueCompletion(
+  partyId: string | null | undefined,
+  authToken: string | null | undefined,
+): Promise<PendingFirstValueCompletionResult | null> {
+  const normalizedPartyId = normalizePartyId(partyId);
+  if (!normalizedPartyId || !authToken) return null;
+
+  let binding;
+  try {
+    binding = captureAuthSession(authToken);
+    const value = await readPendingFirstValue(normalizedPartyId);
+    assertAuthSession(binding);
+    if (!value) return null;
+    const result = await requestPendingFirstValueCompletion(
+      normalizedPartyId,
+      value,
+      authToken,
+    );
+    return result ? { value, result } : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function markFirstValueCompleted(
   partyId: string | null | undefined,
   value: OnboardingFirstValue,
-  authToken?: string | null,
+  authToken: string | null | undefined,
 ): Promise<boolean> {
-  if (!partyId) return false;
-  try {
-    const binding = authToken ? captureAuthSession(authToken) : null;
-    const result = binding
-      ? await completeOnboardingProgress(value, authSessionRequestConfig(binding))
-      : await completeOnboardingProgress(value);
-    if (binding) assertAuthSession(binding);
-    return result.newlyCompleted === true;
-  } catch {
-    return false;
-  }
+  const result = await completeFirstValueWithRecovery(partyId, value, authToken);
+  return result?.newlyCompleted === true;
 }
 
 const hasAny = (values: readonly string[], candidates: readonly string[]) => {

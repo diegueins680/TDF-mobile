@@ -5,19 +5,34 @@ import {
   markFirstValueCompleted,
   ONBOARDING_INTENT_OPTIONS,
   parseOnboardingIntent,
+  PENDING_FIRST_VALUE_KEY_PREFIX,
   persistOnboardingIntent,
   readPendingOnboardingIntent,
   resolveMobileIntentDestination,
+  retryPendingFirstValueCompletion,
 } from '../src/lib/onboardingIntent';
 
 const mockCompleteOnboardingProgress = jest.fn();
+const mockAssertAuthSession = jest.fn();
+const mockBinding = { authorization: 'Bearer token', signal: {}, version: 1 };
+const mockRequestConfig = { headers: { Authorization: 'Bearer token' } };
 
 jest.mock('../src/api/onboarding', () => ({
   completeOnboardingProgress: (...args: unknown[]) => mockCompleteOnboardingProgress(...args),
 }));
 
+jest.mock('../src/api/client', () => ({
+  assertAuthSession: (...args: unknown[]) => mockAssertAuthSession(...args),
+  authSessionRequestConfig: () => mockRequestConfig,
+  captureAuthSession: () => mockBinding,
+}));
+
 describe('onboarding intent', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockAssertAuthSession.mockReset();
+    await AsyncStorage.clear();
+  });
 
   it('normalizes canonical and legacy campaign values without interpreting arbitrary roles', () => {
     expect(parseOnboardingIntent('follow_artists')).toBe('follow_artists');
@@ -50,13 +65,23 @@ describe('onboarding intent', () => {
 
   it('records first value only when the server atomically claims completion', async () => {
     mockCompleteOnboardingProgress
-      .mockResolvedValueOnce({ newlyCompleted: true })
-      .mockResolvedValueOnce({ newlyCompleted: false });
+      .mockResolvedValueOnce({ newlyCompleted: true, progress: { eligible: false } })
+      .mockResolvedValueOnce({ newlyCompleted: false, progress: { eligible: true } });
 
-    await expect(markFirstValueCompleted('9', 'artist_followed')).resolves.toBe(true);
-    await expect(markFirstValueCompleted('10', 'artist_followed')).resolves.toBe(false);
-    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(1, 'artist_followed');
-    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(2, 'artist_followed');
+    await expect(markFirstValueCompleted('9', 'artist_followed', 'token')).resolves.toBe(true);
+    await expect(markFirstValueCompleted('10', 'artist_followed', 'token')).resolves.toBe(false);
+    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(
+      1,
+      'artist_followed',
+      mockRequestConfig,
+    );
+    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(
+      2,
+      'artist_followed',
+      mockRequestConfig,
+    );
+    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toBeNull();
+    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}10`)).resolves.toContain('artist_followed');
   });
 
   it('keeps intent only while authentication is pending', async () => {
@@ -77,11 +102,67 @@ describe('onboarding intent', () => {
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
   });
 
-  it('fails closed when durable completion is unavailable', async () => {
+  it('keeps a Party-bound retry marker when durable completion is unavailable', async () => {
     mockCompleteOnboardingProgress.mockRejectedValueOnce(new Error('offline'));
 
-    await expect(markFirstValueCompleted('9', 'event_saved')).resolves.toBe(false);
-    await expect(markFirstValueCompleted(null, 'event_saved')).resolves.toBe(false);
+    await expect(markFirstValueCompleted('9', 'event_saved', 'token')).resolves.toBe(false);
+    await expect(markFirstValueCompleted(null, 'event_saved', 'token')).resolves.toBe(false);
     expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toContain('event_saved');
+  });
+
+  it('replays a pending first value after relaunch and clears it on authoritative completion', async () => {
+    mockCompleteOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ newlyCompleted: true, progress: { eligible: false } });
+    await markFirstValueCompleted('9', 'moment_reaction', 'token');
+
+    await expect(retryPendingFirstValueCompletion('9', 'token')).resolves.toEqual({
+      value: 'moment_reaction',
+      result: { newlyCompleted: true, progress: { eligible: false } },
+    });
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(2);
+    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toBeNull();
+  });
+
+  it('does not read or send another Party pending first value', async () => {
+    mockCompleteOnboardingProgress.mockRejectedValueOnce(new Error('offline'));
+    await markFirstValueCompleted('9', 'access_requested', 'token');
+
+    await expect(retryPendingFirstValueCompletion('10', 'token')).resolves.toBeNull();
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toContain('access_requested');
+  });
+
+  it('retains the old Party marker and makes no request after a session replacement', async () => {
+    mockAssertAuthSession.mockImplementationOnce(() => {
+      throw new Error('session changed');
+    });
+
+    await expect(markFirstValueCompleted('9', 'event_saved', 'token')).resolves.toBe(false);
+    expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
+    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toContain('event_saved');
+  });
+
+  it('still attempts the handshake when local retry storage is unavailable', async () => {
+    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('storage unavailable'));
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false },
+    });
+
+    await expect(markFirstValueCompleted('9', 'artist_followed', 'token')).resolves.toBe(true);
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards malformed completion metadata without sending a claim', async () => {
+    await AsyncStorage.setItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`, JSON.stringify({
+      version: 1,
+      value: 'admin',
+    }));
+
+    await expect(retryPendingFirstValueCompletion('9', 'token')).resolves.toBeNull();
+    expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
+    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toBeNull();
   });
 });

@@ -29,9 +29,11 @@ const moment = {
 const renderCard = (
   onToggleReaction: jest.Mock,
   onReactionPosted: jest.Mock,
+  locale = 'es',
 ) => render(
   <EventMomentCard
     moment={moment}
+    locale={locale}
     currentActorKey="party:7"
     currentPartyId="7"
     reactionOptions={[reaction]}
@@ -76,5 +78,34 @@ describe('EventMomentCard reaction activation', () => {
 
     await waitFor(() => expect(onToggleReaction).toHaveBeenCalledTimes(1));
     expect(onReactionPosted).not.toHaveBeenCalled();
+  });
+
+  it('uses the selected locale for copy, catalog labels, and accessible names', () => {
+    render(
+      <EventMomentCard
+        moment={{ ...moment, authorPartyId: '8' }}
+        locale="en"
+        currentActorKey="party:7"
+        currentPartyId="7"
+        featured
+        reactionOptions={[reaction]}
+        reactionUnavailableLabel="Reactions unavailable"
+        commentDraft=""
+        onChangeComment={jest.fn()}
+        onSubmitComment={jest.fn()}
+        onToggleReaction={jest.fn()}
+        onConnectAuthor={jest.fn()}
+        onOpenMedia={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Featured moment')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Fire' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'View photo by Andrea' })).toBeTruthy();
+    expect(screen.getByText('0 reactions · 0 comments')).toBeTruthy();
+    expect(screen.getByLabelText('Write a comment')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+    expect(screen.queryByText('Fuego')).toBeNull();
   });
 });

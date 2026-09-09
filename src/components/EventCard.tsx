@@ -8,6 +8,7 @@ import { formatDate, formatTime } from '../lib/formatters';
 import type { SocialEvent } from '../types';
 import { useUserSettings } from '../providers/UserSettingsProvider';
 import { useAppTheme } from '../theme/ThemeProvider';
+import { eventExperienceLanguage, savedEventCopy } from '../localization/eventExperienceCopy';
 
 type Props = {
   event: SocialEvent;
@@ -21,6 +22,7 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
   const router = useRouter();
   const analytics = useAnalytics();
   const { locale } = useUserSettings();
+  const savedCopy = savedEventCopy[eventExperienceLanguage(locale)];
   const { colors } = useAppTheme();
   const [imageError, setImageError] = useState(false);
 
@@ -123,7 +125,9 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
             onPress={onToggleSaved}
             disabled={saveStatus !== 'ready'}
             accessibilityRole="button"
-            accessibilityLabel={saved ? `Quitar ${event.title} de guardados` : `Guardar ${event.title}`}
+            accessibilityLabel={saved
+              ? savedCopy.removeNamedAccessibility(event.title)
+              : `${savedCopy.saveShort} ${event.title}`}
             accessibilityState={{
               busy: saveStatus === 'loading' || saveStatus === 'updating',
               disabled: saveStatus !== 'ready',
@@ -132,14 +136,14 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
           >
             <Text style={[styles.saveButtonText, { color: colors.textPrimary }, saved && { color: colors.actionPrimary }]}>
               {saveStatus === 'loading'
-                ? 'Cargando guardados…'
+                ? savedCopy.loading
                 : saveStatus === 'updating'
-                  ? 'Actualizando…'
+                  ? savedCopy.updating
                   : saveStatus === 'unavailable'
-                    ? 'Guardados no disponibles'
+                    ? savedCopy.unavailable
                     : saved
-                      ? 'Guardado'
-                      : 'Guardar'}
+                      ? savedCopy.saved
+                      : savedCopy.saveShort}
             </Text>
           </TouchableOpacity>
         </View>

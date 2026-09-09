@@ -18,6 +18,7 @@ import {
 import { formatTicketMoney } from '../src/lib/tickets';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useAuth } from '../src/providers/AuthProvider';
+import { eventExperienceLanguage, savedEventCopy } from '../src/localization/eventExperienceCopy';
 
 export default function UserProfileScreen() {
   const router = useRouter();
@@ -36,6 +37,7 @@ export default function UserProfileScreen() {
     getCatalogItems,
     setRegionalPreferences,
   } = useUserSettings();
+  const savedCopy = savedEventCopy[eventExperienceLanguage(locale)];
   const countries = useMemo(() => getCatalogItems('countries'), [getCatalogItems]);
   const localeOptions = useMemo(() => getCatalogItems('locales'), [getCatalogItems]);
   const currencyOptions = useMemo(() => getCatalogItems('currencies'), [getCatalogItems]);
@@ -123,7 +125,7 @@ export default function UserProfileScreen() {
     mutationFn: ({ eventId, ownerPartyId }: { eventId: ID; ownerPartyId: string }) =>
       token
         ? setSavedEventDesiredState(ownerPartyId, eventId, false, token)
-        : Promise.reject(new Error('Tu sesión terminó. Vuelve a iniciar sesión.')),
+        : Promise.reject(new Error(savedCopy.sessionExpired)),
     onSuccess: (_result, { eventId, ownerPartyId }) => {
       if (partyId !== ownerPartyId) return;
       const normalizedEventId = String(eventId);
@@ -138,13 +140,11 @@ export default function UserProfileScreen() {
       void qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
       void qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
     },
-    onError: (error, { ownerPartyId }) => {
+    onError: (_error, { ownerPartyId }) => {
       if (partyId !== ownerPartyId) return;
       Alert.alert(
-        'No pudimos quitar el evento',
-        error instanceof Error
-          ? error.message
-          : 'El cambio no se guardó en tu cuenta. Inténtalo nuevamente.',
+        savedCopy.removeFailureTitle,
+        savedCopy.updateFailureBody,
       );
     }
   });
@@ -173,11 +173,11 @@ export default function UserProfileScreen() {
 
   const handleUnsaveEvent = useCallback((eventId: ID) => {
     if (!partyId) {
-      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para cambiar tus eventos guardados.');
+      Alert.alert(savedCopy.signInTitle, savedCopy.signInSavedBody);
       return;
     }
     unsaveMutation.mutate({ eventId, ownerPartyId: partyId });
-  }, [partyId, unsaveMutation]);
+  }, [partyId, savedCopy, unsaveMutation]);
 
   const handleSaveRegion = useCallback(() => {
     if (countrySearch.trim() && !draftCountryId) {
@@ -231,7 +231,7 @@ export default function UserProfileScreen() {
             onPress={() => handleUnsaveEvent(item.id)}
             disabled={unsaveMutation.isPending}
             accessibilityRole="button"
-            accessibilityLabel={`Quitar ${item.title} de mis eventos guardados`}
+            accessibilityLabel={savedCopy.removeNamedAccessibility(item.title)}
             accessibilityState={{
               busy: unsaveMutation.isPending,
               disabled: unsaveMutation.isPending,
@@ -240,7 +240,7 @@ export default function UserProfileScreen() {
             {unsaveMutation.isPending ? (
               <ActivityIndicator size="small" color={colors.textPrimary} />
             ) : (
-              <Text style={styles.unsaveButtonText}>Quitar</Text>
+              <Text style={styles.unsaveButtonText}>{savedCopy.remove}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -424,10 +424,10 @@ export default function UserProfileScreen() {
             onPress={() => setActiveTab('saved')}
             accessibilityRole="tab"
             accessibilityState={{ selected: activeTab === 'saved' }}
-            accessibilityLabel="Eventos guardados"
+            accessibilityLabel={savedCopy.savedTabAccessibility}
           >
             <Text style={[styles.tabLabel, activeTab === 'saved' && styles.tabLabelActive]}>
-              Guardados
+              {savedCopy.savedTab}
             </Text>
           </TouchableOpacity>
         </View>
@@ -494,49 +494,63 @@ export default function UserProfileScreen() {
           <View style={styles.section}>
             {!partyId ? (
               <>
-                <Text style={styles.noDataText}>Inicia sesión para ver y sincronizar tus eventos guardados.</Text>
+                <Text style={styles.noDataText}>{savedCopy.signInSavedBody}</Text>
                 <TouchableOpacity
                   style={styles.actionButton}
                   onPress={() => router.push({ pathname: '/auth', params: { intent: 'events', returnTo: '/userProfile' } })}
                   accessibilityRole="button"
-                  accessibilityLabel="Ingresar para ver eventos guardados"
+                  accessibilityLabel={savedCopy.signInSavedAccessibility}
                 >
-                  <Text style={styles.actionButtonText}>Ingresar</Text>
+                  <Text style={styles.actionButtonText}>{savedCopy.signIn}</Text>
                 </TouchableOpacity>
               </>
             ) : null}
             {savedEventIdsQuery.data?.source === 'cache' ? (
               <Text style={styles.noDataText} accessibilityLiveRegion="polite">
-                Mostramos la última lista confirmada en este dispositivo. Conéctate para actualizarla.
+                {savedCopy.cacheNotice}
               </Text>
             ) : null}
             {partyId && savedEventIdsQuery.isLoading ? (
-              <ActivityIndicator size="large" color="#2563eb" />
+              <ActivityIndicator
+                size="large"
+                color="#2563eb"
+                accessibilityLabel={savedCopy.loading}
+              />
             ) : partyId && savedEventIdsQuery.isError ? (
               <>
                 <Text style={styles.noDataText} accessibilityLiveRegion="polite">
-                  No pudimos cargar tus eventos guardados.
+                  {savedCopy.loadFailureTitle}
                 </Text>
                 <TouchableOpacity
                   style={styles.actionButton}
                   onPress={() => void savedEventIdsQuery.refetch()}
                   accessibilityRole="button"
-                  accessibilityLabel="Reintentar cargar eventos guardados"
+                  accessibilityLabel={savedCopy.retrySavedAccessibility}
                 >
-                  <Text style={styles.actionButtonText}>Reintentar</Text>
+                  <Text style={styles.actionButtonText}>{savedCopy.retry}</Text>
                 </TouchableOpacity>
               </>
             ) : partyId && savedEventIds.length === 0 ? (
-              <Text style={styles.noDataText}>Aún no hay eventos guardados. Toca Guardar evento dentro de cualquier evento.</Text>
+              <Text style={styles.noDataText}>{savedCopy.savedEmpty}</Text>
             ) : partyId && savedEventsQuery.isLoading ? (
               <ActivityIndicator size="large" color="#2563eb" />
             ) : partyId && savedEvents.length > 0 ? (
               <>
-                <Text style={styles.sectionTitle}>Eventos guardados ({savedEvents.length})</Text>
+                <Text style={styles.sectionTitle}>{savedCopy.savedTitle(savedEvents.length)}</Text>
                 {(savedEventsQuery.data?.unavailableCount ?? 0) > 0 ? (
-                  <Text style={styles.noDataText} accessibilityLiveRegion="polite">
-                    Algunos eventos ya no están disponibles o no pudieron cargarse.
-                  </Text>
+                  <>
+                    <Text style={styles.noDataText} accessibilityLiveRegion="polite">
+                      {savedCopy.someUnavailable}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => void savedEventsQuery.refetch()}
+                      accessibilityRole="button"
+                      accessibilityLabel={savedCopy.retrySavedDetailsAccessibility}
+                    >
+                      <Text style={styles.actionButtonText}>{savedCopy.retry}</Text>
+                    </TouchableOpacity>
+                  </>
                 ) : null}
                 <FlatList
                   data={savedEvents}
@@ -546,9 +560,19 @@ export default function UserProfileScreen() {
                 />
               </>
             ) : partyId ? (
-              <Text style={styles.noDataText}>
-                No pudimos mostrar los detalles de tus eventos guardados. Reintenta cuando tengas conexión.
-              </Text>
+              <>
+                <Text style={styles.noDataText} accessibilityLiveRegion="polite">
+                  {savedCopy.detailsUnavailable}
+                </Text>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => void savedEventsQuery.refetch()}
+                  accessibilityRole="button"
+                  accessibilityLabel={savedCopy.retrySavedDetailsAccessibility}
+                >
+                  <Text style={styles.actionButtonText}>{savedCopy.retry}</Text>
+                </TouchableOpacity>
+              </>
             ) : null}
           </View>
         )}

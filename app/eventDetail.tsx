@@ -71,6 +71,11 @@ import {
 import { markFirstValueCompleted } from '../src/lib/onboardingIntent';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
+import {
+  eventExperienceLanguage,
+  eventMomentCopy,
+  savedEventCopy,
+} from '../src/localization/eventExperienceCopy';
 import type {
   EventLiveBroadcast,
   EventLiveBroadcastQuality,
@@ -134,6 +139,9 @@ export default function EventDetailScreen() {
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: normalizedPartyId, session } = useAuth();
   const { locale, timezone, currency, getCatalogItems } = useUserSettings();
+  const experienceLanguage = eventExperienceLanguage(locale);
+  const momentCopy = eventMomentCopy[experienceLanguage];
+  const savedCopy = savedEventCopy[experienceLanguage];
   const displayName = session?.displayName ?? null;
   const reactionOptions = useMemo<EventMomentReactionOption[]>(
     () => getCatalogItems('reaction-types').flatMap((item) => {
@@ -426,7 +434,7 @@ export default function EventDetailScreen() {
       desiredSaved: boolean;
     }) => token
       ? setSavedEventDesiredState(ownerPartyId, targetEventId, desiredSaved, token)
-      : Promise.reject(new Error('Tu sesión terminó. Vuelve a iniciar sesión.')),
+      : Promise.reject(new Error(savedCopy.sessionExpired)),
     onSuccess: ({ saved }, { ownerPartyId, targetEventId }) => {
       if (normalizedPartyId !== ownerPartyId) return;
       qc.setQueryData<SavedEventSnapshot>(['saved-event-ids', ownerPartyId], (current) => {
@@ -458,19 +466,15 @@ export default function EventDetailScreen() {
         });
       }
       Alert.alert(
-        'Listo',
-        saved
-          ? 'Evento guardado en tu cuenta. Lo verás en tus otros dispositivos.'
-          : 'Evento removido de los guardados de tu cuenta.',
+        savedCopy.readyTitle,
+        saved ? savedCopy.savedSuccess : savedCopy.removedSuccess,
       );
     },
-    onError: (error, { ownerPartyId }) => {
+    onError: (_error, { ownerPartyId }) => {
       if (normalizedPartyId !== ownerPartyId) return;
       Alert.alert(
-        'No pudimos actualizar tus guardados',
-        error instanceof Error
-          ? error.message
-          : 'El cambio no se guardó en tu cuenta. Inténtalo nuevamente.',
+        savedCopy.updateFailureTitle,
+        savedCopy.updateFailureBody,
       );
     },
   });
@@ -653,9 +657,8 @@ export default function EventDetailScreen() {
         });
       });
     },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : 'No pudimos registrar tu reacción.';
-      Alert.alert('Error', message);
+    onError: () => {
+      Alert.alert(momentCopy.errorTitle, momentCopy.reactionFailure);
     },
   });
 
@@ -915,12 +918,12 @@ export default function EventDetailScreen() {
     }
     if (!normalizedPartyId) {
       Alert.alert(
-        'Inicia sesión',
-        'Necesitas una cuenta vinculada para guardar este evento y verlo en otros dispositivos.',
+        savedCopy.signInTitle,
+        savedCopy.signInBody,
         [
-          { text: 'Ahora no', style: 'cancel' },
+          { text: savedCopy.later, style: 'cancel' },
           {
-            text: 'Ingresar',
+            text: savedCopy.signIn,
             onPress: () => router.push({
               pathname: '/auth',
               params: {
@@ -937,8 +940,8 @@ export default function EventDetailScreen() {
       const result = await savedEventIdsQuery.refetch();
       if (result.isError) {
         Alert.alert(
-          'No pudimos cargar tus guardados',
-          'Comprueba tu conexión e inténtalo nuevamente.',
+          savedCopy.loadFailureTitle,
+          savedCopy.loadFailureBody,
         );
       }
       return;
@@ -950,7 +953,7 @@ export default function EventDetailScreen() {
       ownerPartyId: normalizedPartyId,
       desiredSaved,
     });
-  }, [eventId, normalizedPartyId, router, saveEventMutation, savedEventIdsQuery, token]);
+  }, [eventId, normalizedPartyId, router, saveEventMutation, savedCopy, savedEventIdsQuery, token]);
 
   const selectMomentMedia = useCallback(async (
     mode: 'camera' | 'photos' | 'video',
@@ -1287,29 +1290,45 @@ export default function EventDetailScreen() {
                 style={[
                   styles.saveEventButton,
                   isSaved && styles.saveEventButtonActive,
-                  Boolean(normalizedPartyId) && (savedEventIdsQuery.isLoading || savedEventIdsQuery.isError || !savedEventIdsQuery.data || saveEventMutation.isPending) && styles.buttonDisabled,
+                  Boolean(normalizedPartyId) && (
+                    savedEventIdsQuery.isLoading
+                    || (!savedEventIdsQuery.data && !savedEventIdsQuery.isError)
+                    || saveEventMutation.isPending
+                  ) && styles.buttonDisabled,
                 ]}
                 onPress={() => void handleToggleSaved()}
-                disabled={Boolean(normalizedPartyId) && (savedEventIdsQuery.isLoading || savedEventIdsQuery.isError || !savedEventIdsQuery.data || saveEventMutation.isPending)}
+                disabled={Boolean(normalizedPartyId) && (
+                  savedEventIdsQuery.isLoading
+                  || (!savedEventIdsQuery.data && !savedEventIdsQuery.isError)
+                  || saveEventMutation.isPending
+                )}
                 accessibilityRole="button"
-                accessibilityLabel={isSaved ? 'Quitar evento de mis guardados' : 'Guardar evento en mi cuenta'}
-                accessibilityHint="Sincroniza este evento con los guardados de tu cuenta"
+                accessibilityLabel={savedEventIdsQuery.isError
+                  ? savedCopy.retrySavedAccessibility
+                  : isSaved
+                    ? savedCopy.removeAccessibility
+                    : savedCopy.saveAccessibility}
+                accessibilityHint={savedCopy.saveHint}
                 accessibilityState={{
                   busy: saveEventMutation.isPending,
-                  disabled: Boolean(normalizedPartyId) && (savedEventIdsQuery.isLoading || savedEventIdsQuery.isError || !savedEventIdsQuery.data || saveEventMutation.isPending),
+                  disabled: Boolean(normalizedPartyId) && (
+                    savedEventIdsQuery.isLoading
+                    || (!savedEventIdsQuery.data && !savedEventIdsQuery.isError)
+                    || saveEventMutation.isPending
+                  ),
                   selected: isSaved,
                 }}
               >
                 <Text style={[styles.saveEventButtonText, isSaved && styles.saveEventButtonTextActive]}>
                   {saveEventMutation.isPending
-                    ? 'Guardando…'
+                    ? savedCopy.saving
                     : savedEventIdsQuery.isError
-                      ? 'Reintentar guardados'
+                      ? savedCopy.retrySaved
                       : normalizedPartyId && (savedEventIdsQuery.isLoading || !savedEventIdsQuery.data)
-                        ? 'Cargando guardados…'
+                        ? savedCopy.loading
                       : isSaved
-                        ? 'Guardado'
-                        : 'Guardar evento'}
+                        ? savedCopy.saved
+                        : savedCopy.save}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.inviteButton} onPress={() => setShowInviteModal(true)}>
@@ -1318,7 +1337,7 @@ export default function EventDetailScreen() {
             </View>
             {savedEventIdsQuery.data?.source === 'cache' ? (
               <Text style={styles.savedCacheNotice} accessibilityLiveRegion="polite">
-                Mostramos la última lista confirmada en este dispositivo.
+                {savedCopy.cacheNotice}
               </Text>
             ) : null}
 
@@ -1416,6 +1435,7 @@ export default function EventDetailScreen() {
                     <EventMomentCard
                       key={moment.id}
                       moment={moment}
+                      locale={locale}
                       currentActorKey={currentActor.actorKey}
                       currentPartyId={currentActor.partyId}
                       featured={featuredMomentIds.has(moment.id)}

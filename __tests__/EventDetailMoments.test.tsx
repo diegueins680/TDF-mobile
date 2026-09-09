@@ -51,6 +51,9 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
   useUserSettings: () => ({
     partyId: '7',
     displayName: 'Cuco',
+    locale: 'es',
+    timezone: 'America/Guayaquil',
+    currency: 'USD',
     getCatalogItems: (code: string) => code === 'reaction-types' ? [{
       id: '50800000-0000-4000-8000-000000000001',
       code: 'fire',
@@ -236,7 +239,7 @@ describe('EventDetail moments tab', () => {
     expect(screen.getByText('Momentos del evento')).toBeTruthy();
     expect(screen.getByText('Top Momentos')).toBeTruthy();
     expect(screen.getAllByText('Luces arriba').length).toBeGreaterThan(0);
-    expect(screen.getByText('Top moment')).toBeTruthy();
+    expect(screen.getByText('Momento destacado')).toBeTruthy();
     expect(screen.getByText('Conectar')).toBeTruthy();
     expect(screen.getByText('Publicas como Cuco')).toBeTruthy();
 

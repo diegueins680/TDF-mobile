@@ -7117,7 +7117,7 @@ export interface components {
             firstValue: "artist_followed" | "access_requested" | "event_saved" | "moment_reaction" | null;
             /**
              * Format: date-time
-             * @description Server evidence time for the first useful action; it can precede completedAt when a handshake is retried.
+             * @description Server evidence time for first useful actions accepted by the current contract; it can precede completedAt when a handshake is retried. Legacy completed rows may retain the earlier handshake-time meaning.
              */
             firstValueCompletedAt: string | null;
             /** Format: date-time */

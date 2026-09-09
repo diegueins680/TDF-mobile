@@ -5,7 +5,13 @@ const mockMutate = jest.fn();
 const mockPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockCapture = jest.fn();
-const mockRecordFirstValueCompletion = jest.fn(async () => false);
+type FirstValueCompletionArgs = [
+  string | null | undefined,
+  string,
+  () => boolean,
+  { capture: typeof mockCapture },
+];
+const mockRecordFirstValueCompletion = jest.fn<Promise<boolean>, FirstValueCompletionArgs>(async () => false);
 const mockMutationOptions: Array<{
   onSuccess?: (result: unknown, variables: unknown) => void;
 }> = [];
@@ -86,7 +92,7 @@ jest.mock('../src/analytics/AnalyticsProvider', () => ({
 }));
 
 jest.mock('../src/lib/firstValueCompletion', () => ({
-  recordFirstValueCompletion: (...args: unknown[]) => mockRecordFirstValueCompletion(...args),
+  recordFirstValueCompletion: (...args: FirstValueCompletionArgs) => mockRecordFirstValueCompletion(...args),
 }));
 
 const SocialScreen = require('../app/(tabs)/social').default;

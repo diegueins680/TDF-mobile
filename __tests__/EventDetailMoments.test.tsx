@@ -6,7 +6,13 @@ import EventDetailScreen from '../app/eventDetail';
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockCapture = jest.fn();
-const mockRecordFirstValueCompletion = jest.fn(async () => false);
+type FirstValueCompletionArgs = [
+  string | null | undefined,
+  string,
+  () => boolean,
+  { capture: typeof mockCapture },
+];
+const mockRecordFirstValueCompletion = jest.fn<Promise<boolean>, FirstValueCompletionArgs>(async () => false);
 const mockRecordMomentReactionFirstValue = jest.fn<
   Promise<boolean>,
   [unknown, string | null, () => boolean, { capture: typeof mockCapture }]
@@ -114,7 +120,7 @@ jest.mock('../src/lib/momentReactionFirstValue', () => ({
 }));
 
 jest.mock('../src/lib/firstValueCompletion', () => ({
-  recordFirstValueCompletion: (...args: unknown[]) => mockRecordFirstValueCompletion(...args),
+  recordFirstValueCompletion: (...args: FirstValueCompletionArgs) => mockRecordFirstValueCompletion(...args),
 }));
 
 describe('EventDetail moments tab', () => {

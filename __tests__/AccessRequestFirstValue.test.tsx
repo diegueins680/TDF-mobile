@@ -5,7 +5,13 @@ const mockMutate = jest.fn();
 const mockReplace = jest.fn();
 const mockInvalidateQueries = jest.fn(async () => undefined);
 const mockCapture = jest.fn();
-const mockRecordFirstValueCompletion = jest.fn(async () => true);
+type FirstValueCompletionArgs = [
+  string | null | undefined,
+  string,
+  () => boolean,
+  { capture: typeof mockCapture },
+];
+const mockRecordFirstValueCompletion = jest.fn<Promise<boolean>, FirstValueCompletionArgs>(async () => true);
 const mockMutationOptions: Array<{
   onSuccess?: (result: unknown, variables: { ownerPartyId: string }) => Promise<void>;
 }> = [];
@@ -83,7 +89,7 @@ jest.mock('../src/analytics/AnalyticsProvider', () => ({
 }));
 
 jest.mock('../src/lib/firstValueCompletion', () => ({
-  recordFirstValueCompletion: (...args: unknown[]) => mockRecordFirstValueCompletion(...args),
+  recordFirstValueCompletion: (...args: FirstValueCompletionArgs) => mockRecordFirstValueCompletion(...args),
 }));
 
 const NewAccessRequestScreen = require('../app/access-requests/new').default;

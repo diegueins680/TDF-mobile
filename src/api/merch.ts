@@ -9,6 +9,8 @@ export type MerchStockRequest = components['schemas']['MerchStockRequest'];
 export type MerchCart = components['schemas']['MerchCart'];
 export type MerchCheckoutRequest = components['schemas']['MerchCheckoutRequest'];
 export type MerchOrder = components['schemas']['MerchOrder'];
+export type MerchOperationalIssue = components['schemas']['MerchOperationalIssue'];
+export type MerchIssueTriageRequest = components['schemas']['MerchIssueTriageRequest'];
 
 const safeSegment = (value: string) => encodeURIComponent(value.trim());
 const capabilityKey = (kind: 'cart' | 'order', id: string) => `tdf.merch.${kind}.${id}`;
@@ -53,9 +55,13 @@ export const Merch = {
   deleteCartItem: (cartId: string, token: string, variantId: string) => del<MerchCart>(`/merch/carts/${safeSegment(cartId)}/items/${safeSegment(variantId)}`, { headers: { 'X-Cart-Lookup-Token': token } }),
   checkout: (cartId: string, token: string, idempotencyKey: string, body: MerchCheckoutRequest) => post<MerchOrder>(`/merch/carts/${safeSegment(cartId)}/checkout`, body, { headers: { 'X-Cart-Lookup-Token': token, 'Idempotency-Key': idempotencyKey } }),
   order: (orderId: string, token: string) => get<MerchOrder>(`/merch/orders/${safeSegment(orderId)}`, { headers: { 'X-Order-Lookup-Token': token } }),
+  reportIssue: (orderId: string, token: string, issueType: string, message: string, idempotencyKey: string) => post<components['schemas']['MerchOrderIssue']>(`/merch/orders/${safeSegment(orderId)}/issues`, { issueType, message }, { headers: { 'X-Order-Lookup-Token': token, 'Idempotency-Key': idempotencyKey } }),
+  cancelUnpaidOrder: (orderId: string, token: string, reason: string, idempotencyKey: string) => post<MerchOrder>(`/merch/orders/${safeSegment(orderId)}/cancel`, { reason }, { headers: { 'X-Order-Lookup-Token': token, 'Idempotency-Key': idempotencyKey } }),
   sellerStores: () => get<MerchStorefront[]>('/merch/seller/stores'),
   sellerProducts: (storeId: string) => get<MerchProduct[]>(`/merch/seller/stores/${safeSegment(storeId)}/products`),
   updateVariantStock: (storeId: string, variantId: string, body: MerchStockRequest) => patch<components['schemas']['MerchVariant']>(`/merch/seller/stores/${safeSegment(storeId)}/variants/${safeSegment(variantId)}/stock`, body),
   sellerOrders: (storeId: string) => get<MerchOrder[]>(`/merch/seller/stores/${safeSegment(storeId)}/orders`),
+  sellerIssues: (storeId: string) => get<MerchOperationalIssue[]>(`/merch/seller/stores/${safeSegment(storeId)}/issues`),
+  updateSellerIssue: (storeId: string, issueId: string, body: MerchIssueTriageRequest) => patch<MerchOperationalIssue>(`/merch/seller/stores/${safeSegment(storeId)}/issues/${safeSegment(issueId)}`, body),
   updateFulfillment: (storeId: string, orderId: string, body: components['schemas']['MerchFulfillmentRequest']) => patch<MerchOrder>(`/merch/seller/stores/${safeSegment(storeId)}/orders/${safeSegment(orderId)}/fulfillment`, body),
 };

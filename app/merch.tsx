@@ -13,6 +13,7 @@ import {
   loadMerchCapability,
   loadOrCreateMerchCheckoutKey,
   loadStoreCartReference,
+  merchIdempotencyKey,
   saveMerchCapability,
   saveStoreCartReference,
   type MerchCheckoutRequest,
@@ -119,11 +120,25 @@ function CartView({ storeSlug, english, locale, checkoutAvailable, back }: { sto
 }
 
 function OrderView({ orderId, english, locale, back }: { orderId: string; english: boolean; locale: string; back: ReactNode }) {
+  const [issueType, setIssueType] = useState('general');
+  const [issueMessage, setIssueMessage] = useState('');
+  const [issueKey, setIssueKey] = useState(() => merchIdempotencyKey('issue'));
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelKey, setCancelKey] = useState(() => merchIdempotencyKey('cancel-order'));
   const token = useQuery({ queryKey: ['merch-order-token', orderId], queryFn: () => loadMerchCapability('order', orderId) });
   const order = useQuery({ queryKey: ['merch-order', orderId], queryFn: () => Merch.order(orderId, token.data!), enabled: Boolean(token.data), retry: false, refetchInterval: 30_000 });
+  const report = useMutation({ mutationFn: () => Merch.reportIssue(orderId, token.data!, issueType, issueMessage.trim(), issueKey), onSuccess: async () => { setIssueMessage(''); setIssueKey(merchIdempotencyKey('issue')); await order.refetch(); } });
+  const cancel = useMutation({ mutationFn: () => Merch.cancelUnpaidOrder(orderId, token.data!, cancelReason.trim(), cancelKey), onSuccess: async () => { setCancelReason(''); setCancelKey(merchIdempotencyKey('cancel-order')); await order.refetch(); } });
   if (token.isLoading || order.isLoading) return <ScreenState>{back}<ActivityIndicator /></ScreenState>;
   if (!token.data || order.isError || !order.data) return <ScreenState>{back}<Text accessibilityRole="alert" style={styles.error}>{english ? 'This device has no valid private tracking capability.' : 'Este dispositivo no tiene una capacidad privada de seguimiento válida.'}</Text></ScreenState>;
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}>{back}<Text accessibilityRole="header" style={styles.title}>{english ? 'Order tracking' : 'Seguimiento del pedido'}</Text><Text style={styles.cardTitle}>{order.data.orderNumber}</Text>{order.data.paymentStatus !== 'paid' ? <Notice text={english ? 'Payment is pending verification. The order is not paid yet.' : 'El pago está pendiente de verificación. La orden aún no está pagada.'} /> : null}<View style={styles.card}><Text style={styles.label}>{english ? 'Payment' : 'Pago'}: {order.data.paymentStatus}</Text><Text style={styles.label}>{english ? 'Fulfillment' : 'Preparación'}: {order.data.fulfillmentStatus}</Text><Text style={styles.price}>{money(order.data.totalMinor, locale, order.data.currency)}</Text></View></ScrollView></SafeAreaView>;
+  const canCancelUnpaid = order.data.commercialStatus === 'created' && order.data.paymentStatus === 'pending' && order.data.fulfillmentStatus === 'pending';
+  const issueChoices = [
+    ['general', english ? 'General' : 'General'],
+    ['return', english ? 'Return' : 'Devolución'],
+    ['refund', english ? 'Refund' : 'Reembolso'],
+    ['dispute', english ? 'Dispute' : 'Disputa'],
+  ] as const;
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}>{back}<Text accessibilityRole="header" style={styles.title}>{english ? 'Order tracking' : 'Seguimiento del pedido'}</Text><Text style={styles.cardTitle}>{order.data.orderNumber}</Text>{order.data.paymentStatus !== 'paid' ? <Notice text={english ? 'Payment is pending verification. The order is not paid yet.' : 'El pago está pendiente de verificación. La orden aún no está pagada.'} /> : null}<View style={styles.card}><Text style={styles.label}>{english ? 'Payment' : 'Pago'}: {order.data.paymentStatus}</Text><Text style={styles.label}>{english ? 'Fulfillment' : 'Preparación'}: {order.data.fulfillmentStatus}</Text><Text style={styles.price}>{money(order.data.totalMinor, locale, order.data.currency)}</Text></View>{order.data.issues?.length ? <View style={styles.card}><Text style={styles.sectionTitle}>{english ? 'Requests and issues' : 'Solicitudes e incidencias'}</Text>{order.data.issues.map((item) => <View key={item.id}><Text style={styles.label}>{item.issueType} · {item.status}</Text><Text>{item.message}</Text>{item.resolution ? <Text style={styles.meta}>{item.resolution}</Text> : null}</View>)}</View> : null}{canCancelUnpaid ? <View style={styles.card}><Text style={styles.sectionTitle}>{english ? 'Cancel unpaid order' : 'Cancelar orden sin pagar'}</Text><Notice text={english ? 'This is immediate only before payment processing and fulfillment start. Reserved stock will be released.' : 'Esto es inmediato solo antes de iniciar el pago y la preparación. El stock reservado será liberado.'} /><TextInput accessibilityLabel={english ? 'Cancellation reason' : 'Motivo de cancelación'} multiline placeholder={english ? 'Cancellation reason' : 'Motivo de cancelación'} value={cancelReason} onChangeText={setCancelReason} style={[styles.input, styles.multiline]} />{cancel.isError ? <Text accessibilityRole="alert" style={styles.error}>{english ? 'Cancellation is no longer available. Report an issue instead.' : 'La cancelación ya no está disponible. Registra una incidencia.'}</Text> : null}<Action disabled={cancelReason.trim().length < 10 || cancel.isPending} label={cancel.isPending ? (english ? 'Cancelling…' : 'Cancelando…') : (english ? 'Cancel unpaid order' : 'Cancelar orden sin pagar')} onPress={() => cancel.mutate()} /></View> : null}<View style={styles.card}><Text style={styles.sectionTitle}>{english ? 'Report a problem' : 'Reportar un problema'}</Text><View style={styles.choiceRow}>{issueChoices.map(([value, label]) => <TouchableOpacity key={value} accessibilityRole="radio" accessibilityState={{ checked: issueType === value }} style={[styles.choice, issueType === value && styles.choiceSelected]} onPress={() => setIssueType(value)}><Text style={styles.choiceText}>{label}</Text></TouchableOpacity>)}</View><TextInput accessibilityLabel={english ? 'Problem details' : 'Detalles del problema'} multiline placeholder={english ? 'Tell us what happened' : 'Cuéntanos qué ocurrió'} value={issueMessage} onChangeText={setIssueMessage} style={[styles.input, styles.multiline]} />{report.isError ? <Text accessibilityRole="alert" style={styles.error}>{english ? 'The issue could not be recorded.' : 'No se pudo registrar la incidencia.'}</Text> : null}{report.isSuccess ? <Text accessibilityRole="alert" style={styles.success}>{english ? 'The issue was recorded.' : 'La incidencia quedó registrada.'}</Text> : null}<Action disabled={issueMessage.trim().length < 10 || report.isPending} label={report.isPending ? (english ? 'Sending…' : 'Enviando…') : (english ? 'Submit issue' : 'Enviar incidencia')} onPress={() => report.mutate()} /></View></ScrollView></SafeAreaView>;
 }
 
 function SellerView({ english, locale, back }: { english: boolean; locale: string; back: ReactNode }) {
@@ -136,7 +151,43 @@ function SellerView({ english, locale, back }: { english: boolean; locale: strin
   if (stores.isLoading || orders.isLoading) return <ScreenState>{back}<ActivityIndicator /></ScreenState>;
   if (stores.isError) return <ScreenState>{back}<Text style={styles.error}>{english ? 'Sign in with store permission to continue.' : 'Inicia sesión con permiso de tienda para continuar.'}</Text></ScreenState>;
   if (!store) return <ScreenState>{back}<Notice text={english ? 'You do not have an active pilot store. Apply from the responsive web panel.' : 'No tienes una tienda piloto activa. Solicítala desde el panel web responsive.'} /></ScreenState>;
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}>{back}<Text accessibilityRole="header" style={styles.title}>{store.displayName}</Text><Text style={styles.subtitle}>{english ? 'Essential order operations' : 'Operaciones esenciales de pedidos'}</Text>{!store.permissions?.orders ? <Notice text={english ? 'You do not have order permission.' : 'No tienes permiso de pedidos.'} /> : orders.data?.map((order) => { const value = tracking[order.id] ?? { carrier: '', number: '' }; return <View key={order.id} style={styles.card}><Text style={styles.cardTitle}>{order.orderNumber}</Text><Text>{money(order.totalMinor, locale, order.currency)} · {order.paymentStatus} · {order.fulfillmentStatus}</Text>{store.permissions?.fulfillment && order.paymentStatus === 'paid' ? <View style={styles.list}>{order.fulfillmentStatus === 'pending' ? <Action label={english ? 'Start preparing' : 'Empezar preparación'} onPress={() => fulfillment.mutate({ order, status: 'preparing' })} /> : null}{order.fulfillmentStatus === 'preparing' && (order as SellerOrder).shippingMethod === 'coordinated_pickup' ? <Action label={english ? 'Pickup ready' : 'Listo para retirar'} onPress={() => fulfillment.mutate({ order, status: 'ready_for_pickup' })} /> : null}{order.fulfillmentStatus === 'preparing' && (order as SellerOrder).shippingMethod === 'national_shipping' ? <><TextInput placeholder={english ? 'Carrier' : 'Transportista'} value={value.carrier} onChangeText={(carrier) => setTracking({ ...tracking, [order.id]: { ...value, carrier } })} style={styles.input} /><TextInput placeholder="Tracking" value={value.number} onChangeText={(number) => setTracking({ ...tracking, [order.id]: { ...value, number } })} style={styles.input} /><Action disabled={!value.carrier.trim() || !value.number.trim()} label={english ? 'Mark shipped' : 'Marcar enviado'} onPress={() => fulfillment.mutate({ order, status: 'shipped' })} /></> : null}</View> : null}</View>; })}</ScrollView></SafeAreaView>;
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}>{back}<Text accessibilityRole="header" style={styles.title}>{store.displayName}</Text><Text style={styles.subtitle}>{english ? 'Essential order operations' : 'Operaciones esenciales de pedidos'}</Text>{!store.permissions?.orders ? <Notice text={english ? 'You do not have order permission.' : 'No tienes permiso de pedidos.'} /> : orders.data?.map((order) => { const value = tracking[order.id] ?? { carrier: '', number: '' }; return <View key={order.id} style={styles.card}><Text style={styles.cardTitle}>{order.orderNumber}</Text><Text>{money(order.totalMinor, locale, order.currency)} · {order.paymentStatus} · {order.fulfillmentStatus}</Text>{store.permissions?.fulfillment && order.paymentStatus === 'paid' ? <View style={styles.list}>{order.fulfillmentStatus === 'pending' ? <Action label={english ? 'Start preparing' : 'Empezar preparación'} onPress={() => fulfillment.mutate({ order, status: 'preparing' })} /> : null}{order.fulfillmentStatus === 'preparing' && (order as SellerOrder).shippingMethod === 'coordinated_pickup' ? <Action label={english ? 'Pickup ready' : 'Listo para retirar'} onPress={() => fulfillment.mutate({ order, status: 'ready_for_pickup' })} /> : null}{order.fulfillmentStatus === 'preparing' && (order as SellerOrder).shippingMethod === 'national_shipping' ? <><TextInput placeholder={english ? 'Carrier' : 'Transportista'} value={value.carrier} onChangeText={(carrier) => setTracking({ ...tracking, [order.id]: { ...value, carrier } })} style={styles.input} /><TextInput placeholder="Tracking" value={value.number} onChangeText={(number) => setTracking({ ...tracking, [order.id]: { ...value, number } })} style={styles.input} /><Action disabled={!value.carrier.trim() || !value.number.trim()} label={english ? 'Mark shipped' : 'Marcar enviado'} onPress={() => fulfillment.mutate({ order, status: 'shipped' })} /></> : null}</View> : null}</View>; })}<SellerIssueQueue storeId={store.id} enabled={Boolean(store.permissions?.orders)} english={english} /></ScrollView></SafeAreaView>;
+}
+
+function SellerIssueQueue({ storeId, enabled, english }: { storeId: string; enabled: boolean; english: boolean }) {
+  const client = useQueryClient();
+  const [responses, setResponses] = useState<Record<string, string>>({});
+  const issues = useQuery({ queryKey: ['merch-seller-issues', storeId], queryFn: () => Merch.sellerIssues(storeId), enabled, retry: false });
+  const update = useMutation({
+    mutationFn: ({ issueId, status }: { issueId: string; status: Parameters<typeof Merch.updateSellerIssue>[2]['status'] }) => Merch.updateSellerIssue(storeId, issueId, { status, publicResponse: responses[issueId]?.trim() || null, internalNotes: null }),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ['merch-seller-issues', storeId] }),
+  });
+  if (!enabled) return null;
+  if (issues.isLoading) return <ActivityIndicator />;
+  if (issues.isError) return <Text accessibilityRole="alert" style={styles.error}>{english ? 'The issue queue could not be loaded.' : 'No se pudo cargar la cola de incidencias.'}</Text>;
+  return <View style={styles.list}>
+    <Text accessibilityRole="header" style={styles.sectionTitle}>{english ? 'Requests and issues' : 'Solicitudes e incidencias'}</Text>
+    <Notice text={english ? 'Refunds, disputes, fraud, and paid cancellations must be escalated to TDF. Updating a case does not change payment or refund state.' : 'Los reembolsos, disputas, fraude y cancelaciones pagadas deben escalarse a TDF. Actualizar un caso no cambia el pago ni el reembolso.'} />
+    {issues.data?.map((item) => {
+      const response = responses[item.id] ?? '';
+      const terminal = ['resolved', 'rejected', 'cancelled'].includes(item.status);
+      const financial = ['cancellation', 'refund', 'dispute', 'fraud'].includes(item.issueType);
+      return <View key={item.id} style={styles.card}>
+        <Text style={styles.cardTitle}>{item.orderNumber} · {item.issueType}</Text>
+        <Text style={styles.meta}>{item.status}</Text>
+        <Text>{item.message}</Text>
+        {item.resolution ? <Text style={styles.success}>{item.resolution}</Text> : null}
+        {!terminal ? <View style={styles.list}>
+          <TextInput accessibilityLabel={english ? 'Public response to buyer' : 'Respuesta pública para el comprador'} multiline placeholder={english ? 'Public response to buyer' : 'Respuesta pública para el comprador'} value={response} onChangeText={(value) => setResponses({ ...responses, [item.id]: value })} style={[styles.input, styles.multiline]} />
+          {item.status === 'open' ? <Action label={english ? 'Start review' : 'Iniciar revisión'} onPress={() => update.mutate({ issueId: item.id, status: 'seller_review' })} /> : null}
+          <Action label={english ? 'Escalate to TDF' : 'Escalar a TDF'} onPress={() => update.mutate({ issueId: item.id, status: 'staff_review' })} />
+          {!financial ? <Action disabled={response.trim().length < 10} label={english ? 'Resolve operational case' : 'Resolver caso operativo'} onPress={() => update.mutate({ issueId: item.id, status: 'resolved' })} /> : null}
+        </View> : null}
+      </View>;
+    })}
+    {issues.data?.length === 0 ? <Text style={styles.meta}>{english ? 'No issues reported.' : 'No hay incidencias reportadas.'}</Text> : null}
+    {update.isError ? <Text accessibilityRole="alert" style={styles.error}>{english ? 'The case changed or requires staff review.' : 'El caso cambió o requiere revisión de TDF.'}</Text> : null}
+  </View>;
 }
 
 export function MerchSellerScreen() {
@@ -164,12 +215,14 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 18, lineHeight: 24, fontWeight: '800', color: '#111827' },
   cardBody: { color: '#4b5563', lineHeight: 20 },
   meta: { color: '#6b7280', lineHeight: 20 },
+  success: { color: '#166534', lineHeight: 20 },
   price: { fontSize: 24, fontWeight: '900', color: '#111827' },
   label: { fontWeight: '800', color: '#111827' },
   list: { gap: 12 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingVertical: 8 },
   flex: { flex: 1 },
   input: { minHeight: 50, backgroundColor: '#fff', borderColor: '#8b8b92', borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, fontSize: 16, color: '#111827' },
+  multiline: { minHeight: 96, paddingVertical: 12, textAlignVertical: 'top' },
   choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   choice: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: '#8b8b92', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#fff' },
   choiceSelected: { borderColor: '#6d28d9', borderWidth: 2, backgroundColor: '#f5f3ff' },

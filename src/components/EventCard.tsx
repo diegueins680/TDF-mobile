@@ -8,19 +8,21 @@ import { formatDate, formatTime } from '../lib/formatters';
 import type { SocialEvent } from '../types';
 import { useUserSettings } from '../providers/UserSettingsProvider';
 import { useAppTheme } from '../theme/ThemeProvider';
+import { eventExperienceLanguage, savedEventCopy } from '../localization/eventExperienceCopy';
 
 type Props = {
   event: SocialEvent;
   onPress?: () => void;
   saved?: boolean;
   onToggleSaved?: () => void;
-  saveDisabled?: boolean;
+  saveStatus?: 'ready' | 'loading' | 'updating' | 'unavailable';
 };
 
-function EventCardComponent({ event, onPress, saved = false, onToggleSaved, saveDisabled = false }: Props) {
+function EventCardComponent({ event, onPress, saved = false, onToggleSaved, saveStatus = 'ready' }: Props) {
   const router = useRouter();
   const analytics = useAnalytics();
   const { locale } = useUserSettings();
+  const savedCopy = savedEventCopy[eventExperienceLanguage(locale)];
   const { colors } = useAppTheme();
   const [imageError, setImageError] = useState(false);
 
@@ -59,20 +61,20 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
         )}
 
         <View style={styles.content}>
-          <Text maxFontSizeMultiplier={1.5} style={[styles.title, { color: colors.textPrimary }]}>{event.title}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{event.title}</Text>
 
           <View style={styles.meta}>
-            <Text maxFontSizeMultiplier={1.5} style={[styles.date, { color: colors.textSecondary }]}>
+            <Text style={[styles.date, { color: colors.textSecondary }]}>
               {formatDate(startDate)} {formatTime(startDate)}
               {endDate && !isSameDay && ` - ${formatDate(endDate)}`}
             </Text>
-            {event.venue && <Text maxFontSizeMultiplier={1.5} style={[styles.venue, { color: colors.textSecondary }]}>{event.venue.name}</Text>}
+            {event.venue && <Text style={[styles.venue, { color: colors.textSecondary }]}>{event.venue.name}</Text>}
           </View>
 
           {event.artists && event.artists.length > 0 && (
             <View style={styles.artists}>
-              <Text maxFontSizeMultiplier={1.5} style={[styles.artistsLabel, { color: colors.textSecondary }]}>Artistas:</Text>
-              <Text maxFontSizeMultiplier={1.5} style={[styles.artistsList, { color: colors.textPrimary }]}>
+              <Text style={[styles.artistsLabel, { color: colors.textSecondary }]}>Artistas:</Text>
+              <Text style={[styles.artistsList, { color: colors.textPrimary }]}>
                 {event.artists.map(a => a.name).join(', ')}
               </Text>
             </View>
@@ -81,8 +83,8 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
           <View style={[styles.footer, { borderTopColor: colors.borderSubtle }]}>
             {typeof event.ticketPrice === 'number' && (
               <View>
-                {event.ticketPrice > 0 ? <Text maxFontSizeMultiplier={1.5} style={[styles.priceEyebrow, { color: colors.actionPrimary }]}>DESDE</Text> : null}
-                <Text maxFontSizeMultiplier={1.5} style={[styles.price, { color: colors.actionPrimary }]}>
+                {event.ticketPrice > 0 ? <Text style={[styles.priceEyebrow, { color: colors.actionPrimary }]}>DESDE</Text> : null}
+                <Text style={[styles.price, { color: colors.actionPrimary }]}>
                   {event.ticketPrice === 0
                     ? 'Gratis'
                     : formatTicketMoney(Math.round(event.ticketPrice * 100), event.currency ?? 'USD', locale)}
@@ -90,7 +92,7 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
               </View>
             )}
             <View style={styles.stats}>
-              <Text maxFontSizeMultiplier={1.5} style={[styles.stat, { color: colors.textSecondary }]}>{event.rsvpCount} asisten</Text>
+              <Text style={[styles.stat, { color: colors.textSecondary }]}>{event.rsvpCount} asisten</Text>
             </View>
           </View>
         </View>
@@ -105,8 +107,8 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
             accessibilityLabel={`Ver entradas para ${event.title}`}
             accessibilityHint="Abre el checkout del evento"
           >
-            <Text maxFontSizeMultiplier={1.5} style={[styles.ticketButtonText, { color: colors.actionPrimaryContrast }]}>Ver entradas</Text>
-            <Text maxFontSizeMultiplier={1.5} style={[styles.ticketButtonArrow, { color: colors.actionPrimaryContrast }]}>→</Text>
+            <Text style={[styles.ticketButtonText, { color: colors.actionPrimaryContrast }]}>Ver entradas</Text>
+            <Text style={[styles.ticketButtonArrow, { color: colors.actionPrimaryContrast }]}>→</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -118,16 +120,30 @@ function EventCardComponent({ event, onPress, saved = false, onToggleSaved, save
               styles.saveButton,
               { borderColor: colors.border, backgroundColor: colors.surface },
               saved && { borderColor: colors.actionPrimary, backgroundColor: colors.selected },
-              saveDisabled && styles.saveButtonDisabled
+              saveStatus !== 'ready' && styles.saveButtonDisabled
             ]}
             onPress={onToggleSaved}
-            disabled={saveDisabled}
+            disabled={saveStatus !== 'ready'}
             accessibilityRole="button"
-            accessibilityLabel={saved ? 'Quitar de guardados' : 'Guardar evento'}
-            accessibilityState={{ disabled: saveDisabled }}
+            accessibilityLabel={saved
+              ? savedCopy.removeNamedAccessibility(event.title)
+              : `${savedCopy.saveShort} ${event.title}`}
+            accessibilityState={{
+              busy: saveStatus === 'loading' || saveStatus === 'updating',
+              disabled: saveStatus !== 'ready',
+              selected: saved,
+            }}
           >
-            <Text maxFontSizeMultiplier={1.5} style={[styles.saveButtonText, { color: colors.textPrimary }, saved && { color: colors.actionPrimary }]}>
-              {saveDisabled ? 'Actualizando…' : saved ? 'Guardado' : 'Guardar'}
+            <Text style={[styles.saveButtonText, { color: colors.textPrimary }, saved && { color: colors.actionPrimary }]}>
+              {saveStatus === 'loading'
+                ? savedCopy.loading
+                : saveStatus === 'updating'
+                  ? savedCopy.updating
+                  : saveStatus === 'unavailable'
+                    ? savedCopy.unavailable
+                    : saved
+                      ? savedCopy.saved
+                      : savedCopy.saveShort}
             </Text>
           </TouchableOpacity>
         </View>

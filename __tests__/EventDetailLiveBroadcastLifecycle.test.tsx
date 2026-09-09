@@ -1,10 +1,15 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 import EventDetailScreen from '../app/eventDetail';
+import { Directory } from '../src/api/directory';
+import { setAuthToken } from '../src/api/client';
 
 const mockInvalidateQueries = jest.fn();
 const mockStopPublisher = jest.fn();
+const mockSavedRefetch = jest.fn();
+let mockSavedQueryError = false;
 
 const mockUseMutation = jest.fn((options) => ({
   mutate: (variables?: unknown) => {
@@ -58,7 +63,14 @@ jest.mock('../src/providers/AuthProvider', () => ({
 }));
 
 jest.mock('../src/providers/UserSettingsProvider', () => ({
-  useUserSettings: () => ({ partyId: '7', displayName: 'Cuco', getCatalogItems: () => [] }),
+  useUserSettings: () => ({
+    partyId: '7',
+    displayName: 'Cuco',
+    locale: 'es',
+    timezone: 'America/Guayaquil',
+    currency: 'USD',
+    getCatalogItems: () => [],
+  }),
 }));
 
 jest.mock('../src/api/events', () => ({
@@ -73,6 +85,14 @@ jest.mock('../src/api/events', () => ({
     rsvp: jest.fn(),
     sendInvitation: jest.fn(),
     respondToInvitation: jest.fn(),
+  },
+}));
+
+jest.mock('../src/api/directory', () => ({
+  Directory: {
+    favorites: jest.fn(),
+    addFavorite: jest.fn(),
+    removeFavorite: jest.fn(),
   },
 }));
 
@@ -161,16 +181,20 @@ const startedBroadcast = {
   lastHeartbeatAt: '2026-04-10T22:00:00.000Z',
 };
 
-describe('EventDetail live broadcast lifecycle', () => {
+describe('EventDetail persistence and live broadcast lifecycle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    setAuthToken('Bearer test-token');
     mockStopPublisher.mockResolvedValue(undefined);
+    mockSavedQueryError = false;
+    mockSavedRefetch.mockResolvedValue({ isError: false });
     mockStartPublisher.mockResolvedValue({ previewUrl: 'webrtc://local-preview', stop: mockStopPublisher });
     mockBroadcastsRepo.startLiveBroadcastSession.mockResolvedValue({
       source: 'remote',
       broadcast: startedBroadcast,
     });
     mockBroadcastsRepo.endLiveBroadcastSession.mockResolvedValue({ source: 'remote' });
+    jest.mocked(Directory.addFavorite).mockResolvedValue(undefined);
 
     mockUseQuery.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
       if (queryKey[0] === 'event') {
@@ -178,7 +202,16 @@ describe('EventDetail live broadcast lifecycle', () => {
       }
       if (queryKey[0] === 'event-rsvps') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-invitations') return { data: [], isLoading: false };
-      if (queryKey[0] === 'saved-event-ids') return { data: [], isLoading: false };
+      if (queryKey[0] === 'saved-event-ids') {
+        return {
+          data: mockSavedQueryError
+            ? undefined
+            : { ids: [], pendingImportIds: [], pendingImportError: null, source: 'server', cachedAt: null },
+          isLoading: false,
+          isError: mockSavedQueryError,
+          refetch: mockSavedRefetch,
+        };
+      }
       if (queryKey[0] === 'event-ticket-tiers') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-ticket-orders') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-moments') return { data: [], isLoading: false };
@@ -186,6 +219,44 @@ describe('EventDetail live broadcast lifecycle', () => {
       if (queryKey[0] === 'event-live-followed-artists') return { data: ['99'], isLoading: false };
       return { data: null, isLoading: false };
     });
+  });
+
+  it('does not claim that an event was saved when server persistence fails', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    jest.mocked(Directory.addFavorite).mockRejectedValueOnce(new Error('write failed'));
+
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Guardar evento'));
+
+    await waitFor(() => {
+      expect(Directory.addFavorite).toHaveBeenCalledWith(
+        'event',
+        '42',
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer test-token' },
+          signal: expect.anything(),
+        }),
+      );
+      expect(alertSpy).toHaveBeenCalledWith(
+        'No pudimos actualizar tus guardados',
+        'El cambio no se guardó en tu cuenta. Inténtalo nuevamente.',
+      );
+    });
+    expect(alertSpy).not.toHaveBeenCalledWith('Listo', expect.any(String));
+  });
+
+  it('keeps the saved-event error control enabled so it can retry in place', async () => {
+    mockSavedQueryError = true;
+    render(<EventDetailScreen />);
+
+    const retryButton = screen.getByRole('button', {
+      name: 'Reintentar cargar eventos guardados',
+    });
+    expect(retryButton.props.accessibilityState).toMatchObject({ disabled: false });
+
+    fireEvent.press(retryButton);
+
+    await waitFor(() => expect(mockSavedRefetch).toHaveBeenCalledTimes(1));
   });
 
   it('ends the tracked backend broadcast when the broadcasting screen unmounts', async () => {

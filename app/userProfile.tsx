@@ -10,10 +10,15 @@ import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
 import type { ID, SocialEvent } from '../src/types';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
-import { listSavedEventIds, unsaveEvent } from '../src/lib/savedEvents';
+import {
+  loadSavedEventSnapshot,
+  setSavedEventDesiredState,
+  type SavedEventSnapshot,
+} from '../src/lib/savedEvents';
 import { formatTicketMoney } from '../src/lib/tickets';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useAuth } from '../src/providers/AuthProvider';
+import { eventExperienceLanguage, savedEventCopy } from '../src/localization/eventExperienceCopy';
 
 export default function UserProfileScreen() {
   const router = useRouter();
@@ -32,6 +37,7 @@ export default function UserProfileScreen() {
     getCatalogItems,
     setRegionalPreferences,
   } = useUserSettings();
+  const savedCopy = savedEventCopy[eventExperienceLanguage(locale)];
   const countries = useMemo(() => getCatalogItems('countries'), [getCatalogItems]);
   const localeOptions = useMemo(() => getCatalogItems('locales'), [getCatalogItems]);
   const currencyOptions = useMemo(() => getCatalogItems('currencies'), [getCatalogItems]);
@@ -73,18 +79,26 @@ export default function UserProfileScreen() {
   });
 
   const savedEventIdsQuery = useQuery({
-    queryKey: ['saved-event-ids'],
-    queryFn: listSavedEventIds
+    queryKey: ['saved-event-ids', partyId],
+    queryFn: () => loadSavedEventSnapshot(partyId as string, token as string),
+    enabled: Boolean(partyId && token),
+    retry: false,
   });
 
-  const savedEventIds = useMemo(() => savedEventIdsQuery.data ?? [], [savedEventIdsQuery.data]);
+  const savedEventIds = useMemo(
+    () => savedEventIdsQuery.data?.ids ?? [],
+    [savedEventIdsQuery.data?.ids],
+  );
 
   const savedEventsQuery = useQuery({
-    queryKey: ['saved-events', savedEventIds],
+    queryKey: ['saved-events', partyId, savedEventIds],
     enabled: savedEventIds.length > 0,
     queryFn: async () => {
       const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
-      return settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+      return {
+        events: settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])),
+        unavailableCount: settled.filter((result) => result.status === 'rejected').length,
+      };
     }
   });
 
@@ -99,7 +113,7 @@ export default function UserProfileScreen() {
   const savedEvents = useMemo(() => {
     if (!savedEventsQuery.data) return [];
     const order = new Map<string, number>(savedEventIds.map((id, index) => [String(id), index] as const));
-    return [...savedEventsQuery.data].sort((a, b) => {
+    return [...savedEventsQuery.data.events].sort((a, b) => {
       const aOrder = order.get(String(a.id)) ?? Number.MAX_SAFE_INTEGER;
       const bOrder = order.get(String(b.id)) ?? Number.MAX_SAFE_INTEGER;
       return aOrder - bOrder;
@@ -107,13 +121,31 @@ export default function UserProfileScreen() {
   }, [savedEventIds, savedEventsQuery.data]);
 
   const unsaveMutation = useMutation({
-    mutationFn: (eventId: ID) => unsaveEvent(eventId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
-      qc.invalidateQueries({ queryKey: ['saved-events'] });
+    networkMode: 'always',
+    mutationFn: ({ eventId, ownerPartyId }: { eventId: ID; ownerPartyId: string }) =>
+      token
+        ? setSavedEventDesiredState(ownerPartyId, eventId, false, token)
+        : Promise.reject(new Error(savedCopy.sessionExpired)),
+    onSuccess: (_result, { eventId, ownerPartyId }) => {
+      if (partyId !== ownerPartyId) return;
+      const normalizedEventId = String(eventId);
+      qc.setQueryData<SavedEventSnapshot>(['saved-event-ids', ownerPartyId], (current) => current
+        ? {
+          ...current,
+          ids: current.ids.filter((savedEventId) => savedEventId !== normalizedEventId),
+          source: 'server',
+          cachedAt: null,
+        }
+        : current);
+      void qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      void qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
     },
-    onError: () => {
-      Alert.alert('Error', 'No pudimos remover el evento guardado.');
+    onError: (_error, { ownerPartyId }) => {
+      if (partyId !== ownerPartyId) return;
+      Alert.alert(
+        savedCopy.removeFailureTitle,
+        savedCopy.updateFailureBody,
+      );
     }
   });
 
@@ -140,8 +172,12 @@ export default function UserProfileScreen() {
   }, [router]);
 
   const handleUnsaveEvent = useCallback((eventId: ID) => {
-    unsaveMutation.mutate(eventId);
-  }, [unsaveMutation]);
+    if (!partyId) {
+      Alert.alert(savedCopy.signInTitle, savedCopy.signInSavedBody);
+      return;
+    }
+    unsaveMutation.mutate({ eventId, ownerPartyId: partyId });
+  }, [partyId, savedCopy, unsaveMutation]);
 
   const handleSaveRegion = useCallback(() => {
     if (countrySearch.trim() && !draftCountryId) {
@@ -188,14 +224,23 @@ export default function UserProfileScreen() {
       {isSavedView && (
         <View style={styles.savedActionsRow}>
           <TouchableOpacity
-            style={[styles.unsaveButton, unsaveMutation.isPending && styles.buttonDisabled]}
+            style={[
+              styles.unsaveButton,
+              unsaveMutation.isPending && styles.buttonDisabled,
+            ]}
             onPress={() => handleUnsaveEvent(item.id)}
             disabled={unsaveMutation.isPending}
+            accessibilityRole="button"
+            accessibilityLabel={savedCopy.removeNamedAccessibility(item.title)}
+            accessibilityState={{
+              busy: unsaveMutation.isPending,
+              disabled: unsaveMutation.isPending,
+            }}
           >
             {unsaveMutation.isPending ? (
               <ActivityIndicator size="small" color={colors.textPrimary} />
             ) : (
-              <Text style={styles.unsaveButtonText}>Quitar</Text>
+              <Text style={styles.unsaveButtonText}>{savedCopy.remove}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -355,6 +400,9 @@ export default function UserProfileScreen() {
           <TouchableOpacity
             style={[styles.tab, activeTab === 'artist' && styles.tabActive]}
             onPress={() => setActiveTab('artist')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'artist' }}
+            accessibilityLabel="Perfil de artista"
           >
             <Text style={[styles.tabLabel, activeTab === 'artist' && styles.tabLabelActive]}>
               Perfil de artista
@@ -363,6 +411,9 @@ export default function UserProfileScreen() {
           <TouchableOpacity
             style={[styles.tab, activeTab === 'events' && styles.tabActive]}
             onPress={() => setActiveTab('events')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'events' }}
+            accessibilityLabel="Eventos"
           >
             <Text style={[styles.tabLabel, activeTab === 'events' && styles.tabLabelActive]}>
               Eventos
@@ -371,9 +422,12 @@ export default function UserProfileScreen() {
           <TouchableOpacity
             style={[styles.tab, activeTab === 'saved' && styles.tabActive]}
             onPress={() => setActiveTab('saved')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'saved' }}
+            accessibilityLabel={savedCopy.savedTabAccessibility}
           >
             <Text style={[styles.tabLabel, activeTab === 'saved' && styles.tabLabelActive]}>
-              Guardados
+              {savedCopy.savedTab}
             </Text>
           </TouchableOpacity>
         </View>
@@ -438,15 +492,70 @@ export default function UserProfileScreen() {
 
         {activeTab === 'saved' && (
           <View style={styles.section}>
-            {savedEventIdsQuery.isLoading ? (
-              <ActivityIndicator size="large" color="#2563eb" />
-            ) : savedEventIds.length === 0 ? (
-              <Text style={styles.noDataText}>Aún no hay eventos guardados. Toca Guardar evento dentro de cualquier evento.</Text>
-            ) : savedEventsQuery.isLoading ? (
-              <ActivityIndicator size="large" color="#2563eb" />
-            ) : savedEvents.length > 0 ? (
+            {!partyId ? (
               <>
-                <Text style={styles.sectionTitle}>Saved events ({savedEvents.length})</Text>
+                <Text style={styles.noDataText}>{savedCopy.signInSavedBody}</Text>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => router.push({ pathname: '/auth', params: { intent: 'events', returnTo: '/userProfile' } })}
+                  accessibilityRole="button"
+                  accessibilityLabel={savedCopy.signInSavedAccessibility}
+                >
+                  <Text style={styles.actionButtonText}>{savedCopy.signIn}</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+            {savedEventIdsQuery.data?.source === 'cache' ? (
+              <Text style={styles.noDataText} accessibilityLiveRegion="polite">
+                {savedCopy.cacheNotice}
+              </Text>
+            ) : null}
+            {partyId && savedEventIdsQuery.isLoading ? (
+              <ActivityIndicator
+                size="large"
+                color="#2563eb"
+                accessibilityLabel={savedCopy.loading}
+              />
+            ) : partyId && savedEventIdsQuery.isError ? (
+              <>
+                <Text style={styles.noDataText} accessibilityLiveRegion="polite">
+                  {savedCopy.loadFailureTitle}
+                </Text>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => void savedEventIdsQuery.refetch()}
+                  accessibilityRole="button"
+                  accessibilityLabel={savedCopy.retrySavedAccessibility}
+                >
+                  <Text style={styles.actionButtonText}>{savedCopy.retry}</Text>
+                </TouchableOpacity>
+              </>
+            ) : partyId && savedEventIds.length === 0 ? (
+              <Text style={styles.noDataText}>{savedCopy.savedEmpty}</Text>
+            ) : partyId && savedEventsQuery.isLoading ? (
+              <ActivityIndicator
+                size="large"
+                color="#2563eb"
+                accessibilityLabel={savedCopy.loading}
+              />
+            ) : partyId && savedEvents.length > 0 ? (
+              <>
+                <Text style={styles.sectionTitle}>{savedCopy.savedTitle(savedEvents.length)}</Text>
+                {(savedEventsQuery.data?.unavailableCount ?? 0) > 0 ? (
+                  <>
+                    <Text style={styles.noDataText} accessibilityLiveRegion="polite">
+                      {savedCopy.someUnavailable}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => void savedEventsQuery.refetch()}
+                      accessibilityRole="button"
+                      accessibilityLabel={savedCopy.retrySavedDetailsAccessibility}
+                    >
+                      <Text style={styles.actionButtonText}>{savedCopy.retry}</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : null}
                 <FlatList
                   data={savedEvents}
                   renderItem={({ item }) => renderEventItem(item, true)}
@@ -454,11 +563,21 @@ export default function UserProfileScreen() {
                   scrollEnabled={false}
                 />
               </>
-            ) : (
-              <Text style={styles.noDataText}>
-                No pudimos cargar tus eventos guardados. Abre un evento y vuelve a guardarlo.
-              </Text>
-            )}
+            ) : partyId ? (
+              <>
+                <Text style={styles.noDataText} accessibilityLiveRegion="polite">
+                  {savedCopy.detailsUnavailable}
+                </Text>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => void savedEventsQuery.refetch()}
+                  accessibilityRole="button"
+                  accessibilityLabel={savedCopy.retrySavedDetailsAccessibility}
+                >
+                  <Text style={styles.actionButtonText}>{savedCopy.retry}</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
           </View>
         )}
       </ScrollView>
@@ -500,7 +619,7 @@ const styles = StyleSheet.create({
   tabContainer: { flexDirection: 'row', gap: 8, marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   tab: { flex: 1, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: '#2563eb' },
-  tabLabel: { fontSize: 13, fontWeight: '600', color: '#999', textAlign: 'center' },
+  tabLabel: { fontSize: 13, fontWeight: '600', color: '#6b7280', textAlign: 'center' },
   tabLabelActive: { color: '#2563eb' },
   section: { backgroundColor: '#fff', borderRadius: 8, padding: 16, borderWidth: 1, borderColor: '#f0f0f0' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 12 },
@@ -510,16 +629,16 @@ const styles = StyleSheet.create({
   genreText: { fontSize: 12, fontWeight: '600', color: '#2563eb' },
   actionButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 12 },
   actionButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  noDataText: { fontSize: 13, color: '#999', textAlign: 'center', paddingVertical: 24 },
+  noDataText: { fontSize: 13, color: '#6b7280', textAlign: 'center', paddingVertical: 24 },
   eventItem: { backgroundColor: '#f9f9f9', borderRadius: 6, marginBottom: 8, borderLeftWidth: 4, borderLeftColor: '#2563eb' },
   eventTapArea: { padding: 12 },
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 },
   eventTitle: { fontSize: 13, fontWeight: '600', color: '#1a1a1a', flex: 1 },
   eventPrice: { fontSize: 12, fontWeight: '700', color: '#2563eb', marginLeft: 8 },
-  eventDateTime: { fontSize: 12, color: '#999', marginBottom: 4 },
+  eventDateTime: { fontSize: 12, color: '#6b7280', marginBottom: 4 },
   eventVenue: { fontSize: 12, color: '#666' },
   savedActionsRow: { marginTop: 10, flexDirection: 'row', justifyContent: 'flex-end' },
-  unsaveButton: { backgroundColor: '#f3f4f6', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6 },
+  unsaveButton: { minHeight: 44, justifyContent: 'center', backgroundColor: '#f3f4f6', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6 },
   unsaveButtonText: { fontSize: 12, color: '#111827', fontWeight: '700' },
   buttonDisabled: { opacity: 0.6 }
 });

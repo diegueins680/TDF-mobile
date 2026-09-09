@@ -55,6 +55,7 @@ import {
 import {
   addMomentFeedComment,
   createMomentFeedItem,
+  isRemoteReactionActive,
   listMomentFeed,
   toggleMomentFeedReaction,
 } from '../src/lib/eventMomentsRepository';
@@ -62,8 +63,19 @@ import { normalizeRouteParam } from '../src/lib/routeParams';
 import { countGoingRsvps } from '../src/lib/rsvp';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
-import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
+import {
+  loadSavedEventSnapshot,
+  setSavedEventDesiredState,
+  type SavedEventSnapshot,
+} from '../src/lib/savedEvents';
+import { markFirstValueCompleted } from '../src/lib/onboardingIntent';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
+import {
+  eventExperienceLanguage,
+  eventMomentCopy,
+  savedEventCopy,
+} from '../src/localization/eventExperienceCopy';
 import type {
   EventLiveBroadcast,
   EventLiveBroadcastQuality,
@@ -123,9 +135,13 @@ export default function EventDetailScreen() {
   const { eventId: rawEventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const analytics = useAnalytics();
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: normalizedPartyId, session } = useAuth();
   const { locale, timezone, currency, getCatalogItems } = useUserSettings();
+  const experienceLanguage = eventExperienceLanguage(locale);
+  const momentCopy = eventMomentCopy[experienceLanguage];
+  const savedCopy = savedEventCopy[experienceLanguage];
   const displayName = session?.displayName ?? null;
   const reactionOptions = useMemo<EventMomentReactionOption[]>(
     () => getCatalogItems('reaction-types').flatMap((item) => {
@@ -191,8 +207,10 @@ export default function EventDetailScreen() {
   });
 
   const savedEventIdsQuery = useQuery({
-    queryKey: ['saved-event-ids'],
-    queryFn: listSavedEventIds,
+    queryKey: ['saved-event-ids', normalizedPartyId],
+    queryFn: () => loadSavedEventSnapshot(normalizedPartyId as string, token as string),
+    enabled: Boolean(normalizedPartyId && token),
+    retry: false,
   });
 
   const ticketTiersQuery = useQuery({
@@ -202,13 +220,21 @@ export default function EventDetailScreen() {
   });
 
   const momentsQueryKey = useMemo(
-    () => ['event-moments', eventId, shouldPreferRemoteMoments ? 'remote' : 'local'] as const,
-    [eventId, shouldPreferRemoteMoments],
+    () => [
+      'event-moments',
+      eventId,
+      currentActor.actorKey,
+      shouldPreferRemoteMoments ? 'remote' : 'local',
+    ] as const,
+    [currentActor.actorKey, eventId, shouldPreferRemoteMoments],
   );
 
   const momentsQuery = useQuery({
     queryKey: momentsQueryKey,
-    queryFn: () => listMomentFeed(eventId as ID, { preferRemote: shouldPreferRemoteMoments }),
+    queryFn: () => listMomentFeed(eventId as ID, {
+      preferRemote: shouldPreferRemoteMoments,
+      storageScope: currentActor.actorKey,
+    }),
     enabled: Boolean(eventId && activeTab === 'moments'),
   });
 
@@ -397,16 +423,59 @@ export default function EventDetailScreen() {
   });
 
   const saveEventMutation = useMutation({
-    mutationFn: () => {
-      if (!eventId) throw new Error('Event not found');
-      return toggleSavedEvent(eventId);
+    networkMode: 'always',
+    mutationFn: ({
+      targetEventId,
+      ownerPartyId,
+      desiredSaved,
+    }: {
+      targetEventId: string;
+      ownerPartyId: string;
+      desiredSaved: boolean;
+    }) => token
+      ? setSavedEventDesiredState(ownerPartyId, targetEventId, desiredSaved, token)
+      : Promise.reject(new Error(savedCopy.sessionExpired)),
+    onSuccess: ({ saved }, { ownerPartyId, targetEventId }) => {
+      if (normalizedPartyId !== ownerPartyId) return;
+      qc.setQueryData<SavedEventSnapshot>(['saved-event-ids', ownerPartyId], (current) => {
+        if (!current) return current;
+        const withoutEvent = current.ids.filter((savedEventId) => savedEventId !== targetEventId);
+        return {
+          ...current,
+          ids: saved ? [targetEventId, ...withoutEvent] : withoutEvent,
+          source: 'server',
+          cachedAt: null,
+        };
+      });
+      void qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      void qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
+      analytics.capture('feature_favorite_changed', {
+        platform: 'mobile',
+        event_id: targetEventId,
+        action: saved ? 'saved' : 'unsaved',
+      });
+      if (saved && token) {
+        void markFirstValueCompleted(ownerPartyId, 'event_saved', token).then((completedValue) => {
+          if (!completedValue) return;
+          analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+          analytics.capture('onboarding_completed', {
+            platform: 'mobile',
+            reason: 'first_value',
+            value: completedValue,
+          });
+        });
+      }
+      Alert.alert(
+        savedCopy.readyTitle,
+        saved ? savedCopy.savedSuccess : savedCopy.removedSuccess,
+      );
     },
-    onSuccess: ({ saved }) => {
-      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
-      Alert.alert('Listo', saved ? 'Evento guardado en tu perfil.' : 'Evento removido de guardados.');
-    },
-    onError: () => {
-      Alert.alert('Error', 'No pudimos actualizar tus eventos guardados.');
+    onError: (_error, { ownerPartyId }) => {
+      if (normalizedPartyId !== ownerPartyId) return;
+      Alert.alert(
+        savedCopy.updateFailureTitle,
+        savedCopy.updateFailureBody,
+      );
     },
   });
 
@@ -457,7 +526,7 @@ export default function EventDetailScreen() {
               authorPartyId: currentActor.partyId,
               caption: submission.caption,
               media: mediaForMoment,
-            }, { preferRemote });
+            }, { preferRemote, storageScope: currentActor.actorKey });
 
             if (result.source === 'local' && shouldPreferRemoteMoments && result.fallbackReason) {
               notices.push(result.fallbackReason);
@@ -546,21 +615,50 @@ export default function EventDetailScreen() {
   });
 
   const reactionMutation = useMutation({
-    mutationFn: ({ momentId, reaction }: { momentId: string; reaction: EventMomentReactionOption }) => {
+    mutationFn: ({
+      momentId,
+      reaction,
+      actorKey,
+      active,
+    }: {
+      momentId: string;
+      reaction: EventMomentReactionOption;
+      actorKey: string;
+      active: boolean;
+      ownerPartyId: string;
+      authToken: string;
+    }) => {
       if (!eventId) throw new Error('Event not found');
       return toggleMomentFeedReaction({
         eventId,
         momentId,
-        actorKey: currentActor.actorKey,
+        actorKey,
         reaction,
-      }, { preferRemote: shouldPreferRemoteMoments });
+        active,
+      }, {
+        preferRemote: shouldPreferRemoteMoments,
+        storageScope: actorKey,
+      });
     },
-    onSuccess: () => {
+    onSuccess: (result, { reaction, actorKey, ownerPartyId, authToken }) => {
       qc.invalidateQueries({ queryKey: ['event-moments', eventId] });
+      if (
+        normalizedPartyId !== ownerPartyId
+        || token !== authToken
+        || !isRemoteReactionActive(result, reaction.id, actorKey)
+      ) return;
+      void markFirstValueCompleted(ownerPartyId, 'moment_reaction', authToken).then((completedValue) => {
+        if (!completedValue) return;
+        analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+        analytics.capture('onboarding_completed', {
+          platform: 'mobile',
+          reason: 'first_value',
+          value: completedValue,
+        });
+      });
     },
-    onError: (error) => {
-      const message = error instanceof Error ? error.message : 'No pudimos registrar tu reacción.';
-      Alert.alert('Error', message);
+    onError: () => {
+      Alert.alert(momentCopy.errorTitle, momentCopy.reactionFailure);
     },
   });
 
@@ -573,7 +671,10 @@ export default function EventDetailScreen() {
         authorName: currentActor.displayName,
         authorPartyId: currentActor.partyId,
         body,
-      }, { preferRemote: shouldPreferRemoteMoments });
+      }, {
+        preferRemote: shouldPreferRemoteMoments,
+        storageScope: currentActor.actorKey,
+      });
     },
     onSuccess: (_data, variables) => {
       setCommentDrafts((current) => ({ ...current, [variables.momentId]: '' }));
@@ -810,9 +911,49 @@ export default function EventDetailScreen() {
     rsvpMutation.mutate(status);
   }, [normalizedPartyId, rsvpMutation]);
 
-  const handleToggleSaved = useCallback(() => {
-    saveEventMutation.mutate();
-  }, [saveEventMutation]);
+  const handleToggleSaved = useCallback(async () => {
+    if (!eventId) {
+      Alert.alert('Error', 'No encontramos este evento.');
+      return;
+    }
+    if (!normalizedPartyId) {
+      Alert.alert(
+        savedCopy.signInTitle,
+        savedCopy.signInBody,
+        [
+          { text: savedCopy.later, style: 'cancel' },
+          {
+            text: savedCopy.signIn,
+            onPress: () => router.push({
+              pathname: '/auth',
+              params: {
+                intent: 'events',
+                returnTo: `/eventDetail?eventId=${encodeURIComponent(eventId)}`,
+              },
+            }),
+          },
+        ],
+      );
+      return;
+    }
+    if (savedEventIdsQuery.isError) {
+      const result = await savedEventIdsQuery.refetch();
+      if (result.isError) {
+        Alert.alert(
+          savedCopy.loadFailureTitle,
+          savedCopy.loadFailureBody,
+        );
+      }
+      return;
+    }
+    if (!token || savedEventIdsQuery.isLoading || !savedEventIdsQuery.data) return;
+    const desiredSaved = !(savedEventIdsQuery.data?.ids.includes(eventId) ?? false);
+    saveEventMutation.mutate({
+      targetEventId: eventId,
+      ownerPartyId: normalizedPartyId,
+      desiredSaved,
+    });
+  }, [eventId, normalizedPartyId, router, saveEventMutation, savedCopy, savedEventIdsQuery, token]);
 
   const selectMomentMedia = useCallback(async (
     mode: 'camera' | 'photos' | 'video',
@@ -966,7 +1107,7 @@ export default function EventDetailScreen() {
   const endDate = event.endTime ? new Date(event.endTime) : null;
   const rsvpCount = rsvpQuery.data ? countGoingRsvps(rsvpQuery.data) : (event.rsvpCount ?? 0);
   const invitations = invitationsQuery.data ?? [];
-  const isSaved = savedEventIdsQuery.data?.includes(String(event.id)) ?? false;
+  const isSaved = savedEventIdsQuery.data?.ids.includes(String(event.id)) ?? false;
   const momentCount = displayedMoments.length;
   const liveBroadcasts = liveBroadcastsQuery.data ?? [];
   const liveBroadcastCount = countLiveBroadcasts(liveBroadcasts);
@@ -1149,19 +1290,56 @@ export default function EventDetailScreen() {
                 style={[
                   styles.saveEventButton,
                   isSaved && styles.saveEventButtonActive,
-                  saveEventMutation.isPending && styles.buttonDisabled,
+                  Boolean(normalizedPartyId) && (
+                    savedEventIdsQuery.isLoading
+                    || (!savedEventIdsQuery.data && !savedEventIdsQuery.isError)
+                    || saveEventMutation.isPending
+                  ) && styles.buttonDisabled,
                 ]}
-                onPress={handleToggleSaved}
-                disabled={saveEventMutation.isPending}
+                onPress={() => void handleToggleSaved()}
+                disabled={Boolean(normalizedPartyId) && (
+                  savedEventIdsQuery.isLoading
+                  || (!savedEventIdsQuery.data && !savedEventIdsQuery.isError)
+                  || saveEventMutation.isPending
+                )}
+                accessibilityRole="button"
+                accessibilityLabel={savedEventIdsQuery.isError
+                  ? savedCopy.retrySavedAccessibility
+                  : isSaved
+                    ? savedCopy.removeAccessibility
+                    : savedCopy.saveAccessibility}
+                accessibilityHint={savedCopy.saveHint}
+                accessibilityState={{
+                  busy: saveEventMutation.isPending,
+                  disabled: Boolean(normalizedPartyId) && (
+                    savedEventIdsQuery.isLoading
+                    || (!savedEventIdsQuery.data && !savedEventIdsQuery.isError)
+                    || saveEventMutation.isPending
+                  ),
+                  selected: isSaved,
+                }}
               >
                 <Text style={[styles.saveEventButtonText, isSaved && styles.saveEventButtonTextActive]}>
-                  {saveEventMutation.isPending ? 'Guardando…' : isSaved ? 'Guardado' : 'Guardar evento'}
+                  {saveEventMutation.isPending
+                    ? savedCopy.saving
+                    : savedEventIdsQuery.isError
+                      ? savedCopy.retrySaved
+                      : normalizedPartyId && (savedEventIdsQuery.isLoading || !savedEventIdsQuery.data)
+                        ? savedCopy.loading
+                      : isSaved
+                        ? savedCopy.saved
+                        : savedCopy.save}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.inviteButton} onPress={() => setShowInviteModal(true)}>
                 <Text style={styles.inviteButtonText}>Invitar amistades</Text>
               </TouchableOpacity>
             </View>
+            {savedEventIdsQuery.data?.source === 'cache' ? (
+              <Text style={styles.savedCacheNotice} accessibilityLiveRegion="polite">
+                {savedCopy.cacheNotice}
+              </Text>
+            ) : null}
 
             <ExperienceReviews
               targetKind="event"
@@ -1257,6 +1435,7 @@ export default function EventDetailScreen() {
                     <EventMomentCard
                       key={moment.id}
                       moment={moment}
+                      locale={locale}
                       currentActorKey={currentActor.actorKey}
                       currentPartyId={currentActor.partyId}
                       featured={featuredMomentIds.has(moment.id)}
@@ -1274,7 +1453,17 @@ export default function EventDetailScreen() {
                       commentDraft={commentDrafts[moment.id] ?? ''}
                       onChangeComment={handleCommentChange}
                       onSubmitComment={handleCommentSubmit}
-                      onToggleReaction={(momentId, reaction) => reactionMutation.mutate({ momentId, reaction })}
+                      onToggleReaction={(momentId, reaction, active) => {
+                        if (!normalizedPartyId || !token) return;
+                        reactionMutation.mutate({
+                          momentId,
+                          reaction,
+                          actorKey: currentActor.actorKey,
+                          active,
+                          ownerPartyId: normalizedPartyId,
+                          authToken: token,
+                        });
+                      }}
                       onConnectAuthor={handleConnectAuthor}
                       onOpenMedia={handleOpenMomentMedia}
                     />
@@ -1949,6 +2138,12 @@ const styles = StyleSheet.create({
   saveEventButtonActive: { backgroundColor: '#e0e7ff', borderColor: '#2563eb' },
   saveEventButtonText: { fontSize: 14, fontWeight: '600', color: '#374151' },
   saveEventButtonTextActive: { color: '#1d4ed8' },
+  savedCacheNotice: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 8,
+  },
   inviteButton: {
     flex: 1,
     backgroundColor: '#f0f0f0',

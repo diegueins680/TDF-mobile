@@ -1,4 +1,12 @@
-import { http, setAuthToken, getAuthToken, normalizeApiError } from '../src/api/client';
+import {
+  assertAuthSession,
+  authSessionRequestConfig,
+  captureAuthSession,
+  http,
+  setAuthToken,
+  getAuthToken,
+  normalizeApiError,
+} from '../src/api/client';
 import axios from 'axios';
 
 describe('API client auth header', () => {
@@ -35,6 +43,21 @@ describe('API client auth header', () => {
     setAuthToken(null);
     expect(getAuthToken()).toBeUndefined();
     expect(http.defaults.headers.common.Authorization).toBeUndefined();
+  });
+
+  it('binds a protected request to one auth session and aborts it on account change', () => {
+    setAuthToken('account-a-token');
+    const binding = captureAuthSession('Bearer account-a-token');
+    expect(authSessionRequestConfig(binding)).toMatchObject({
+      headers: { Authorization: 'Bearer account-a-token' },
+      signal: binding.signal,
+    });
+    expect(binding.signal.aborted).toBe(false);
+
+    setAuthToken('account-b-token');
+
+    expect(binding.signal.aborted).toBe(true);
+    expect(() => assertAuthSession(binding)).toThrow(/sesión cambió/i);
   });
 });
 

@@ -12,7 +12,6 @@ import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { impactMedium } from '../../src/utils/haptics';
 import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
-import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
 
 type TabKey = 'following' | 'followers';
 
@@ -74,15 +73,9 @@ export default function SocialScreen() {
       if (!isPositivePartyId(targetId)) throw new Error('No pudimos reconocer ese perfil.');
       await Social.addFriend(targetId);
     },
-    onSuccess: async (_data, targetId) => {
+    onSuccess: async (_data, _targetId) => {
       invalidateAll();
       void impactMedium();
-      analytics.capture('artist_followed', { platform: 'mobile', target_party_id: targetId });
-      if (await markFirstValueCompleted(effectivePartyId, 'artist_followed')) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'artist_followed' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'artist_followed' });
-        if (effectivePartyId) await markNewUserOnboardingCompleted(effectivePartyId);
-      }
       Alert.alert('Listo', 'Ahora sigues a esta persona.');
     },
     onError: (err) => {
@@ -91,19 +84,23 @@ export default function SocialScreen() {
     }
   });
 
-  const artistFollowMutation = useMutation<void, Error, ArtistProfile>({
-    mutationFn: async (artist) => {
-      if (!effectivePartyId) throw new Error(english ? 'Sign in to follow an artist.' : 'Inicia sesión para seguir a un artista.');
-      await Artists.follow(artist.id, effectivePartyId);
+  const artistFollowMutation = useMutation<void, Error, {
+    artist: ArtistProfile;
+    ownerPartyId: string;
+    authToken: string;
+  }>({
+    mutationFn: async ({ artist, ownerPartyId }) => {
+      await Artists.follow(artist.id, ownerPartyId);
     },
-    onSuccess: async (_data, artist) => {
+    onSuccess: async (_data, { artist, ownerPartyId, authToken }) => {
+      if (effectivePartyId !== ownerPartyId || token !== authToken) return;
       setFollowedArtistIds((current) => new Set(current).add(String(artist.id)));
       void impactMedium();
       analytics.capture('artist_followed', { platform: 'mobile', artist_id: String(artist.id) });
-      if (await markFirstValueCompleted(effectivePartyId, 'artist_followed')) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'artist_followed' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'artist_followed' });
-        if (effectivePartyId) await markNewUserOnboardingCompleted(effectivePartyId);
+      const completedValue = await markFirstValueCompleted(ownerPartyId, 'artist_followed', authToken);
+      if (completedValue) {
+        analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
       }
     },
     onError: (error) => Alert.alert(
@@ -261,7 +258,14 @@ export default function SocialScreen() {
                     <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{artist.name}</Text>
                     <TouchableOpacity
                       style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }, followed && styles.buttonDisabled]}
-                      onPress={() => artistFollowMutation.mutate(artist)}
+                      onPress={() => {
+                        if (!effectivePartyId || !token) return;
+                        artistFollowMutation.mutate({
+                          artist,
+                          ownerPartyId: effectivePartyId,
+                          authToken: token,
+                        });
+                      }}
                       disabled={followed || artistFollowMutation.isPending}
                       accessibilityRole="button"
                       accessibilityLabel={`${english ? 'Follow' : 'Seguir a'} ${artist.name}`}

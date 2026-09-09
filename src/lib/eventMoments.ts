@@ -11,7 +11,7 @@ import type {
   ID,
 } from '../types';
 
-const STORAGE_KEY = 'tdf-event-moments';
+const STORAGE_KEY_PREFIX = 'tdf-event-moments:v2';
 const MAX_CAPTION_LENGTH = 280;
 const MAX_COMMENT_LENGTH = 500;
 const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -51,6 +51,17 @@ const normalizeText = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+};
+
+const storageKeyForScope = (rawScope?: string): string => {
+  const normalizedScope = normalizeText(rawScope);
+  const partyId = /^party:/i.test(normalizedScope ?? '')
+    ? normalizePartyId(normalizedScope?.replace(/^party:/i, ''))
+    : null;
+  if (partyId) return `${STORAGE_KEY_PREFIX}:party:${partyId}`;
+
+  const guestSlug = normalizedScope?.toLowerCase().match(/^guest:([a-z0-9-]{1,80})$/)?.[1];
+  return `${STORAGE_KEY_PREFIX}:guest:${guestSlug ?? 'anon'}`;
 };
 
 const normalizeEventId = (value: unknown): string | null => {
@@ -173,37 +184,40 @@ const sanitizeStore = (store: unknown): Record<string, EventMoment[]> => {
   );
 };
 
-async function readStore(): Promise<Record<string, EventMoment[]>> {
+async function readStore(storageScope?: string): Promise<Record<string, EventMoment[]>> {
+  const raw = await AsyncStorage.getItem(storageKeyForScope(storageScope));
+  if (!raw) return {};
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
     return sanitizeStore(JSON.parse(raw) as unknown);
   } catch {
+    // Malformed data is ignored without deleting it; storage I/O errors above
+    // still propagate so a mutation cannot overwrite data it failed to read.
     return {};
   }
 }
 
-async function writeStore(store: Record<string, EventMoment[]>): Promise<void> {
-  try {
-    const entries = Object.entries(store).filter(([, moments]) => moments.length > 0);
-    if (entries.length === 0) {
-      await AsyncStorage.removeItem(STORAGE_KEY);
-      return;
-    }
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)));
-  } catch {
-    // Ignore write failures so the UI can keep responding.
+async function writeStore(
+  store: Record<string, EventMoment[]>,
+  storageScope?: string,
+): Promise<void> {
+  const storageKey = storageKeyForScope(storageScope);
+  const entries = Object.entries(store).filter(([, moments]) => moments.length > 0);
+  if (entries.length === 0) {
+    await AsyncStorage.removeItem(storageKey);
+    return;
   }
+  await AsyncStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(entries)));
 }
 
 async function updateMoments(
   rawEventId: ID,
   updater: (current: EventMoment[]) => EventMoment[],
+  storageScope?: string,
 ): Promise<EventMoment[]> {
   const eventId = normalizeEventId(rawEventId);
   if (!eventId) return [];
 
-  const store = await readStore();
+  const store = await readStore(storageScope);
   const nextMoments = sortMomentsNewestFirst(updater(store[eventId] ?? []).map((moment) => sanitizeMoment(moment)).filter((moment): moment is EventMoment => Boolean(moment)));
   const nextStore = { ...store };
 
@@ -213,7 +227,7 @@ async function updateMoments(
     nextStore[eventId] = nextMoments;
   }
 
-  await writeStore(nextStore);
+  await writeStore(nextStore, storageScope);
   return nextStore[eventId] ?? [];
 }
 
@@ -266,14 +280,20 @@ export function listFeaturedMoments(moments: EventMoment[], limit = 3): EventMom
     .slice(0, Math.max(0, limit));
 }
 
-export async function listEventMoments(eventId: ID): Promise<EventMoment[]> {
+export async function listEventMoments(
+  eventId: ID,
+  storageScope?: string,
+): Promise<EventMoment[]> {
   const normalized = normalizeEventId(eventId);
   if (!normalized) return [];
-  const store = await readStore();
+  const store = await readStore(storageScope);
   return store[normalized] ?? [];
 }
 
-export async function createEventMoment(input: EventMomentCreateInput): Promise<EventMoment> {
+export async function createEventMoment(
+  input: EventMomentCreateInput,
+  storageScope?: string,
+): Promise<EventMoment> {
   const eventId = normalizeEventId(input.eventId);
   const authorName = normalizeText(input.authorName);
   const mediaUri = normalizeText(input.media.uri);
@@ -307,7 +327,7 @@ export async function createEventMoment(input: EventMomentCreateInput): Promise<
     comments: [],
   };
 
-  await updateMoments(eventId, (current) => [moment, ...current]);
+  await updateMoments(eventId, (current) => [moment, ...current], storageScope);
   return moment;
 }
 
@@ -316,7 +336,8 @@ export async function toggleMomentReaction(input: {
   momentId: string;
   actorKey: string;
   reactionTypeId: string;
-}): Promise<EventMoment[]> {
+  active?: boolean;
+}, storageScope?: string): Promise<EventMoment[]> {
   const actorKey = normalizeText(input.actorKey);
   const reactionTypeId = normalizeText(input.reactionTypeId)?.toLowerCase();
   if (!actorKey) throw new Error('Necesitas una identidad para reaccionar.');
@@ -336,16 +357,21 @@ export async function toggleMomentReaction(input: {
         ]),
       ) as EventMoment['reactions'];
 
-      if (!alreadySelected) {
+      const shouldActivate = input.active ?? !alreadySelected;
+      if (shouldActivate) {
         nextReactions[reactionTypeId] = [actorKey, ...(nextReactions[reactionTypeId] ?? [])];
       }
 
       return { ...moment, reactions: nextReactions };
     }),
+    storageScope,
   );
 }
 
-export async function addMomentComment(input: EventMomentCommentInput): Promise<EventMoment[]> {
+export async function addMomentComment(
+  input: EventMomentCommentInput,
+  storageScope?: string,
+): Promise<EventMoment[]> {
   const body = normalizeText(input.body);
   const authorName = normalizeText(input.authorName);
   if (!body) throw new Error('Escribe un comentario antes de enviarlo.');
@@ -368,5 +394,6 @@ export async function addMomentComment(input: EventMomentCommentInput): Promise<
         ? { ...moment, comments: sortCommentsNewestFirst([comment, ...moment.comments]) }
         : moment,
     ),
+    storageScope,
   );
 }

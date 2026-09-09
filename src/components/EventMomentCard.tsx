@@ -4,10 +4,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 
 import { countMomentReactions } from '../lib/eventMoments';
+import { eventExperienceLanguage, eventMomentCopy } from '../localization/eventExperienceCopy';
 import type { EventMoment, EventMomentMedia, EventMomentReactionOption } from '../types';
 
-const formatDuration = (durationMs?: number | null): string => {
-  if (!durationMs || durationMs <= 0) return 'Video corto';
+const formatDuration = (durationMs: number | null | undefined, shortVideoLabel: string): string => {
+  if (!durationMs || durationMs <= 0) return shortVideoLabel;
   const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -16,6 +17,7 @@ const formatDuration = (durationMs?: number | null): string => {
 
 type EventMomentCardProps = {
   moment: EventMoment;
+  locale: string;
   currentActorKey: string;
   currentPartyId?: string | null;
   featured?: boolean;
@@ -29,7 +31,11 @@ type EventMomentCardProps = {
   commentDraft: string;
   onChangeComment: (momentId: string, value: string) => void;
   onSubmitComment: (momentId: string) => void;
-  onToggleReaction: (momentId: string, reaction: EventMomentReactionOption) => void;
+  onToggleReaction: (
+    momentId: string,
+    reaction: EventMomentReactionOption,
+    active: boolean,
+  ) => boolean | void | Promise<boolean | void>;
   onReactionPosted?: () => void;
   onConnectAuthor?: (partyId: string) => void;
   onOpenMedia?: (media: EventMomentMedia) => void;
@@ -37,6 +43,7 @@ type EventMomentCardProps = {
 
 export function EventMomentCard({
   moment,
+  locale,
   currentActorKey,
   currentPartyId,
   featured = false,
@@ -55,6 +62,8 @@ export function EventMomentCard({
   onConnectAuthor,
   onOpenMedia,
 }: EventMomentCardProps) {
+  const language = eventExperienceLanguage(locale);
+  const copy = eventMomentCopy[language];
   const [imageLoading, setImageLoading] = useState(moment.media.kind === 'image');
   const [imageFailed, setImageFailed] = useState(false);
   const totalReactions = countMomentReactions(moment);
@@ -71,13 +80,13 @@ export function EventMomentCard({
             <Text style={styles.authorName}>{moment.authorName}</Text>
             {featured ? (
               <View style={styles.featuredBadge}>
-                <Text style={styles.featuredBadgeText}>Top moment</Text>
+                <Text style={styles.featuredBadgeText}>{copy.featured}</Text>
               </View>
             ) : null}
             {pending ? (
               <View style={styles.pendingBadge} accessibilityLiveRegion="polite">
                 <ActivityIndicator size="small" color="#1d4ed8" />
-                <Text style={styles.pendingBadgeText}>Publicando…</Text>
+                <Text style={styles.pendingBadgeText}>{copy.publishing}</Text>
               </View>
             ) : null}
           </View>
@@ -90,8 +99,11 @@ export function EventMomentCard({
             style={[styles.connectButton, (connectDisabled || pending) && styles.buttonDisabled]}
             onPress={() => moment.authorPartyId && onConnectAuthor?.(moment.authorPartyId)}
             disabled={connectDisabled || pending}
+            accessibilityRole="button"
+            accessibilityLabel={copy.connect}
+            accessibilityState={{ disabled: connectDisabled || pending }}
           >
-            <Text style={styles.connectButtonText}>Conectar</Text>
+            <Text style={styles.connectButtonText}>{copy.connect}</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -103,8 +115,8 @@ export function EventMomentCard({
         accessibilityRole={onOpenMedia ? 'button' : undefined}
         accessibilityLabel={
           moment.media.kind === 'image'
-            ? `Ver foto de ${moment.authorName}`
-            : `Abrir video de ${moment.authorName}`
+            ? copy.viewPhoto(moment.authorName)
+            : copy.openVideo(moment.authorName)
         }
       >
         {moment.media.kind === 'image' ? (
@@ -115,7 +127,7 @@ export function EventMomentCard({
             {imageFailed ? (
               <View style={styles.mediaFallback}>
                 <MaterialCommunityIcons name="image-off-outline" size={32} color="#64748b" />
-                <Text style={styles.mediaFallbackText}>No pudimos cargar esta foto</Text>
+                <Text style={styles.mediaFallbackText}>{copy.imageLoadFailure}</Text>
               </View>
             ) : (
               <Image
@@ -140,16 +152,16 @@ export function EventMomentCard({
                   setImageFailed(true);
                 }}
                 accessibilityRole="image"
-                accessibilityLabel={moment.caption || `Foto compartida por ${moment.authorName}`}
+                accessibilityLabel={moment.caption || copy.sharedPhoto(moment.authorName)}
               />
             )}
           </View>
         ) : (
           <View style={styles.videoBox}>
             <MaterialCommunityIcons name="play-circle-outline" size={40} color="#f8fafc" />
-            <Text style={styles.videoTitle}>Video del evento</Text>
-            <Text style={styles.videoMeta}>{formatDuration(moment.media.durationMs)}</Text>
-            {onOpenMedia ? <Text style={styles.videoHint}>Toca para abrir</Text> : null}
+            <Text style={styles.videoTitle}>{copy.eventVideo}</Text>
+            <Text style={styles.videoMeta}>{formatDuration(moment.media.durationMs, copy.shortVideo)}</Text>
+            {onOpenMedia ? <Text style={styles.videoHint}>{copy.tapToOpen}</Text> : null}
           </View>
         )}
       </TouchableOpacity>
@@ -161,6 +173,8 @@ export function EventMomentCard({
           const actors = moment.reactions[reaction.id] ?? [];
           const count = actors.length;
           const active = actors.includes(currentActorKey);
+          const reactionLabel = (language === 'en' ? reaction.nameEn : reaction.nameEs).trim()
+            || reaction.label;
           return (
             <TouchableOpacity
               key={reaction.id}
@@ -171,21 +185,21 @@ export function EventMomentCard({
               ]}
               onPress={async () => {
                 try {
-                  await onToggleReaction(moment.id, reaction);
-                  onReactionPosted?.();
+                  const reactionActivated = await onToggleReaction(moment.id, reaction, !active);
+                  if (reactionActivated) onReactionPosted?.();
                 } catch {
                   // Swallow — the parent owns error surfacing for the toggle
-                  // mutation; we only fire the conversion callback on success.
+                  // mutation; conversion requires an acknowledged activation.
                 }
               }}
               disabled={reactionDisabled || pending}
               accessibilityRole="button"
               accessibilityState={{ selected: active, disabled: reactionDisabled || pending }}
-              accessibilityLabel={count > 0 ? `${reaction.label}: ${count}` : reaction.label}
+              accessibilityLabel={count > 0 ? `${reactionLabel}: ${count}` : reactionLabel}
             >
               <Text accessibilityElementsHidden style={styles.reactionEmoji}>{reaction.emoji}</Text>
               <Text style={[styles.reactionText, active && styles.reactionTextActive]}>
-                {reaction.label} {count > 0 ? count : ''}
+                {reactionLabel} {count > 0 ? count : ''}
               </Text>
             </TouchableOpacity>
           );
@@ -199,7 +213,7 @@ export function EventMomentCard({
       ) : null}
 
       <Text style={styles.summaryText}>
-        {totalReactions} reacciones · {moment.comments.length} comentarios
+        {copy.summary(totalReactions, moment.comments.length)}
       </Text>
 
       <View style={styles.commentsList}>
@@ -213,11 +227,13 @@ export function EventMomentCard({
 
       <View style={styles.commentComposer}>
         <TextInput
-          placeholder="Escribe un comentario"
+          placeholder={copy.commentPlaceholder}
           value={commentDraft}
           onChangeText={(value) => onChangeComment(moment.id, value)}
           style={styles.commentInput}
           editable={!commentDisabled && !pending}
+          accessibilityLabel={copy.commentPlaceholder}
+          accessibilityState={{ disabled: commentDisabled || pending }}
         />
         <TouchableOpacity
           style={[
@@ -226,8 +242,11 @@ export function EventMomentCard({
           ]}
           onPress={() => onSubmitComment(moment.id)}
           disabled={!commentDraft.trim() || commentDisabled || pending}
+          accessibilityRole="button"
+          accessibilityLabel={copy.sendComment}
+          accessibilityState={{ disabled: !commentDraft.trim() || commentDisabled || pending }}
         >
-          <Text style={styles.commentButtonText}>Enviar</Text>
+          <Text style={styles.commentButtonText}>{copy.sendComment}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -428,6 +447,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   commentButtonText: {
     color: '#fff',

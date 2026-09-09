@@ -1,9 +1,14 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 const mockMutate = jest.fn();
 const mockPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockCapture = jest.fn();
+const mockMarkFirstValueCompleted = jest.fn();
+const mockMutationOptions: Array<{
+  onSuccess?: (data: unknown, variables: unknown) => unknown;
+}> = [];
 const mockUseQuery = jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
   if (queryKey[0] === 'social-following') {
     return {
@@ -47,13 +52,24 @@ const mockUseQuery = jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
 });
 
 jest.mock('@tanstack/react-query', () => ({
-  useMutation: jest.fn(() => ({
-    mutate: mockMutate,
-    isPending: false,
-    error: null,
-  })),
+  useMutation: jest.fn((options) => {
+    mockMutationOptions.push(options);
+    return {
+      mutate: mockMutate,
+      isPending: false,
+      error: null,
+    };
+  }),
   useQuery: (options: { queryKey: unknown[] }) => mockUseQuery(options),
   useQueryClient: jest.fn(() => ({ invalidateQueries: mockInvalidateQueries })),
+}));
+
+jest.mock('../src/analytics/AnalyticsProvider', () => ({
+  useAnalytics: () => ({ capture: mockCapture }),
+}));
+
+jest.mock('../src/lib/onboardingIntent', () => ({
+  markFirstValueCompleted: (...args: unknown[]) => mockMarkFirstValueCompleted(...args),
 }));
 
 jest.mock('expo-router', () => ({
@@ -78,6 +94,8 @@ const SocialScreen = require('../app/(tabs)/social').default;
 describe('Social screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMutationOptions.length = 0;
+    mockMarkFirstValueCompleted.mockResolvedValue('artist_followed');
   });
 
   it('keeps the visible social surface focused on following', () => {
@@ -104,9 +122,67 @@ describe('Social screen', () => {
     expect(screen.getByText('Artista Uno')).toBeTruthy();
 
     fireEvent.press(screen.getByRole('button', { name: 'Seguir a Artista Uno' }));
-    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ id: 'artist-1', name: 'Artista Uno' }));
+    expect(mockMutate).toHaveBeenCalledWith({
+      artist: expect.objectContaining({ id: 'artist-1', name: 'Artista Uno' }),
+      ownerPartyId: '42',
+      authToken: 'Bearer demo',
+    });
 
     fireEvent.press(screen.getByRole('button', { name: 'Ver próximos eventos' }));
     expect(mockPush).toHaveBeenCalledWith('/(tabs)/events');
+  });
+
+  it('does not mislabel a person-to-person follow as artist activation', async () => {
+    render(<SocialScreen />);
+
+    await act(async () => {
+      await mockMutationOptions[0]?.onSuccess?.(undefined, 9);
+    });
+
+    expect(mockCapture).not.toHaveBeenCalledWith('artist_followed', expect.anything());
+    expect(mockMarkFirstValueCompleted).not.toHaveBeenCalled();
+  });
+
+  it('binds real artist activation to the current Party token', async () => {
+    const artist = { id: 'artist-1', partyId: '71', name: 'Artista Uno' };
+    render(<SocialScreen />);
+
+    await act(async () => {
+      await mockMutationOptions[1]?.onSuccess?.(undefined, {
+        artist,
+        ownerPartyId: '42',
+        authToken: 'Bearer demo',
+      });
+    });
+
+    expect(mockCapture).toHaveBeenCalledWith(
+      'artist_followed',
+      { platform: 'mobile', artist_id: 'artist-1' },
+    );
+    expect(mockMarkFirstValueCompleted).toHaveBeenCalledWith(
+      '42',
+      'artist_followed',
+      'Bearer demo',
+    );
+    expect(mockCapture).toHaveBeenCalledWith(
+      'first_value_completed',
+      { platform: 'mobile', value: 'artist_followed' },
+    );
+  });
+
+  it('suppresses artist success and completion after an auth-session replacement', async () => {
+    const artist = { id: 'artist-1', partyId: '71', name: 'Artista Uno' };
+    render(<SocialScreen />);
+
+    await act(async () => {
+      await mockMutationOptions[1]?.onSuccess?.(undefined, {
+        artist,
+        ownerPartyId: '41',
+        authToken: 'Bearer previous',
+      });
+    });
+
+    expect(mockCapture).not.toHaveBeenCalled();
+    expect(mockMarkFirstValueCompleted).not.toHaveBeenCalled();
   });
 });

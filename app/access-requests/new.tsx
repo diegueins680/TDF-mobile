@@ -17,7 +17,6 @@ import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
-import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
 
 const ACTIONS = new Set<FeatureAction>(['discover', 'view', 'create', 'edit', 'delete', 'archive', 'deactivate', 'import', 'export', 'submit', 'validate', 'approve', 'reject', 'assign', 'publish', 'report', 'administer']);
 
@@ -50,10 +49,10 @@ export default function NewAccessRequestScreen() {
     mutationFn: () => submitAccessRequest({ featureId: feature?.id ?? '', action: selection?.action ?? 'view', justification: justification.trim() || null }),
     onSuccess: async (request) => {
       analytics.capture('feature_access_request_submitted', { feature_id: request.featureId, feature_action: request.action, platform: 'mobile' });
-      if (await markFirstValueCompleted(partyId, 'access_requested')) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'access_requested' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'access_requested' });
-        if (partyId) await markNewUserOnboardingCompleted(partyId);
+      const completedValue = await markFirstValueCompleted(partyId, 'access_requested', token);
+      if (completedValue) {
+        analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
       }
       await queryClient.invalidateQueries({ queryKey: ['access-requests'] });
       router.replace('/access-requests' as Href);

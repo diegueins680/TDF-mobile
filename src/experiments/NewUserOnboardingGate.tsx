@@ -30,10 +30,10 @@ import { Events } from '../api/events';
 import { EventMomentCard } from '../components/EventMomentCard';
 import { buildMomentActor } from '../lib/eventMoments';
 import {
+  isRemoteReactionActive,
   listMomentFeed,
   toggleMomentFeedReaction,
 } from '../lib/eventMomentsRepository';
-import { markFirstValueCompleted } from '../lib/onboardingIntent';
 import { markExperimentExposedOnce } from '../lib/firstRunFlags';
 import { useAuth } from '../providers/AuthProvider';
 import { useFirstRun } from '../providers/FirstRunProvider';
@@ -54,6 +54,13 @@ const TREATMENT = 'treatment_singlefeature';
 
 type Props = {
   children: React.ReactNode;
+};
+
+type ReactionRecovery = {
+  momentId: string;
+  reaction: EventMomentReactionOption;
+  active: boolean;
+  reason: 'failed' | 'local-only';
 };
 
 const pickAnchorEvent = (events: SocialEvent[] | undefined): SocialEvent | null => {
@@ -167,12 +174,14 @@ export function NewUserOnboardingGate({ children }: Props) {
       queryKey: [
         'exp-single-feature-onboarding',
         'probe',
+        currentActor.actorKey,
         event.id,
         shouldPreferRemoteMoments ? 'remote' : 'local',
       ] as const,
       queryFn: () =>
         listMomentFeed(event.id as ID, {
           preferRemote: shouldPreferRemoteMoments,
+          storageScope: currentActor.actorKey,
         }),
       enabled: gateEngaged,
     })),
@@ -200,61 +209,100 @@ export function NewUserOnboardingGate({ children }: Props) {
     queryKey: [
       'exp-single-feature-onboarding',
       'moments',
+      currentActor.actorKey,
       featuredEvent?.id ?? null,
       shouldPreferRemoteMoments ? 'remote' : 'local',
     ],
     queryFn: () =>
       listMomentFeed(featuredEvent!.id as ID, {
         preferRemote: shouldPreferRemoteMoments,
+        storageScope: currentActor.actorKey,
       }),
     enabled: gateEngaged && Boolean(featuredEvent?.id),
     initialData: featuredProbe?.data,
   });
 
-  // Conversion detection: fire experiment_converted the first time the user
-  // successfully posts a reaction via the moment card.
+  // Conversion detection: fire experiment_converted only after the server
+  // acknowledges that the authenticated Party now has the selected reaction.
   const convertedRef = useRef(false);
+  const conversionInFlightRef = useRef(false);
+  const reactionInFlightRef = useRef(false);
   const handleConversion = useCallback(() => {
-    if (convertedRef.current) return;
-    convertedRef.current = true;
-    track('experiment_converted', {
-      experimentId: EXPERIMENT_ID,
-      variant: TREATMENT,
-      userId: normalizedPartyId ?? undefined,
-      metadata: { value: 1, surface: 'gate_moment_reaction' },
-    });
+    if (convertedRef.current || conversionInFlightRef.current) return;
+    conversionInFlightRef.current = true;
     void (async () => {
-      if (await markFirstValueCompleted(normalizedPartyId, 'moment_reaction')) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'moment_reaction' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'moment_reaction' });
+      try {
+        const result = await completeOnboarding('moment_reaction');
+        if (!result) return;
+        convertedRef.current = !result.progress.eligible;
+        if (!result.newlyCompleted) return;
+        const completedValue = result.progress.firstValue;
+        if (completedValue) {
+          analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
+        }
+        if (completedValue === 'moment_reaction') {
+          track('experiment_converted', {
+            experimentId: EXPERIMENT_ID,
+            variant: TREATMENT,
+            userId: normalizedPartyId ?? undefined,
+            metadata: { value: 1, surface: 'gate_moment_reaction' },
+          });
+        }
+      } finally {
+        conversionInFlightRef.current = false;
       }
-      await completeOnboarding();
     })();
   }, [analytics, completeOnboarding, normalizedPartyId, track]);
 
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [reactionRecovery, setReactionRecovery] = useState<ReactionRecovery | null>(null);
+  const [reactionPending, setReactionPending] = useState(false);
   const handleChangeComment = useCallback((momentId: string, value: string) => {
     setCommentDrafts((prev) => ({ ...prev, [momentId]: value }));
   }, []);
 
   const handleToggleReaction = useCallback(
-    async (momentId: string, reaction: EventMomentReactionOption) => {
-      if (!featuredEvent?.id) return;
+    async (momentId: string, reaction: EventMomentReactionOption, active: boolean) => {
+      if (!featuredEvent?.id || reactionInFlightRef.current) return false;
+      reactionInFlightRef.current = true;
+      setReactionPending(true);
+      setReactionRecovery(null);
       try {
-        await toggleMomentFeedReaction(
+        const result = await toggleMomentFeedReaction(
           {
             eventId: featuredEvent.id as ID,
             momentId,
             actorKey: currentActor.actorKey,
             reaction,
+            active,
           },
-          { preferRemote: shouldPreferRemoteMoments },
+          {
+            preferRemote: shouldPreferRemoteMoments,
+            storageScope: currentActor.actorKey,
+          },
         );
+        if (result.source !== 'remote') {
+          setReactionRecovery({ momentId, reaction, active, reason: 'local-only' });
+          return false;
+        }
+        const remotelyActive = isRemoteReactionActive(result, reaction.id, currentActor.actorKey);
+        if (active && !remotelyActive) {
+          setReactionRecovery({ momentId, reaction, active, reason: 'failed' });
+          return false;
+        }
+        return remotelyActive;
+      } catch {
+        setReactionRecovery({ momentId, reaction, active, reason: 'failed' });
+        return false;
       } finally {
-        queryClient.invalidateQueries({
+        reactionInFlightRef.current = false;
+        setReactionPending(false);
+        void queryClient.invalidateQueries({
           queryKey: [
             'exp-single-feature-onboarding',
             'moments',
+            currentActor.actorKey,
             featuredEvent.id,
             shouldPreferRemoteMoments ? 'remote' : 'local',
           ],
@@ -264,11 +312,33 @@ export function NewUserOnboardingGate({ children }: Props) {
     [currentActor, featuredEvent?.id, queryClient, shouldPreferRemoteMoments],
   );
 
+  const handleRetryReaction = useCallback(() => {
+    if (!reactionRecovery || reactionInFlightRef.current) return;
+    const retry = reactionRecovery;
+    void handleToggleReaction(retry.momentId, retry.reaction, retry.active).then((activated) => {
+      if (activated) handleConversion();
+    });
+  }, [handleConversion, handleToggleReaction, reactionRecovery]);
+
+  const handleRetryFeed = useCallback(() => {
+    void eventsQuery.refetch();
+    if (featuredEvent?.id) void momentsQuery.refetch();
+  }, [eventsQuery, featuredEvent?.id, momentsQuery]);
+
   const handleExplore = useCallback(() => {
     setTreatmentExited(true);
-    analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
-    void completeOnboarding();
     router.replace('/(tabs)/events');
+    void completeOnboarding().then((result) => {
+      if (result?.newlyCompleted) {
+        const completedValue = result.progress.firstValue;
+        if (completedValue) {
+          analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
+        } else {
+          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
+        }
+      }
+    });
   }, [analytics, completeOnboarding, router]);
 
   if (!gateEngaged) {
@@ -284,13 +354,40 @@ export function NewUserOnboardingGate({ children }: Props) {
         <Text style={styles.eyebrow}>{copy.eyebrow}</Text>
         <Text accessibilityRole="header" style={styles.title}>
           {featuredEvent
-            ? `${locale.startsWith('en') ? 'Experience' : 'Vive'} ${featuredEvent.title ?? copy.eventFallback}`
+            ? `${copy.experiencePrefix} ${featuredEvent.title ?? copy.eventFallback}`
             : copy.titleFallback}
         </Text>
         <Text style={styles.subtitle}>{copy.subtitle}</Text>
       </View>
 
       <ScrollView style={styles.feed} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {reactionRecovery ? (
+          <View
+            style={styles.recoveryCard}
+          >
+            <Text
+              style={styles.recoveryText}
+              accessibilityRole="alert"
+              accessibilityLiveRegion="assertive"
+            >
+              {reactionRecovery.reason === 'local-only'
+                ? copy.reactionLocalOnly
+                : copy.reactionFailure}
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={copy.retryReaction}
+              accessibilityState={{ busy: reactionPending, disabled: reactionPending }}
+              style={[styles.retryButton, reactionPending && styles.buttonDisabled]}
+              disabled={reactionPending}
+              onPress={handleRetryReaction}
+            >
+              <Text style={styles.retryButtonText}>
+                {reactionPending ? copy.retryingReaction : copy.retryReaction}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
         {!isConnected ? (
           <View style={styles.emptyCard}>
             <Text accessibilityRole="header" style={styles.emptyTitle}>{copy.offlineTitle}</Text>
@@ -300,6 +397,14 @@ export function NewUserOnboardingGate({ children }: Props) {
           <View style={styles.emptyCard}>
             <Text accessibilityRole="header" style={styles.emptyTitle}>{copy.errorTitle}</Text>
             <Text style={styles.emptyBody}>{copy.errorBody}</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={copy.retryFeed}
+              style={styles.retryButton}
+              onPress={handleRetryFeed}
+            >
+              <Text style={styles.retryButtonText}>{copy.retryFeed}</Text>
+            </TouchableOpacity>
           </View>
         ) : loadingFeed ? (
           <View style={styles.center}>
@@ -310,11 +415,13 @@ export function NewUserOnboardingGate({ children }: Props) {
             <EventMomentCard
               key={moment.id}
               moment={moment}
+              locale={locale}
               currentActorKey={currentActor.actorKey}
               currentPartyId={normalizedPartyId ?? null}
               featured={idx === 0}
               reactionOptions={reactionOptions}
               reactionUnavailableLabel={copy.reactionsUnavailable}
+              reactionDisabled={reactionPending}
               commentDraft={commentDrafts[moment.id] ?? ''}
               onChangeComment={handleChangeComment}
               onSubmitComment={() => {
@@ -405,6 +512,26 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   previewBody: { marginTop: 6, fontSize: 14, color: '#0f172a', lineHeight: 20 },
+  recoveryCard: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#fed7aa',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    gap: 10,
+  },
+  recoveryText: { color: '#9a3412', fontSize: 14, lineHeight: 20 },
+  retryButton: {
+    minHeight: 44,
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#1d4ed8',
+  },
+  retryButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  buttonDisabled: { opacity: 0.55 },
   footer: {
     padding: 16,
     backgroundColor: 'rgba(255,255,255,0.96)',

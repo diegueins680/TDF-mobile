@@ -34,6 +34,11 @@ function Probe() {
         accessibilityLabel="Complete first value"
         onPress={() => void completeOnboarding('artist_followed')}
       />
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Exit onboarding"
+        onPress={() => void completeOnboarding()}
+      />
     </>
   );
 }
@@ -107,5 +112,50 @@ describe('FirstRunProvider', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Complete first value' }));
     expect(mockGetOnboardingProgress).not.toHaveBeenCalled();
     expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
+  });
+
+  it('fails closed immediately while eligibility for a new Party is unresolved', async () => {
+    mockGetOnboardingProgress
+      .mockResolvedValueOnce({ eligible: true })
+      .mockReturnValueOnce(new Promise(() => undefined));
+    const view = renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    mockPartyId = '77';
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+
+    expect(screen.getByText('false:false')).toBeTruthy();
+    expect(screen.getByText('no-replay')).toBeTruthy();
+  });
+
+  it('ignores a late exit completion after the active Party changes', async () => {
+    let resolveCompletion!: (value: {
+      newlyCompleted: boolean;
+      progress: { eligible: boolean };
+    }) => void;
+    mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
+    mockCompleteOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveCompletion = resolve;
+    }));
+    const view = renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    fireEvent.press(screen.getByRole('button', { name: 'Exit onboarding' }));
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledWith());
+    mockPartyId = '77';
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    resolveCompletion({ newlyCompleted: true, progress: { eligible: false } });
+
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
   });
 });

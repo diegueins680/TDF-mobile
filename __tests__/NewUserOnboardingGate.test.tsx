@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Text } from 'react-native';
 
 const mockTrack = jest.fn();
@@ -24,6 +24,7 @@ let mockEventsState: Record<string, unknown>;
 let mockMomentsState: Record<string, unknown>;
 let mockProbeState: Record<string, unknown>[];
 let mockReplayedFirstValueCompletion: Record<string, unknown> | null = null;
+let mockPartyId = '42';
 
 const pastEvent = { id: 'event-1', title: 'Festival Uno', startTime: '2026-01-01T00:00:00.000Z' };
 const moment = { id: 'moment-1', eventId: 'event-1', body: 'Primer momento' };
@@ -36,7 +37,7 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
   useQueries: () => mockProbeState,
   useQuery: ({ queryKey }: { queryKey: unknown[] }) => (
-    queryKey[1] === 'events' ? mockEventsState : mockMomentsState
+    queryKey.includes('events') ? mockEventsState : mockMomentsState
   ),
 }));
 
@@ -54,7 +55,7 @@ jest.mock('../src/lib/firstRunFlags', () => ({
   ),
 }));
 jest.mock('../src/providers/AuthProvider', () => ({
-  useAuth: () => ({ token: 'Bearer token', partyId: '42', session: { displayName: 'Ana' } }),
+  useAuth: () => ({ token: 'Bearer token', partyId: mockPartyId, session: { displayName: 'Ana' } }),
 }));
 jest.mock('../src/providers/FirstRunProvider', () => ({
   useFirstRun: () => ({
@@ -66,7 +67,7 @@ jest.mock('../src/providers/FirstRunProvider', () => ({
 }));
 jest.mock('../src/providers/UserSettingsProvider', () => ({
   useUserSettings: () => ({
-    partyId: '42',
+    partyId: mockPartyId,
     displayName: 'Ana',
     locale: 'es',
     getCatalogItems: () => [{ id: 'like', code: 'like', name: 'Me gusta', nameEs: 'Me gusta', nameEn: 'Like', displaySymbol: '❤️' }],
@@ -126,6 +127,7 @@ describe('NewUserOnboardingGate states', () => {
     mockMomentsState = { data: [], isLoading: false, isError: false };
     mockProbeState = [];
     mockReplayedFirstValueCompletion = null;
+    mockPartyId = '42';
   });
 
   it('records one-shot treatment exposure after identity and persists explicit exit', async () => {
@@ -160,6 +162,52 @@ describe('NewUserOnboardingGate states', () => {
       variant: 'control',
       userId: '42',
     })));
+  });
+
+  it('keeps an explicit treatment exit scoped to the Party that chose it', async () => {
+    mockIsConnected = false;
+    const view = renderGate();
+    fireEvent.press(screen.getByRole('button', { name: 'Ver eventos' }));
+    expect(screen.getByText('Full app shell')).toBeTruthy();
+
+    mockPartyId = '77';
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+
+    expect(screen.getByRole('header', { name: 'Estás sin conexión' })).toBeTruthy();
+  });
+
+  it('suppresses a late exposure after the active Party changes', async () => {
+    let resolveOldExposure!: (value: boolean) => void;
+    mockMarkExperimentExposedOnce
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveOldExposure = resolve;
+      }))
+      .mockResolvedValueOnce(true);
+    const view = renderGate();
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledWith(
+      '42',
+      'single-feature-onboarding-v1',
+    ));
+
+    mockPartyId = '77';
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_viewed',
+      expect.objectContaining({ userId: '77' }),
+    ));
+    await act(async () => {
+      resolveOldExposure(true);
+      await Promise.resolve();
+    });
+
+    expect(mockTrack).not.toHaveBeenCalledWith(
+      'experiment_viewed',
+      expect.objectContaining({ userId: '42' }),
+    );
   });
 
   it.each([
@@ -203,6 +251,34 @@ describe('NewUserOnboardingGate states', () => {
       'first_value_completed',
       { platform: 'mobile', value: 'moment_reaction' },
     );
+  });
+
+  it('suppresses a late conversion after the active Party changes', async () => {
+    let resolveOldCompletion!: (value: {
+      newlyCompleted: boolean;
+      progress: { eligible: boolean };
+    }) => void;
+    mockCompleteOnboarding.mockReturnValueOnce(new Promise((resolve) => {
+      resolveOldCompletion = resolve;
+    }));
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    const view = renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+    await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledWith('moment_reaction'));
+    mockPartyId = '77';
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    await act(async () => {
+      resolveOldCompletion({ newlyCompleted: true, progress: { eligible: false } });
+      await Promise.resolve();
+    });
+
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+    expect(mockCapture).not.toHaveBeenCalledWith('first_value_completed', expect.anything());
   });
 
   it('suppresses completion analytics when onboarding was already completed', async () => {

@@ -6,7 +6,7 @@
  * can observe partyId. Eligibility comes from the backend's account-bound
  * signup marker, survives device changes, and ends permanently on completion.
  */
-import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 import {
   completeOnboardingProgress,
@@ -19,6 +19,7 @@ import {
   retryPendingFirstValueCompletion,
   type RetriedFirstValueCompletion,
 } from '../lib/onboardingIntent';
+import { usePartyOwnership } from '../hooks/usePartyOwnership';
 import { useAuth } from './AuthProvider';
 
 type FirstRunContextValue = {
@@ -39,79 +40,107 @@ const FirstRunContext = createContext<FirstRunContextValue>({
   replayedFirstValueCompletion: null,
 });
 
+type FirstRunState = {
+  partyId: string | null;
+  cohortReady: boolean;
+  isNewUser: boolean;
+  replayedFirstValueCompletion: RetriedFirstValueCompletion | null;
+};
+
 export function FirstRunProvider({ children }: PropsWithChildren) {
   const { partyId } = useAuth();
-  const activePartyIdRef = useRef(partyId);
-  activePartyIdRef.current = partyId;
-
-  const [cohortReady, setCohortReady] = useState(false);
-  const [isNewUser, setIsNewUser] = useState(false);
-  const [replayedFirstValueCompletion, setReplayedFirstValueCompletion] =
-    useState<RetriedFirstValueCompletion | null>(null);
+  const ownsParty = usePartyOwnership(partyId);
+  const [state, setState] = useState<FirstRunState>({
+    partyId: null,
+    cohortReady: false,
+    isNewUser: false,
+    replayedFirstValueCompletion: null,
+  });
 
   useEffect(() => {
     if (!partyId) {
-      setCohortReady(true);
-      setIsNewUser(false);
-      setReplayedFirstValueCompletion(null);
+      setState({
+        partyId: null,
+        cohortReady: true,
+        isNewUser: false,
+        replayedFirstValueCompletion: null,
+      });
       return;
     }
 
     let cancelled = false;
+    setState({
+      partyId,
+      cohortReady: false,
+      isNewUser: false,
+      replayedFirstValueCompletion: null,
+    });
     (async () => {
-      setCohortReady(false);
-      setReplayedFirstValueCompletion(null);
       let isNew = false;
+      let replayed: RetriedFirstValueCompletion | null = null;
       try {
         const progress = await getOnboardingProgress();
-        if (cancelled) return;
-        const replayed = await retryPendingFirstValueCompletion(
+        if (cancelled || !ownsParty(partyId)) return;
+        replayed = await retryPendingFirstValueCompletion(
           partyId,
-          () => activePartyIdRef.current === partyId,
+          () => ownsParty(partyId),
         );
-        if (cancelled) return;
-        setReplayedFirstValueCompletion(replayed);
+        if (cancelled || !ownsParty(partyId)) return;
         isNew = replayed?.result.progress.eligible ?? progress.eligible;
       } catch {
         // Fail closed: network errors and legacy servers must never classify
         // an established account as a new-user experiment participant.
       }
-      if (cancelled) return;
-      setIsNewUser(isNew);
-      setCohortReady(true);
+      if (cancelled || !ownsParty(partyId)) return;
+      setState({
+        partyId,
+        cohortReady: true,
+        isNewUser: isNew,
+        replayedFirstValueCompletion: replayed,
+      });
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [partyId]);
+  }, [ownsParty, partyId]);
 
   const completeOnboarding = useCallback(async (
     firstValue?: OnboardingFirstValue,
   ): Promise<OnboardingCompletionResult | null> => {
-    if (!partyId) return null;
+    const ownerPartyId = partyId;
+    if (!ownerPartyId || !ownsParty(ownerPartyId)) return null;
     try {
-      return firstValue
+      const result = firstValue
         ? await completeFirstValueWithRetry(
-          partyId,
+          ownerPartyId,
           firstValue,
-          () => activePartyIdRef.current === partyId,
+          () => ownsParty(ownerPartyId),
         )
         : await completeOnboardingProgress();
+      return ownsParty(ownerPartyId) ? result : null;
     } catch {
       // Leaving optional onboarding must not trap the current app session.
       return null;
     } finally {
-      setIsNewUser(false);
+      if (ownsParty(ownerPartyId)) {
+        setState((current) => current.partyId === ownerPartyId
+          ? { ...current, isNewUser: false }
+          : current);
+      }
     }
-  }, [partyId]);
+  }, [ownsParty, partyId]);
+
+  const stateIsCurrent = state.partyId === partyId;
 
   return (
     <FirstRunContext.Provider value={{
-      cohortReady,
-      isNewUser,
+      cohortReady: stateIsCurrent && state.cohortReady,
+      isNewUser: stateIsCurrent && state.isNewUser,
       completeOnboarding,
-      replayedFirstValueCompletion,
+      replayedFirstValueCompletion: stateIsCurrent
+        ? state.replayedFirstValueCompletion
+        : null,
     }}>
       {children}
     </FirstRunContext.Provider>

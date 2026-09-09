@@ -34,6 +34,7 @@ import {
   toggleMomentFeedReaction,
 } from '../lib/eventMomentsRepository';
 import { markExperimentExposedOnce } from '../lib/firstRunFlags';
+import { usePartyOwnership } from '../hooks/usePartyOwnership';
 import { useAuth } from '../providers/AuthProvider';
 import { useFirstRun } from '../providers/FirstRunProvider';
 import { useUserSettings } from '../providers/UserSettingsProvider';
@@ -85,6 +86,7 @@ export function NewUserOnboardingGate({ children }: Props) {
     replayedFirstValueCompletion,
   } = useFirstRun();
   const { token, partyId: normalizedPartyId, session } = useAuth();
+  const ownsParty = usePartyOwnership(normalizedPartyId);
   const { locale, getCatalogItems } = useUserSettings();
   const displayName = session?.displayName ?? null;
   const copy = experimentCopy[onboardingLanguage(locale)];
@@ -112,7 +114,9 @@ export function NewUserOnboardingGate({ children }: Props) {
   // Local override — once the user explicitly leaves the treatment landing
   // (e.g. taps "Explore more"), don't trap them again for the rest of the
   // session.
-  const [treatmentExited, setTreatmentExited] = useState(false);
+  const [treatmentExitedPartyId, setTreatmentExitedPartyId] = useState<string | null>(null);
+  const treatmentExited = Boolean(normalizedPartyId)
+    && treatmentExitedPartyId === normalizedPartyId;
 
   const variant = experimentsReady ? getVariant(EXPERIMENT_ID) : null;
   const experimentEnabled = isExperimentEnabled(EXPERIMENT_ID);
@@ -133,20 +137,26 @@ export function NewUserOnboardingGate({ children }: Props) {
     if (!eligibleForExperiment || !variant || viewedRef.current) return;
     viewedRef.current = true;
     void (async () => {
-      if (!normalizedPartyId || !await markExperimentExposedOnce(normalizedPartyId, EXPERIMENT_ID)) return;
+      const ownerPartyId = normalizedPartyId;
+      if (
+        !ownerPartyId
+        || !ownsParty(ownerPartyId)
+        || !await markExperimentExposedOnce(ownerPartyId, EXPERIMENT_ID)
+        || !ownsParty(ownerPartyId)
+      ) return;
       track('experiment_viewed', {
         experimentId: EXPERIMENT_ID,
         variant,
-        userId: normalizedPartyId,
+        userId: ownerPartyId,
       });
     })();
-  }, [eligibleForExperiment, normalizedPartyId, track, variant]);
+  }, [eligibleForExperiment, normalizedPartyId, ownsParty, track, variant]);
 
   // Pull a small window of recent events and anchor on the most recent past
   // one whose moments feed is non-empty. We fetch a slightly larger page
   // (without `upcomingOnly`) so the search has something to chew on.
   const eventsQuery = useQuery({
-    queryKey: ['exp-single-feature-onboarding', 'events'],
+    queryKey: ['exp-single-feature-onboarding', normalizedPartyId, 'events'],
     queryFn: () => Events.list({ limit: 20 }),
     enabled: gateEngaged,
   });
@@ -175,6 +185,7 @@ export function NewUserOnboardingGate({ children }: Props) {
     queries: candidateEvents.map((event) => ({
       queryKey: [
         'exp-single-feature-onboarding',
+        normalizedPartyId,
         'probe',
         event.id,
         shouldPreferRemoteMoments ? 'remote' : 'local',
@@ -208,6 +219,7 @@ export function NewUserOnboardingGate({ children }: Props) {
   const momentsQuery = useQuery({
     queryKey: [
       'exp-single-feature-onboarding',
+      normalizedPartyId,
       'moments',
       featuredEvent?.id ?? null,
       shouldPreferRemoteMoments ? 'remote' : 'local',
@@ -222,44 +234,53 @@ export function NewUserOnboardingGate({ children }: Props) {
 
   // Conversion detection: fire experiment_converted the first time the user
   // successfully posts a reaction via the moment card.
-  const convertedRef = useRef(false);
-  const conversionInFlightRef = useRef(false);
-  const recordMomentConversion = useCallback(() => {
-    if (convertedRef.current) return;
-    convertedRef.current = true;
+  const convertedPartyIdRef = useRef<string | null>(null);
+  const conversionInFlightPartyIdRef = useRef<string | null>(null);
+  const recordMomentConversion = useCallback((ownerPartyId: string | null) => {
+    if (!ownerPartyId || !ownsParty(ownerPartyId)) return;
+    if (convertedPartyIdRef.current === ownerPartyId) return;
+    convertedPartyIdRef.current = ownerPartyId;
     track('experiment_converted', {
       experimentId: EXPERIMENT_ID,
       variant: TREATMENT,
-      userId: normalizedPartyId ?? undefined,
+      userId: ownerPartyId,
       metadata: { value: 1, surface: 'gate_moment_reaction' },
     });
     analytics.capture('first_value_completed', { platform: 'mobile', value: 'moment_reaction' });
     analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'moment_reaction' });
-  }, [analytics, normalizedPartyId, track]);
+  }, [analytics, ownsParty, track]);
 
   useEffect(() => {
     if (
       replayedFirstValueCompletion?.value === 'moment_reaction'
       && replayedFirstValueCompletion.result.newlyCompleted
     ) {
-      recordMomentConversion();
+      recordMomentConversion(normalizedPartyId);
     }
-  }, [recordMomentConversion, replayedFirstValueCompletion]);
+  }, [normalizedPartyId, recordMomentConversion, replayedFirstValueCompletion]);
 
   const handleConversion = useCallback(() => {
-    if (convertedRef.current || conversionInFlightRef.current) return;
-    conversionInFlightRef.current = true;
+    const ownerPartyId = normalizedPartyId;
+    if (
+      !ownerPartyId
+      || !ownsParty(ownerPartyId)
+      || convertedPartyIdRef.current === ownerPartyId
+      || conversionInFlightPartyIdRef.current === ownerPartyId
+    ) return;
+    conversionInFlightPartyIdRef.current = ownerPartyId;
     void (async () => {
       try {
         const result = await completeOnboarding('moment_reaction');
-        if (!result) return;
+        if (!ownsParty(ownerPartyId) || !result) return;
         if (!result.newlyCompleted) return;
-        recordMomentConversion();
+        recordMomentConversion(ownerPartyId);
       } finally {
-        conversionInFlightRef.current = false;
+        if (conversionInFlightPartyIdRef.current === ownerPartyId) {
+          conversionInFlightPartyIdRef.current = null;
+        }
       }
     })();
-  }, [completeOnboarding, recordMomentConversion]);
+  }, [completeOnboarding, normalizedPartyId, ownsParty, recordMomentConversion]);
 
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const handleChangeComment = useCallback((momentId: string, value: string) => {
@@ -268,7 +289,8 @@ export function NewUserOnboardingGate({ children }: Props) {
 
   const handleToggleReaction = useCallback(
     async (momentId: string, reaction: EventMomentReactionOption) => {
-      if (!featuredEvent?.id) return;
+      const ownerPartyId = normalizedPartyId;
+      if (!featuredEvent?.id || !ownerPartyId || !ownsParty(ownerPartyId)) return false;
       try {
         const result = await toggleMomentFeedReaction(
           {
@@ -279,11 +301,13 @@ export function NewUserOnboardingGate({ children }: Props) {
           },
           { preferRemote: shouldPreferRemoteMoments },
         );
+        if (!ownsParty(ownerPartyId)) return false;
         return result.source === 'remote' && result.selected === true;
       } finally {
         queryClient.invalidateQueries({
           queryKey: [
             'exp-single-feature-onboarding',
+            ownerPartyId,
             'moments',
             featuredEvent.id,
             shouldPreferRemoteMoments ? 'remote' : 'local',
@@ -291,18 +315,20 @@ export function NewUserOnboardingGate({ children }: Props) {
         });
       }
     },
-    [currentActor, featuredEvent?.id, queryClient, shouldPreferRemoteMoments],
+    [currentActor, featuredEvent?.id, normalizedPartyId, ownsParty, queryClient, shouldPreferRemoteMoments],
   );
 
   const handleExplore = useCallback(() => {
-    setTreatmentExited(true);
+    const ownerPartyId = normalizedPartyId;
+    if (!ownerPartyId || !ownsParty(ownerPartyId)) return;
+    setTreatmentExitedPartyId(ownerPartyId);
     router.replace('/(tabs)/events');
     void completeOnboarding().then((result) => {
-      if (result?.newlyCompleted) {
+      if (ownsParty(ownerPartyId) && result?.newlyCompleted) {
         analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
       }
     });
-  }, [analytics, completeOnboarding, router]);
+  }, [analytics, completeOnboarding, normalizedPartyId, ownsParty, router]);
 
   if (!gateEngaged) {
     return <>{children}</>;

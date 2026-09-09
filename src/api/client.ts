@@ -42,6 +42,11 @@ export function getAuthToken(): string | undefined {
   return currentToken;
 }
 
+export function isCurrentAuthToken(token: string | null | undefined): boolean {
+  const normalized = normalizeAuthToken(token);
+  return Boolean(normalized) && normalized === currentToken;
+}
+
 const readResponseMessage = (value: unknown): string | null => {
   if (typeof value === 'string' && value.trim()) return value.trim();
   if (value && typeof value === 'object' && 'message' in value) {

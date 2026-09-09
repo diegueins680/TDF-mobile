@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 
 import { loginRequest, googleLoginRequest, signupRequest, requestPasswordReset } from '../src/api/auth';
+import { isCurrentAuthToken } from '../src/api/client';
 import { API_BASE } from '../src/lib/api';
 import {
   GOOGLE_IOS_CLIENT_ID,
@@ -29,6 +30,7 @@ import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import {
   clearPendingOnboardingIntent,
+  clearPendingOnboardingIntentIfCurrent,
   DEFAULT_ONBOARDING_INTENT,
   ONBOARDING_INTENT_OPTIONS,
   parseOnboardingIntent,
@@ -109,6 +111,10 @@ export default function AuthScreen() {
   const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const forgotPasswordEmailInputRef = useRef<TextInput>(null);
+  const requestedIntentPersistenceRef = useRef<{
+    intent: OnboardingIntent;
+    promise: Promise<void>;
+  } | null>(null);
 
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
   const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
@@ -163,6 +169,15 @@ export default function AuthScreen() {
     if (option) setRegionalPreferences({ localeId: option.id });
   };
 
+  const persistRequestedIntentOnce = (intent: OnboardingIntent): Promise<void> => {
+    if (requestedIntentPersistenceRef.current?.intent === intent) {
+      return requestedIntentPersistenceRef.current.promise;
+    }
+    const promise = persistOnboardingIntent(intent);
+    requestedIntentPersistenceRef.current = { intent, promise };
+    return promise;
+  };
+
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -178,7 +193,7 @@ export default function AuthScreen() {
       if (requestedMode === 'signup') {
         analytics.capture('signup_started', { platform: 'mobile', entry: 'deeplink', intent: entryIntent });
       }
-      if (requestedIntent) await persistOnboardingIntent(requestedIntent);
+      if (requestedIntent) await persistRequestedIntentOnce(requestedIntent);
     })();
     return () => {
       active = false;
@@ -187,12 +202,16 @@ export default function AuthScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const persistIntentForExistingAccount = async (pendingIntent: OnboardingIntent | null) => {
+  const persistIntentForExistingAccount = async (
+    pendingIntent: OnboardingIntent | null,
+    ownerToken: string,
+  ) => {
     if (!pendingIntent) return;
 
     try {
       await updateOnboardingIntent(pendingIntent);
-      await clearPendingOnboardingIntent();
+      if (!isCurrentAuthToken(ownerToken)) return;
+      await clearPendingOnboardingIntentIfCurrent(pendingIntent);
     } catch {
       // Keep the validated pending intent for a later retry. Personalization
       // sync must not turn a successful login into an authentication failure.
@@ -231,7 +250,7 @@ export default function AuthScreen() {
     setFeedbackMessage(null);
     setIsPasswordSubmitting(true);
     const pendingIntentPromise = requestedIntent
-      ? Promise.resolve(requestedIntent)
+      ? persistRequestedIntentOnce(requestedIntent).then(() => requestedIntent)
       : readPendingOnboardingIntent();
 
     try {
@@ -248,7 +267,7 @@ export default function AuthScreen() {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
-      void persistIntentForExistingAccount(pendingIntent);
+      void persistIntentForExistingAccount(pendingIntent, session.token);
       setPassword('');
       analytics.capture('login_completed', { platform: 'mobile', method: 'password' });
       setFeedbackMessage(copy.loginSuccess);
@@ -342,7 +361,7 @@ export default function AuthScreen() {
     const pendingIntentPromise = mode === 'signup'
       ? Promise.resolve(selectedIntent)
       : requestedIntent
-        ? Promise.resolve(requestedIntent)
+        ? persistRequestedIntentOnce(requestedIntent).then(() => requestedIntent)
         : readPendingOnboardingIntent();
 
     try {
@@ -381,7 +400,7 @@ export default function AuthScreen() {
       if (googleCreatedAccount) {
         await clearPendingOnboardingIntent();
       } else {
-        void persistIntentForExistingAccount(pendingIntent);
+        void persistIntentForExistingAccount(pendingIntent, session.token);
       }
       analytics.capture(googleCreatedAccount ? 'signup_completed' : 'login_completed', {
         platform: 'mobile',

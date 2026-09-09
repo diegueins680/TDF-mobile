@@ -13,9 +13,11 @@ const mockGoogleSignOut = jest.fn();
 const mockLoadNativeGoogleSignin = jest.fn();
 const mockReplace = jest.fn();
 const mockClearPendingOnboardingIntent = jest.fn();
+const mockClearPendingOnboardingIntentIfCurrent = jest.fn();
 const mockPersistOnboardingIntent = jest.fn();
 const mockReadPendingOnboardingIntent = jest.fn(() => Promise.resolve(null));
 const mockUpdateOnboardingIntent = jest.fn();
+const mockIsCurrentAuthToken = jest.fn();
 const mockOpenURL = jest.spyOn(Linking, 'openURL');
 let mockAuthConfig = {
   GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
@@ -82,6 +84,10 @@ jest.mock('../src/api/onboarding', () => ({
   updateOnboardingIntent: (...args: unknown[]) => mockUpdateOnboardingIntent(...args),
 }));
 
+jest.mock('../src/api/client', () => ({
+  isCurrentAuthToken: (...args: unknown[]) => mockIsCurrentAuthToken(...args),
+}));
+
 jest.mock('../src/lib/authConfig', () => ({
   __esModule: true,
   get GOOGLE_WEB_CLIENT_ID() {
@@ -104,6 +110,7 @@ jest.mock('../src/lib/onboardingIntent', () => {
   return {
     ...actual,
     clearPendingOnboardingIntent: (...args: unknown[]) => mockClearPendingOnboardingIntent(...args),
+    clearPendingOnboardingIntentIfCurrent: (...args: unknown[]) => mockClearPendingOnboardingIntentIfCurrent(...args),
     persistOnboardingIntent: (...args: unknown[]) => mockPersistOnboardingIntent(...args),
     readPendingOnboardingIntent: () => mockReadPendingOnboardingIntent(),
   };
@@ -120,7 +127,9 @@ describe('Auth screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockReadPendingOnboardingIntent.mockResolvedValue(null);
+    mockPersistOnboardingIntent.mockResolvedValue(undefined);
     mockUpdateOnboardingIntent.mockResolvedValue({ eligible: false });
+    mockIsCurrentAuthToken.mockReturnValue(true);
     mockOpenURL.mockResolvedValue(undefined);
     mockSearchParams = {};
     mockReplace.mockReset();
@@ -416,7 +425,7 @@ describe('Auth screen', () => {
     fireEvent.press(googleButton);
 
     await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('internships'));
-    expect(mockClearPendingOnboardingIntent).not.toHaveBeenCalled();
+    expect(mockClearPendingOnboardingIntentIfCurrent).not.toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith({
       pathname: '/access-requests/new',
       params: { feature: 'internships', action: 'view' },
@@ -463,7 +472,9 @@ describe('Auth screen', () => {
     fireEvent.press(screen.getByTestId('loginButton'));
 
     await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists'));
-    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockClearPendingOnboardingIntentIfCurrent).toHaveBeenCalledWith('follow_artists'));
+    expect(mockIsCurrentAuthToken).toHaveBeenCalledWith('token');
+    expect(mockPersistOnboardingIntent).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/social');
   });
 
@@ -477,7 +488,7 @@ describe('Auth screen', () => {
     fireEvent.press(screen.getByTestId('loginButton'));
 
     await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists'));
-    expect(mockClearPendingOnboardingIntent).not.toHaveBeenCalled();
+    expect(mockClearPendingOnboardingIntentIfCurrent).not.toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/social');
   });
 
@@ -494,7 +505,33 @@ describe('Auth screen', () => {
       pathname: '/access-requests/new',
       params: { feature: 'internships', action: 'view' },
     });
-    await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockClearPendingOnboardingIntentIfCurrent).toHaveBeenCalledWith('internships'));
+  });
+
+  it('does not clear an intent after a different authenticated session takes ownership', async () => {
+    let resolveUpdate: ((value: { eligible: boolean }) => void) | undefined;
+    mockSearchParams = { intent: 'follow_artists' };
+    mockLoginRequest.mockResolvedValue({
+      token: 'first-token',
+      partyId: 83,
+      roles: ['Customer'],
+      modules: [],
+    });
+    mockUpdateOnboardingIntent.mockReturnValueOnce(new Promise((resolve) => {
+      resolveUpdate = resolve;
+    }));
+
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'demo-user');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'demo-pass');
+    fireEvent.press(screen.getByTestId('loginButton'));
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists'));
+    mockIsCurrentAuthToken.mockReturnValue(false);
+    resolveUpdate?.({ eligible: false });
+
+    await waitFor(() => expect(mockIsCurrentAuthToken).toHaveBeenCalledWith('first-token'));
+    expect(mockClearPendingOnboardingIntentIfCurrent).not.toHaveBeenCalled();
   });
 
   it('exposes internships as a signup intent without treating it as a role', async () => {

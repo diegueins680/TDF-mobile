@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   clearPendingOnboardingIntent,
+  clearPendingOnboardingIntentIfCurrent,
   markFirstValueCompleted,
   ONBOARDING_INTENT_OPTIONS,
   PENDING_FIRST_VALUE_PREFIX,
@@ -85,6 +86,18 @@ describe('onboarding intent', () => {
     await clearPendingOnboardingIntent();
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending', 'events');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
+  });
+
+  it('only clears the intent acknowledged by the authenticated session', async () => {
+    jest.mocked(AsyncStorage.getItem)
+      .mockResolvedValueOnce('events')
+      .mockResolvedValueOnce('follow_artists');
+
+    await clearPendingOnboardingIntentIfCurrent('follow_artists');
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
+
+    await clearPendingOnboardingIntentIfCurrent('follow_artists');
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
   });
 

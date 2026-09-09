@@ -106,6 +106,18 @@ export async function clearPendingOnboardingIntent(): Promise<void> {
   }
 }
 
+export async function clearPendingOnboardingIntentIfCurrent(
+  intent: OnboardingIntent,
+): Promise<void> {
+  try {
+    if (await AsyncStorage.getItem(PENDING_INTENT_KEY) === intent) {
+      await AsyncStorage.removeItem(PENDING_INTENT_KEY);
+    }
+  } catch {
+    // A retained intent is safe to retry; never clear a newer auth attempt.
+  }
+}
+
 export async function markFirstValueCompleted(
   partyId: string | null | undefined,
   value: OnboardingFirstValue,

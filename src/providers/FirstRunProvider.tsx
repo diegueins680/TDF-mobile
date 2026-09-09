@@ -32,6 +32,7 @@ import {
 } from '../lib/onboardingIntent';
 import { usePartyOwnership } from '../hooks/usePartyOwnership';
 import { useAuth } from './AuthProvider';
+import { useNetwork } from './NetworkProvider';
 
 type FirstRunContextValue = {
   /** True once we've resolved the cohort for the active partyId (or there is none). */
@@ -60,7 +61,10 @@ type FirstRunState = {
 
 export function FirstRunProvider({ children }: PropsWithChildren) {
   const { partyId } = useAuth();
+  const { isConnected } = useNetwork();
   const ownsParty = usePartyOwnership(partyId);
+  const recoveryTriggerRef = useRef<(() => void) | null>(null);
+  const previousConnectivityRef = useRef(isConnected);
   const intentRecoveryRef = useRef<{
     partyId: string;
     promise: Promise<void>;
@@ -83,6 +87,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!partyId) {
+      recoveryTriggerRef.current = null;
       locallyExitedPartyIdRef.current = null;
       setState({
         partyId: null,
@@ -180,6 +185,10 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
         };
       });
     };
+    const recoverFirstRun = () => {
+      void replayPendingIntent();
+      void refreshFirstRunState();
+    };
 
     setState({
       partyId,
@@ -187,19 +196,27 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       isNewUser: false,
       replayedFirstValueCompletion: null,
     });
-    void replayPendingIntent();
-    void refreshFirstRunState();
+    recoveryTriggerRef.current = recoverFirstRun;
+    recoverFirstRun();
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState !== 'active') return;
-      void replayPendingIntent();
-      void refreshFirstRunState();
+      recoverFirstRun();
     });
 
     return () => {
       cancelled = true;
+      if (recoveryTriggerRef.current === recoverFirstRun) {
+        recoveryTriggerRef.current = null;
+      }
       subscription.remove();
     };
   }, [ownsParty, partyId]);
+
+  useEffect(() => {
+    const wasConnected = previousConnectivityRef.current;
+    previousConnectivityRef.current = isConnected;
+    if (!wasConnected && isConnected) recoveryTriggerRef.current?.();
+  }, [isConnected]);
 
   const completeOnboarding = useCallback(async (
     firstValue?: OnboardingFirstValue,

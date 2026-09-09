@@ -7,6 +7,7 @@ const mockGetOnboardingProgress = jest.fn();
 const mockCompleteOnboardingProgress = jest.fn();
 const mockUpdateOnboardingIntent = jest.fn();
 let mockPartyId: string | null = '42';
+let mockIsConnected = true;
 let appStateChangeListener: ((state: AppStateStatus) => void) | null = null;
 const mockRemoveAppStateListener = jest.fn();
 const mockAddAppStateListener = jest.spyOn(AppState, 'addEventListener');
@@ -19,6 +20,10 @@ jest.mock('../src/api/onboarding', () => ({
 
 jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: () => ({ partyId: mockPartyId }),
+}));
+
+jest.mock('../src/providers/NetworkProvider', () => ({
+  useNetwork: () => ({ isConnected: mockIsConnected, connectionType: 'internet' }),
 }));
 
 import { FirstRunProvider, useFirstRun } from '../src/providers/FirstRunProvider';
@@ -78,6 +83,7 @@ describe('FirstRunProvider', () => {
       return { remove: mockRemoveAppStateListener };
     });
     mockPartyId = '42';
+    mockIsConnected = true;
   });
 
   it('uses authoritative server eligibility for the authenticated party', async () => {
@@ -397,6 +403,76 @@ describe('FirstRunProvider', () => {
       </FirstRunProvider>,
     );
 
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+  });
+
+  it('recovers retained Party work when connectivity returns without an app-state change', async () => {
+    mockIsConnected = false;
+    const intentKey = 'tdf-onboarding-intent:party:42';
+    const firstValueKey = 'tdf-onboarding-first-value:party:42';
+    const values = new Map([
+      [intentKey, 'learning'],
+      [firstValueKey, 'event_saved'],
+    ]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    mockGetOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ eligible: true });
+    mockUpdateOnboardingIntent
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ eligible: false });
+    mockCompleteOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        newlyCompleted: true,
+        progress: { eligible: false },
+      });
+    const view = renderProvider();
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(1);
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+
+    mockIsConnected = true;
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('event_saved')).toBeTruthy());
+    expect(screen.getByText('true:false')).toBeTruthy();
+    expect(values.size).toBe(0);
+  });
+
+  it('coalesces reconnect and foreground recovery for the active Party', async () => {
+    mockIsConnected = false;
+    let resolveProgress!: (progress: { eligible: boolean }) => void;
+    mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProgress = resolve;
+    }));
+    const view = renderProvider();
+    expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1);
+
+    mockIsConnected = true;
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+    act(() => emitAppStateChange('active'));
+
+    expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveProgress({ eligible: true });
+      await Promise.resolve();
+    });
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
   });
 

@@ -10,11 +10,13 @@ describe('first-run experiment exposure', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('records experiment exposure only once per party and experiment', async () => {
+    const first = { assignment: { experimentEligible: true }, newlyExposed: true };
+    const repeated = { assignment: { experimentEligible: true }, newlyExposed: false };
     mockRecordExperimentExposure
-      .mockResolvedValueOnce({ assignment: { experimentEligible: true }, newlyExposed: true })
-      .mockResolvedValueOnce({ assignment: { experimentEligible: true }, newlyExposed: false });
-    await expect(markExperimentExposedOnce('9', 'onboarding-v1')).resolves.toBe(true);
-    await expect(markExperimentExposedOnce('9', 'onboarding-v1')).resolves.toBe(false);
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(repeated);
+    await expect(markExperimentExposedOnce('9', 'onboarding-v1')).resolves.toBe(first);
+    await expect(markExperimentExposedOnce('9', 'onboarding-v1')).resolves.toBe(repeated);
     expect(mockRecordExperimentExposure).toHaveBeenCalledTimes(2);
     expect(mockRecordExperimentExposure).toHaveBeenCalledWith('onboarding-v1');
   });
@@ -25,6 +27,15 @@ describe('first-run experiment exposure', () => {
       newlyExposed: false,
     });
 
-    await expect(markExperimentExposedOnce('9', 'onboarding-v1')).resolves.toBe(false);
+    await expect(markExperimentExposedOnce('9', 'onboarding-v1')).resolves.toEqual({
+      assignment: { experimentEligible: false },
+      newlyExposed: false,
+    });
+  });
+
+  it('returns no acknowledgement when exposure persistence is unavailable', async () => {
+    mockRecordExperimentExposure.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(markExperimentExposedOnce('9', 'onboarding-v1')).resolves.toBeNull();
   });
 });

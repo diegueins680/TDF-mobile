@@ -1,11 +1,16 @@
-import { recordExperimentExposure } from '../api/experiments';
+import {
+  recordExperimentExposure,
+  type ExperimentExposureResult,
+} from '../api/experiments';
 
-export async function markExperimentExposedOnce(partyId: string, experimentId: string): Promise<boolean> {
-  if (!partyId || !experimentId) return false;
+export async function markExperimentExposedOnce(
+  partyId: string,
+  experimentId: string,
+): Promise<ExperimentExposureResult | null> {
+  if (!partyId || !experimentId) return null;
   try {
-    const result = await recordExperimentExposure(experimentId);
-    return result.assignment.experimentEligible && result.newlyExposed;
+    return await recordExperimentExposure(experimentId);
   } catch {
-    return false;
+    return null;
   }
 }

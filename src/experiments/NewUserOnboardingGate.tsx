@@ -16,6 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   ScrollView,
   StyleSheet,
   Text,
@@ -77,7 +78,12 @@ export function NewUserOnboardingGate({ children }: Props) {
   const router = useRouter();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const { isReady: experimentsReady, getVariant, isExperimentEnabled } = useExperiments();
+  const {
+    isReady: experimentsReady,
+    getVariant,
+    getExperimentVersion,
+    isExperimentEnabled,
+  } = useExperiments();
   const { isConnected } = useNetwork();
   const {
     cohortReady,
@@ -119,38 +125,104 @@ export function NewUserOnboardingGate({ children }: Props) {
     && treatmentExitedPartyId === normalizedPartyId;
 
   const variant = experimentsReady ? getVariant(EXPERIMENT_ID) : null;
+  const experimentVersion = experimentsReady
+    ? getExperimentVersion(EXPERIMENT_ID)
+    : null;
   const experimentEnabled = isExperimentEnabled(EXPERIMENT_ID);
-  const eligibleForExperiment = experimentsReady && cohortReady && isNewUser && experimentEnabled;
+  const eligibleForExperiment = experimentsReady
+    && cohortReady
+    && isNewUser
+    && experimentEnabled
+    && experimentVersion !== null;
   const gateEngaged =
     eligibleForExperiment &&
     variant === TREATMENT &&
     !treatmentExited;
 
-  // Fire experiment_viewed exactly once when the gate first engages.
-  const viewedRef = useRef(false);
-  const viewedPartyIdRef = useRef<string | null>(null);
+  // Fire experiment_viewed only after the server acknowledges exposure.
+  const acknowledgedExposureKeyRef = useRef<string | null>(null);
+  const exposureTriggerRef = useRef<(() => void) | null>(null);
+  const previousConnectivityRef = useRef(isConnected);
+  const exposureRecoveryRef = useRef<{
+    key: string;
+    promise: Promise<void>;
+  } | null>(null);
   useEffect(() => {
-    if (viewedPartyIdRef.current !== normalizedPartyId) {
-      viewedPartyIdRef.current = normalizedPartyId;
-      viewedRef.current = false;
+    if (
+      !eligibleForExperiment
+      || !normalizedPartyId
+      || !variant
+      || experimentVersion === null
+    ) {
+      exposureTriggerRef.current = null;
+      return;
     }
-    if (!eligibleForExperiment || !variant || viewedRef.current) return;
-    viewedRef.current = true;
-    void (async () => {
-      const ownerPartyId = normalizedPartyId;
+
+    let cancelled = false;
+    const ownerPartyId = normalizedPartyId;
+    const ownerVariant = variant;
+    const ownerExperimentVersion = experimentVersion;
+    const exposureKey = `${encodeURIComponent(ownerPartyId)}:${ownerExperimentVersion}`;
+    const recordExposure = () => {
       if (
-        !ownerPartyId
+        cancelled
         || !ownsParty(ownerPartyId)
-        || !await markExperimentExposedOnce(ownerPartyId, EXPERIMENT_ID)
-        || !ownsParty(ownerPartyId)
+        || acknowledgedExposureKeyRef.current === exposureKey
       ) return;
-      track('experiment_viewed', {
-        experimentId: EXPERIMENT_ID,
-        variant,
-        userId: ownerPartyId,
+      const activeRecovery = exposureRecoveryRef.current;
+      if (activeRecovery?.key === exposureKey) return;
+
+      const promise = (async () => {
+        const result = await markExperimentExposedOnce(ownerPartyId, EXPERIMENT_ID);
+        if (!result || cancelled || !ownsParty(ownerPartyId)) return;
+        acknowledgedExposureKeyRef.current = exposureKey;
+        if (
+          !result.newlyExposed
+          || !result.assignment.experimentEnabled
+          || !result.assignment.experimentEligible
+          || result.assignment.experimentVersion !== ownerExperimentVersion
+          || result.assignment.variant !== ownerVariant
+        ) return;
+        track('experiment_viewed', {
+          experimentId: EXPERIMENT_ID,
+          variant: ownerVariant,
+          userId: ownerPartyId,
+          metadata: { experimentVersion: ownerExperimentVersion },
+        });
+      })().finally(() => {
+        if (exposureRecoveryRef.current?.promise === promise) {
+          exposureRecoveryRef.current = null;
+        }
       });
-    })();
-  }, [eligibleForExperiment, normalizedPartyId, ownsParty, track, variant]);
+      exposureRecoveryRef.current = { key: exposureKey, promise };
+    };
+
+    exposureTriggerRef.current = recordExposure;
+    recordExposure();
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') recordExposure();
+    });
+    return () => {
+      cancelled = true;
+      if (exposureTriggerRef.current === recordExposure) {
+        exposureTriggerRef.current = null;
+      }
+      subscription.remove();
+    };
+  }, [
+    eligibleForExperiment,
+    experimentVersion,
+    normalizedPartyId,
+    ownsParty,
+    track,
+    variant,
+  ]);
+
+  useEffect(() => {
+    const wasConnected = previousConnectivityRef.current;
+    previousConnectivityRef.current = isConnected;
+    if (!wasConnected && isConnected) exposureTriggerRef.current?.();
+  }, [isConnected]);
 
   // Pull a small window of recent events and anchor on the most recent past
   // one whose moments feed is non-empty. We fetch a slightly larger page

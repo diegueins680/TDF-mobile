@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { AppState, type AppStateStatus, Text } from 'react-native';
 
 const mockTrack = jest.fn();
 const mockCapture = jest.fn();
@@ -14,12 +14,23 @@ const mockToggleMomentFeedReaction = jest.fn(() => Promise.resolve({
 }));
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
-const mockMarkExperimentExposedOnce = jest.fn(
-  (_partyId: string, _experimentId: string) => Promise.resolve(true),
-);
+const acknowledgedExposure = {
+  assignment: {
+    experimentEnabled: true,
+    experimentEligible: true,
+    experimentVersion: 1,
+    variant: 'treatment_singlefeature',
+  },
+  newlyExposed: true,
+};
+const mockMarkExperimentExposedOnce = jest.fn();
+let appStateChangeListener: ((state: AppStateStatus) => void) | null = null;
+const mockRemoveAppStateListener = jest.fn();
+const mockAddAppStateListener = jest.spyOn(AppState, 'addEventListener');
 
 let mockIsConnected = true;
 let mockVariant = 'treatment_singlefeature';
+let mockExperimentVersion = 1;
 let mockEventsState: Record<string, unknown>;
 let mockMomentsState: Record<string, unknown>;
 let mockProbeState: Record<string, unknown>[];
@@ -79,6 +90,7 @@ jest.mock('../src/experiments/ExperimentProvider', () => ({
   useExperiments: () => ({
     isReady: true,
     getVariant: () => mockVariant,
+    getExperimentVersion: () => mockExperimentVersion,
     isExperimentEnabled: () => true,
   }),
 }));
@@ -118,11 +130,24 @@ const renderGate = () => render(
   <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
 );
 
+const emitAppStateChange = (state: AppStateStatus) => {
+  if (!appStateChangeListener) throw new Error('AppState listener was not registered');
+  appStateChangeListener(state);
+};
+
 describe('NewUserOnboardingGate states', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMarkExperimentExposedOnce.mockReset().mockResolvedValue(acknowledgedExposure);
+    appStateChangeListener = null;
+    mockRemoveAppStateListener.mockReset();
+    mockAddAppStateListener.mockReset().mockImplementation((_event, listener) => {
+      appStateChangeListener = listener;
+      return { remove: mockRemoveAppStateListener };
+    });
     mockIsConnected = true;
     mockVariant = 'treatment_singlefeature';
+    mockExperimentVersion = 1;
     mockEventsState = { data: [], isLoading: false, isError: false };
     mockMomentsState = { data: [], isLoading: false, isError: false };
     mockProbeState = [];
@@ -154,6 +179,10 @@ describe('NewUserOnboardingGate states', () => {
 
   it('records control exposure without replacing the full app shell', async () => {
     mockVariant = 'control';
+    mockMarkExperimentExposedOnce.mockResolvedValueOnce({
+      ...acknowledgedExposure,
+      assignment: { ...acknowledgedExposure.assignment, variant: 'control' },
+    });
     renderGate();
 
     expect(screen.getByText('Full app shell')).toBeTruthy();
@@ -179,12 +208,12 @@ describe('NewUserOnboardingGate states', () => {
   });
 
   it('suppresses a late exposure after the active Party changes', async () => {
-    let resolveOldExposure!: (value: boolean) => void;
+    let resolveOldExposure!: (value: typeof acknowledgedExposure) => void;
     mockMarkExperimentExposedOnce
       .mockReturnValueOnce(new Promise((resolve) => {
         resolveOldExposure = resolve;
       }))
-      .mockResolvedValueOnce(true);
+      .mockResolvedValueOnce(acknowledgedExposure);
     const view = renderGate();
     await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledWith(
       '42',
@@ -200,7 +229,7 @@ describe('NewUserOnboardingGate states', () => {
       expect.objectContaining({ userId: '77' }),
     ));
     await act(async () => {
-      resolveOldExposure(true);
+      resolveOldExposure(acknowledgedExposure);
       await Promise.resolve();
     });
 
@@ -208,6 +237,91 @@ describe('NewUserOnboardingGate states', () => {
       'experiment_viewed',
       expect.objectContaining({ userId: '42' }),
     );
+  });
+
+  it('retries an unacknowledged exposure when connectivity returns', async () => {
+    mockIsConnected = false;
+    mockMarkExperimentExposedOnce
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(acknowledgedExposure);
+    const view = renderGate();
+
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(1));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_viewed', expect.anything());
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_viewed',
+      expect.objectContaining({ userId: '42' }),
+    ));
+  });
+
+  it('coalesces reconnect and foreground exposure recovery', async () => {
+    mockIsConnected = false;
+    let resolveExposure!: (value: typeof acknowledgedExposure) => void;
+    mockMarkExperimentExposedOnce.mockReturnValueOnce(new Promise((resolve) => {
+      resolveExposure = resolve;
+    }));
+    const view = renderGate();
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(1));
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    act(() => emitAppStateChange('active'));
+
+    expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveExposure(acknowledgedExposure);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not retry or emit analytics after an acknowledged repeat exposure', async () => {
+    mockMarkExperimentExposedOnce.mockResolvedValueOnce({
+      ...acknowledgedExposure,
+      newlyExposed: false,
+    });
+    renderGate();
+
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(1));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_viewed', expect.anything());
+
+    act(() => emitAppStateChange('active'));
+
+    expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(1);
+  });
+
+  it('records exposure again for a new server experiment version', async () => {
+    mockMarkExperimentExposedOnce
+      .mockResolvedValueOnce(acknowledgedExposure)
+      .mockResolvedValueOnce({
+        ...acknowledgedExposure,
+        assignment: { ...acknowledgedExposure.assignment, experimentVersion: 2 },
+      });
+    const view = renderGate();
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_viewed',
+      expect.objectContaining({ metadata: { experimentVersion: 1 } }),
+    ));
+
+    mockExperimentVersion = 2;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_viewed',
+      expect.objectContaining({ metadata: { experimentVersion: 2 } }),
+    ));
   });
 
   it.each([

@@ -27,10 +27,20 @@ jest.mock('../src/api/experiments', () => ({
 const { ExperimentProvider, useExperiments } = require('../src/experiments/ExperimentProvider');
 
 function VariantProbe() {
-  const { getVariant, isExperimentEnabled, isReady } = useExperiments();
+  const {
+    getVariant,
+    getExperimentVersion,
+    isExperimentEnabled,
+    isReady,
+  } = useExperiments();
   if (!isReady) return <Text>loading</Text>;
   const experimentId = 'single-feature-onboarding-v1';
-  return <Text>{`${getVariant(experimentId) ?? 'none'}:${isExperimentEnabled(experimentId)}`}</Text>;
+  return (
+    <>
+      <Text>{`${getVariant(experimentId) ?? 'none'}:${isExperimentEnabled(experimentId)}`}</Text>
+      <Text>{`version:${getExperimentVersion(experimentId) ?? 'none'}`}</Text>
+    </>
+  );
 }
 
 const emitAppStateChange = (state: AppStateStatus) => {
@@ -95,6 +105,7 @@ describe('ExperimentProvider', () => {
     render(<ExperimentProvider><VariantProbe /></ExperimentProvider>);
 
     await waitFor(() => expect(screen.getByText('treatment_singlefeature:true')).toBeTruthy());
+    expect(screen.getByText('version:1')).toBeTruthy();
     expect(mockCapture).toHaveBeenCalledWith('experiment_assigned', {
       experimentId: 'single-feature-onboarding-v1',
       experimentVersion: 1,

@@ -26,12 +26,14 @@ interface ExperimentConfig {
 
 interface ExperimentContextType {
   getVariant: (experimentId: string) => ExperimentVariant | null;
+  getExperimentVersion: (experimentId: string) => number | null;
   isExperimentEnabled: (experimentId: string) => boolean;
   isReady: boolean;
 }
 
 const ExperimentContext = createContext<ExperimentContextType>({
   getVariant: () => null,
+  getExperimentVersion: () => null,
   isExperimentEnabled: () => false,
   isReady: false,
 });
@@ -59,6 +61,7 @@ export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     promise: Promise<void>;
   } | null>(null);
   const [variants, setVariants] = useState<Record<string, ExperimentVariant>>({});
+  const [versions, setVersions] = useState<Record<string, number>>({});
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [resolvedPartyId, setResolvedPartyId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -67,6 +70,7 @@ export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (!partyId) {
       recoveryTriggerRef.current = null;
       setVariants({});
+      setVersions({});
       setEnabled({});
       setResolvedPartyId(null);
       setIsReady(true);
@@ -79,6 +83,7 @@ export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (activeRecovery?.partyId === partyId) return activeRecovery.promise;
 
       const nextVariants: Record<string, ExperimentVariant> = {};
+      const nextVersions: Record<string, number> = {};
       const nextEnabled: Record<string, boolean> = {};
       let succeeded = false;
       const promise = (async () => {
@@ -88,6 +93,7 @@ export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             const assignment = await getExperimentAssignment(exp.id);
             if (cancelled || !ownsParty(partyId)) return;
             nextVariants[exp.id] = assignment.variant;
+            nextVersions[exp.id] = assignment.experimentVersion;
             nextEnabled[exp.id] = assignment.experimentEnabled && assignment.experimentEligible;
             if (assignment.newlyAssigned) {
               analytics.capture('experiment_assigned', {
@@ -104,6 +110,7 @@ export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
         if (cancelled || !ownsParty(partyId)) return;
         setVariants(succeeded ? nextVariants : {});
+        setVersions(succeeded ? nextVersions : {});
         setEnabled(succeeded ? nextEnabled : {});
         setResolvedPartyId(partyId);
         setIsReady(true);
@@ -120,6 +127,7 @@ export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     setVariants({});
+    setVersions({});
     setEnabled({});
     setResolvedPartyId(null);
     setIsReady(false);
@@ -148,11 +156,19 @@ export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const getVariant = (experimentId: string): ExperimentVariant | null =>
     identityReady ? variants[experimentId] || null : null;
 
+  const getExperimentVersion = (experimentId: string): number | null =>
+    identityReady ? versions[experimentId] ?? null : null;
+
   const isExperimentEnabled = (experimentId: string): boolean =>
     identityReady && enabled[experimentId] === true;
 
   return (
-    <ExperimentContext.Provider value={{ getVariant, isExperimentEnabled, isReady: identityReady }}>
+    <ExperimentContext.Provider value={{
+      getVariant,
+      getExperimentVersion,
+      isExperimentEnabled,
+      isReady: identityReady,
+    }}>
       {children}
     </ExperimentContext.Provider>
   );

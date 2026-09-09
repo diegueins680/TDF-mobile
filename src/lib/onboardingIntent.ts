@@ -104,8 +104,9 @@ export async function clearPendingOnboardingIntent(): Promise<void> {
 export async function markFirstValueCompleted(
   partyId: string | null | undefined,
   value: OnboardingFirstValue,
+  stillOwnsParty: () => boolean = () => true,
 ): Promise<boolean> {
-  const result = await completeFirstValueWithRetry(partyId, value);
+  const result = await completeFirstValueWithRetry(partyId, value, stillOwnsParty);
   return result?.newlyCompleted === true;
 }
 

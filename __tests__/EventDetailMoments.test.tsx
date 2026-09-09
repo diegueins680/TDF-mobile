@@ -5,6 +5,14 @@ import EventDetailScreen from '../app/eventDetail';
 
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockCapture = jest.fn();
+const mockRecordMomentReactionFirstValue = jest.fn<
+  Promise<boolean>,
+  [unknown, string | null, () => boolean, { capture: typeof mockCapture }]
+>(async () => false);
+const mockMutationOptions: Array<{
+  onSuccess?: (result: unknown, variables: unknown) => void;
+}> = [];
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
@@ -18,7 +26,10 @@ jest.mock('@expo/vector-icons', () => ({
 
 jest.mock('@tanstack/react-query', () => ({
   useQuery: jest.fn(),
-  useMutation: jest.fn(() => ({ mutate: mockMutate, isPending: false })),
+  useMutation: jest.fn((options) => {
+    mockMutationOptions.push(options);
+    return { mutate: mockMutate, isPending: false };
+  }),
   useQueryClient: jest.fn(() => ({ invalidateQueries: mockInvalidateQueries })),
 }));
 
@@ -92,12 +103,22 @@ jest.mock('../src/lib/liveBroadcastPublishing', () => ({
   startWhipBroadcastPublisher: jest.fn(),
 }));
 
+jest.mock('../src/analytics/AnalyticsProvider', () => ({
+  useAnalytics: () => ({ capture: mockCapture }),
+}));
+
+jest.mock('../src/lib/momentReactionFirstValue', () => ({
+  recordMomentReactionFirstValue: (...args: Parameters<typeof mockRecordMomentReactionFirstValue>) =>
+    mockRecordMomentReactionFirstValue(...args),
+}));
+
 describe('EventDetail moments tab', () => {
   const useQuery = jest.mocked(require('@tanstack/react-query').useQuery as jest.Mock);
   const imagePicker = jest.mocked(require('expo-image-picker'));
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMutationOptions.length = 0;
 
     useQuery.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
       if (queryKey[0] === 'event') {
@@ -233,6 +254,30 @@ describe('EventDetail moments tab', () => {
     fireEvent.press(screen.getByLabelText('Ver foto de Andrea'));
     expect(screen.getByLabelText('Cerrar vista previa')).toBeTruthy();
     expect(screen.getByLabelText('Vista previa de la foto')).toBeTruthy();
+  });
+
+  it('binds a successful reaction to the initiating Party first-value boundary', async () => {
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByLabelText('Fuego: 1'));
+
+    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({
+      momentId: 'moment-1',
+      ownerPartyId: '7',
+    }));
+
+    const reactionOptions = mockMutationOptions[5];
+    const result = { source: 'remote', selected: true };
+    reactionOptions.onSuccess?.(result, { ownerPartyId: '7' });
+
+    await waitFor(() => expect(mockRecordMomentReactionFirstValue).toHaveBeenCalledWith(
+      result,
+      '7',
+      expect.any(Function),
+      expect.objectContaining({ capture: mockCapture }),
+    ));
+    const stillOwnsParty = mockRecordMomentReactionFirstValue.mock.calls[0][2] as () => boolean;
+    expect(stillOwnsParty()).toBe(true);
   });
 
   it('adds several gallery photos with immediate thumbnails and one publish action', async () => {

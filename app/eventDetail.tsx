@@ -66,6 +66,7 @@ import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { markFirstValueCompleted } from '../src/lib/onboardingIntent';
+import { recordMomentReactionFirstValue } from '../src/lib/momentReactionFirstValue';
 import type {
   EventLiveBroadcast,
   EventLiveBroadcastQuality,
@@ -151,6 +152,8 @@ export default function EventDetailScreen() {
   );
   const shouldPreferRemoteMoments = Boolean(token?.trim());
   const shouldPreferRemoteBroadcasts = Boolean(token?.trim());
+  const activePartyIdRef = useRef(normalizedPartyId);
+  activePartyIdRef.current = normalizedPartyId;
   const publisherSessionRef = useRef<LiveBroadcastPublisherSession | null>(null);
   const activeLiveBroadcastRef = useRef<ActiveLiveBroadcastRecord | null>(null);
 
@@ -567,7 +570,11 @@ export default function EventDetailScreen() {
   });
 
   const reactionMutation = useMutation({
-    mutationFn: ({ momentId, reaction }: { momentId: string; reaction: EventMomentReactionOption }) => {
+    mutationFn: ({ momentId, reaction }: {
+      momentId: string;
+      reaction: EventMomentReactionOption;
+      ownerPartyId: string | null;
+    }) => {
       if (!eventId) throw new Error('Event not found');
       return toggleMomentFeedReaction({
         eventId,
@@ -576,8 +583,14 @@ export default function EventDetailScreen() {
         reaction,
       }, { preferRemote: shouldPreferRemoteMoments });
     },
-    onSuccess: () => {
+    onSuccess: (result, { ownerPartyId }) => {
       qc.invalidateQueries({ queryKey: ['event-moments', eventId] });
+      void recordMomentReactionFirstValue(
+        result,
+        ownerPartyId,
+        () => activePartyIdRef.current === ownerPartyId,
+        analytics,
+      );
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'No pudimos registrar tu reacción.';
@@ -1320,7 +1333,11 @@ export default function EventDetailScreen() {
                       commentDraft={commentDrafts[moment.id] ?? ''}
                       onChangeComment={handleCommentChange}
                       onSubmitComment={handleCommentSubmit}
-                      onToggleReaction={(momentId, reaction) => reactionMutation.mutate({ momentId, reaction })}
+                      onToggleReaction={(momentId, reaction) => reactionMutation.mutate({
+                        momentId,
+                        reaction,
+                        ownerPartyId: normalizedPartyId,
+                      })}
                       onConnectAuthor={handleConnectAuthor}
                       onOpenMedia={handleOpenMomentMedia}
                     />

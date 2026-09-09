@@ -2,7 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   clearPendingOnboardingIntent,
-  completeFirstValueWithRetry,
   markFirstValueCompleted,
   ONBOARDING_INTENT_OPTIONS,
   PENDING_FIRST_VALUE_PREFIX,
@@ -130,11 +129,11 @@ describe('onboarding intent', () => {
       return { newlyCompleted: true, progress: { eligible: false } };
     });
 
-    await expect(completeFirstValueWithRetry(
+    await expect(markFirstValueCompleted(
       '9',
       'moment_reaction',
       () => stillOwnsParty,
-    )).resolves.toBeNull();
+    )).resolves.toBe(false);
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       `${PENDING_FIRST_VALUE_PREFIX}9`,

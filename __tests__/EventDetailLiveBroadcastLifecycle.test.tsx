@@ -58,12 +58,27 @@ jest.mock('../src/providers/AuthProvider', () => ({
 }));
 
 jest.mock('../src/providers/UserSettingsProvider', () => ({
-  useUserSettings: () => ({ partyId: '7', displayName: 'Cuco', getCatalogItems: () => [] }),
+  useUserSettings: () => ({
+    partyId: '7',
+    displayName: 'Cuco',
+    locale: 'es',
+    timezone: 'UTC',
+    currency: 'USD',
+    showEventRsvpsOnProfile: true,
+    getCatalogItems: () => [],
+  }),
+}));
+
+jest.mock('../src/analytics/AnalyticsProvider', () => ({
+  useAnalytics: () => ({ capture: jest.fn() }),
 }));
 
 jest.mock('../src/api/events', () => ({
   Events: {
     getById: jest.fn(),
+    getPublicById: jest.fn(),
+    getMyRSVP: jest.fn(),
+    getRSVPSummary: jest.fn(),
     getRSVPs: jest.fn(),
     getInvitations: jest.fn(),
     listTicketTiers: jest.fn(),
@@ -71,6 +86,7 @@ jest.mock('../src/api/events', () => ({
     createTicketPaymentSheet: jest.fn(),
     updateTicketOrderStatus: jest.fn(),
     rsvp: jest.fn(),
+    deleteRSVP: jest.fn(),
     sendInvitation: jest.fn(),
     respondToInvitation: jest.fn(),
   },

@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Text, TouchableOpacity } from 'react-native';
+import { AppState, Text, TouchableOpacity } from 'react-native';
 
 const mockGetOnboardingProgress = jest.fn();
 const mockCompleteOnboardingProgress = jest.fn();
@@ -252,6 +252,30 @@ describe('FirstRunProvider', () => {
 
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
     expect(mockRetryPendingFirstValueCompletion).toHaveBeenCalledWith('42', 'Bearer token');
+  });
+
+  it('retries pending completion when the app returns to the foreground', async () => {
+    let onAppStateChange: ((state: 'active') => void) | null = null;
+    const remove = jest.fn();
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((
+      _event,
+      listener,
+    ) => {
+      onAppStateChange = listener as (state: 'active') => void;
+      return { remove };
+    });
+    mockGetOnboardingProgress
+      .mockResolvedValueOnce({ eligible: true, completedAt: null })
+      .mockResolvedValueOnce({ eligible: true, completedAt: null });
+
+    const view = renderProvider();
+    await waitFor(() => expect(mockRetryPendingFirstValueCompletion).toHaveBeenCalledTimes(1));
+
+    act(() => onAppStateChange?.('active'));
+
+    await waitFor(() => expect(mockRetryPendingFirstValueCompletion).toHaveBeenCalledTimes(2));
+    view.unmount();
+    expect(remove).toHaveBeenCalledTimes(1);
   });
 
   it('does not load or complete progress without an authenticated party', async () => {

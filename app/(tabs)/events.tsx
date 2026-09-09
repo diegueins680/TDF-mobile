@@ -160,10 +160,10 @@ export default function EventsScreen() {
         action: saved ? 'saved' : 'unsaved',
       });
       if (saved && token) {
-        void markFirstValueCompleted(ownerPartyId, 'event_saved', token).then((completed) => {
-          if (!completed) return;
-          analytics.capture('first_value_completed', { platform: 'mobile', value: 'event_saved' });
-          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'event_saved' });
+        void markFirstValueCompleted(ownerPartyId, 'event_saved', token).then((completedValue) => {
+          if (!completedValue) return;
+          analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
         });
       }
     },

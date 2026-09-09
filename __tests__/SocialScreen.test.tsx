@@ -95,7 +95,7 @@ describe('Social screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockMutationOptions.length = 0;
-    mockMarkFirstValueCompleted.mockResolvedValue(true);
+    mockMarkFirstValueCompleted.mockResolvedValue('artist_followed');
   });
 
   it('keeps the visible social surface focused on following', () => {

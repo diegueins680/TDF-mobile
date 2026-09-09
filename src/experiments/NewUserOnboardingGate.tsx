@@ -236,14 +236,19 @@ export function NewUserOnboardingGate({ children }: Props) {
         if (!result) return;
         convertedRef.current = !result.progress.eligible;
         if (!result.newlyCompleted) return;
-        track('experiment_converted', {
-          experimentId: EXPERIMENT_ID,
-          variant: TREATMENT,
-          userId: normalizedPartyId ?? undefined,
-          metadata: { value: 1, surface: 'gate_moment_reaction' },
-        });
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'moment_reaction' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'moment_reaction' });
+        const completedValue = result.progress.firstValue;
+        if (completedValue) {
+          analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
+        }
+        if (completedValue === 'moment_reaction') {
+          track('experiment_converted', {
+            experimentId: EXPERIMENT_ID,
+            variant: TREATMENT,
+            userId: normalizedPartyId ?? undefined,
+            metadata: { value: 1, surface: 'gate_moment_reaction' },
+          });
+        }
       } finally {
         conversionInFlightRef.current = false;
       }
@@ -325,7 +330,13 @@ export function NewUserOnboardingGate({ children }: Props) {
     router.replace('/(tabs)/events');
     void completeOnboarding().then((result) => {
       if (result?.newlyCompleted) {
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
+        const completedValue = result.progress.firstValue;
+        if (completedValue) {
+          analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
+        } else {
+          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
+        }
       }
     });
   }, [analytics, completeOnboarding, router]);

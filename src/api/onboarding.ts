@@ -30,3 +30,11 @@ export async function completeOnboardingProgress(
     ? post<OnboardingCompletionResult>('/session/onboarding/complete', body, config)
     : post<OnboardingCompletionResult>('/session/onboarding/complete', body);
 }
+
+export async function reconcileOnboardingProgress(
+  config?: AxiosRequestConfig,
+): Promise<OnboardingCompletionResult> {
+  return config
+    ? post<OnboardingCompletionResult>('/session/onboarding/reconcile', undefined, config)
+    : post<OnboardingCompletionResult>('/session/onboarding/reconcile', undefined);
+}

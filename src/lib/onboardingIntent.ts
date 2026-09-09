@@ -190,7 +190,7 @@ async function requestPendingFirstValueCompletion(
       authSessionRequestConfig(binding),
     );
     assertAuthSession(binding);
-    if (!result.progress.eligible) {
+    if (result.progress.completedAt) {
       try {
         await AsyncStorage.removeItem(pendingFirstValueKey(partyId));
       } catch {
@@ -262,9 +262,14 @@ export async function markFirstValueCompleted(
   partyId: string | null | undefined,
   value: OnboardingFirstValue,
   authToken: string | null | undefined,
-): Promise<boolean> {
+): Promise<OnboardingFirstValue | null> {
   const result = await completeFirstValueWithRecovery(partyId, value, authToken);
-  return result?.newlyCompleted === true;
+  const authoritativeValue = result?.progress.firstValue;
+  return result?.newlyCompleted === true
+    && authoritativeValue
+    && FIRST_VALUES.has(authoritativeValue)
+    ? authoritativeValue
+    : null;
 }
 
 const hasAny = (values: readonly string[], candidates: readonly string[]) => {

@@ -11,7 +11,7 @@ import { AppState } from 'react-native';
 
 import {
   completeOnboardingProgress,
-  getOnboardingProgress,
+  reconcileOnboardingProgress,
   type OnboardingCompletionResult,
   type OnboardingFirstValue,
 } from '../api/onboarding';
@@ -25,7 +25,6 @@ import { useAnalytics } from '../analytics/AnalyticsProvider';
 import {
   clearPendingFirstValueCompletion,
   completeFirstValueWithRecovery,
-  retryPendingFirstValueCompletion,
 } from '../lib/onboardingIntent';
 import { useAuth } from './AuthProvider';
 import { useNetwork } from './NetworkProvider';
@@ -55,6 +54,10 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
   const [isNewUser, setIsNewUser] = useState(false);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const stateGenerationRef = useRef(0);
+  const reconciliationInFlightRef = useRef<{
+    sessionKey: string;
+    request: Promise<OnboardingCompletionResult>;
+  } | null>(null);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -81,21 +84,37 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     (async () => {
       setCohortReady(false);
       let isNew = false;
-      let recoveredForAnalytics: Awaited<ReturnType<typeof retryPendingFirstValueCompletion>> = null;
+      let reconciledFirstValue: OnboardingFirstValue | null = null;
       try {
         const binding = captureAuthSession(token);
-        let progress = await getOnboardingProgress(authSessionRequestConfig(binding));
+        const sessionKey = `${partyId}:${binding.version}`;
+        let inFlight = reconciliationInFlightRef.current;
+        if (!inFlight || inFlight.sessionKey !== sessionKey) {
+          const request = reconcileOnboardingProgress(authSessionRequestConfig(binding));
+          inFlight = { sessionKey, request };
+          reconciliationInFlightRef.current = inFlight;
+          void request.then(
+            () => {
+              if (reconciliationInFlightRef.current?.request === request) {
+                reconciliationInFlightRef.current = null;
+              }
+            },
+            () => {
+              if (reconciliationInFlightRef.current?.request === request) {
+                reconciliationInFlightRef.current = null;
+              }
+            },
+          );
+        }
+        const result = await inFlight.request;
         assertAuthSession(binding);
-        if (!progress.completedAt) {
-          const recovered = await retryPendingFirstValueCompletion(partyId, token);
-          assertAuthSession(binding);
-          if (recovered) {
-            progress = recovered.result.progress;
-            if (recovered.result.newlyCompleted) recoveredForAnalytics = recovered;
-          }
-        } else {
+        const progress = result.progress;
+        if (progress.completedAt) {
           await clearPendingFirstValueCompletion(partyId, token);
           assertAuthSession(binding);
+        }
+        if (result.newlyCompleted && progress.firstValue) {
+          reconciledFirstValue = progress.firstValue;
         }
         isNew = progress.eligible;
       } catch {
@@ -103,15 +122,15 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
         // an established account as a new-user experiment participant.
       }
       if (cancelled || generation !== stateGenerationRef.current) return;
-      if (recoveredForAnalytics) {
+      if (reconciledFirstValue) {
         analytics.capture('first_value_completed', {
           platform: 'mobile',
-          value: recoveredForAnalytics.value,
+          value: reconciledFirstValue,
         });
         analytics.capture('onboarding_completed', {
           platform: 'mobile',
           reason: 'first_value',
-          value: recoveredForAnalytics.value,
+          value: reconciledFirstValue,
         });
       }
       setIsNewUser(isNew);
@@ -134,6 +153,23 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       return null;
     }
     try {
+      const sessionKey = `${partyId}:${binding.version}`;
+      const inFlight = reconciliationInFlightRef.current;
+      if (inFlight?.sessionKey === sessionKey) {
+        try {
+          const reconciled = await inFlight.request;
+          assertAuthSession(binding);
+          if (reconciled.progress.completedAt) {
+            // The provider hydration path owns analytics for this response.
+            // Returning a non-winning result prevents a direct caller from
+            // emitting the same completion a second time.
+            return { ...reconciled, newlyCompleted: false };
+          }
+        } catch {
+          assertAuthSession(binding);
+          // A failed reconciliation must not block the direct handshake.
+        }
+      }
       const result = firstValue
         ? await completeFirstValueWithRecovery(partyId, firstValue, token)
         : await completeOnboardingProgress(

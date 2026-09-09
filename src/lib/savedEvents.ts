@@ -39,6 +39,9 @@ type FlushResult = {
   retrying: PendingSavedEventChange[];
   rejected: Array<{ change: PendingSavedEventChange; error: unknown }>;
 };
+type StillOwnsParty = () => boolean;
+
+const alwaysOwnsParty: StillOwnsParty = () => true;
 
 const partyQueues = new Map<string, Promise<unknown>>();
 
@@ -187,11 +190,20 @@ const isRetryableSyncError = (error: unknown): boolean => {
   return status === undefined || status === 408 || status === 429 || status >= 500;
 };
 
-async function flushOutbox(partyId: string, changes: PendingSavedEventChange[]): Promise<FlushResult> {
+async function flushOutbox(
+  partyId: string,
+  changes: PendingSavedEventChange[],
+  stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
+): Promise<FlushResult> {
   const acknowledged: PendingSavedEventChange[] = [];
   const retrying: PendingSavedEventChange[] = [];
   const rejected: Array<{ change: PendingSavedEventChange; error: unknown }> = [];
-  for (const change of changes) {
+  for (let index = 0; index < changes.length; index += 1) {
+    const change = changes[index];
+    if (!stillOwnsParty()) {
+      retrying.push(...changes.slice(index));
+      break;
+    }
     try {
       if (change.desiredSaved) await saveDirectoryEventFavorite(change.eventId);
       else await deleteDirectoryEventFavorite(change.eventId);
@@ -208,9 +220,10 @@ async function flushOutbox(partyId: string, changes: PendingSavedEventChange[]):
 async function retryOnboardingAfterAcknowledgedReplay(
   partyId: string,
   flush: FlushResult,
+  stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
 ): Promise<void> {
-  if (flush.acknowledged.some((change) => change.desiredSaved)) {
-    await markFirstValueCompleted(partyId, 'event_saved');
+  if (stillOwnsParty() && flush.acknowledged.some((change) => change.desiredSaved)) {
+    await markFirstValueCompleted(partyId, 'event_saved', stillOwnsParty);
   }
 }
 
@@ -225,7 +238,8 @@ async function withPartyQueue<T>(partyId: string, action: () => Promise<T>): Pro
   }
 }
 
-const remoteEventIds = async (): Promise<string[]> => {
+const remoteEventIds = async (stillOwnsParty: StillOwnsParty): Promise<string[]> => {
+  if (!stillOwnsParty()) return [];
   const favorites = await listDirectoryEventFavorites();
   const seen = new Set<string>();
   return favorites.flatMap((favorite) => {
@@ -237,21 +251,26 @@ const remoteEventIds = async (): Promise<string[]> => {
   });
 };
 
-async function synchronizeSavedEventIdsWithinQueue(partyId: string): Promise<string[]> {
+async function synchronizeSavedEventIdsWithinQueue(
+  partyId: string,
+  stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
+): Promise<string[]> {
   const [cachedIds, pendingChanges] = await Promise.all([
     readIds(partyId),
     readOutbox(partyId),
   ]);
   let authoritativeIds: string[];
   try {
-    authoritativeIds = await remoteEventIds();
+    if (!stillOwnsParty()) return cachedIds;
+    authoritativeIds = await remoteEventIds(stillOwnsParty);
   } catch (error) {
     if (!isRetryableSyncError(error)) throw error;
     authoritativeIds = cachedIds;
   }
 
-  const flush = await flushOutbox(partyId, pendingChanges);
-  await retryOnboardingAfterAcknowledgedReplay(partyId, flush);
+  if (!stillOwnsParty()) return cachedIds;
+  const flush = await flushOutbox(partyId, pendingChanges, stillOwnsParty);
+  await retryOnboardingAfterAcknowledgedReplay(partyId, flush, stillOwnsParty);
   const nextIds = applyDesiredChanges(
     authoritativeIds,
     [...flush.acknowledged, ...flush.retrying],
@@ -260,16 +279,20 @@ async function synchronizeSavedEventIdsWithinQueue(partyId: string): Promise<str
   return nextIds;
 }
 
-export async function listSavedEventIds(partyId: ID): Promise<string[]> {
+export async function listSavedEventIds(
+  partyId: ID,
+  stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
+): Promise<string[]> {
   const normalizedPartyId = requirePartyId(partyId);
   return withPartyQueue(normalizedPartyId, () =>
-    synchronizeSavedEventIdsWithinQueue(normalizedPartyId));
+    synchronizeSavedEventIdsWithinQueue(normalizedPartyId, stillOwnsParty));
 }
 
 async function setSavedEventDesiredStateWithinQueue(
   normalizedPartyId: string,
   normalizedEventId: string,
   desiredSaved: boolean,
+  stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
 ): Promise<SavedEventMutationResult> {
   const currentIds = await readIds(normalizedPartyId);
   const currentOutbox = await readOutbox(normalizedPartyId);
@@ -279,7 +302,7 @@ async function setSavedEventDesiredStateWithinQueue(
   // Persist intent first so an interrupted cache write cannot lose the change.
   await writeOutbox(normalizedPartyId, nextOutbox);
   await writeIds(normalizedPartyId, nextIds);
-  const flush = await flushOutbox(normalizedPartyId, nextOutbox);
+  const flush = await flushOutbox(normalizedPartyId, nextOutbox, stillOwnsParty);
   const rejected = flush.rejected.find(({ change }) => change.eventId === normalizedEventId);
   if (rejected) {
     const restoredIds = applyDesiredChanges(nextIds, [{
@@ -299,29 +322,42 @@ async function setSavedEventDesiredStateWithinQueue(
   };
 }
 
-export async function saveEvent(partyId: ID, eventId: ID): Promise<SavedEventMutationResult> {
+export async function saveEvent(
+  partyId: ID,
+  eventId: ID,
+  stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
+): Promise<SavedEventMutationResult> {
   const normalizedPartyId = requirePartyId(partyId);
   const normalizedEventId = requireEventId(eventId);
   return withPartyQueue(normalizedPartyId, () =>
-    setSavedEventDesiredStateWithinQueue(normalizedPartyId, normalizedEventId, true));
+    setSavedEventDesiredStateWithinQueue(normalizedPartyId, normalizedEventId, true, stillOwnsParty));
 }
 
-export async function unsaveEvent(partyId: ID, eventId: ID): Promise<SavedEventMutationResult> {
+export async function unsaveEvent(
+  partyId: ID,
+  eventId: ID,
+  stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
+): Promise<SavedEventMutationResult> {
   const normalizedPartyId = requirePartyId(partyId);
   const normalizedEventId = requireEventId(eventId);
   return withPartyQueue(normalizedPartyId, () =>
-    setSavedEventDesiredStateWithinQueue(normalizedPartyId, normalizedEventId, false));
+    setSavedEventDesiredStateWithinQueue(normalizedPartyId, normalizedEventId, false, stillOwnsParty));
 }
 
-export async function toggleSavedEvent(partyId: ID, eventId: ID): Promise<SavedEventMutationResult> {
+export async function toggleSavedEvent(
+  partyId: ID,
+  eventId: ID,
+  stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
+): Promise<SavedEventMutationResult> {
   const normalizedPartyId = requirePartyId(partyId);
   const normalizedEventId = requireEventId(eventId);
   return withPartyQueue(normalizedPartyId, async () => {
-    const ids = await synchronizeSavedEventIdsWithinQueue(normalizedPartyId);
+    const ids = await synchronizeSavedEventIdsWithinQueue(normalizedPartyId, stillOwnsParty);
     return setSavedEventDesiredStateWithinQueue(
       normalizedPartyId,
       normalizedEventId,
       !ids.includes(normalizedEventId),
+      stillOwnsParty,
     );
   });
 }
@@ -335,7 +371,10 @@ export async function getLegacySavedEventCandidate(): Promise<LegacySavedEventCa
   return ids.length > 0 ? { count: ids.length } : null;
 }
 
-export async function importLegacySavedEvents(partyId: ID): Promise<LegacySavedEventImportResult> {
+export async function importLegacySavedEvents(
+  partyId: ID,
+  stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
+): Promise<LegacySavedEventImportResult> {
   const normalizedPartyId = requirePartyId(partyId);
   return withPartyQueue(normalizedPartyId, async () => {
     const raw = await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
@@ -357,8 +396,8 @@ export async function importLegacySavedEvents(partyId: ID): Promise<LegacySavedE
     await writeOutbox(normalizedPartyId, nextOutbox);
     await writeIds(normalizedPartyId, nextIds);
     await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
-    const flush = await flushOutbox(normalizedPartyId, nextOutbox);
-    await retryOnboardingAfterAcknowledgedReplay(normalizedPartyId, flush);
+    const flush = await flushOutbox(normalizedPartyId, nextOutbox, stillOwnsParty);
+    await retryOnboardingAfterAcknowledgedReplay(normalizedPartyId, flush, stillOwnsParty);
     const rejectedIds = new Set(flush.rejected.map(({ change }) => change.eventId));
     const retainedIds = nextIds.filter((eventId) => !rejectedIds.has(eventId));
     if (retainedIds.length !== nextIds.length) await writeIds(normalizedPartyId, retainedIds);

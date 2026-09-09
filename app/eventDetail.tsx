@@ -65,8 +65,9 @@ import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
-import { markFirstValueCompleted } from '../src/lib/onboardingIntent';
+import { recordFirstValueCompletion } from '../src/lib/firstValueCompletion';
 import { recordMomentReactionFirstValue } from '../src/lib/momentReactionFirstValue';
+import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
 import type {
   EventLiveBroadcast,
   EventLiveBroadcastQuality,
@@ -152,8 +153,7 @@ export default function EventDetailScreen() {
   );
   const shouldPreferRemoteMoments = Boolean(token?.trim());
   const shouldPreferRemoteBroadcasts = Boolean(token?.trim());
-  const activePartyIdRef = useRef(normalizedPartyId);
-  activePartyIdRef.current = normalizedPartyId;
+  const ownsParty = usePartyOwnership(normalizedPartyId);
   const publisherSessionRef = useRef<LiveBroadcastPublisherSession | null>(null);
   const activeLiveBroadcastRef = useRef<ActiveLiveBroadcastRecord | null>(null);
 
@@ -198,7 +198,10 @@ export default function EventDetailScreen() {
 
   const savedEventIdsQuery = useQuery({
     queryKey: ['saved-event-ids', normalizedPartyId],
-    queryFn: () => listSavedEventIds(normalizedPartyId as string),
+    queryFn: () => listSavedEventIds(
+      normalizedPartyId as string,
+      () => ownsParty(normalizedPartyId),
+    ),
     enabled: Boolean(normalizedPartyId),
   });
 
@@ -405,21 +408,27 @@ export default function EventDetailScreen() {
 
   const saveEventMutation = useMutation({
     mutationFn: ({ targetEventId, ownerPartyId }: { targetEventId: string; ownerPartyId: string }) => {
-      return toggleSavedEvent(ownerPartyId, targetEventId);
+      return toggleSavedEvent(
+        ownerPartyId,
+        targetEventId,
+        () => ownsParty(ownerPartyId),
+      );
     },
     onSuccess: async ({ saved, serverAcknowledged }, { targetEventId, ownerPartyId }) => {
       qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
-      if (normalizedPartyId !== ownerPartyId) return;
+      if (!ownsParty(ownerPartyId)) return;
       if (serverAcknowledged) {
         analytics.capture('feature_favorite_changed', {
           platform: 'mobile',
           event_id: targetEventId,
           action: saved ? 'saved' : 'unsaved',
         });
-        if (saved && await markFirstValueCompleted(ownerPartyId, 'event_saved')) {
-          analytics.capture('first_value_completed', { platform: 'mobile', value: 'event_saved' });
-          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'event_saved' });
-        }
+        if (saved) void recordFirstValueCompletion(
+          ownerPartyId,
+          'event_saved',
+          () => ownsParty(ownerPartyId),
+          analytics,
+        );
       }
       Alert.alert(
         serverAcknowledged ? 'Listo' : 'Cambio pendiente de sincronización',
@@ -429,7 +438,7 @@ export default function EventDetailScreen() {
       );
     },
     onError: (_error, { ownerPartyId }) => {
-      if (normalizedPartyId !== ownerPartyId) return;
+      if (!ownsParty(ownerPartyId)) return;
       Alert.alert('Error', 'No pudimos actualizar tus eventos guardados.');
     },
   });
@@ -588,7 +597,7 @@ export default function EventDetailScreen() {
       void recordMomentReactionFirstValue(
         result,
         ownerPartyId,
-        () => activePartyIdRef.current === ownerPartyId,
+        () => ownsParty(ownerPartyId),
         analytics,
       );
     },

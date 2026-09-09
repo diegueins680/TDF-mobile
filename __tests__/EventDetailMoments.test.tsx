@@ -6,6 +6,7 @@ import EventDetailScreen from '../app/eventDetail';
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockCapture = jest.fn();
+const mockRecordFirstValueCompletion = jest.fn(async () => false);
 const mockRecordMomentReactionFirstValue = jest.fn<
   Promise<boolean>,
   [unknown, string | null, () => boolean, { capture: typeof mockCapture }]
@@ -110,6 +111,10 @@ jest.mock('../src/analytics/AnalyticsProvider', () => ({
 jest.mock('../src/lib/momentReactionFirstValue', () => ({
   recordMomentReactionFirstValue: (...args: Parameters<typeof mockRecordMomentReactionFirstValue>) =>
     mockRecordMomentReactionFirstValue(...args),
+}));
+
+jest.mock('../src/lib/firstValueCompletion', () => ({
+  recordFirstValueCompletion: (...args: unknown[]) => mockRecordFirstValueCompletion(...args),
 }));
 
 describe('EventDetail moments tab', () => {
@@ -277,6 +282,31 @@ describe('EventDetail moments tab', () => {
       expect.objectContaining({ capture: mockCapture }),
     ));
     const stillOwnsParty = mockRecordMomentReactionFirstValue.mock.calls[0][2] as () => boolean;
+    expect(stillOwnsParty()).toBe(true);
+  });
+
+  it('binds a successful event save to the initiating Party first-value boundary', async () => {
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Guardar evento'));
+
+    expect(mockMutate).toHaveBeenCalledWith({
+      targetEventId: '42',
+      ownerPartyId: '7',
+    });
+
+    const saveOptions = mockMutationOptions[3];
+    saveOptions.onSuccess?.(
+      { saved: true, serverAcknowledged: true },
+      { targetEventId: '42', ownerPartyId: '7' },
+    );
+
+    await waitFor(() => expect(mockRecordFirstValueCompletion).toHaveBeenCalledWith(
+      '7',
+      'event_saved',
+      expect.any(Function),
+      expect.objectContaining({ capture: mockCapture }),
+    ));
+    const stillOwnsParty = mockRecordFirstValueCompletion.mock.calls[0][2] as () => boolean;
     expect(stillOwnsParty()).toBe(true);
   });
 

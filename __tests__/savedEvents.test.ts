@@ -116,7 +116,7 @@ describe('savedEvents account synchronization', () => {
     await expect(listSavedEventIds('42')).resolves.toEqual(['9']);
     expect(saveRemoteMock).toHaveBeenCalledTimes(2);
     expect(storage[outboxKeyFor('42')]).toBeUndefined();
-    expect(markFirstValueMock).toHaveBeenCalledWith('42', 'event_saved');
+    expect(markFirstValueMock).toHaveBeenCalledWith('42', 'event_saved', expect.any(Function));
   });
 
   it('falls back to Party-scoped cache during a retryable read failure', async () => {
@@ -161,6 +161,38 @@ describe('savedEvents account synchronization', () => {
 
     expect(storage[LEGACY_STORAGE_KEY]).toBe(JSON.stringify(['99']));
     expect(getItemMock).not.toHaveBeenCalledWith(LEGACY_STORAGE_KEY);
+  });
+
+  it('keeps queued work under its initiating Party when ownership changes before replay', async () => {
+    storage[storageKeyFor('42')] = JSON.stringify(['9']);
+    storage[outboxKeyFor('42')] = JSON.stringify([{ eventId: '9', desiredSaved: true }]);
+    const stillOwnsParty = jest.fn(() => false);
+
+    await expect(listSavedEventIds('42', stillOwnsParty)).resolves.toEqual(['9']);
+
+    expect(listRemoteMock).not.toHaveBeenCalled();
+    expect(saveRemoteMock).not.toHaveBeenCalled();
+    expect(markFirstValueMock).not.toHaveBeenCalled();
+    expect(storage[outboxKeyFor('42')]).toBe(JSON.stringify([{ eventId: '9', desiredSaved: true }]));
+  });
+
+  it('stops a multi-change replay when Party ownership changes between requests', async () => {
+    storage[outboxKeyFor('42')] = JSON.stringify([
+      { eventId: '9', desiredSaved: true },
+      { eventId: '10', desiredSaved: true },
+    ]);
+    let ownsParty = true;
+    saveRemoteMock.mockImplementation(async (eventId) => {
+      remoteIds.add(eventId);
+      ownsParty = false;
+    });
+
+    await expect(listSavedEventIds('42', () => ownsParty)).resolves.toEqual(['10', '9']);
+
+    expect(saveRemoteMock).toHaveBeenCalledTimes(1);
+    expect(saveRemoteMock).toHaveBeenCalledWith('9');
+    expect(markFirstValueMock).not.toHaveBeenCalled();
+    expect(storage[outboxKeyFor('42')]).toBe(JSON.stringify([{ eventId: '10', desiredSaved: true }]));
   });
 
   it('imports legacy values only after explicit account binding and preserves offline work', async () => {

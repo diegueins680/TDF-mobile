@@ -1,9 +1,14 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockMutate = jest.fn();
 const mockPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockCapture = jest.fn();
+const mockRecordFirstValueCompletion = jest.fn(async () => false);
+const mockMutationOptions: Array<{
+  onSuccess?: (result: unknown, variables: unknown) => void;
+}> = [];
 const mockUseQuery = jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
   if (queryKey[0] === 'social-following') {
     return {
@@ -47,11 +52,14 @@ const mockUseQuery = jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
 });
 
 jest.mock('@tanstack/react-query', () => ({
-  useMutation: jest.fn(() => ({
+  useMutation: jest.fn((options) => {
+    mockMutationOptions.push(options);
+    return {
     mutate: mockMutate,
     isPending: false,
     error: null,
-  })),
+    };
+  }),
   useQuery: (options: { queryKey: unknown[] }) => mockUseQuery(options),
   useQueryClient: jest.fn(() => ({ invalidateQueries: mockInvalidateQueries })),
 }));
@@ -73,11 +81,20 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
   useUserSettings: jest.fn(() => ({ partyId: '42', displayName: 'Demo Fan', locale: 'es' })),
 }));
 
+jest.mock('../src/analytics/AnalyticsProvider', () => ({
+  useAnalytics: () => ({ capture: mockCapture }),
+}));
+
+jest.mock('../src/lib/firstValueCompletion', () => ({
+  recordFirstValueCompletion: (...args: unknown[]) => mockRecordFirstValueCompletion(...args),
+}));
+
 const SocialScreen = require('../app/(tabs)/social').default;
 
 describe('Social screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMutationOptions.length = 0;
   });
 
   it('keeps the visible social surface focused on following', () => {
@@ -97,14 +114,34 @@ describe('Social screen', () => {
     expect(screen.queryByText(/ID de contacto/i)).toBeNull();
   });
 
-  it('offers a real artist follow action with an events fallback', () => {
+  it('binds the real artist follow action to the initiating Party', async () => {
     render(<SocialScreen />);
 
     expect(screen.getByRole('header', { name: 'Empieza siguiendo a un artista' })).toBeTruthy();
     expect(screen.getByText('Artista Uno')).toBeTruthy();
 
     fireEvent.press(screen.getByRole('button', { name: 'Seguir a Artista Uno' }));
-    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ id: 'artist-1', name: 'Artista Uno' }));
+    const variables = {
+      artist: expect.objectContaining({ id: 'artist-1', name: 'Artista Uno' }),
+      ownerPartyId: '42',
+    };
+    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining(variables));
+
+    const artistFollowOptions = mockMutationOptions[1];
+    await act(async () => {
+      artistFollowOptions.onSuccess?.(undefined, {
+        artist: { id: 'artist-1', partyId: '71', name: 'Artista Uno' },
+        ownerPartyId: '42',
+      });
+    });
+    await waitFor(() => expect(mockRecordFirstValueCompletion).toHaveBeenCalledWith(
+      '42',
+      'artist_followed',
+      expect.any(Function),
+      expect.objectContaining({ capture: mockCapture }),
+    ));
+    const stillOwnsParty = mockRecordFirstValueCompletion.mock.calls[0][2] as () => boolean;
+    expect(stillOwnsParty()).toBe(true);
 
     fireEvent.press(screen.getByRole('button', { name: 'Ver próximos eventos' }));
     expect(mockPush).toHaveBeenCalledWith('/(tabs)/events');

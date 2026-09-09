@@ -19,11 +19,13 @@ import {
 import { formatTicketMoney } from '../src/lib/tickets';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useAuth } from '../src/providers/AuthProvider';
+import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
 
 export default function UserProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const { token, partyId, session } = useAuth();
+  const ownsParty = usePartyOwnership(partyId);
   const {
     colors,
     preferenceId: themePreferenceId,
@@ -79,7 +81,10 @@ export default function UserProfileScreen() {
 
   const savedEventIdsQuery = useQuery({
     queryKey: ['saved-event-ids', partyId],
-    queryFn: () => listSavedEventIds(partyId as string),
+    queryFn: () => listSavedEventIds(
+      partyId as string,
+      () => ownsParty(partyId),
+    ),
     enabled: Boolean(partyId),
   });
 
@@ -120,25 +125,32 @@ export default function UserProfileScreen() {
 
   const unsaveMutation = useMutation({
     mutationFn: ({ eventId, ownerPartyId }: { eventId: ID; ownerPartyId: string }) =>
-      unsaveEvent(ownerPartyId, eventId),
+      unsaveEvent(
+        ownerPartyId,
+        eventId,
+        () => ownsParty(ownerPartyId),
+      ),
     onSuccess: (_ids, { ownerPartyId }) => {
       qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
       qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
     },
     onError: (_error, { ownerPartyId }) => {
-      if (partyId !== ownerPartyId) return;
+      if (!ownsParty(ownerPartyId)) return;
       Alert.alert('Error', 'No pudimos remover el evento guardado.');
     }
   });
 
   const legacyImportMutation = useMutation({
     mutationFn: ({ ownerPartyId }: { ownerPartyId: string }) =>
-      importLegacySavedEvents(ownerPartyId),
+      importLegacySavedEvents(
+        ownerPartyId,
+        () => ownsParty(ownerPartyId),
+      ),
     onSuccess: (result, { ownerPartyId }) => {
       qc.invalidateQueries({ queryKey: ['legacy-saved-event-candidate'] });
       qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
       qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
-      if (partyId !== ownerPartyId) return;
+      if (!ownsParty(ownerPartyId)) return;
       Alert.alert(
         'Importación lista',
         result.pendingCount > 0
@@ -147,7 +159,7 @@ export default function UserProfileScreen() {
       );
     },
     onError: (_error, { ownerPartyId }) => {
-      if (partyId !== ownerPartyId) return;
+      if (!ownsParty(ownerPartyId)) return;
       Alert.alert('No pudimos importar', 'Los datos anteriores se conservaron. Revisa la sesión y vuelve a intentarlo.');
     },
   });

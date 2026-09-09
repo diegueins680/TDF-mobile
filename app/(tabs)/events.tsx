@@ -27,7 +27,8 @@ import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
 import { impactLight } from '../../src/utils/haptics';
-import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
+import { recordFirstValueCompletion } from '../../src/lib/firstValueCompletion';
+import { usePartyOwnership } from '../../src/hooks/usePartyOwnership';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -50,6 +51,7 @@ export default function EventsScreen() {
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
   const { partyId } = useAuth();
+  const ownsParty = usePartyOwnership(partyId);
   const { locale, timezone, countryCode } = useUserSettings();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
@@ -75,7 +77,10 @@ export default function EventsScreen() {
 
   const savedEventIdsQuery = useQuery({
     queryKey: ['saved-event-ids', partyId],
-    queryFn: () => listSavedEventIds(partyId as string),
+    queryFn: () => listSavedEventIds(
+      partyId as string,
+      () => ownsParty(partyId),
+    ),
     enabled: Boolean(partyId),
   });
 
@@ -106,11 +111,15 @@ export default function EventsScreen() {
 
   const saveToggleMutation = useMutation({
     mutationFn: ({ eventId, ownerPartyId }: { eventId: string; ownerPartyId: string }) =>
-      toggleSavedEvent(ownerPartyId, eventId),
+      toggleSavedEvent(
+        ownerPartyId,
+        eventId,
+        () => ownsParty(ownerPartyId),
+      ),
     onSuccess: async ({ saved, serverAcknowledged }, { eventId, ownerPartyId }) => {
       qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
       qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
-      if (partyId !== ownerPartyId) return;
+      if (!ownsParty(ownerPartyId)) return;
       void impactLight();
       if (!serverAcknowledged) {
         Alert.alert(
@@ -124,13 +133,15 @@ export default function EventsScreen() {
         event_id: eventId,
         action: saved ? 'saved' : 'unsaved',
       });
-      if (saved && await markFirstValueCompleted(ownerPartyId, 'event_saved')) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'event_saved' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'event_saved' });
-      }
+      if (saved) void recordFirstValueCompletion(
+        ownerPartyId,
+        'event_saved',
+        () => ownsParty(ownerPartyId),
+        analytics,
+      );
     },
     onError: (_error, { ownerPartyId }) => {
-      if (partyId !== ownerPartyId) return;
+      if (!ownsParty(ownerPartyId)) return;
       Alert.alert(
         'No pudimos actualizar tus guardados',
         'El cambio no se pudo guardar ni poner en cola. Comprueba la sesión y el almacenamiento e inténtalo nuevamente.',

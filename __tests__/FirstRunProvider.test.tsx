@@ -1,12 +1,15 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Text, TouchableOpacity } from 'react-native';
+import { AppState, type AppStateStatus, Text, TouchableOpacity } from 'react-native';
 
 const mockGetOnboardingProgress = jest.fn();
 const mockCompleteOnboardingProgress = jest.fn();
 const mockUpdateOnboardingIntent = jest.fn();
 let mockPartyId: string | null = '42';
+let appStateChangeListener: ((state: AppStateStatus) => void) | null = null;
+const mockRemoveAppStateListener = jest.fn();
+const mockAddAppStateListener = jest.spyOn(AppState, 'addEventListener');
 
 jest.mock('../src/api/onboarding', () => ({
   getOnboardingProgress: (...args: unknown[]) => mockGetOnboardingProgress(...args),
@@ -51,6 +54,11 @@ const renderProvider = () => render(
   </FirstRunProvider>,
 );
 
+const emitAppStateChange = (state: AppStateStatus) => {
+  if (!appStateChangeListener) throw new Error('AppState listener was not registered');
+  appStateChangeListener(state);
+};
+
 describe('FirstRunProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -58,6 +66,12 @@ describe('FirstRunProvider', () => {
     jest.mocked(AsyncStorage.setItem).mockReset().mockResolvedValue(undefined);
     jest.mocked(AsyncStorage.removeItem).mockReset().mockResolvedValue(undefined);
     mockUpdateOnboardingIntent.mockReset().mockResolvedValue({ eligible: false });
+    appStateChangeListener = null;
+    mockRemoveAppStateListener.mockReset();
+    mockAddAppStateListener.mockReset().mockImplementation((_event, listener) => {
+      appStateChangeListener = listener;
+      return { remove: mockRemoveAppStateListener };
+    });
     mockPartyId = '42';
   });
 
@@ -142,6 +156,63 @@ describe('FirstRunProvider', () => {
 
     await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('learning'));
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+  });
+
+  it('retries a retained Party intent when the app returns to the foreground', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: false });
+    const key = 'tdf-onboarding-intent:party:42';
+    const values = new Map([[key, 'learning']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    let rejectStartupAttempt!: (reason: Error) => void;
+    mockUpdateOnboardingIntent.mockReturnValueOnce(new Promise((_resolve, reject) => {
+      rejectStartupAttempt = reject;
+    }));
+
+    renderProvider();
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      rejectStartupAttempt(new Error('offline'));
+      await Promise.resolve();
+    });
+
+    act(() => emitAppStateChange('active'));
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(values.has(key)).toBe(false));
+  });
+
+  it('coalesces foreground intent recovery while the active Party request is pending', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: false });
+    const key = 'tdf-onboarding-intent:party:42';
+    const values = new Map([[key, 'professional_tools']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    let resolveUpdate!: (result: { eligible: boolean }) => void;
+    mockUpdateOnboardingIntent.mockReturnValueOnce(new Promise((resolve) => {
+      resolveUpdate = resolve;
+    }));
+
+    renderProvider();
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      emitAppStateChange('active');
+      emitAppStateChange('active');
+    });
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveUpdate({ eligible: false });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(values.has(key)).toBe(false));
   });
 
   it('does not load or complete progress without an authenticated party', async () => {

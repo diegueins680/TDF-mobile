@@ -6,7 +6,16 @@
  * can observe partyId. Eligibility comes from the backend's account-bound
  * signup marker, survives device changes, and ends permanently on completion.
  */
-import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useState } from 'react';
+import {
+  PropsWithChildren,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import { AppState } from 'react-native';
 
 import {
   completeOnboardingProgress,
@@ -51,6 +60,10 @@ type FirstRunState = {
 export function FirstRunProvider({ children }: PropsWithChildren) {
   const { partyId } = useAuth();
   const ownsParty = usePartyOwnership(partyId);
+  const intentRecoveryRef = useRef<{
+    partyId: string;
+    promise: Promise<void>;
+  } | null>(null);
   const [state, setState] = useState<FirstRunState>({
     partyId: null,
     cohortReady: false,
@@ -70,6 +83,25 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     }
 
     let cancelled = false;
+    const replayPendingIntent = (): Promise<void> => {
+      const activeRecovery = intentRecoveryRef.current;
+      if (activeRecovery?.partyId === partyId) return activeRecovery.promise;
+
+      const promise = retryPendingOnboardingIntent(
+        partyId,
+        () => !cancelled && ownsParty(partyId),
+      )
+        .then(() => undefined)
+        .catch(() => undefined)
+        .finally(() => {
+          if (intentRecoveryRef.current?.promise === promise) {
+            intentRecoveryRef.current = null;
+          }
+        });
+      intentRecoveryRef.current = { partyId, promise };
+      return promise;
+    };
+
     setState({
       partyId,
       cohortReady: false,
@@ -79,10 +111,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     (async () => {
       let isNew = false;
       let replayed: RetriedFirstValueCompletion | null = null;
-      void retryPendingOnboardingIntent(
-        partyId,
-        () => !cancelled && ownsParty(partyId),
-      );
+      void replayPendingIntent();
       try {
         const progress = await getOnboardingProgress();
         if (cancelled || !ownsParty(partyId)) return;
@@ -104,9 +133,13 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
         replayedFirstValueCompletion: replayed,
       });
     })();
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') void replayPendingIntent();
+    });
 
     return () => {
       cancelled = true;
+      subscription.remove();
     };
   }, [ownsParty, partyId]);
 

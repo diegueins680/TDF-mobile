@@ -533,7 +533,11 @@ export default function UserProfileScreen() {
             ) : partyId && savedEventIds.length === 0 ? (
               <Text style={styles.noDataText}>{savedCopy.savedEmpty}</Text>
             ) : partyId && savedEventsQuery.isLoading ? (
-              <ActivityIndicator size="large" color="#2563eb" />
+              <ActivityIndicator
+                size="large"
+                color="#2563eb"
+                accessibilityLabel={savedCopy.loading}
+              />
             ) : partyId && savedEvents.length > 0 ? (
               <>
                 <Text style={styles.sectionTitle}>{savedCopy.savedTitle(savedEvents.length)}</Text>

@@ -14,8 +14,10 @@ const mockMarkExperimentExposedOnce = jest.fn(
   (_partyId: string, _experimentId: string) => Promise.resolve(true),
 );
 const mockToggleMomentFeedReaction = jest.fn();
+const mockEventsRefetch = jest.fn();
 
 let mockIsConnected = true;
+let mockLocale = 'es';
 let mockVariant = 'treatment_singlefeature';
 let mockEventsState: Record<string, unknown>;
 let mockMomentsState: Record<string, unknown>;
@@ -65,7 +67,7 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
   useUserSettings: () => ({
     partyId: '42',
     displayName: 'Ana',
-    locale: 'es',
+    locale: mockLocale,
     getCatalogItems: () => [{ id: 'like', code: 'like', name: 'Me gusta', nameEs: 'Me gusta', nameEn: 'Like', displaySymbol: '❤️' }],
   }),
 }));
@@ -124,6 +126,7 @@ describe('NewUserOnboardingGate states', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsConnected = true;
+    mockLocale = 'es';
     mockVariant = 'treatment_singlefeature';
     mockEventsState = { data: [], isLoading: false, isError: false };
     mockMomentsState = { data: [], isLoading: false, isError: false };
@@ -132,6 +135,7 @@ describe('NewUserOnboardingGate states', () => {
       source: 'remote',
       moment: { reactions: { like: ['party:42'] } },
     });
+    mockEventsRefetch.mockResolvedValue({ data: [] });
   });
 
   it('records one-shot treatment exposure after identity and persists explicit exit', async () => {
@@ -182,6 +186,20 @@ describe('NewUserOnboardingGate states', () => {
     }
   });
 
+  it('offers an in-place retry when the onboarding feed fails', () => {
+    mockEventsState = {
+      data: [],
+      isLoading: false,
+      isError: true,
+      refetch: mockEventsRefetch,
+    };
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Reintentar carga' }));
+
+    expect(mockEventsRefetch).toHaveBeenCalledTimes(1);
+  });
+
   it('renders moment content as the success state', () => {
     mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
     mockMomentsState = { data: [moment], isLoading: false, isError: false };
@@ -190,6 +208,57 @@ describe('NewUserOnboardingGate states', () => {
 
     expect(screen.getByText('Moment card moment-1')).toBeTruthy();
     expect(screen.queryByText('Aún no hay momentos publicados')).toBeNull();
+  });
+
+  it('uses coherent English copy when English is selected', () => {
+    mockLocale = 'en';
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    expect(screen.getByRole('header', { name: 'Experience Festival Uno' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'View events' })).toBeTruthy();
+    expect(screen.queryByText('Vive Festival Uno')).toBeNull();
+  });
+
+  it('surfaces a failed first reaction and completes after an explicit retry', async () => {
+    mockToggleMomentFeedReaction.mockRejectedValueOnce(new Error('offline'));
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+
+    await waitFor(() => expect(screen.getByText(
+      'No pudimos guardar tu reacción. Nada cambió en tu cuenta.',
+    )).toBeTruthy());
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(mockCompleteOnboarding).not.toHaveBeenCalledWith('moment_reaction');
+
+    fireEvent.press(screen.getByRole('button', { name: 'Reintentar reacción' }));
+
+    await waitFor(() => expect(mockToggleMomentFeedReaction).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledWith('moment_reaction'));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('explains a local-only reaction and keeps completion pending', async () => {
+    mockToggleMomentFeedReaction.mockResolvedValueOnce({ source: 'local' });
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+
+    await waitFor(() => expect(screen.getByText(
+      'Tu reacción quedó solo en este dispositivo. Conéctate para sincronizarla.',
+    )).toBeTruthy());
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reintentar reacción' })).toBeTruthy();
+    expect(mockCompleteOnboarding).not.toHaveBeenCalledWith('moment_reaction');
   });
 
   it('emits conversion analytics only when the server newly completes onboarding', async () => {

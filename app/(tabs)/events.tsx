@@ -24,6 +24,7 @@ import type { EventCityInput, SocialEvent } from '../../src/types';
 import {
   importPendingSavedEvents,
   loadSavedEventSnapshot,
+  SavedEventImportError,
   setSavedEventDesiredState,
   type SavedEventSnapshot,
 } from '../../src/lib/savedEvents';
@@ -34,6 +35,7 @@ import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
 import { impactLight } from '../../src/utils/haptics';
 import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
+import { eventExperienceLanguage, savedEventCopy } from '../../src/localization/eventExperienceCopy';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -58,6 +60,7 @@ export default function EventsScreen() {
   const analytics = useAnalytics();
   const { partyId, token } = useAuth();
   const { locale, timezone, countryCode } = useUserSettings();
+  const savedCopy = savedEventCopy[eventExperienceLanguage(locale)];
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
   const [discoveryScope, setDiscoveryScope] = useState<DiscoveryScope>('subscribed');
@@ -135,7 +138,7 @@ export default function EventsScreen() {
       desiredSaved: boolean;
     }) => token
       ? setSavedEventDesiredState(ownerPartyId, eventId, desiredSaved, token)
-      : Promise.reject(new Error('Tu sesión terminó. Vuelve a iniciar sesión.')),
+      : Promise.reject(new Error(savedCopy.sessionExpired)),
     onSuccess: ({ saved }, { eventId, ownerPartyId }) => {
       if (partyId !== ownerPartyId) return;
       qc.setQueryData<SavedEventSnapshot>(['saved-event-ids', ownerPartyId], (current) => {
@@ -164,13 +167,11 @@ export default function EventsScreen() {
         });
       }
     },
-    onError: (error, { ownerPartyId }) => {
+    onError: (_error, { ownerPartyId }) => {
       if (partyId !== ownerPartyId) return;
       Alert.alert(
-        'No pudimos actualizar tus guardados',
-        error instanceof Error
-          ? error.message
-          : 'El cambio no se guardó en tu cuenta. Inténtalo nuevamente.',
+        savedCopy.updateFailureTitle,
+        savedCopy.updateFailureBody,
       );
     },
   });
@@ -179,25 +180,23 @@ export default function EventsScreen() {
     networkMode: 'always',
     mutationFn: (ownerPartyId: string) => token
       ? importPendingSavedEvents(ownerPartyId, token)
-      : Promise.reject(new Error('Tu sesión terminó. Vuelve a iniciar sesión.')),
+      : Promise.reject(new Error(savedCopy.sessionExpired)),
     onSuccess: ({ importedCount }, ownerPartyId) => {
       qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
       qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
       if (partyId !== ownerPartyId) return;
       Alert.alert(
-        'Guardados importados',
-        importedCount === 1
-          ? 'Importamos 1 evento a tu cuenta.'
-          : `Importamos ${importedCount} eventos a tu cuenta.`,
+        savedCopy.importSuccessTitle,
+        savedCopy.importSuccess(importedCount),
       );
     },
     onError: (error, ownerPartyId) => {
       if (partyId !== ownerPartyId) return;
       Alert.alert(
-        'Importación incompleta',
-        error instanceof Error
-          ? error.message
-          : 'No borramos la copia de este dispositivo. Inténtalo nuevamente.',
+        savedCopy.importFailureTitle,
+        error instanceof SavedEventImportError
+          ? savedCopy.importFailure(error.importedCount, error.totalCount)
+          : savedCopy.importFailureFallback,
       );
     },
   });
@@ -331,12 +330,12 @@ export default function EventsScreen() {
   const handleToggleSaved = useCallback(async (eventId: string) => {
     if (!partyId) {
       Alert.alert(
-        'Inicia sesión',
-        'Necesitas una cuenta vinculada para guardar este evento y verlo en otros dispositivos.',
+        savedCopy.signInTitle,
+        savedCopy.signInBody,
         [
-          { text: 'Ahora no', style: 'cancel' },
+          { text: savedCopy.later, style: 'cancel' },
           {
-            text: 'Ingresar',
+            text: savedCopy.signIn,
             onPress: () => router.push({
               pathname: '/auth',
               params: { intent: 'events', returnTo: '/(tabs)/events' },
@@ -350,8 +349,8 @@ export default function EventsScreen() {
       const result = await savedEventIdsQuery.refetch();
       if (result.isError) {
         Alert.alert(
-          'No pudimos cargar tus guardados',
-          'Comprueba tu sesión o conexión e inténtalo nuevamente.',
+          savedCopy.loadFailureTitle,
+          savedCopy.loadFailureBody,
         );
       }
       return;
@@ -360,12 +359,12 @@ export default function EventsScreen() {
     const isCurrentlySaved = savedEventIds.includes(eventId);
     if (isCurrentlySaved) {
       Alert.alert(
-        'Quitar evento guardado',
-        '¿Quieres quitar este evento de tus guardados?',
+        savedCopy.removeConfirmTitle,
+        savedCopy.removeConfirmBody,
         [
-          { text: 'Cancelar', style: 'cancel' },
+          { text: savedCopy.cancel, style: 'cancel' },
           {
-            text: 'Quitar',
+            text: savedCopy.remove,
             style: 'destructive',
             onPress: () => saveToggleMutation.mutate({
               eventId,
@@ -382,7 +381,7 @@ export default function EventsScreen() {
         desiredSaved: true,
       });
     }
-  }, [partyId, router, saveToggleMutation, savedEventIds, savedEventIdsQuery, token]);
+  }, [partyId, router, saveToggleMutation, savedCopy, savedEventIds, savedEventIdsQuery, token]);
 
   const renderEventItem = useCallback(({ item }: { item: SocialEvent }) => (
     <EventCard
@@ -423,8 +422,12 @@ export default function EventsScreen() {
   if (listError) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <Text style={[styles.error, { color: colors.danger }]} accessibilityLiveRegion="polite">No se pudieron cargar los eventos</Text>
-        <Text style={[styles.errorHelper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">Comprueba tu conexión e inténtalo nuevamente.</Text>
+        <Text style={[styles.error, { color: colors.danger }]} accessibilityLiveRegion="polite">
+          {eventScope === 'saved' ? savedCopy.loadFailureTitle : 'No se pudieron cargar los eventos'}
+        </Text>
+        <Text style={[styles.errorHelper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">
+          {eventScope === 'saved' ? savedCopy.loadFailureBody : 'Comprueba tu conexión e inténtalo nuevamente.'}
+        </Text>
         <TouchableOpacity
           style={[styles.retryButton, { backgroundColor: colors.actionPrimary }]}
           onPress={() => {
@@ -439,9 +442,11 @@ export default function EventsScreen() {
             }
           }}
           accessibilityRole="button"
-          accessibilityLabel="Reintentar cargar eventos"
+          accessibilityLabel={eventScope === 'saved' ? savedCopy.retrySavedAccessibility : 'Reintentar cargar eventos'}
         >
-          <Text style={[styles.retryButtonText, { color: colors.actionPrimaryContrast }]}>Reintentar</Text>
+          <Text style={[styles.retryButtonText, { color: colors.actionPrimaryContrast }]}>
+            {eventScope === 'saved' ? savedCopy.retry : 'Reintentar'}
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -484,15 +489,55 @@ export default function EventsScreen() {
       {savedEventIdsQuery.data?.source === 'cache' ? (
         <View style={[styles.savedStatusNotice, { backgroundColor: colors.selected }]}>
           <Text style={[styles.savedStatusText, { color: colors.textPrimary }]} accessibilityLiveRegion="polite">
-            Mostramos la última lista confirmada en este dispositivo. Conéctate para actualizarla.
+            {savedCopy.cacheNotice}
           </Text>
+        </View>
+      ) : null}
+
+      {partyId && savedEventIdsQuery.isError ? (
+        <View style={[styles.savedImportNotice, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+          <Text
+            style={[styles.savedImportTitle, { color: colors.textPrimary }]}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
+          >
+            {savedCopy.loadFailureTitle}
+          </Text>
+          <Text style={[styles.savedImportBody, { color: colors.textSecondary }]}>
+            {savedCopy.loadFailureBody}
+          </Text>
+          <View style={styles.savedImportActions}>
+            <TouchableOpacity
+              style={[
+                styles.savedImportButton,
+                { backgroundColor: colors.actionPrimary },
+                savedEventIdsQuery.isFetching && styles.manageCitiesButtonDisabled,
+              ]}
+              onPress={() => void savedEventIdsQuery.refetch()}
+              disabled={savedEventIdsQuery.isFetching}
+              accessibilityRole="button"
+              accessibilityLabel={savedCopy.retrySavedAccessibility}
+              accessibilityState={{
+                busy: savedEventIdsQuery.isFetching,
+                disabled: savedEventIdsQuery.isFetching,
+              }}
+            >
+              <Text style={[styles.savedImportButtonText, { color: colors.actionPrimaryContrast }]}>
+                {savedEventIdsQuery.isFetching ? savedCopy.loading : savedCopy.retry}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : null}
 
       {savedEventIdsQuery.data?.pendingImportError ? (
         <View style={[styles.savedStatusNotice, { backgroundColor: colors.selected }]}>
-          <Text style={[styles.savedStatusText, { color: colors.textPrimary }]} accessibilityLiveRegion="polite">
-            {savedEventIdsQuery.data.pendingImportError}
+          <Text
+            style={[styles.savedStatusText, { color: colors.textPrimary }]}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
+          >
+            {savedCopy.pendingImportFailure}
           </Text>
         </View>
       ) : null}
@@ -500,19 +545,19 @@ export default function EventsScreen() {
       {showSavedImportNotice && (savedEventIdsQuery.data?.pendingImportIds.length ?? 0) > 0 ? (
         <View style={[styles.savedImportNotice, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
           <Text style={[styles.savedImportTitle, { color: colors.textPrimary }]}>
-            Encontramos guardados de esta cuenta en este dispositivo
+            {savedCopy.importTitle}
           </Text>
           <Text style={[styles.savedImportBody, { color: colors.textSecondary }]}>
-            Impórtalos para verlos en tus otros dispositivos.
+            {savedCopy.importBody}
           </Text>
           <View style={styles.savedImportActions}>
             <TouchableOpacity
               style={styles.savedImportLater}
               onPress={() => setShowSavedImportNotice(false)}
               accessibilityRole="button"
-              accessibilityLabel="Importar eventos guardados más tarde"
+              accessibilityLabel={savedCopy.importLaterAccessibility}
             >
-              <Text style={[styles.savedImportLaterText, { color: colors.textSecondary }]}>Ahora no</Text>
+              <Text style={[styles.savedImportLaterText, { color: colors.textSecondary }]}>{savedCopy.later}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -523,14 +568,14 @@ export default function EventsScreen() {
               onPress={() => partyId && importSavedEventsMutation.mutate(partyId)}
               disabled={importSavedEventsMutation.isPending}
               accessibilityRole="button"
-              accessibilityLabel="Importar eventos guardados a mi cuenta"
+              accessibilityLabel={savedCopy.importAccessibility}
               accessibilityState={{
                 busy: importSavedEventsMutation.isPending,
                 disabled: importSavedEventsMutation.isPending,
               }}
             >
               <Text style={[styles.savedImportButtonText, { color: colors.actionPrimaryContrast }]}>
-                {importSavedEventsMutation.isPending ? 'Importando…' : 'Importar'}
+                {importSavedEventsMutation.isPending ? savedCopy.importing : savedCopy.import}
               </Text>
             </TouchableOpacity>
           </View>
@@ -579,11 +624,11 @@ export default function EventsScreen() {
           style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, eventScope === 'saved' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
           onPress={() => setEventScope('saved')}
           accessibilityRole="tab"
-          accessibilityLabel="Mostrar eventos guardados"
+          accessibilityLabel={savedCopy.showSavedAccessibility}
           accessibilityState={{ selected: eventScope === 'saved' }}
         >
           <Text style={[styles.toggleBtnText, { color: colors.textSecondary }, eventScope === 'saved' && [styles.toggleBtnTextActive, { color: colors.actionPrimaryContrast }]]}>
-            Guardados ({savedEventIds.length})
+            {savedCopy.savedTab} ({savedEventIds.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -616,7 +661,7 @@ export default function EventsScreen() {
       {eventScope === 'saved' && (savedEventsQuery.data?.unavailableCount ?? 0) > 0 ? (
         <View style={[styles.savedStatusNotice, { backgroundColor: colors.selected }]}>
           <Text style={[styles.savedStatusText, { color: colors.textPrimary }]} accessibilityLiveRegion="polite">
-            Algunos eventos guardados ya no están disponibles o no pudieron cargarse.
+            {savedCopy.someUnavailable}
           </Text>
         </View>
       ) : null}
@@ -658,7 +703,7 @@ export default function EventsScreen() {
           ) : (
             <View style={styles.empty}>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                {eventScope === 'saved' ? 'No hay eventos guardados en esta fecha' : 'No hay eventos en esta fecha'}
+                {eventScope === 'saved' ? savedCopy.savedDateEmpty : 'No hay eventos en esta fecha'}
               </Text>
             </View>
           )}
@@ -678,7 +723,7 @@ export default function EventsScreen() {
                 {debouncedSearch
                   ? 'No encontramos eventos que coincidan con tu búsqueda'
                   : eventScope === 'saved'
-                    ? 'No se encontraron eventos guardados'
+                    ? savedCopy.savedListEmpty
                     : discoveryScope === 'subscribed'
                       ? 'Añade ciudades para ver los eventos que ocurren cerca de ti'
                     : 'No hay próximos eventos publicados'}

@@ -94,7 +94,7 @@ describe('EventCard ticket discovery', () => {
       />,
     );
 
-    const saveButton = screen.getByRole('button', { name: 'Quitar TDF Showcase de guardados' });
+    const saveButton = screen.getByRole('button', { name: 'Remove TDF Showcase from my saved events' });
     expect(saveButton.props.accessibilityState).toMatchObject({ selected: true, disabled: false });
     fireEvent.press(saveButton);
     expect(onToggleSaved).toHaveBeenCalledTimes(1);
@@ -111,9 +111,9 @@ describe('EventCard ticket discovery', () => {
       />,
     );
 
-    const saveButton = screen.getByRole('button', { name: 'Guardar TDF Showcase' });
+    const saveButton = screen.getByRole('button', { name: 'Save TDF Showcase' });
     expect(saveButton.props.accessibilityState).toMatchObject({ busy: true, disabled: true });
-    expect(screen.getByText('Cargando guardados…')).toBeTruthy();
+    expect(screen.getByText('Loading saved events…')).toBeTruthy();
     fireEvent.press(saveButton);
     expect(onToggleSaved).not.toHaveBeenCalled();
   });

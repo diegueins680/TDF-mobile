@@ -8,6 +8,8 @@ import { setAuthToken } from '../src/api/client';
 
 const mockInvalidateQueries = jest.fn();
 const mockStopPublisher = jest.fn();
+const mockSavedRefetch = jest.fn();
+let mockSavedQueryError = false;
 
 const mockUseMutation = jest.fn((options) => ({
   mutate: (variables?: unknown) => {
@@ -61,7 +63,14 @@ jest.mock('../src/providers/AuthProvider', () => ({
 }));
 
 jest.mock('../src/providers/UserSettingsProvider', () => ({
-  useUserSettings: () => ({ partyId: '7', displayName: 'Cuco', getCatalogItems: () => [] }),
+  useUserSettings: () => ({
+    partyId: '7',
+    displayName: 'Cuco',
+    locale: 'es',
+    timezone: 'America/Guayaquil',
+    currency: 'USD',
+    getCatalogItems: () => [],
+  }),
 }));
 
 jest.mock('../src/api/events', () => ({
@@ -177,6 +186,8 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
     jest.clearAllMocks();
     setAuthToken('Bearer test-token');
     mockStopPublisher.mockResolvedValue(undefined);
+    mockSavedQueryError = false;
+    mockSavedRefetch.mockResolvedValue({ isError: false });
     mockStartPublisher.mockResolvedValue({ previewUrl: 'webrtc://local-preview', stop: mockStopPublisher });
     mockBroadcastsRepo.startLiveBroadcastSession.mockResolvedValue({
       source: 'remote',
@@ -193,9 +204,12 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
       if (queryKey[0] === 'event-invitations') return { data: [], isLoading: false };
       if (queryKey[0] === 'saved-event-ids') {
         return {
-          data: { ids: [], pendingImportIds: [], pendingImportError: null, source: 'server', cachedAt: null },
+          data: mockSavedQueryError
+            ? undefined
+            : { ids: [], pendingImportIds: [], pendingImportError: null, source: 'server', cachedAt: null },
           isLoading: false,
-          isError: false,
+          isError: mockSavedQueryError,
+          refetch: mockSavedRefetch,
         };
       }
       if (queryKey[0] === 'event-ticket-tiers') return { data: [], isLoading: false };
@@ -225,10 +239,24 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
       );
       expect(alertSpy).toHaveBeenCalledWith(
         'No pudimos actualizar tus guardados',
-        'write failed',
+        'El cambio no se guardó en tu cuenta. Inténtalo nuevamente.',
       );
     });
     expect(alertSpy).not.toHaveBeenCalledWith('Listo', expect.any(String));
+  });
+
+  it('keeps the saved-event error control enabled so it can retry in place', async () => {
+    mockSavedQueryError = true;
+    render(<EventDetailScreen />);
+
+    const retryButton = screen.getByRole('button', {
+      name: 'Reintentar cargar eventos guardados',
+    });
+    expect(retryButton.props.accessibilityState).toMatchObject({ disabled: false });
+
+    fireEvent.press(retryButton);
+
+    await waitFor(() => expect(mockSavedRefetch).toHaveBeenCalledTimes(1));
   });
 
   it('ends the tracked backend broadcast when the broadcasting screen unmounts', async () => {

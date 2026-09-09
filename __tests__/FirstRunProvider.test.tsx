@@ -111,8 +111,14 @@ describe('FirstRunProvider', () => {
 
   it('retries retained intent persistence when an authenticated Party starts', async () => {
     mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: false });
-    jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
-      key === 'tdf-onboarding-intent:pending' ? 'professional_tools' : null);
+    const values = new Map([['tdf-onboarding-intent:pending', 'professional_tools']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => values.get(key) ?? null);
+    jest.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+      values.set(key, value);
+    });
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (key) => {
+      values.delete(key);
+    });
 
     renderProvider();
 
@@ -120,6 +126,10 @@ describe('FirstRunProvider', () => {
     await waitFor(() => expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
       'tdf-onboarding-intent:pending',
     ));
+    await waitFor(() => expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
+      'tdf-onboarding-intent:party:42',
+    ));
+    expect(values.size).toBe(0);
   });
 
   it('does not hold cohort readiness while intent recovery is pending', async () => {

@@ -6,6 +6,7 @@ import {
   markFirstValueCompleted,
   ONBOARDING_INTENT_OPTIONS,
   PENDING_FIRST_VALUE_PREFIX,
+  PENDING_PARTY_INTENT_PREFIX,
   parseOnboardingIntent,
   persistOnboardingIntent,
   readPendingOnboardingIntent,
@@ -22,6 +23,18 @@ jest.mock('../src/api/onboarding', () => ({
   completeOnboardingProgress: (...args: unknown[]) => mockCompleteOnboardingProgress(...args),
   updateOnboardingIntent: (...args: unknown[]) => mockUpdateOnboardingIntent(...args),
 }));
+
+const useStoredValues = (entries: readonly (readonly [string, string])[]) => {
+  const values = new Map(entries);
+  jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => values.get(key) ?? null);
+  jest.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+    values.set(key, value);
+  });
+  jest.mocked(AsyncStorage.removeItem).mockImplementation(async (key) => {
+    values.delete(key);
+  });
+  return values;
+};
 
 describe('onboarding intent', () => {
   beforeEach(() => {
@@ -113,9 +126,8 @@ describe('onboarding intent', () => {
 
   it('retries a retained intent only while the authenticated Party still owns it', async () => {
     let stillOwnsParty = true;
-    jest.mocked(AsyncStorage.getItem)
-      .mockResolvedValueOnce('follow_artists')
-      .mockResolvedValueOnce('follow_artists');
+    const partyKey = `${PENDING_PARTY_INTENT_PREFIX}42`;
+    useStoredValues([[partyKey, 'follow_artists']]);
     mockUpdateOnboardingIntent.mockImplementationOnce(async () => {
       stillOwnsParty = false;
       return { eligible: false };
@@ -130,26 +142,46 @@ describe('onboarding intent', () => {
     expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
   });
 
-  it('clears a retained intent after authenticated recovery succeeds', async () => {
-    jest.mocked(AsyncStorage.getItem)
-      .mockResolvedValueOnce('internships')
-      .mockResolvedValueOnce('internships');
+  it('transfers a pre-auth intent to Party storage and clears both after recovery', async () => {
+    const partyKey = `${PENDING_PARTY_INTENT_PREFIX}42`;
+    const values = useStoredValues([['tdf-onboarding-intent:pending', 'internships']]);
     mockUpdateOnboardingIntent.mockResolvedValueOnce({ eligible: false });
 
     await expect(retryPendingOnboardingIntent('42')).resolves.toBe(true);
 
     expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('internships');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(partyKey, 'internships');
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(partyKey);
+    expect(values.size).toBe(0);
   });
 
-  it('retains the intent when authenticated recovery remains offline', async () => {
-    jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce('learning');
+  it('retains an offline recovery under the authenticated Party, not the global key', async () => {
+    const partyKey = `${PENDING_PARTY_INTENT_PREFIX}42`;
+    const values = useStoredValues([['tdf-onboarding-intent:pending', 'learning']]);
     mockUpdateOnboardingIntent.mockRejectedValueOnce(new Error('offline'));
 
     await expect(retryPendingOnboardingIntent('42')).resolves.toBe(false);
 
     expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('learning');
-    expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
+    expect(values.get(partyKey)).toBe('learning');
+    expect(values.has('tdf-onboarding-intent:pending')).toBe(false);
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(partyKey);
+  });
+
+  it('prioritizes Party recovery without consuming another pre-auth attempt', async () => {
+    const partyKey = `${PENDING_PARTY_INTENT_PREFIX}42`;
+    const values = useStoredValues([
+      [partyKey, 'learning'],
+      ['tdf-onboarding-intent:pending', 'events'],
+    ]);
+    mockUpdateOnboardingIntent.mockResolvedValueOnce({ eligible: false });
+
+    await expect(retryPendingOnboardingIntent('42')).resolves.toBe(true);
+
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('learning');
+    expect(values.has(partyKey)).toBe(false);
+    expect(values.get('tdf-onboarding-intent:pending')).toBe('events');
   });
 
   it('discards an invalid pending value instead of restoring a permission-like role', async () => {

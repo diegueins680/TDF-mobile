@@ -19,6 +19,7 @@ export type { OnboardingIntent } from '../api/onboarding';
 
 export const DEFAULT_ONBOARDING_INTENT: OnboardingIntent = 'events';
 export const PENDING_INTENT_KEY = 'tdf-onboarding-intent:pending';
+export const PENDING_PARTY_INTENT_PREFIX = 'tdf-onboarding-intent:party:';
 export const PENDING_FIRST_VALUE_PREFIX = 'tdf-onboarding-first-value:party:';
 
 const INTENTS = new Set<OnboardingIntent>([
@@ -109,14 +110,92 @@ export async function clearPendingOnboardingIntent(): Promise<void> {
 
 export async function clearPendingOnboardingIntentIfCurrent(
   intent: OnboardingIntent,
+  stillOwnsParty: () => boolean = () => true,
 ): Promise<void> {
   try {
-    if (await AsyncStorage.getItem(PENDING_INTENT_KEY) === intent) {
+    if (
+      stillOwnsParty()
+      && await AsyncStorage.getItem(PENDING_INTENT_KEY) === intent
+      && stillOwnsParty()
+    ) {
       await AsyncStorage.removeItem(PENDING_INTENT_KEY);
     }
   } catch {
     // A retained intent is safe to retry; never clear a newer auth attempt.
   }
+}
+
+const partyIntentKey = (partyId: string): string =>
+  `${PENDING_PARTY_INTENT_PREFIX}${encodeURIComponent(partyId)}`;
+
+async function readPendingPartyIntent(partyId: string): Promise<OnboardingIntent | null> {
+  try {
+    const key = partyIntentKey(partyId);
+    const stored = await AsyncStorage.getItem(key);
+    const intent = parseOnboardingIntent(stored);
+    if (stored && !intent) {
+      await AsyncStorage.removeItem(key);
+    }
+    return intent;
+  } catch {
+    return null;
+  }
+}
+
+async function storePendingPartyIntent(
+  partyId: string,
+  intent: OnboardingIntent,
+): Promise<boolean> {
+  try {
+    await AsyncStorage.setItem(partyIntentKey(partyId), intent);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function clearPendingPartyIntentIfCurrent(
+  partyId: string,
+  intent: OnboardingIntent,
+  stillOwnsParty: () => boolean,
+): Promise<void> {
+  try {
+    const key = partyIntentKey(partyId);
+    if (
+      stillOwnsParty()
+      && await AsyncStorage.getItem(key) === intent
+      && stillOwnsParty()
+    ) {
+      await AsyncStorage.removeItem(key);
+    }
+  } catch {
+    // A later retry is safe because the server upserts intent for the authenticated Party.
+  }
+}
+
+export async function persistOnboardingIntentForPartyWithRetry(
+  rawPartyId: string | number | null | undefined,
+  intent: OnboardingIntent,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<boolean> {
+  const partyId = String(rawPartyId ?? '').trim();
+  if (!partyId || !stillOwnsParty()) return false;
+  const storedForParty = await storePendingPartyIntent(partyId, intent);
+  if (!stillOwnsParty()) return false;
+  if (storedForParty) {
+    await clearPendingOnboardingIntentIfCurrent(intent, stillOwnsParty);
+    if (!stillOwnsParty()) return false;
+  }
+  try {
+    await updateOnboardingIntent(intent);
+  } catch {
+    return false;
+  }
+  if (!stillOwnsParty()) return false;
+  await clearPendingPartyIntentIfCurrent(partyId, intent, stillOwnsParty);
+  if (!stillOwnsParty()) return false;
+  await clearPendingOnboardingIntentIfCurrent(intent, stillOwnsParty);
+  return true;
 }
 
 export async function retryPendingOnboardingIntent(
@@ -125,16 +204,10 @@ export async function retryPendingOnboardingIntent(
 ): Promise<boolean> {
   const partyId = rawPartyId?.trim();
   if (!partyId || !stillOwnsParty()) return false;
-  const intent = await readPendingOnboardingIntent();
+  const intent = await readPendingPartyIntent(partyId)
+    ?? await readPendingOnboardingIntent();
   if (!intent || !stillOwnsParty()) return false;
-  try {
-    await updateOnboardingIntent(intent);
-  } catch {
-    return false;
-  }
-  if (!stillOwnsParty()) return false;
-  await clearPendingOnboardingIntentIfCurrent(intent);
-  return true;
+  return persistOnboardingIntentForPartyWithRetry(partyId, intent, stillOwnsParty);
 }
 
 export async function markFirstValueCompleted(

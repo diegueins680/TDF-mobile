@@ -30,17 +30,16 @@ import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import {
   clearPendingOnboardingIntent,
-  clearPendingOnboardingIntentIfCurrent,
   DEFAULT_ONBOARDING_INTENT,
   ONBOARDING_INTENT_OPTIONS,
   parseOnboardingIntent,
   persistOnboardingIntent,
+  persistOnboardingIntentForPartyWithRetry,
   readPendingOnboardingIntent,
   resolveMobileIntentNavigation,
   type MobileIntentNavigation,
   type OnboardingIntent,
 } from '../src/lib/onboardingIntent';
-import { updateOnboardingIntent } from '../src/api/onboarding';
 import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
 import { authCopy, onboardingLanguage } from '../src/localization/onboardingCopy';
 import { isValidSignupPassword } from '../src/lib/passwordPolicy';
@@ -205,17 +204,14 @@ export default function AuthScreen() {
   const persistIntentForExistingAccount = async (
     pendingIntent: OnboardingIntent | null,
     ownerToken: string,
+    ownerPartyId: number,
   ) => {
     if (!pendingIntent) return;
-
-    try {
-      await updateOnboardingIntent(pendingIntent);
-      if (!isCurrentAuthToken(ownerToken)) return;
-      await clearPendingOnboardingIntentIfCurrent(pendingIntent);
-    } catch {
-      // Keep the validated pending intent for a later retry. Personalization
-      // sync must not turn a successful login into an authentication failure.
-    }
+    await persistOnboardingIntentForPartyWithRetry(
+      ownerPartyId,
+      pendingIntent,
+      () => isCurrentAuthToken(ownerToken),
+    );
   };
 
   useEffect(() => {
@@ -267,7 +263,7 @@ export default function AuthScreen() {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
-      void persistIntentForExistingAccount(pendingIntent, session.token);
+      void persistIntentForExistingAccount(pendingIntent, session.token, session.partyId);
       setPassword('');
       analytics.capture('login_completed', { platform: 'mobile', method: 'password' });
       setFeedbackMessage(copy.loginSuccess);
@@ -400,7 +396,7 @@ export default function AuthScreen() {
       if (googleCreatedAccount) {
         await clearPendingOnboardingIntent();
       } else {
-        void persistIntentForExistingAccount(pendingIntent, session.token);
+        void persistIntentForExistingAccount(pendingIntent, session.token, session.partyId);
       }
       analytics.capture(googleCreatedAccount ? 'signup_completed' : 'login_completed', {
         platform: 'mobile',

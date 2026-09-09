@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking } from 'react-native';
 
 const mockSetToken = jest.fn();
@@ -13,7 +14,6 @@ const mockGoogleSignOut = jest.fn();
 const mockLoadNativeGoogleSignin = jest.fn();
 const mockReplace = jest.fn();
 const mockClearPendingOnboardingIntent = jest.fn();
-const mockClearPendingOnboardingIntentIfCurrent = jest.fn();
 const mockPersistOnboardingIntent = jest.fn();
 const mockReadPendingOnboardingIntent = jest.fn(() => Promise.resolve(null));
 const mockUpdateOnboardingIntent = jest.fn();
@@ -25,6 +25,7 @@ let mockAuthConfig = {
   GOOGLE_IOS_URL_SCHEME: 'com.googleusercontent.apps.123456',
 };
 let mockSearchParams: Record<string, string> = {};
+let mockStoredValues = new Map<string, string>();
 
 jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: jest.fn(() => ({
@@ -110,7 +111,6 @@ jest.mock('../src/lib/onboardingIntent', () => {
   return {
     ...actual,
     clearPendingOnboardingIntent: (...args: unknown[]) => mockClearPendingOnboardingIntent(...args),
-    clearPendingOnboardingIntentIfCurrent: (...args: unknown[]) => mockClearPendingOnboardingIntentIfCurrent(...args),
     persistOnboardingIntent: (...args: unknown[]) => mockPersistOnboardingIntent(...args),
     readPendingOnboardingIntent: () => mockReadPendingOnboardingIntent(),
   };
@@ -126,8 +126,19 @@ const AuthScreen = require('../app/auth').default;
 describe('Auth screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStoredValues = new Map();
+    jest.mocked(AsyncStorage.getItem).mockReset().mockImplementation(async (key) =>
+      mockStoredValues.get(key) ?? null);
+    jest.mocked(AsyncStorage.setItem).mockReset().mockImplementation(async (key, value) => {
+      mockStoredValues.set(key, value);
+    });
+    jest.mocked(AsyncStorage.removeItem).mockReset().mockImplementation(async (key) => {
+      mockStoredValues.delete(key);
+    });
     mockReadPendingOnboardingIntent.mockResolvedValue(null);
-    mockPersistOnboardingIntent.mockResolvedValue(undefined);
+    mockPersistOnboardingIntent.mockImplementation(async (intent: string) => {
+      mockStoredValues.set('tdf-onboarding-intent:pending', intent);
+    });
     mockUpdateOnboardingIntent.mockResolvedValue({ eligible: false });
     mockIsCurrentAuthToken.mockReturnValue(true);
     mockOpenURL.mockResolvedValue(undefined);
@@ -425,7 +436,11 @@ describe('Auth screen', () => {
     fireEvent.press(googleButton);
 
     await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('internships'));
-    expect(mockClearPendingOnboardingIntentIfCurrent).not.toHaveBeenCalled();
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'tdf-onboarding-intent:party:76',
+      'internships',
+    );
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith('tdf-onboarding-intent:party:76');
     expect(mockReplace).toHaveBeenCalledWith({
       pathname: '/access-requests/new',
       params: { feature: 'internships', action: 'view' },
@@ -472,7 +487,10 @@ describe('Auth screen', () => {
     fireEvent.press(screen.getByTestId('loginButton'));
 
     await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists'));
-    await waitFor(() => expect(mockClearPendingOnboardingIntentIfCurrent).toHaveBeenCalledWith('follow_artists'));
+    await waitFor(() => expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
+      'tdf-onboarding-intent:party:79',
+    ));
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
     expect(mockIsCurrentAuthToken).toHaveBeenCalledWith('token');
     expect(mockPersistOnboardingIntent).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/social');
@@ -488,7 +506,11 @@ describe('Auth screen', () => {
     fireEvent.press(screen.getByTestId('loginButton'));
 
     await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists'));
-    expect(mockClearPendingOnboardingIntentIfCurrent).not.toHaveBeenCalled();
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'tdf-onboarding-intent:party:80',
+      'follow_artists',
+    );
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith('tdf-onboarding-intent:party:80');
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/social');
   });
 
@@ -505,7 +527,9 @@ describe('Auth screen', () => {
       pathname: '/access-requests/new',
       params: { feature: 'internships', action: 'view' },
     });
-    await waitFor(() => expect(mockClearPendingOnboardingIntentIfCurrent).toHaveBeenCalledWith('internships'));
+    await waitFor(() => expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
+      'tdf-onboarding-intent:party:81',
+    ));
   });
 
   it('does not clear an intent after a different authenticated session takes ownership', async () => {
@@ -531,7 +555,7 @@ describe('Auth screen', () => {
     resolveUpdate?.({ eligible: false });
 
     await waitFor(() => expect(mockIsCurrentAuthToken).toHaveBeenCalledWith('first-token'));
-    expect(mockClearPendingOnboardingIntentIfCurrent).not.toHaveBeenCalled();
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith('tdf-onboarding-intent:party:83');
   });
 
   it('exposes internships as a signup intent without treating it as a role', async () => {

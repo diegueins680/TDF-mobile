@@ -7,6 +7,11 @@ import {
   type OnboardingFirstValue,
   type OnboardingIntent,
 } from '../api/onboarding';
+import {
+  evaluateFeatureAccess,
+  getFeatureById,
+  resolveMobileDestination,
+} from '../features/featureRegistry';
 import { MOBILE_LANDING_ROUTE } from '../navigation/mobileSurface';
 
 export type { OnboardingIntent } from '../api/onboarding';
@@ -210,11 +215,46 @@ export function resolveMobileIntentDestination(
       return hasAny(roles, ['intern', 'admin']) && hasAny(modules, ['internships', 'admin'])
         ? '/(tabs)/more' as unknown as Href
         : ({ pathname: '/access-requests/new', params: { feature: 'internships', action: 'view' } } as unknown as Href);
+    case 'events':
     case 'learning':
     case 'professional_tools':
-      return '/(tabs)/more' as unknown as Href;
-    case 'events':
     default:
       return MOBILE_LANDING_ROUTE;
   }
+}
+
+export type MobileIntentNavigation =
+  | { kind: 'native'; value: Href }
+  | { kind: 'web'; value: string };
+
+const resolvePublicWebFeature = (
+  featureId: string,
+  roles: readonly string[],
+  modules: readonly string[],
+): MobileIntentNavigation | null => {
+  const feature = getFeatureById(featureId);
+  if (!feature) return null;
+  if (evaluateFeatureAccess(
+    feature,
+    { authenticated: true, roles, modules },
+    'view',
+  ).state !== 'allowed') return null;
+  const destination = resolveMobileDestination(feature);
+  return destination?.kind === 'web' ? destination : null;
+};
+
+export function resolveMobileIntentNavigation(
+  intent: OnboardingIntent,
+  roles: readonly string[] = [],
+  modules: readonly string[] = [],
+): MobileIntentNavigation {
+  const publicFirstAction = intent === 'learning'
+    ? resolvePublicWebFeature('public.trials', roles, modules)
+    : intent === 'professional_tools'
+      ? resolvePublicWebFeature('tools.music-maker', roles, modules)
+      : null;
+  return publicFirstAction ?? {
+    kind: 'native',
+    value: resolveMobileIntentDestination(intent, roles, modules),
+  };
 }

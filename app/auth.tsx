@@ -34,7 +34,8 @@ import {
   parseOnboardingIntent,
   persistOnboardingIntent,
   readPendingOnboardingIntent,
-  resolveMobileIntentDestination,
+  resolveMobileIntentNavigation,
+  type MobileIntentNavigation,
   type OnboardingIntent,
 } from '../src/lib/onboardingIntent';
 import { updateOnboardingIntent } from '../src/api/onboarding';
@@ -120,6 +121,17 @@ export default function AuthScreen() {
   const [isForgotPasswordSubmitting, setIsForgotPasswordSubmitting] = useState(false);
   const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
   const [forgotPasswordError, setForgotPasswordError] = useState<string | null>(null);
+
+  const finishAuthNavigation = (destination: MobileIntentNavigation) => {
+    if (destination.kind === 'web') {
+      // Leave a useful authenticated app surface behind the browser. If the
+      // OS cannot open the public web task, the user still exits auth safely.
+      router.replace('/(tabs)/directory');
+      void Linking.openURL(destination.value).catch(() => undefined);
+      return;
+    }
+    router.replace(destination.value);
+  };
 
   const hasToken = Boolean(token?.trim());
   const canSubmitPassword = username.trim().length > 0 && password.length > 0 && !isPasswordSubmitting;
@@ -240,10 +252,14 @@ export default function AuthScreen() {
       setPassword('');
       analytics.capture('login_completed', { platform: 'mobile', method: 'password' });
       setFeedbackMessage(copy.loginSuccess);
-      router.replace(
-        resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? [])
-          ?? resolveMobileIntentDestination(postLoginIntent, session.roles ?? [], session.modules ?? []),
+      const authorizedReturnTo = resolveAuthorizedReturnTo(
+        safeReturnTo,
+        session.roles ?? [],
+        session.modules ?? [],
       );
+      finishAuthNavigation(authorizedReturnTo
+        ? { kind: 'native', value: authorizedReturnTo }
+        : resolveMobileIntentNavigation(postLoginIntent, session.roles ?? [], session.modules ?? []));
     } catch (error) {
       analytics.capture('login_failed', { platform: 'mobile', method: 'password' });
       setErrorMessage(readErrorMessage(error, copy.loginFailure));
@@ -282,7 +298,7 @@ export default function AuthScreen() {
       });
       await clearPendingOnboardingIntent();
       setPassword('');
-      const intentDestination = resolveMobileIntentDestination(
+      const intentDestination = resolveMobileIntentNavigation(
         selectedIntent,
         session.roles ?? [],
         session.modules ?? [],
@@ -290,15 +306,21 @@ export default function AuthScreen() {
       const authorizedReturnTo = resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []);
       const destination = (selectedIntent === 'artist_profile' || selectedIntent === 'internships')
         ? intentDestination
-        : authorizedReturnTo ?? intentDestination;
+        : authorizedReturnTo
+          ? { kind: 'native' as const, value: authorizedReturnTo }
+          : intentDestination;
       analytics.capture('signup_completed', {
         platform: 'mobile',
         method: 'password',
         intent: selectedIntent,
-        destination_kind: typeof destination === 'string' ? destination : destination.pathname,
+        destination_kind: destination.kind === 'web'
+          ? 'external_web'
+          : typeof destination.value === 'string'
+            ? destination.value
+            : destination.value.pathname,
       });
       setFeedbackMessage(copy.signupSuccess);
-      router.replace(destination);
+      finishAuthNavigation(destination);
     } catch (error) {
       analytics.capture('signup_failed', { platform: 'mobile', method: 'password', intent: selectedIntent });
       setErrorMessage(readErrorMessage(error, copy.signupFailure));
@@ -368,12 +390,13 @@ export default function AuthScreen() {
       });
       setFeedbackMessage(copy.googleSuccess);
       const authorizedReturnTo = resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []);
-      router.replace(
-        mode === 'signup' && (!authorizedReturnTo || selectedIntent === 'artist_profile' || selectedIntent === 'internships')
-          ? resolveMobileIntentDestination(selectedIntent, session.roles ?? [], session.modules ?? [])
-          : authorizedReturnTo
-            ?? resolveMobileIntentDestination(postLoginIntent, session.roles ?? [], session.modules ?? []),
-      );
+      const destination = mode === 'signup'
+        && (!authorizedReturnTo || selectedIntent === 'artist_profile' || selectedIntent === 'internships')
+        ? resolveMobileIntentNavigation(selectedIntent, session.roles ?? [], session.modules ?? [])
+        : authorizedReturnTo
+          ? { kind: 'native' as const, value: authorizedReturnTo }
+          : resolveMobileIntentNavigation(postLoginIntent, session.roles ?? [], session.modules ?? []);
+      finishAuthNavigation(destination);
     } catch (error) {
       if (googleSigninModule.isErrorWithCode(error)) {
         if (error.code === googleSigninModule.statusCodes.SIGN_IN_CANCELLED) {

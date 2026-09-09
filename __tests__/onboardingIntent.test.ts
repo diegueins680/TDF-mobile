@@ -10,6 +10,7 @@ import {
   readPendingOnboardingIntent,
   retryPendingFirstValueCompletion,
   resolveMobileIntentDestination,
+  resolveMobileIntentNavigation,
 } from '../src/lib/onboardingIntent';
 
 const mockCompleteOnboardingProgress = jest.fn();
@@ -47,6 +48,21 @@ describe('onboarding intent', () => {
     expect(resolveMobileIntentDestination('internships', ['Customer'])).toEqual({
       pathname: '/access-requests/new',
       params: { feature: 'internships', action: 'view' },
+    });
+  });
+
+  it('routes learning and professional intents to registry-governed public first actions', () => {
+    expect(resolveMobileIntentNavigation('learning')).toEqual({
+      kind: 'web',
+      value: 'https://tdf-app.pages.dev/trials',
+    });
+    expect(resolveMobileIntentNavigation('professional_tools')).toEqual({
+      kind: 'web',
+      value: 'https://tdf-app.pages.dev/herramientas/creador-musical',
+    });
+    expect(resolveMobileIntentNavigation('events')).toEqual({
+      kind: 'native',
+      value: '/(tabs)/directory',
     });
   });
 

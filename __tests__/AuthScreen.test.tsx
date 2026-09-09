@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 
 const mockSetToken = jest.fn();
 const mockClearToken = jest.fn();
@@ -15,6 +16,7 @@ const mockClearPendingOnboardingIntent = jest.fn();
 const mockPersistOnboardingIntent = jest.fn();
 const mockReadPendingOnboardingIntent = jest.fn(() => Promise.resolve(null));
 const mockUpdateOnboardingIntent = jest.fn();
+const mockOpenURL = jest.spyOn(Linking, 'openURL');
 let mockAuthConfig = {
   GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
   GOOGLE_IOS_CLIENT_ID: 'ios-client-id.apps.googleusercontent.com',
@@ -119,6 +121,7 @@ describe('Auth screen', () => {
     jest.clearAllMocks();
     mockReadPendingOnboardingIntent.mockResolvedValue(null);
     mockUpdateOnboardingIntent.mockResolvedValue({ eligible: false });
+    mockOpenURL.mockResolvedValue(undefined);
     mockSearchParams = {};
     mockReplace.mockReset();
     mockAuthConfig.GOOGLE_WEB_CLIENT_ID = 'web-client-id.apps.googleusercontent.com';
@@ -195,13 +198,31 @@ describe('Auth screen', () => {
   });
 
   it('resumes an authorized internal route with its event query intact', async () => {
-    mockSearchParams = { returnTo: '/ticketCheckout?eventId=42' };
+    mockSearchParams = {
+      intent: 'professional_tools',
+      returnTo: '/ticketCheckout?eventId=42',
+    };
     mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
     render(<AuthScreen />);
     fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
     fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
     fireEvent.press(screen.getByTestId('loginButton'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/ticketCheckout?eventId=42'));
+    expect(mockOpenURL).not.toHaveBeenCalled();
+  });
+
+  it('opens the public music maker after professional-tools login', async () => {
+    mockSearchParams = { intent: 'professional_tools' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
+    fireEvent.press(screen.getByTestId('loginButton'));
+
+    await waitFor(() => expect(mockOpenURL).toHaveBeenCalledWith(
+      'https://tdf-app.pages.dev/herramientas/creador-musical',
+    ));
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory');
   });
 
   it('rejects an external return target before session authorization', async () => {

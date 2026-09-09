@@ -264,6 +264,24 @@ describe('Auth screen', () => {
     ).props.accessibilityRole).toBe('alert');
   });
 
+  it('links signup consent to the account policy recorded by its terms version', async () => {
+    render(<AuthScreen />);
+    await screen.findByText(/Continuar con Google/i);
+    fireEvent.press(screen.getByText('Crear cuenta'));
+
+    fireEvent.press(screen.getByRole('link', { name: 'Ver términos' }));
+    fireEvent.press(screen.getByRole('link', { name: 'Ver privacidad' }));
+
+    expect(mockOpenURL).toHaveBeenNthCalledWith(
+      1,
+      'https://tdf-app.pages.dev/account/terms.html',
+    );
+    expect(mockOpenURL).toHaveBeenNthCalledWith(
+      2,
+      'https://tdf-app.pages.dev/account/privacy.html',
+    );
+  });
+
   it('creates an account without caller-selected roles and stores the returned session', async () => {
     mockSignupRequest.mockResolvedValue({
       token: 'Bearer new-fan-token',

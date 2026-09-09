@@ -45,8 +45,8 @@ import { isValidSignupPassword } from '../src/lib/passwordPolicy';
 import { safeInternalRoute } from '../src/navigation/deepLinks';
 
 const ACCOUNT_TERMS_VERSION = 'tdf-account-terms-v1';
-const TERMS_URL = 'https://tdf-app.pages.dev/mobile-app/terms.html';
-const PRIVACY_URL = 'https://tdf-app.pages.dev/mobile-app/privacy.html';
+const TERMS_URL = 'https://tdf-app.pages.dev/account/terms.html';
+const PRIVACY_URL = 'https://tdf-app.pages.dev/account/privacy.html';
 
 const readErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {

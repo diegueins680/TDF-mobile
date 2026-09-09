@@ -215,6 +215,94 @@ describe('FirstRunProvider', () => {
     await waitFor(() => expect(values.has(key)).toBe(false));
   });
 
+  it('retries a retained first-value completion when the app returns to the foreground', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
+    const key = 'tdf-onboarding-first-value:party:42';
+    const values = new Map([[key, 'moment_reaction']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    mockCompleteOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        newlyCompleted: true,
+        progress: { eligible: false },
+      });
+
+    renderProvider();
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    act(() => emitAppStateChange('active'));
+
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(screen.getByText('moment_reaction')).toBeTruthy();
+    expect(values.has(key)).toBe(false);
+  });
+
+  it('coalesces foreground first-value recovery while the Party request is pending', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
+    const key = 'tdf-onboarding-first-value:party:42';
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      storageKey === key ? 'event_saved' : null);
+    let resolveCompletion!: (result: {
+      newlyCompleted: boolean;
+      progress: { eligible: boolean };
+    }) => void;
+    mockCompleteOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveCompletion = resolve;
+    }));
+
+    renderProvider();
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      emitAppStateChange('active');
+      emitAppStateChange('active');
+    });
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveCompletion({ newlyCompleted: true, progress: { eligible: false } });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(screen.getByText('event_saved')).toBeTruthy();
+  });
+
+  it('does not let late eligibility reopen onboarding after a foreground replay', async () => {
+    let resolveProgress!: (progress: { eligible: boolean }) => void;
+    mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProgress = resolve;
+    }));
+    const key = 'tdf-onboarding-first-value:party:42';
+    const values = new Map([[key, 'moment_reaction']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false },
+    });
+
+    renderProvider();
+    act(() => emitAppStateChange('active'));
+    await waitFor(() => expect(screen.getByText('moment_reaction')).toBeTruthy());
+
+    await act(async () => {
+      resolveProgress({ eligible: true });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(screen.getByText('moment_reaction')).toBeTruthy();
+  });
+
   it('does not load or complete progress without an authenticated party', async () => {
     mockPartyId = null;
     renderProvider();

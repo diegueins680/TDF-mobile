@@ -64,6 +64,10 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     partyId: string;
     promise: Promise<void>;
   } | null>(null);
+  const firstValueRecoveryRef = useRef<{
+    partyId: string;
+    promise: Promise<RetriedFirstValueCompletion | null>;
+  } | null>(null);
   const [state, setState] = useState<FirstRunState>({
     partyId: null,
     cohortReady: false,
@@ -101,6 +105,33 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       intentRecoveryRef.current = { partyId, promise };
       return promise;
     };
+    const replayPendingFirstValue = (): Promise<RetriedFirstValueCompletion | null> => {
+      const activeRecovery = firstValueRecoveryRef.current;
+      if (activeRecovery?.partyId === partyId) return activeRecovery.promise;
+
+      const promise = retryPendingFirstValueCompletion(
+        partyId,
+        () => !cancelled && ownsParty(partyId),
+      )
+        .catch(() => null)
+        .finally(() => {
+          if (firstValueRecoveryRef.current?.promise === promise) {
+            firstValueRecoveryRef.current = null;
+          }
+        });
+      firstValueRecoveryRef.current = { partyId, promise };
+      return promise;
+    };
+    const applyReplayedFirstValue = (replayed: RetriedFirstValueCompletion | null) => {
+      if (!replayed || cancelled || !ownsParty(partyId)) return;
+      setState((current) => current.partyId === partyId
+        ? {
+          ...current,
+          isNewUser: replayed.result.progress.eligible,
+          replayedFirstValueCompletion: replayed,
+        }
+        : current);
+    };
 
     setState({
       partyId,
@@ -115,10 +146,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       try {
         const progress = await getOnboardingProgress();
         if (cancelled || !ownsParty(partyId)) return;
-        replayed = await retryPendingFirstValueCompletion(
-          partyId,
-          () => ownsParty(partyId),
-        );
+        replayed = await replayPendingFirstValue();
         if (cancelled || !ownsParty(partyId)) return;
         isNew = replayed?.result.progress.eligible ?? progress.eligible;
       } catch {
@@ -126,15 +154,21 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
         // an established account as a new-user experiment participant.
       }
       if (cancelled || !ownsParty(partyId)) return;
-      setState({
-        partyId,
-        cohortReady: true,
-        isNewUser: isNew,
-        replayedFirstValueCompletion: replayed,
+      setState((current) => {
+        if (current.partyId !== partyId) return current;
+        const effectiveReplay = replayed ?? current.replayedFirstValueCompletion;
+        return {
+          partyId,
+          cohortReady: true,
+          isNewUser: effectiveReplay?.result.progress.eligible ?? isNew,
+          replayedFirstValueCompletion: effectiveReplay,
+        };
       });
     })();
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') void replayPendingIntent();
+      if (nextState !== 'active') return;
+      void replayPendingIntent();
+      void replayPendingFirstValue().then(applyReplayedFirstValue);
     });
 
     return () => {

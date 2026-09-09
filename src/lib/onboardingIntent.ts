@@ -6,6 +6,7 @@ import {
   type OnboardingCompletionResult,
   type OnboardingFirstValue,
   type OnboardingIntent,
+  updateOnboardingIntent,
 } from '../api/onboarding';
 import {
   evaluateFeatureAccess,
@@ -116,6 +117,24 @@ export async function clearPendingOnboardingIntentIfCurrent(
   } catch {
     // A retained intent is safe to retry; never clear a newer auth attempt.
   }
+}
+
+export async function retryPendingOnboardingIntent(
+  rawPartyId: string | null | undefined,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<boolean> {
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return false;
+  const intent = await readPendingOnboardingIntent();
+  if (!intent || !stillOwnsParty()) return false;
+  try {
+    await updateOnboardingIntent(intent);
+  } catch {
+    return false;
+  }
+  if (!stillOwnsParty()) return false;
+  await clearPendingOnboardingIntentIfCurrent(intent);
+  return true;
 }
 
 export async function markFirstValueCompleted(

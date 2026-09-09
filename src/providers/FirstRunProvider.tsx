@@ -16,6 +16,7 @@ import {
 } from '../api/onboarding';
 import {
   completeFirstValueWithRetry,
+  retryPendingOnboardingIntent,
   retryPendingFirstValueCompletion,
   type RetriedFirstValueCompletion,
 } from '../lib/onboardingIntent';
@@ -78,6 +79,10 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     (async () => {
       let isNew = false;
       let replayed: RetriedFirstValueCompletion | null = null;
+      void retryPendingOnboardingIntent(
+        partyId,
+        () => !cancelled && ownsParty(partyId),
+      );
       try {
         const progress = await getOnboardingProgress();
         if (cancelled || !ownsParty(partyId)) return;

@@ -5,11 +5,13 @@ import { Text, TouchableOpacity } from 'react-native';
 
 const mockGetOnboardingProgress = jest.fn();
 const mockCompleteOnboardingProgress = jest.fn();
+const mockUpdateOnboardingIntent = jest.fn();
 let mockPartyId: string | null = '42';
 
 jest.mock('../src/api/onboarding', () => ({
   getOnboardingProgress: (...args: unknown[]) => mockGetOnboardingProgress(...args),
   completeOnboardingProgress: (...args: unknown[]) => mockCompleteOnboardingProgress(...args),
+  updateOnboardingIntent: (...args: unknown[]) => mockUpdateOnboardingIntent(...args),
 }));
 
 jest.mock('../src/providers/AuthProvider', () => ({
@@ -52,7 +54,10 @@ const renderProvider = () => render(
 describe('FirstRunProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.mocked(AsyncStorage.getItem).mockResolvedValue(null);
+    jest.mocked(AsyncStorage.getItem).mockReset().mockResolvedValue(null);
+    jest.mocked(AsyncStorage.setItem).mockReset().mockResolvedValue(undefined);
+    jest.mocked(AsyncStorage.removeItem).mockReset().mockResolvedValue(undefined);
+    mockUpdateOnboardingIntent.mockReset().mockResolvedValue({ eligible: false });
     mockPartyId = '42';
   });
 
@@ -102,6 +107,31 @@ describe('FirstRunProvider', () => {
     expect(screen.getByText('moment_reaction')).toBeTruthy();
     expect(mockCompleteOnboardingProgress).toHaveBeenCalledWith('moment_reaction');
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-first-value:party:42');
+  });
+
+  it('retries retained intent persistence when an authenticated Party starts', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: false });
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'tdf-onboarding-intent:pending' ? 'professional_tools' : null);
+
+    renderProvider();
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('professional_tools'));
+    await waitFor(() => expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
+      'tdf-onboarding-intent:pending',
+    ));
+  });
+
+  it('does not hold cohort readiness while intent recovery is pending', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'tdf-onboarding-intent:pending' ? 'learning' : null);
+    mockUpdateOnboardingIntent.mockReturnValueOnce(new Promise(() => undefined));
+
+    renderProvider();
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('learning'));
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
   });
 
   it('does not load or complete progress without an authenticated party', async () => {

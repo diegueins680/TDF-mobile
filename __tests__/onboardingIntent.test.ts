@@ -9,19 +9,29 @@ import {
   parseOnboardingIntent,
   persistOnboardingIntent,
   readPendingOnboardingIntent,
+  retryPendingOnboardingIntent,
   retryPendingFirstValueCompletion,
   resolveMobileIntentDestination,
   resolveMobileIntentNavigation,
 } from '../src/lib/onboardingIntent';
 
 const mockCompleteOnboardingProgress = jest.fn();
+const mockUpdateOnboardingIntent = jest.fn();
 
 jest.mock('../src/api/onboarding', () => ({
   completeOnboardingProgress: (...args: unknown[]) => mockCompleteOnboardingProgress(...args),
+  updateOnboardingIntent: (...args: unknown[]) => mockUpdateOnboardingIntent(...args),
 }));
 
 describe('onboarding intent', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.mocked(AsyncStorage.getItem).mockReset().mockResolvedValue(null);
+    jest.mocked(AsyncStorage.setItem).mockReset().mockResolvedValue(undefined);
+    jest.mocked(AsyncStorage.removeItem).mockReset().mockResolvedValue(undefined);
+    mockCompleteOnboardingProgress.mockReset();
+    mockUpdateOnboardingIntent.mockReset();
+  });
 
   it('normalizes canonical and legacy campaign values without interpreting arbitrary roles', () => {
     expect(parseOnboardingIntent('follow_artists')).toBe('follow_artists');
@@ -99,6 +109,47 @@ describe('onboarding intent', () => {
 
     await clearPendingOnboardingIntentIfCurrent('follow_artists');
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
+  });
+
+  it('retries a retained intent only while the authenticated Party still owns it', async () => {
+    let stillOwnsParty = true;
+    jest.mocked(AsyncStorage.getItem)
+      .mockResolvedValueOnce('follow_artists')
+      .mockResolvedValueOnce('follow_artists');
+    mockUpdateOnboardingIntent.mockImplementationOnce(async () => {
+      stillOwnsParty = false;
+      return { eligible: false };
+    });
+
+    await expect(retryPendingOnboardingIntent(
+      '42',
+      () => stillOwnsParty,
+    )).resolves.toBe(false);
+
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists');
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
+  });
+
+  it('clears a retained intent after authenticated recovery succeeds', async () => {
+    jest.mocked(AsyncStorage.getItem)
+      .mockResolvedValueOnce('internships')
+      .mockResolvedValueOnce('internships');
+    mockUpdateOnboardingIntent.mockResolvedValueOnce({ eligible: false });
+
+    await expect(retryPendingOnboardingIntent('42')).resolves.toBe(true);
+
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('internships');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
+  });
+
+  it('retains the intent when authenticated recovery remains offline', async () => {
+    jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce('learning');
+    mockUpdateOnboardingIntent.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(retryPendingOnboardingIntent('42')).resolves.toBe(false);
+
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('learning');
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
   });
 
   it('discards an invalid pending value instead of restoring a permission-like role', async () => {

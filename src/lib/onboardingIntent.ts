@@ -21,6 +21,9 @@ export const DEFAULT_ONBOARDING_INTENT: OnboardingIntent = 'events';
 export const PENDING_INTENT_KEY = 'tdf-onboarding-intent:pending';
 export const PENDING_PARTY_INTENT_PREFIX = 'tdf-onboarding-intent:party:';
 export const PENDING_FIRST_VALUE_PREFIX = 'tdf-onboarding-first-value:party:';
+export const PENDING_ONBOARDING_EXIT_PREFIX = 'tdf-onboarding-exit:party:';
+
+const PENDING_ONBOARDING_EXIT_VALUE = 'pending';
 
 const INTENTS = new Set<OnboardingIntent>([
   'events',
@@ -296,6 +299,83 @@ export async function retryPendingFirstValueCompletion(
   } catch {
     return null;
   }
+}
+
+const onboardingExitKey = (partyId: string): string =>
+  `${PENDING_ONBOARDING_EXIT_PREFIX}${encodeURIComponent(partyId)}`;
+
+async function clearPendingOnboardingExit(
+  partyId: string,
+  stillOwnsParty: () => boolean,
+): Promise<void> {
+  try {
+    const key = onboardingExitKey(partyId);
+    if (
+      stillOwnsParty()
+      && await AsyncStorage.getItem(key) === PENDING_ONBOARDING_EXIT_VALUE
+      && stillOwnsParty()
+    ) {
+      await AsyncStorage.removeItem(key);
+    }
+  } catch {
+    // A later retry is harmless because the completion endpoint is idempotent.
+  }
+}
+
+export async function completeOnboardingExitWithRetry(
+  rawPartyId: string | null | undefined,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<OnboardingCompletionResult | null> {
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return null;
+  try {
+    await AsyncStorage.setItem(
+      onboardingExitKey(partyId),
+      PENDING_ONBOARDING_EXIT_VALUE,
+    );
+  } catch {
+    // Still attempt the authoritative handshake when local persistence is unavailable.
+  }
+  if (!stillOwnsParty()) return null;
+  try {
+    const result = await completeOnboardingProgress();
+    if (!stillOwnsParty()) return null;
+    await clearPendingOnboardingExit(partyId, stillOwnsParty);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+export type RetriedOnboardingExit = {
+  result: OnboardingCompletionResult | null;
+};
+
+export async function retryPendingOnboardingExit(
+  rawPartyId: string | null | undefined,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<RetriedOnboardingExit | null> {
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return null;
+  const key = onboardingExitKey(partyId);
+  let stored: string | null;
+  try {
+    stored = await AsyncStorage.getItem(key);
+  } catch {
+    return null;
+  }
+  if (!stored || !stillOwnsParty()) return null;
+  if (stored !== PENDING_ONBOARDING_EXIT_VALUE) {
+    try {
+      if (stillOwnsParty()) await AsyncStorage.removeItem(key);
+    } catch {
+      // Best-effort cleanup of invalid local state.
+    }
+    return null;
+  }
+  return {
+    result: await completeOnboardingExitWithRetry(partyId, stillOwnsParty),
+  };
 }
 
 const hasAny = (values: readonly string[], candidates: readonly string[]) => {

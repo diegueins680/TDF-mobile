@@ -18,17 +18,19 @@ import {
 import { AppState } from 'react-native';
 
 import {
-  completeOnboardingProgress,
   getOnboardingProgress,
   type OnboardingCompletionResult,
   type OnboardingFirstValue,
   type OnboardingProgress,
 } from '../api/onboarding';
 import {
+  completeOnboardingExitWithRetry,
   completeFirstValueWithRetry,
   retryPendingOnboardingIntent,
+  retryPendingOnboardingExit,
   retryPendingFirstValueCompletion,
   type RetriedFirstValueCompletion,
+  type RetriedOnboardingExit,
 } from '../lib/onboardingIntent';
 import { usePartyOwnership } from '../hooks/usePartyOwnership';
 import { useAuth } from './AuthProvider';
@@ -72,6 +74,10 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
   const firstValueRecoveryRef = useRef<{
     partyId: string;
     promise: Promise<RetriedFirstValueCompletion | null>;
+  } | null>(null);
+  const exitRecoveryRef = useRef<{
+    partyId: string;
+    promise: Promise<RetriedOnboardingExit | null>;
   } | null>(null);
   const progressRecoveryRef = useRef<{
     partyId: string;
@@ -151,6 +157,23 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       firstValueRecoveryRef.current = { partyId, promise };
       return promise;
     };
+    const replayPendingExit = (): Promise<RetriedOnboardingExit | null> => {
+      const activeRecovery = exitRecoveryRef.current;
+      if (activeRecovery?.partyId === partyId) return activeRecovery.promise;
+
+      const promise = retryPendingOnboardingExit(
+        partyId,
+        () => !cancelled && ownsParty(partyId),
+      )
+        .catch(() => null)
+        .finally(() => {
+          if (exitRecoveryRef.current?.promise === promise) {
+            exitRecoveryRef.current = null;
+          }
+        });
+      exitRecoveryRef.current = { partyId, promise };
+      return promise;
+    };
     const applyReplayedFirstValue = (replayed: RetriedFirstValueCompletion | null) => {
       if (!replayed || cancelled || !ownsParty(partyId)) return;
       setState((current) => current.partyId === partyId
@@ -167,9 +190,24 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     const refreshFirstRunState = async (): Promise<void> => {
       const progressPromise = loadOnboardingProgress();
       const replayPromise = replayPendingFirstValue();
-      void replayPromise.then(applyReplayedFirstValue);
-      const [progress, replayed] = await Promise.all([progressPromise, replayPromise]);
+      const exitPromise = replayPendingExit();
+      void Promise.all([replayPromise, exitPromise]).then(([replayed, recoveredExit]) => {
+        if (recoveredExit && !cancelled && ownsParty(partyId)) {
+          locallyExitedPartyIdRef.current = partyId;
+          setState((current) => current.partyId === partyId
+            ? { ...current, cohortReady: true, isNewUser: false }
+            : current);
+          return;
+        }
+        applyReplayedFirstValue(replayed);
+      });
+      const [progress, replayed, recoveredExit] = await Promise.all([
+        progressPromise,
+        replayPromise,
+        exitPromise,
+      ]);
       if (cancelled || !ownsParty(partyId)) return;
+      if (recoveredExit) locallyExitedPartyIdRef.current = partyId;
       setState((current) => {
         if (current.partyId !== partyId) return current;
         const effectiveReplay = replayed ?? current.replayedFirstValueCompletion;
@@ -234,7 +272,10 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
           firstValue,
           () => ownsParty(ownerPartyId),
         )
-        : await completeOnboardingProgress();
+        : await completeOnboardingExitWithRetry(
+          ownerPartyId,
+          () => ownsParty(ownerPartyId),
+        );
       return ownsParty(ownerPartyId) ? result : null;
     } catch {
       // Leaving optional onboarding must not trap the current app session.

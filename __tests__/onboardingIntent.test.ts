@@ -3,14 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   clearPendingOnboardingIntent,
   clearPendingOnboardingIntentIfCurrent,
+  completeOnboardingExitWithRetry,
   markFirstValueCompleted,
   ONBOARDING_INTENT_OPTIONS,
   PENDING_FIRST_VALUE_PREFIX,
+  PENDING_ONBOARDING_EXIT_PREFIX,
   PENDING_PARTY_INTENT_PREFIX,
   parseOnboardingIntent,
   persistOnboardingIntent,
   readPendingOnboardingIntent,
   retryPendingOnboardingIntent,
+  retryPendingOnboardingExit,
   retryPendingFirstValueCompletion,
   resolveMobileIntentDestination,
   resolveMobileIntentNavigation,
@@ -252,5 +255,51 @@ describe('onboarding intent', () => {
       'moment_reaction',
     );
     expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(`${PENDING_FIRST_VALUE_PREFIX}9`);
+  });
+
+  it('retains an offline explicit exit and clears it after an authoritative retry', async () => {
+    const key = `${PENDING_ONBOARDING_EXIT_PREFIX}party%2F9`;
+    const values = useStoredValues([]);
+    mockCompleteOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ newlyCompleted: true, progress: { eligible: false } });
+
+    await expect(completeOnboardingExitWithRetry('party/9')).resolves.toBeNull();
+    expect(values.get(key)).toBe('pending');
+
+    await expect(retryPendingOnboardingExit('party/9')).resolves.toEqual({
+      result: { newlyCompleted: true, progress: { eligible: false } },
+    });
+    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(1);
+    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(2);
+    expect(values.has(key)).toBe(false);
+  });
+
+  it('does not clear a retained exit after the authenticated Party changes', async () => {
+    let stillOwnsParty = true;
+    const key = `${PENDING_ONBOARDING_EXIT_PREFIX}42`;
+    const values = useStoredValues([[key, 'pending']]);
+    mockCompleteOnboardingProgress.mockImplementationOnce(async () => {
+      stillOwnsParty = false;
+      return { newlyCompleted: true, progress: { eligible: false } };
+    });
+
+    await expect(retryPendingOnboardingExit(
+      '42',
+      () => stillOwnsParty,
+    )).resolves.toEqual({ result: null });
+
+    expect(values.get(key)).toBe('pending');
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(key);
+  });
+
+  it('removes invalid retained exit state without completing onboarding', async () => {
+    const key = `${PENDING_ONBOARDING_EXIT_PREFIX}42`;
+    const values = useStoredValues([[key, 'completed']]);
+
+    await expect(retryPendingOnboardingExit('42')).resolves.toBeNull();
+
+    expect(values.has(key)).toBe(false);
+    expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
   });
 });

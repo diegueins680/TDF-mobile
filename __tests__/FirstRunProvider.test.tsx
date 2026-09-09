@@ -383,10 +383,87 @@ describe('FirstRunProvider', () => {
 
     fireEvent.press(screen.getByRole('button', { name: 'Exit onboarding' }));
     await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'tdf-onboarding-exit:party:42',
+      'pending',
+    );
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(
+      'tdf-onboarding-exit:party:42',
+    );
     act(() => emitAppStateChange('active'));
 
     await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
     expect(screen.getByText('true:false')).toBeTruthy();
+  });
+
+  it('keeps a retained offline exit closed across relaunch and clears it on reconnect', async () => {
+    mockIsConnected = false;
+    const key = 'tdf-onboarding-exit:party:42';
+    const values = new Map([[key, 'pending']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.setItem).mockImplementation(async (storageKey, value) => {
+      values.set(storageKey, value);
+    });
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
+    mockCompleteOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        newlyCompleted: true,
+        progress: { eligible: false },
+      });
+
+    const view = renderProvider();
+
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(values.get(key)).toBe('pending');
+
+    mockIsConnected = true;
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(values.has(key)).toBe(false));
+    expect(screen.getByText('true:false')).toBeTruthy();
+  });
+
+  it('coalesces retained exit recovery across reconnect and foreground triggers', async () => {
+    mockIsConnected = false;
+    const key = 'tdf-onboarding-exit:party:42';
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      storageKey === key ? 'pending' : null);
+    let resolveCompletion!: (result: {
+      newlyCompleted: boolean;
+      progress: { eligible: boolean };
+    }) => void;
+    mockCompleteOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveCompletion = resolve;
+    }));
+
+    const view = renderProvider();
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1));
+
+    mockIsConnected = true;
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+    act(() => emitAppStateChange('active'));
+
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveCompletion({ newlyCompleted: true, progress: { eligible: false } });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
   });
 
   it('loads eligibility normally for a new Party after the prior Party exits', async () => {

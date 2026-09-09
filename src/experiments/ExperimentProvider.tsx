@@ -9,11 +9,14 @@
  *   const variant = getVariant('streak-counter-v1'); // 'control' | 'treatment'
  */
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { getAnalyticsClient } from '../analytics/posthog';
 import { getExperimentAssignment } from '../api/experiments';
+import { usePartyOwnership } from '../hooks/usePartyOwnership';
 import { useAuth } from '../providers/AuthProvider';
+import { useNetwork } from '../providers/NetworkProvider';
 
 export type ExperimentVariant = 'control' | 'treatment' | string;
 
@@ -47,57 +50,98 @@ const ACTIVE_EXPERIMENTS: ExperimentConfig[] = [
 
 export const ExperimentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { partyId } = useAuth();
+  const { isConnected } = useNetwork();
+  const ownsParty = usePartyOwnership(partyId);
+  const recoveryTriggerRef = useRef<(() => void) | null>(null);
+  const previousConnectivityRef = useRef(isConnected);
+  const assignmentRecoveryRef = useRef<{
+    partyId: string;
+    promise: Promise<void>;
+  } | null>(null);
   const [variants, setVariants] = useState<Record<string, ExperimentVariant>>({});
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [resolvedPartyId, setResolvedPartyId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    async function init() {
-      if (!partyId) {
-        setVariants({});
-        setEnabled({});
-        setResolvedPartyId(null);
-        setIsReady(true);
-        return;
-      }
-      setIsReady(false);
-      const nextVariants: Record<string, ExperimentVariant> = {};
-      const nextEnabled: Record<string, boolean> = {};
-      try {
-        const analytics = getAnalyticsClient();
-        for (const exp of ACTIVE_EXPERIMENTS) {
-          const assignment = await getExperimentAssignment(exp.id);
-          if (cancelled) return;
-          nextVariants[exp.id] = assignment.variant;
-          nextEnabled[exp.id] = assignment.experimentEnabled && assignment.experimentEligible;
-          if (assignment.newlyAssigned) {
-            analytics.capture('experiment_assigned', {
-              experimentId: exp.id,
-              experimentVersion: assignment.experimentVersion,
-              variant: assignment.variant,
-              source: 'authenticated_identity_server',
-            });
-          }
-        }
-      } catch (err) {
-        if (!cancelled) console.error('Experiment init failed:', err);
-      } finally {
-        if (!cancelled) {
-          setVariants(nextVariants);
-          setEnabled(nextEnabled);
-          setResolvedPartyId(partyId);
-          setIsReady(true);
-        }
-      }
+    if (!partyId) {
+      recoveryTriggerRef.current = null;
+      setVariants({});
+      setEnabled({});
+      setResolvedPartyId(null);
+      setIsReady(true);
+      return;
     }
 
-    void init();
+    let cancelled = false;
+    const recoverAssignments = (): Promise<void> => {
+      const activeRecovery = assignmentRecoveryRef.current;
+      if (activeRecovery?.partyId === partyId) return activeRecovery.promise;
+
+      const nextVariants: Record<string, ExperimentVariant> = {};
+      const nextEnabled: Record<string, boolean> = {};
+      let succeeded = false;
+      const promise = (async () => {
+        try {
+          const analytics = getAnalyticsClient();
+          for (const exp of ACTIVE_EXPERIMENTS) {
+            const assignment = await getExperimentAssignment(exp.id);
+            if (cancelled || !ownsParty(partyId)) return;
+            nextVariants[exp.id] = assignment.variant;
+            nextEnabled[exp.id] = assignment.experimentEnabled && assignment.experimentEligible;
+            if (assignment.newlyAssigned) {
+              analytics.capture('experiment_assigned', {
+                experimentId: exp.id,
+                experimentVersion: assignment.experimentVersion,
+                variant: assignment.variant,
+                source: 'authenticated_identity_server',
+              });
+            }
+          }
+          succeeded = true;
+        } catch (err) {
+          if (!cancelled && ownsParty(partyId)) console.error('Experiment init failed:', err);
+        }
+        if (cancelled || !ownsParty(partyId)) return;
+        setVariants(succeeded ? nextVariants : {});
+        setEnabled(succeeded ? nextEnabled : {});
+        setResolvedPartyId(partyId);
+        setIsReady(true);
+      })().finally(() => {
+        if (assignmentRecoveryRef.current?.promise === promise) {
+          assignmentRecoveryRef.current = null;
+        }
+      });
+      assignmentRecoveryRef.current = { partyId, promise };
+      return promise;
+    };
+    const recover = () => {
+      void recoverAssignments();
+    };
+
+    setVariants({});
+    setEnabled({});
+    setResolvedPartyId(null);
+    setIsReady(false);
+    recoveryTriggerRef.current = recover;
+    recover();
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') recover();
+    });
     return () => {
       cancelled = true;
+      if (recoveryTriggerRef.current === recover) {
+        recoveryTriggerRef.current = null;
+      }
+      subscription.remove();
     };
-  }, [partyId]);
+  }, [ownsParty, partyId]);
+
+  useEffect(() => {
+    const wasConnected = previousConnectivityRef.current;
+    previousConnectivityRef.current = isConnected;
+    if (!wasConnected && isConnected) recoveryTriggerRef.current?.();
+  }, [isConnected]);
 
   const identityReady = isReady && resolvedPartyId === partyId;
 

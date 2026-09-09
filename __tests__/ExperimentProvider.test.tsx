@@ -1,13 +1,20 @@
 import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { AppState, type AppStateStatus, Text } from 'react-native';
 
 let mockPartyId: string | null = null;
+let mockIsConnected = true;
+let appStateChangeListener: ((state: AppStateStatus) => void) | null = null;
 const mockCapture = jest.fn();
 const mockGetExperimentAssignment = jest.fn();
+const mockRemoveAppStateListener = jest.fn();
+const mockAddAppStateListener = jest.spyOn(AppState, 'addEventListener');
 
 jest.mock('../src/providers/AuthProvider', () => ({
   useAuth: () => ({ partyId: mockPartyId }),
+}));
+jest.mock('../src/providers/NetworkProvider', () => ({
+  useNetwork: () => ({ isConnected: mockIsConnected, connectionType: 'internet' }),
 }));
 
 jest.mock('../src/analytics/posthog', () => ({
@@ -26,10 +33,22 @@ function VariantProbe() {
   return <Text>{`${getVariant(experimentId) ?? 'none'}:${isExperimentEnabled(experimentId)}`}</Text>;
 }
 
+const emitAppStateChange = (state: AppStateStatus) => {
+  if (!appStateChangeListener) throw new Error('AppState listener was not registered');
+  appStateChangeListener(state);
+};
+
 describe('ExperimentProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPartyId = null;
+    mockIsConnected = true;
+    appStateChangeListener = null;
+    mockRemoveAppStateListener.mockReset();
+    mockAddAppStateListener.mockReset().mockImplementation((_event, listener) => {
+      appStateChangeListener = listener;
+      return { remove: mockRemoveAppStateListener };
+    });
     mockGetExperimentAssignment.mockResolvedValue({
       experimentId: 'single-feature-onboarding-v1',
       experimentVersion: 1,
@@ -116,6 +135,99 @@ describe('ExperimentProvider', () => {
       variant: 'control',
       assignedAt: '2026-09-07T20:01:00Z',
       eligibleUntil: '2026-09-08T20:01:00Z',
+      exposedAt: null,
+      newlyAssigned: false,
+    }));
+    await waitFor(() => expect(screen.getByText('control:true')).toBeTruthy());
+  });
+
+  it('recovers an offline assignment when connectivity returns without an app-state change', async () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockPartyId = 'party-42';
+    mockIsConnected = false;
+    mockGetExperimentAssignment
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        experimentId: 'single-feature-onboarding-v1',
+        experimentVersion: 1,
+        experimentEnabled: true,
+        experimentEligible: true,
+        variant: 'treatment_singlefeature',
+        assignedAt: '2026-09-07T20:00:00Z',
+        eligibleUntil: '2026-09-08T20:00:00Z',
+        exposedAt: null,
+        newlyAssigned: false,
+      });
+    const view = render(<ExperimentProvider><VariantProbe /></ExperimentProvider>);
+
+    await waitFor(() => expect(screen.getByText('none:false')).toBeTruthy());
+    expect(mockGetExperimentAssignment).toHaveBeenCalledTimes(1);
+
+    mockIsConnected = true;
+    view.rerender(<ExperimentProvider><VariantProbe /></ExperimentProvider>);
+
+    await waitFor(() => expect(screen.getByText('treatment_singlefeature:true')).toBeTruthy());
+    expect(mockGetExperimentAssignment).toHaveBeenCalledTimes(2);
+    consoleError.mockRestore();
+  });
+
+  it('refreshes an assignment when the app returns to the foreground', async () => {
+    mockPartyId = 'party-42';
+    mockGetExperimentAssignment
+      .mockResolvedValueOnce({
+        experimentId: 'single-feature-onboarding-v1',
+        experimentVersion: 1,
+        experimentEnabled: true,
+        experimentEligible: true,
+        variant: 'treatment_singlefeature',
+        assignedAt: '2026-09-07T20:00:00Z',
+        eligibleUntil: '2026-09-08T20:00:00Z',
+        exposedAt: null,
+        newlyAssigned: false,
+      })
+      .mockResolvedValueOnce({
+        experimentId: 'single-feature-onboarding-v1',
+        experimentVersion: 1,
+        experimentEnabled: false,
+        experimentEligible: false,
+        variant: 'control',
+        assignedAt: '2026-09-07T20:00:00Z',
+        eligibleUntil: '2026-09-08T20:00:00Z',
+        exposedAt: null,
+        newlyAssigned: false,
+      });
+    render(<ExperimentProvider><VariantProbe /></ExperimentProvider>);
+    await waitFor(() => expect(screen.getByText('treatment_singlefeature:true')).toBeTruthy());
+
+    act(() => emitAppStateChange('active'));
+
+    await waitFor(() => expect(screen.getByText('control:false')).toBeTruthy());
+    expect(mockGetExperimentAssignment).toHaveBeenCalledTimes(2);
+  });
+
+  it('coalesces simultaneous reconnect and foreground assignment recovery', async () => {
+    mockPartyId = 'party-42';
+    mockIsConnected = false;
+    let resolveAssignment!: (value: object) => void;
+    mockGetExperimentAssignment.mockReturnValueOnce(new Promise((resolve) => {
+      resolveAssignment = resolve;
+    }));
+    const view = render(<ExperimentProvider><VariantProbe /></ExperimentProvider>);
+    expect(mockGetExperimentAssignment).toHaveBeenCalledTimes(1);
+
+    mockIsConnected = true;
+    view.rerender(<ExperimentProvider><VariantProbe /></ExperimentProvider>);
+    act(() => emitAppStateChange('active'));
+
+    expect(mockGetExperimentAssignment).toHaveBeenCalledTimes(1);
+    await act(async () => resolveAssignment({
+      experimentId: 'single-feature-onboarding-v1',
+      experimentVersion: 1,
+      experimentEnabled: true,
+      experimentEligible: true,
+      variant: 'control',
+      assignedAt: '2026-09-07T20:00:00Z',
+      eligibleUntil: '2026-09-08T20:00:00Z',
       exposedAt: null,
       newlyAssigned: false,
     }));

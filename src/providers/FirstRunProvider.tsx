@@ -22,6 +22,7 @@ import {
   getOnboardingProgress,
   type OnboardingCompletionResult,
   type OnboardingFirstValue,
+  type OnboardingProgress,
 } from '../api/onboarding';
 import {
   completeFirstValueWithRetry,
@@ -68,6 +69,10 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     partyId: string;
     promise: Promise<RetriedFirstValueCompletion | null>;
   } | null>(null);
+  const progressRecoveryRef = useRef<{
+    partyId: string;
+    promise: Promise<OnboardingProgress | null>;
+  } | null>(null);
   const [state, setState] = useState<FirstRunState>({
     partyId: null,
     cohortReady: false,
@@ -87,6 +92,20 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     }
 
     let cancelled = false;
+    const loadOnboardingProgress = (): Promise<OnboardingProgress | null> => {
+      const activeRecovery = progressRecoveryRef.current;
+      if (activeRecovery?.partyId === partyId) return activeRecovery.promise;
+
+      const promise = getOnboardingProgress()
+        .catch(() => null)
+        .finally(() => {
+          if (progressRecoveryRef.current?.promise === promise) {
+            progressRecoveryRef.current = null;
+          }
+        });
+      progressRecoveryRef.current = { partyId, promise };
+      return promise;
+    };
     const replayPendingIntent = (): Promise<void> => {
       const activeRecovery = intentRecoveryRef.current;
       if (activeRecovery?.partyId === partyId) return activeRecovery.promise;
@@ -127,10 +146,30 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       setState((current) => current.partyId === partyId
         ? {
           ...current,
+          cohortReady: true,
           isNewUser: replayed.result.progress.eligible,
           replayedFirstValueCompletion: replayed,
         }
         : current);
+    };
+    const refreshFirstRunState = async (): Promise<void> => {
+      const progressPromise = loadOnboardingProgress();
+      const replayPromise = replayPendingFirstValue();
+      void replayPromise.then(applyReplayedFirstValue);
+      const [progress, replayed] = await Promise.all([progressPromise, replayPromise]);
+      if (cancelled || !ownsParty(partyId)) return;
+      setState((current) => {
+        if (current.partyId !== partyId) return current;
+        const effectiveReplay = replayed ?? current.replayedFirstValueCompletion;
+        return {
+          partyId,
+          cohortReady: true,
+          isNewUser: effectiveReplay?.result.progress.eligible
+            ?? progress?.eligible
+            ?? false,
+          replayedFirstValueCompletion: effectiveReplay,
+        };
+      });
     };
 
     setState({
@@ -139,36 +178,12 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       isNewUser: false,
       replayedFirstValueCompletion: null,
     });
-    (async () => {
-      let isNew = false;
-      let replayed: RetriedFirstValueCompletion | null = null;
-      void replayPendingIntent();
-      try {
-        const progress = await getOnboardingProgress();
-        if (cancelled || !ownsParty(partyId)) return;
-        replayed = await replayPendingFirstValue();
-        if (cancelled || !ownsParty(partyId)) return;
-        isNew = replayed?.result.progress.eligible ?? progress.eligible;
-      } catch {
-        // Fail closed: network errors and legacy servers must never classify
-        // an established account as a new-user experiment participant.
-      }
-      if (cancelled || !ownsParty(partyId)) return;
-      setState((current) => {
-        if (current.partyId !== partyId) return current;
-        const effectiveReplay = replayed ?? current.replayedFirstValueCompletion;
-        return {
-          partyId,
-          cohortReady: true,
-          isNewUser: effectiveReplay?.result.progress.eligible ?? isNew,
-          replayedFirstValueCompletion: effectiveReplay,
-        };
-      });
-    })();
+    void replayPendingIntent();
+    void refreshFirstRunState();
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState !== 'active') return;
       void replayPendingIntent();
-      void replayPendingFirstValue().then(applyReplayedFirstValue);
+      void refreshFirstRunState();
     });
 
     return () => {

@@ -62,6 +62,11 @@ const emitAppStateChange = (state: AppStateStatus) => {
 describe('FirstRunProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetOnboardingProgress.mockReset().mockResolvedValue({ eligible: false });
+    mockCompleteOnboardingProgress.mockReset().mockResolvedValue({
+      newlyCompleted: false,
+      progress: { eligible: false },
+    });
     jest.mocked(AsyncStorage.getItem).mockReset().mockResolvedValue(null);
     jest.mocked(AsyncStorage.setItem).mockReset().mockResolvedValue(undefined);
     jest.mocked(AsyncStorage.removeItem).mockReset().mockResolvedValue(undefined);
@@ -301,6 +306,40 @@ describe('FirstRunProvider', () => {
 
     await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
     expect(screen.getByText('moment_reaction')).toBeTruthy();
+  });
+
+  it('reloads authoritative eligibility after an offline startup returns to the foreground', async () => {
+    mockGetOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ eligible: true });
+
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+
+    act(() => emitAppStateChange('active'));
+
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+  });
+
+  it('coalesces repeated foreground eligibility loads for the active Party', async () => {
+    let resolveProgress!: (progress: { eligible: boolean }) => void;
+    mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProgress = resolve;
+    }));
+
+    renderProvider();
+    act(() => {
+      emitAppStateChange('active');
+      emitAppStateChange('active');
+    });
+
+    expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveProgress({ eligible: true });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
   });
 
   it('does not load or complete progress without an authenticated party', async () => {

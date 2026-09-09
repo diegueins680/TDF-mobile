@@ -49,9 +49,10 @@ export default function NewAccessRequestScreen() {
     mutationFn: () => submitAccessRequest({ featureId: feature?.id ?? '', action: selection?.action ?? 'view', justification: justification.trim() || null }),
     onSuccess: async (request) => {
       analytics.capture('feature_access_request_submitted', { feature_id: request.featureId, feature_action: request.action, platform: 'mobile' });
-      if (await markFirstValueCompleted(partyId, 'access_requested', token)) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'access_requested' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'access_requested' });
+      const completedValue = await markFirstValueCompleted(partyId, 'access_requested', token);
+      if (completedValue) {
+        analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
       }
       await queryClient.invalidateQueries({ queryKey: ['access-requests'] });
       router.replace('/access-requests' as Href);

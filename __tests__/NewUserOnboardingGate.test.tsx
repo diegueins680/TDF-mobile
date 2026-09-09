@@ -6,7 +6,7 @@ const mockTrack = jest.fn();
 const mockCapture = jest.fn();
 const mockCompleteOnboarding = jest.fn(() => Promise.resolve({
   newlyCompleted: true,
-  progress: { eligible: false },
+  progress: { eligible: false, firstValue: 'moment_reaction' },
 }));
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -140,6 +140,10 @@ describe('NewUserOnboardingGate states', () => {
 
   it('records one-shot treatment exposure after identity and persists explicit exit', async () => {
     mockIsConnected = false;
+    mockCompleteOnboarding.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, firstValue: null },
+    });
     renderGate();
 
     expect(screen.getByRole('header', { name: 'Estás sin conexión' })).toBeTruthy();
@@ -283,7 +287,7 @@ describe('NewUserOnboardingGate states', () => {
   it('suppresses completion analytics when onboarding was already completed', async () => {
     mockCompleteOnboarding.mockResolvedValueOnce({
       newlyCompleted: false,
-      progress: { eligible: false },
+      progress: { eligible: false, firstValue: 'moment_reaction' },
     });
     mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
     mockMomentsState = { data: [moment], isLoading: false, isError: false };
@@ -296,6 +300,26 @@ describe('NewUserOnboardingGate states', () => {
     expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
     expect(mockCapture).not.toHaveBeenCalledWith('first_value_completed', expect.anything());
     expect(mockCapture).not.toHaveBeenCalledWith('onboarding_completed', expect.anything());
+  });
+
+  it('uses the authoritative first value and does not misattribute experiment conversion', async () => {
+    mockCompleteOnboarding.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, firstValue: 'event_saved' },
+    });
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+
+    await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledWith('moment_reaction'));
+    expect(mockCapture).toHaveBeenCalledWith(
+      'first_value_completed',
+      { platform: 'mobile', value: 'event_saved' },
+    );
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
   });
 
   it.each([
@@ -317,8 +341,14 @@ describe('NewUserOnboardingGate states', () => {
 
   it('allows a retry when the server reports that evidence is still pending', async () => {
     mockCompleteOnboarding
-      .mockResolvedValueOnce({ newlyCompleted: false, progress: { eligible: true } })
-      .mockResolvedValueOnce({ newlyCompleted: true, progress: { eligible: false } });
+      .mockResolvedValueOnce({
+        newlyCompleted: false,
+        progress: { eligible: true, firstValue: null },
+      })
+      .mockResolvedValueOnce({
+        newlyCompleted: true,
+        progress: { eligible: false, firstValue: 'moment_reaction' },
+      });
     mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
     mockMomentsState = { data: [moment], isLoading: false, isError: false };
     mockProbeState = [{ data: [moment], isLoading: false, isError: false }];

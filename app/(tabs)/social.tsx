@@ -97,9 +97,10 @@ export default function SocialScreen() {
       setFollowedArtistIds((current) => new Set(current).add(String(artist.id)));
       void impactMedium();
       analytics.capture('artist_followed', { platform: 'mobile', artist_id: String(artist.id) });
-      if (await markFirstValueCompleted(ownerPartyId, 'artist_followed', authToken)) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'artist_followed' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'artist_followed' });
+      const completedValue = await markFirstValueCompleted(ownerPartyId, 'artist_followed', authToken);
+      if (completedValue) {
+        analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
       }
     },
     onError: (error) => Alert.alert(

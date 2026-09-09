@@ -44,6 +44,12 @@ export const MerchReputation = {
     get<MerchReputationSummary>('/merch/products/' + encodeURIComponent(productId) + '/reputation'),
   eligibility: (orderId: string) =>
     get<MerchReviewEligibility>('/merch/orders/' + encodeURIComponent(orderId) + '/reviews/eligibility'),
+  claimBuyer: (orderId: string, lookupToken: string) =>
+    put<components['schemas']['MerchReviewBuyerClaim']>(
+      '/merch/orders/' + encodeURIComponent(orderId) + '/review-buyer-claim',
+      undefined,
+      { headers: { 'X-Order-Lookup-Token': lookupToken } },
+    ),
   submitStore: (orderId: string, body: MerchReviewSubmit, key?: string) =>
     put<components['schemas']['MerchReviewMutation']>(
       '/merch/orders/' + encodeURIComponent(orderId) + '/store-review',

@@ -73,6 +73,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     partyId: string;
     promise: Promise<OnboardingProgress | null>;
   } | null>(null);
+  const locallyExitedPartyIdRef = useRef<string | null>(null);
   const [state, setState] = useState<FirstRunState>({
     partyId: null,
     cohortReady: false,
@@ -82,6 +83,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!partyId) {
+      locallyExitedPartyIdRef.current = null;
       setState({
         partyId: null,
         cohortReady: true,
@@ -89,6 +91,9 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
         replayedFirstValueCompletion: null,
       });
       return;
+    }
+    if (locallyExitedPartyIdRef.current !== partyId) {
+      locallyExitedPartyIdRef.current = null;
     }
 
     let cancelled = false;
@@ -147,7 +152,9 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
         ? {
           ...current,
           cohortReady: true,
-          isNewUser: replayed.result.progress.eligible,
+          isNewUser: locallyExitedPartyIdRef.current === partyId
+            ? false
+            : replayed.result.progress.eligible,
           replayedFirstValueCompletion: replayed,
         }
         : current);
@@ -164,9 +171,11 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
         return {
           partyId,
           cohortReady: true,
-          isNewUser: effectiveReplay?.result.progress.eligible
-            ?? progress?.eligible
-            ?? false,
+          isNewUser: locallyExitedPartyIdRef.current === partyId
+            ? false
+            : effectiveReplay?.result.progress.eligible
+              ?? progress?.eligible
+              ?? false,
           replayedFirstValueCompletion: effectiveReplay,
         };
       });
@@ -197,6 +206,10 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
   ): Promise<OnboardingCompletionResult | null> => {
     const ownerPartyId = partyId;
     if (!ownerPartyId || !ownsParty(ownerPartyId)) return null;
+    locallyExitedPartyIdRef.current = ownerPartyId;
+    setState((current) => current.partyId === ownerPartyId
+      ? { ...current, isNewUser: false }
+      : current);
     try {
       const result = firstValue
         ? await completeFirstValueWithRetry(

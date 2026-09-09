@@ -342,6 +342,64 @@ describe('FirstRunProvider', () => {
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
   });
 
+  it('does not let an older foreground eligibility response reopen an exited Party', async () => {
+    let resolveForegroundProgress!: (progress: { eligible: boolean }) => void;
+    mockGetOnboardingProgress
+      .mockResolvedValueOnce({ eligible: true })
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveForegroundProgress = resolve;
+      }));
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false },
+    });
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    act(() => emitAppStateChange('active'));
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
+    fireEvent.press(screen.getByRole('button', { name: 'Exit onboarding' }));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+
+    await act(async () => {
+      resolveForegroundProgress({ eligible: true });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('true:false')).toBeTruthy();
+  });
+
+  it('keeps onboarding exited for the Party session when durable completion fails', async () => {
+    mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
+    mockCompleteOnboardingProgress.mockRejectedValueOnce(new Error('offline'));
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    fireEvent.press(screen.getByRole('button', { name: 'Exit onboarding' }));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    act(() => emitAppStateChange('active'));
+
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('true:false')).toBeTruthy();
+  });
+
+  it('loads eligibility normally for a new Party after the prior Party exits', async () => {
+    mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
+    const view = renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    fireEvent.press(screen.getByRole('button', { name: 'Exit onboarding' }));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    mockPartyId = '77';
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+  });
+
   it('does not load or complete progress without an authenticated party', async () => {
     mockPartyId = null;
     renderProvider();

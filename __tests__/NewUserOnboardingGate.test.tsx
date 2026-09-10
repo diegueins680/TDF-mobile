@@ -4,6 +4,7 @@ import { AppState, type AppStateStatus, Text } from 'react-native';
 
 const mockTrack = jest.fn();
 const mockCapture = jest.fn();
+const mockGetOnboardingProgress = jest.fn();
 const mockCompleteOnboarding = jest.fn(() => Promise.resolve({
   newlyCompleted: true,
   progress: { eligible: false },
@@ -24,11 +25,15 @@ const acknowledgedExposure = {
   newlyExposed: true,
 };
 const mockMarkExperimentExposedOnce = jest.fn();
+const mockPersistPendingExperimentConversion = jest.fn();
+const mockReadPendingExperimentConversion = jest.fn();
+const mockClearPendingExperimentConversionIfCurrent = jest.fn();
 let appStateChangeListener: ((state: AppStateStatus) => void) | null = null;
 const mockRemoveAppStateListener = jest.fn();
 const mockAddAppStateListener = jest.spyOn(AppState, 'addEventListener');
 
 let mockIsConnected = true;
+let mockAnalyticsReady = true;
 let mockVariant = 'treatment_singlefeature';
 let mockExperimentVersion = 1;
 let mockEventsState: Record<string, unknown>;
@@ -39,6 +44,12 @@ let mockPartyId = '42';
 
 const pastEvent = { id: 'event-1', title: 'Festival Uno', startTime: '2026-01-01T00:00:00.000Z' };
 const moment = { id: 'moment-1', eventId: 'event-1', body: 'Primer momento' };
+const pendingConversion = {
+  experimentId: 'single-feature-onboarding-v1',
+  experimentVersion: 1,
+  variant: 'treatment_singlefeature',
+  firstValue: 'moment_reaction',
+};
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace, push: mockPush }),
@@ -53,6 +64,9 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('../src/api/events', () => ({ Events: { list: jest.fn() } }));
+jest.mock('../src/api/onboarding', () => ({
+  getOnboardingProgress: () => mockGetOnboardingProgress(),
+}));
 jest.mock('../src/lib/eventMomentsRepository', () => ({
   listMomentFeed: jest.fn(),
   toggleMomentFeedReaction: mockToggleMomentFeedReaction,
@@ -61,8 +75,17 @@ jest.mock('../src/lib/eventMoments', () => ({
   buildMomentActor: () => ({ actorKey: 'party:42' }),
 }));
 jest.mock('../src/lib/firstRunFlags', () => ({
+  clearPendingExperimentConversionIfCurrent: (...args: unknown[]) => (
+    mockClearPendingExperimentConversionIfCurrent(...args)
+  ),
   markExperimentExposedOnce: (partyId: string, experimentId: string) => (
     mockMarkExperimentExposedOnce(partyId, experimentId)
+  ),
+  persistPendingExperimentConversion: (...args: unknown[]) => (
+    mockPersistPendingExperimentConversion(...args)
+  ),
+  readPendingExperimentConversion: (...args: unknown[]) => (
+    mockReadPendingExperimentConversion(...args)
   ),
 }));
 jest.mock('../src/providers/AuthProvider', () => ({
@@ -85,7 +108,9 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
   }),
 }));
 jest.mock('../src/providers/NetworkProvider', () => ({ useNetwork: () => ({ isConnected: mockIsConnected }) }));
-jest.mock('../src/analytics/AnalyticsProvider', () => ({ useAnalytics: () => ({ capture: mockCapture }) }));
+jest.mock('../src/analytics/AnalyticsProvider', () => ({
+  useAnalytics: () => ({ ready: mockAnalyticsReady, capture: mockCapture }),
+}));
 jest.mock('../src/experiments/ExperimentProvider', () => ({
   useExperiments: () => ({
     isReady: true,
@@ -138,7 +163,15 @@ const emitAppStateChange = (state: AppStateStatus) => {
 describe('NewUserOnboardingGate states', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetOnboardingProgress.mockReset().mockResolvedValue({
+      eligible: true,
+      completedAt: null,
+      firstValue: null,
+    });
     mockMarkExperimentExposedOnce.mockReset().mockResolvedValue(acknowledgedExposure);
+    mockPersistPendingExperimentConversion.mockReset().mockResolvedValue(true);
+    mockReadPendingExperimentConversion.mockReset().mockResolvedValue(null);
+    mockClearPendingExperimentConversionIfCurrent.mockReset().mockResolvedValue(undefined);
     appStateChangeListener = null;
     mockRemoveAppStateListener.mockReset();
     mockAddAppStateListener.mockReset().mockImplementation((_event, listener) => {
@@ -146,6 +179,7 @@ describe('NewUserOnboardingGate states', () => {
       return { remove: mockRemoveAppStateListener };
     });
     mockIsConnected = true;
+    mockAnalyticsReady = true;
     mockVariant = 'treatment_singlefeature';
     mockExperimentVersion = 1;
     mockEventsState = { data: [], isLoading: false, isError: false };
@@ -360,7 +394,13 @@ describe('NewUserOnboardingGate states', () => {
     expect(mockTrack).toHaveBeenCalledWith('experiment_converted', expect.objectContaining({
       experimentId: 'single-feature-onboarding-v1',
       variant: 'treatment_singlefeature',
+      metadata: expect.objectContaining({ experimentVersion: 1 }),
     }));
+    expect(mockPersistPendingExperimentConversion).toHaveBeenCalledWith(
+      '42',
+      pendingConversion,
+      expect.any(Function),
+    );
     expect(mockCapture).toHaveBeenCalledWith(
       'first_value_completed',
       { platform: 'mobile', value: 'moment_reaction' },
@@ -442,6 +482,7 @@ describe('NewUserOnboardingGate states', () => {
   });
 
   it('emits one conversion when a durable completion handshake succeeds on replay', async () => {
+    mockReadPendingExperimentConversion.mockResolvedValue(pendingConversion);
     mockReplayedFirstValueCompletion = {
       value: 'moment_reaction',
       result: { newlyCompleted: true, progress: { eligible: false } },
@@ -457,5 +498,190 @@ describe('NewUserOnboardingGate states', () => {
       'first_value_completed',
       { platform: 'mobile', value: 'moment_reaction' },
     );
+  });
+
+  it('retains conversion attribution when the completion response is unavailable', async () => {
+    mockCompleteOnboarding.mockResolvedValueOnce(null);
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+
+    await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledWith('moment_reaction'));
+    expect(mockPersistPendingExperimentConversion).toHaveBeenCalledWith(
+      '42',
+      pendingConversion,
+      expect.any(Function),
+    );
+    expect(mockClearPendingExperimentConversionIfCurrent).not.toHaveBeenCalled();
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+  });
+
+  it('recovers a confirmed conversion with its original experiment version', async () => {
+    mockVariant = 'control';
+    mockExperimentVersion = 2;
+    mockReadPendingExperimentConversion.mockResolvedValueOnce(pendingConversion);
+    mockGetOnboardingProgress.mockResolvedValueOnce({
+      eligible: false,
+      completedAt: '2026-09-09T20:00:00Z',
+      firstValue: 'moment_reaction',
+    });
+
+    renderGate();
+
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_converted',
+      {
+        experimentId: 'single-feature-onboarding-v1',
+        variant: 'treatment_singlefeature',
+        userId: '42',
+        metadata: {
+          value: 1,
+          surface: 'gate_moment_reaction',
+          experimentVersion: 1,
+        },
+      },
+    ));
+    expect(mockClearPendingExperimentConversionIfCurrent).toHaveBeenCalledWith(
+      '42',
+      pendingConversion,
+      expect.any(Function),
+    );
+  });
+
+  it('retries conversion reconciliation when connectivity returns', async () => {
+    mockIsConnected = false;
+    mockReadPendingExperimentConversion.mockResolvedValue(pendingConversion);
+    mockGetOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        eligible: false,
+        completedAt: '2026-09-09T20:00:00Z',
+        firstValue: 'moment_reaction',
+      });
+    const view = renderGate();
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_converted',
+      expect.objectContaining({ userId: '42' }),
+    ));
+  });
+
+  it('coalesces reconnect and foreground conversion reconciliation', async () => {
+    mockIsConnected = false;
+    mockReadPendingExperimentConversion.mockResolvedValue(pendingConversion);
+    let resolveProgress!: (progress: {
+      eligible: boolean;
+      completedAt: string;
+      firstValue: string;
+    }) => void;
+    mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProgress = resolve;
+    }));
+    const view = renderGate();
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1));
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    act(() => emitAppStateChange('active'));
+
+    expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveProgress({
+        eligible: false,
+        completedAt: '2026-09-09T20:00:00Z',
+        firstValue: 'moment_reaction',
+      });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_converted',
+      expect.objectContaining({ userId: '42' }),
+    ));
+    expect(mockTrack.mock.calls.filter(([event]) => event === 'experiment_converted')).toHaveLength(1);
+  });
+
+  it('suppresses late conversion reconciliation after the active Party changes', async () => {
+    mockReadPendingExperimentConversion.mockImplementation(async (partyId: string) =>
+      partyId === '42' ? pendingConversion : null);
+    let resolveProgress!: (progress: {
+      eligible: boolean;
+      completedAt: string;
+      firstValue: string;
+    }) => void;
+    mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProgress = resolve;
+    }));
+    const view = renderGate();
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1));
+
+    mockPartyId = '77';
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    await act(async () => {
+      resolveProgress({
+        eligible: false,
+        completedAt: '2026-09-09T20:00:00Z',
+        firstValue: 'moment_reaction',
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockTrack).not.toHaveBeenCalledWith(
+      'experiment_converted',
+      expect.objectContaining({ userId: '42' }),
+    );
+    expect(mockClearPendingExperimentConversionIfCurrent).not.toHaveBeenCalledWith(
+      '42',
+      pendingConversion,
+      expect.any(Function),
+    );
+  });
+
+  it('clears a terminal conversion receipt that the server does not confirm', async () => {
+    mockReadPendingExperimentConversion.mockResolvedValueOnce(pendingConversion);
+    mockGetOnboardingProgress.mockResolvedValueOnce({
+      eligible: false,
+      completedAt: '2026-09-09T20:00:00Z',
+      firstValue: 'event_saved',
+    });
+
+    renderGate();
+
+    await waitFor(() => expect(mockClearPendingExperimentConversionIfCurrent).toHaveBeenCalledWith(
+      '42',
+      pendingConversion,
+      expect.any(Function),
+    ));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+  });
+
+  it('retains a confirmed receipt while the analytics client is unavailable', async () => {
+    mockAnalyticsReady = false;
+    mockReadPendingExperimentConversion.mockResolvedValueOnce(pendingConversion);
+    mockGetOnboardingProgress.mockResolvedValueOnce({
+      eligible: false,
+      completedAt: '2026-09-09T20:00:00Z',
+      firstValue: 'moment_reaction',
+    });
+
+    renderGate();
+
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+    expect(mockClearPendingExperimentConversionIfCurrent).not.toHaveBeenCalled();
   });
 });

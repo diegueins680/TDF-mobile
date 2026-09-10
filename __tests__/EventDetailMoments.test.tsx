@@ -51,6 +51,10 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
   useUserSettings: () => ({
     partyId: '7',
     displayName: 'Cuco',
+    locale: 'es',
+    timezone: 'UTC',
+    currency: 'USD',
+    showEventRsvpsOnProfile: true,
     getCatalogItems: (code: string) => code === 'reaction-types' ? [{
       id: '50800000-0000-4000-8000-000000000001',
       code: 'fire',
@@ -62,9 +66,16 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
   }),
 }));
 
+jest.mock('../src/analytics/AnalyticsProvider', () => ({
+  useAnalytics: () => ({ capture: jest.fn() }),
+}));
+
 jest.mock('../src/api/events', () => ({
   Events: {
     getById: jest.fn(),
+    getPublicById: jest.fn(),
+    getMyRSVP: jest.fn(),
+    getRSVPSummary: jest.fn(),
     getRSVPs: jest.fn(),
     getInvitations: jest.fn(),
     listTicketTiers: jest.fn(),
@@ -72,6 +83,7 @@ jest.mock('../src/api/events', () => ({
     createTicketPaymentSheet: jest.fn(),
     updateTicketOrderStatus: jest.fn(),
     rsvp: jest.fn(),
+    deleteRSVP: jest.fn(),
     sendInvitation: jest.fn(),
     respondToInvitation: jest.fn(),
   },
@@ -131,6 +143,8 @@ describe('EventDetail moments tab', () => {
             ],
             createdBy: '7',
             isPublic: true,
+            publicListable: true,
+            rsvpEligible: true,
             rsvpCount: 2,
             createdAt: '2026-04-01T00:00:00.000Z',
             updatedAt: '2026-04-01T00:00:00.000Z',
@@ -141,7 +155,11 @@ describe('EventDetail moments tab', () => {
       }
 
       if (queryKey[0] === 'event-rsvps') {
-        return { data: [], isLoading: false };
+        return { data: { status: 'INTERESTED', showOnProfile: false }, isLoading: false };
+      }
+
+      if (queryKey[0] === 'event-rsvp-summary') {
+        return { data: { goingCount: 2, interestedCount: 1 }, isLoading: false };
       }
 
       if (queryKey[0] === 'event-invitations') {
@@ -216,6 +234,17 @@ describe('EventDetail moments tab', () => {
 
       return { data: null, isLoading: false };
     });
+  });
+
+  it('shows the authoritative RSVP selection, separate counts, and submits the chosen state', async () => {
+    render(<EventDetailScreen />);
+
+    await waitFor(() => expect(screen.getAllByRole('radio')[1]?.props.accessibilityState.selected).toBe(true));
+    expect(screen.getByText('2 van · 1 interesadas')).toBeTruthy();
+    expect(screen.getByLabelText('Mostrar este RSVP en mi perfil').props.value).toBe(false);
+
+    fireEvent.press(screen.getByText('✓ Voy'));
+    expect(mockMutate).toHaveBeenCalledWith({ status: 'GOING', profile: false });
   });
 
   it('renders the social feed when switching to Momentos', () => {

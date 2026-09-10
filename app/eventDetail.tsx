@@ -12,8 +12,12 @@ import {
   Linking,
   TextInput,
   AppState,
+  Share,
+  Switch,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import { Image as ExpoImage } from 'expo-image';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -59,8 +63,10 @@ import {
   toggleMomentFeedReaction,
 } from '../src/lib/eventMomentsRepository';
 import { normalizeRouteParam } from '../src/lib/routeParams';
-import { countGoingRsvps } from '../src/lib/rsvp';
+import { canonicalEventUrl, eventShareMessage } from '../src/lib/eventSharing';
+import { clearEventRsvpIntent, readEventRsvpIntent, saveEventRsvpIntent } from '../src/lib/eventRsvpIntent';
 import { useAuth } from '../src/providers/AuthProvider';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
@@ -120,12 +126,18 @@ const parsePositivePartyId = (value: string | null | undefined): number | null =
 };
 
 export default function EventDetailScreen() {
-  const { eventId: rawEventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    eventId?: string | string[];
+    utm_source?: string | string[];
+    utm_campaign?: string | string[];
+  }>();
+  const rawEventId = params.eventId;
   const router = useRouter();
   const qc = useQueryClient();
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: normalizedPartyId, session } = useAuth();
-  const { locale, timezone, currency, getCatalogItems } = useUserSettings();
+  const analytics = useAnalytics();
+  const { locale, timezone, currency, showEventRsvpsOnProfile, getCatalogItems } = useUserSettings();
   const displayName = session?.displayName ?? null;
   const reactionOptions = useMemo<EventMomentReactionOption[]>(
     () => getCatalogItems('reaction-types').flatMap((item) => {
@@ -153,6 +165,11 @@ export default function EventDetailScreen() {
 
   const [activeTab, setActiveTab] = useState<EventDetailTab>('details');
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('NONE');
+  const [showRsvpOnProfile, setShowRsvpOnProfile] = useState(true);
+  const resumedRsvpNonce = useRef<string | null>(null);
+  const sharedEventViewTracked = useRef(false);
+  const sharedRsvpConversionCaptured = useRef(false);
+  const rsvpMutationLock = useRef(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [invitee, setInvitee] = useState<PartySelectorOption | null>(null);
   const [inviteMessage, setInviteMessage] = useState('');
@@ -173,15 +190,21 @@ export default function EventDetailScreen() {
   const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
 
   const { data: event, isLoading, isError, refetch: refetchEvent } = useQuery({
-    queryKey: ['event', eventId],
-    queryFn: () => Events.getById(eventId as ID),
+    queryKey: ['event', eventId, token ? 'authenticated' : 'public'],
+    queryFn: () => token ? Events.getById(eventId as ID) : Events.getPublicById(eventId as ID),
     enabled: Boolean(eventId),
   });
 
   const rsvpQuery = useQuery({
-    queryKey: ['event-rsvps', eventId],
-    queryFn: () => Events.getRSVPs(eventId as ID),
-    enabled: Boolean(eventId && activeTab === 'details'),
+    queryKey: ['event-rsvps', normalizedPartyId ?? 'anonymous', eventId],
+    queryFn: () => Events.getMyRSVP(eventId as ID),
+    enabled: Boolean(eventId && token && activeTab === 'details'),
+  });
+
+  const rsvpSummaryQuery = useQuery({
+    queryKey: ['event-rsvp-summary', eventId],
+    queryFn: () => Events.getRSVPSummary(eventId as ID),
+    enabled: Boolean(eventId && token && activeTab === 'details'),
   });
 
   const invitationsQuery = useQuery({
@@ -198,7 +221,7 @@ export default function EventDetailScreen() {
   const ticketTiersQuery = useQuery({
     queryKey: ['event-ticket-tiers', eventId],
     queryFn: () => Events.listTicketTiers(eventId as ID),
-    enabled: Boolean(eventId),
+    enabled: Boolean(eventId && token),
   });
 
   const momentsQueryKey = useMemo(
@@ -294,11 +317,76 @@ export default function EventDetailScreen() {
     [event?.sources],
   );
 
+  const handleShareEvent = useCallback(async (
+    mode: 'native' | 'copy',
+    status: RSVPStatus = rsvpStatus,
+  ) => {
+    if (!eventId || !event) return;
+    if (!event.isPublic || !event.publicListable) {
+      Alert.alert(
+        locale.toLowerCase().startsWith('en') ? 'Sharing unavailable' : 'No se puede compartir',
+        locale.toLowerCase().startsWith('en') ? 'This event does not have a public share link.' : 'Este evento no tiene un enlace público para compartir.',
+      );
+      return;
+    }
+    try {
+      const url = canonicalEventUrl(eventId, {
+        utm_source: 'tdf_mobile',
+        utm_medium: mode === 'copy' ? 'copy' : 'share',
+        utm_campaign: 'event_rsvp',
+      });
+      const message = eventShareMessage({
+        title: event.title,
+        status: status === 'GOING' || status === 'INTERESTED' ? status : null,
+        start: event.startTime,
+        timezone,
+        venue: event.venue?.name ?? null,
+        locale,
+      });
+      analytics.capture('event_share_started', {
+        platform: 'mobile', event_id: eventId, method: mode,
+      });
+      if (mode === 'copy') {
+        await Clipboard.setStringAsync(url);
+        analytics.capture('event_link_copied', { platform: 'mobile', event_id: eventId, method: 'copy' });
+        Alert.alert(
+          locale.toLowerCase().startsWith('en') ? 'Link copied' : 'Enlace copiado',
+          locale.toLowerCase().startsWith('en') ? 'The public event link is ready to paste.' : 'El enlace público del evento está listo para pegar.',
+        );
+        return;
+      }
+      const result = await Share.share({
+        title: event.title,
+        message: `${message}\n${url}`,
+        ...(Platform.OS === 'ios' ? { url } : {}),
+      });
+      analytics.capture(
+        result.action === Share.dismissedAction ? 'event_share_cancelled' : 'event_share_completed',
+        { platform: 'mobile', event_id: eventId, method: 'native' },
+      );
+    } catch (error) {
+      analytics.capture('event_share_failed', { platform: 'mobile', event_id: eventId, method: mode });
+      Alert.alert(
+        locale.toLowerCase().startsWith('en') ? 'Could not share' : 'No pudimos compartir',
+        error instanceof Error ? error.message : (locale.toLowerCase().startsWith('en') ? 'Try again.' : 'Inténtalo nuevamente.'),
+      );
+    }
+  }, [analytics, event, eventId, locale, rsvpStatus, timezone]);
+
   useEffect(() => {
-    if (!normalizedPartyId || !rsvpQuery.data) return;
-    const mine = rsvpQuery.data.find((r) => String(r.userId) === normalizedPartyId);
-    setRsvpStatus(mine?.status ?? 'NONE');
-  }, [normalizedPartyId, rsvpQuery.data]);
+    const source = Array.isArray(params.utm_source) ? params.utm_source[0] : params.utm_source;
+    const campaign = Array.isArray(params.utm_campaign) ? params.utm_campaign[0] : params.utm_campaign;
+    if (!eventId || sharedEventViewTracked.current || campaign !== 'event_rsvp' || !['tdf_web', 'tdf_mobile'].includes(source ?? '')) return;
+    sharedEventViewTracked.current = true;
+    analytics.capture('event_shared_viewed', {
+      platform: 'mobile', event_id: eventId, attributed: true, source,
+    });
+  }, [analytics, eventId, params.utm_campaign, params.utm_source]);
+
+  useEffect(() => {
+    setRsvpStatus(rsvpQuery.data?.status ?? 'NONE');
+    setShowRsvpOnProfile(rsvpQuery.data?.showOnProfile ?? showEventRsvpsOnProfile);
+  }, [rsvpQuery.data, showEventRsvpsOnProfile]);
 
   useEffect(() => {
     const thumbnailUrls = (momentsQuery.data ?? [])
@@ -341,22 +429,118 @@ export default function EventDetailScreen() {
   }, [activeBroadcastId, eventId, qc, shouldPreferRemoteBroadcasts]);
 
   const rsvpMutation = useMutation({
-    mutationFn: (status: RSVPStatus) => {
+    mutationFn: ({ status, profile }: { status: RSVPStatus; profile: boolean }) => {
       if (!eventId) throw new Error('Event not found');
-      if (!normalizedPartyId) throw new Error('Inicia sesión con una cuenta vinculada para confirmar asistencia.');
-      return Events.rsvp({ eventId, userId: normalizedPartyId, status });
+      if (!token) throw new Error('Inicia sesión para confirmar asistencia.');
+      return Events.rsvp({ eventId, status, showOnProfile: profile });
     },
-    onSuccess: (_data, status) => {
-      setRsvpStatus(status);
+    onMutate: () => {
+      rsvpMutationLock.current = true;
+    },
+    onSuccess: async (data, input) => {
+      const pendingIntent = await readEventRsvpIntent(eventId);
+      const canonicalStatus = input.status === 'GOING'
+        ? 'accepted'
+        : input.status === 'INTERESTED' ? 'maybe' : 'declined';
+      setRsvpStatus(data.status);
+      setShowRsvpOnProfile(data.showOnProfile);
+      await clearEventRsvpIntent();
       qc.invalidateQueries({ queryKey: ['event', eventId] });
-      qc.invalidateQueries({ queryKey: ['event-rsvps', eventId] });
-      Alert.alert('Listo', `Marcaste tu asistencia como ${status.toLowerCase()}`);
+      qc.invalidateQueries({ queryKey: ['event-rsvp-summary', eventId] });
+      qc.invalidateQueries({ queryKey: ['event-rsvp-feed'] });
+      analytics.capture(rsvpQuery.data ? 'event_rsvp_updated' : 'event_rsvp_created', {
+        platform: 'mobile', event_id: eventId, rsvp_status: canonicalStatus,
+      });
+      const source = Array.isArray(params.utm_source) ? params.utm_source[0] : params.utm_source;
+      const campaign = Array.isArray(params.utm_campaign) ? params.utm_campaign[0] : params.utm_campaign;
+      if (
+        !sharedRsvpConversionCaptured.current
+        && (pendingIntent?.sharedAttribution || (campaign === 'event_rsvp' && ['tdf_web', 'tdf_mobile'].includes(source ?? '')))
+      ) {
+        sharedRsvpConversionCaptured.current = true;
+        analytics.capture('event_shared_visit_to_rsvp', {
+          platform: 'mobile', event_id: eventId, rsvp_status: canonicalStatus,
+        });
+      }
+      if (input.status === 'GOING' || input.status === 'INTERESTED') {
+        analytics.capture('event_share_prompt_shown', { platform: 'mobile', event_id: eventId, rsvp_status: canonicalStatus });
+        Alert.alert(
+          locale.toLowerCase().startsWith('en') ? 'RSVP saved' : 'RSVP guardado',
+          locale.toLowerCase().startsWith('en') ? 'Would you like to share this event?' : '¿Quieres compartir este evento?',
+          [
+            { text: locale.toLowerCase().startsWith('en') ? 'Not now' : 'Ahora no', style: 'cancel' },
+            { text: locale.toLowerCase().startsWith('en') ? 'Share' : 'Compartir', onPress: () => { void handleShareEvent('native', data.status); } },
+          ],
+        );
+      } else {
+        Alert.alert(locale.toLowerCase().startsWith('en') ? 'Done' : 'Listo', locale.toLowerCase().startsWith('en') ? "Your RSVP is now Can't go." : 'Marcaste que no irás.');
+      }
     },
     onError: (err) => {
       const msg = err instanceof Error ? err.message : 'No pudimos guardar tu RSVP';
       Alert.alert('Error', msg);
     },
+    onSettled: () => {
+      rsvpMutationLock.current = false;
+    },
   });
+
+  const deleteRsvpMutation = useMutation({
+    mutationFn: () => {
+      if (!eventId) throw new Error('Event not found');
+      return Events.deleteRSVP(eventId);
+    },
+    onMutate: () => {
+      rsvpMutationLock.current = true;
+    },
+    onSuccess: () => {
+      setRsvpStatus('NONE');
+      qc.invalidateQueries({ queryKey: ['event-rsvp-summary', eventId] });
+      qc.invalidateQueries({ queryKey: ['event-rsvp-feed'] });
+      analytics.capture('event_rsvp_deleted', { platform: 'mobile', event_id: eventId });
+      Alert.alert(locale.toLowerCase().startsWith('en') ? 'Done' : 'Listo', locale.toLowerCase().startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
+    },
+    onError: (error) => Alert.alert('Error', error instanceof Error ? error.message : 'No pudimos eliminar tu RSVP.'),
+    onSettled: () => {
+      rsvpMutationLock.current = false;
+    },
+  });
+
+  useEffect(() => {
+    if (!token || !eventId || !event || rsvpMutation.isPending) return;
+    let active = true;
+    void readEventRsvpIntent(eventId).then((intent) => {
+      if (!active || !intent || resumedRsvpNonce.current === intent.nonce) return;
+      resumedRsvpNonce.current = intent.nonce;
+      if (!event.rsvpEligible) {
+        Alert.alert(
+          locale.toLowerCase().startsWith('en') ? 'RSVP unavailable' : 'RSVP no disponible',
+          locale.toLowerCase().startsWith('en')
+            ? 'The event changed while you were signing in. Your RSVP was not applied.'
+            : 'El evento cambió mientras iniciabas sesión. No aplicamos tu RSVP.',
+          [
+            { text: locale.toLowerCase().startsWith('en') ? 'Keep for later' : 'Conservar', style: 'cancel' },
+            {
+              text: locale.toLowerCase().startsWith('en') ? 'Discard RSVP' : 'Descartar RSVP',
+              style: 'destructive',
+              onPress: () => { void clearEventRsvpIntent(); },
+            },
+          ],
+        );
+        return;
+      }
+      setShowRsvpOnProfile(intent.showOnProfile);
+      analytics.capture('event_rsvp_post_auth_resumed', {
+        platform: 'mobile',
+        event_id: eventId,
+        rsvp_status: intent.status === 'GOING' ? 'accepted' : intent.status === 'INTERESTED' ? 'maybe' : 'declined',
+        origin: intent.origin,
+      });
+      rsvpMutationLock.current = true;
+      rsvpMutation.mutate({ status: intent.status, profile: intent.showOnProfile });
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [analytics, event, eventId, locale, rsvpMutation, token]);
 
   const invitationMutation = useMutation({
     mutationFn: async () => {
@@ -803,12 +987,38 @@ export default function EventDetailScreen() {
   }, [endLiveBroadcastMutation]);
 
   const handleRsvpPress = useCallback((status: RSVPStatus) => {
-    if (!normalizedPartyId) {
-      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para confirmar asistencia.');
+    if (status === 'NONE' || !eventId || rsvpMutationLock.current) return;
+    const canonicalStatus = status === 'GOING' ? 'accepted' : status === 'INTERESTED' ? 'maybe' : 'declined';
+    analytics.capture('event_rsvp_started', {
+      platform: 'mobile', event_id: eventId, rsvp_status: canonicalStatus, origin: 'public_event_detail',
+    });
+    if (!token) {
+      rsvpMutationLock.current = true;
+      const source = Array.isArray(params.utm_source) ? params.utm_source[0] : params.utm_source;
+      const campaign = Array.isArray(params.utm_campaign) ? params.utm_campaign[0] : params.utm_campaign;
+      void saveEventRsvpIntent({
+        eventId,
+        status,
+        showOnProfile: showRsvpOnProfile,
+        origin: 'public_event_detail',
+        sharedAttribution: campaign === 'event_rsvp' && ['tdf_web', 'tdf_mobile'].includes(source ?? ''),
+      }).then((intent) => {
+        analytics.capture('event_rsvp_auth_redirected', {
+          platform: 'mobile', event_id: eventId, rsvp_status: canonicalStatus, auth_mode: 'signup', origin: intent.origin,
+        });
+        router.push({
+          pathname: '/auth',
+          params: { mode: 'signup', intent: 'events', returnTo: intent.returnTo },
+        });
+      }).catch(() => {
+        rsvpMutationLock.current = false;
+        Alert.alert('Error', locale.toLowerCase().startsWith('en') ? 'Could not preserve your RSVP. Try again.' : 'No pudimos conservar tu RSVP. Inténtalo nuevamente.');
+      });
       return;
     }
-    rsvpMutation.mutate(status);
-  }, [normalizedPartyId, rsvpMutation]);
+    rsvpMutationLock.current = true;
+    rsvpMutation.mutate({ status, profile: showRsvpOnProfile });
+  }, [analytics, eventId, locale, params.utm_campaign, params.utm_source, router, rsvpMutation, showRsvpOnProfile, token]);
 
   const handleToggleSaved = useCallback(() => {
     saveEventMutation.mutate();
@@ -964,7 +1174,10 @@ export default function EventDetailScreen() {
 
   const startDate = new Date(event.startTime);
   const endDate = event.endTime ? new Date(event.endTime) : null;
-  const rsvpCount = rsvpQuery.data ? countGoingRsvps(rsvpQuery.data) : (event.rsvpCount ?? 0);
+  const acceptedCount = rsvpSummaryQuery.data?.goingCount ?? event.rsvpCount ?? 0;
+  const interestedCount = rsvpSummaryQuery.data?.interestedCount ?? event.rsvpInterestedCount ?? 0;
+  const rsvpBusy = rsvpMutation.isPending || deleteRsvpMutation.isPending;
+  const english = locale.toLowerCase().startsWith('en');
   const invitations = invitationsQuery.data ?? [];
   const isSaved = savedEventIdsQuery.data?.includes(String(event.id)) ?? false;
   const momentCount = displayedMoments.length;
@@ -1002,6 +1215,11 @@ export default function EventDetailScreen() {
         )}
 
         <Text style={styles.title}>{event.title}</Text>
+        {event.workflowStateCode === 'cancelled' ? (
+          <View style={styles.cancelledBanner} accessibilityRole="text">
+            <Text style={styles.cancelledBannerText}>{english ? 'Cancelled' : 'Cancelado'}</Text>
+          </View>
+        ) : null}
         <TicketPurchaseCard
           tiers={ticketTiersQuery.data ?? []}
           fallbackPrice={event.ticketPrice}
@@ -1107,39 +1325,106 @@ export default function EventDetailScreen() {
               </View>
             ) : null}
 
-            <View style={styles.section}>
-              <Text style={styles.label}>¿Asistirás? ({rsvpCount})</Text>
-              {!normalizedPartyId ? (
-                <Text style={styles.helperText}>Inicia sesión con una cuenta vinculada para confirmar asistencia.</Text>
+            <View style={styles.section} accessibilityState={{ busy: rsvpBusy }}>
+              <Text style={styles.label}>{english ? 'Your RSVP' : 'Tu RSVP'}</Text>
+              <Text style={styles.helperText} accessibilityLiveRegion="polite">
+                {acceptedCount} {english ? 'going' : 'van'} · {interestedCount} {english ? 'interested' : 'interesadas'}
+              </Text>
+              {!token ? (
+                <Text style={styles.helperText}>{english ? 'Choose an option and we will take you to create an account. You can also sign in.' : 'Elige una opción y te llevaremos a crear una cuenta. También podrás iniciar sesión.'}</Text>
               ) : null}
-              {rsvpQuery.isLoading ? <Text style={styles.text}>Cargando RSVP...</Text> : null}
+              {!event.rsvpEligible ? (
+                <Text style={styles.rsvpUnavailable} accessibilityLiveRegion="polite">
+                  {english ? 'This event is not accepting new RSVPs.' : 'Este evento no acepta nuevos RSVPs.'}
+                </Text>
+              ) : null}
+              {rsvpQuery.isLoading ? <Text style={styles.text}>{english ? 'Loading RSVP…' : 'Cargando RSVP…'}</Text> : null}
+              {rsvpQuery.isError ? (
+                <View accessibilityLiveRegion="polite">
+                  <Text style={styles.rsvpUnavailable}>{english ? 'Could not load your RSVP. Check your connection.' : 'No pudimos cargar tu RSVP. Comprueba tu conexión.'}</Text>
+                  <TouchableOpacity
+                    style={styles.removeRsvpButton}
+                    onPress={() => { void rsvpQuery.refetch(); }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.removeRsvpButtonText}>{english ? 'Retry' : 'Reintentar'}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
               <View style={styles.rsvpButtons}>
                 <TouchableOpacity
                   style={[styles.rsvpButton, rsvpStatus === 'GOING' && styles.rsvpButtonActive]}
                   onPress={() => handleRsvpPress('GOING')}
-                  disabled={rsvpMutation.isPending}
+                  disabled={rsvpBusy || !event.rsvpEligible}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: rsvpStatus === 'GOING', disabled: rsvpBusy || !event.rsvpEligible }}
                 >
                   <Text style={[styles.rsvpButtonText, rsvpStatus === 'GOING' && styles.rsvpButtonTextActive]}>
-                    ✓ Voy
+                    ✓ {english ? 'Going' : 'Voy'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.rsvpButton, rsvpStatus === 'INTERESTED' && styles.rsvpButtonActive]}
                   onPress={() => handleRsvpPress('INTERESTED')}
-                  disabled={rsvpMutation.isPending}
+                  disabled={rsvpBusy || !event.rsvpEligible}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: rsvpStatus === 'INTERESTED', disabled: rsvpBusy || !event.rsvpEligible }}
                 >
                   <Text style={[styles.rsvpButtonText, rsvpStatus === 'INTERESTED' && styles.rsvpButtonTextActive]}>
-                    ♥ Me interesa
+                    ♥ {english ? 'Interested' : 'Me interesa'}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.rsvpButton, rsvpStatus === 'NOT_GOING' && styles.rsvpButtonActive]}
                   onPress={() => handleRsvpPress('NOT_GOING')}
-                  disabled={rsvpMutation.isPending}
+                  disabled={rsvpBusy || !event.rsvpEligible}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: rsvpStatus === 'NOT_GOING', disabled: rsvpBusy || !event.rsvpEligible }}
                 >
                   <Text style={[styles.rsvpButtonText, rsvpStatus === 'NOT_GOING' && styles.rsvpButtonTextActive]}>
-                    ✕ No iré
+                    ✕ {english ? "Can't go" : 'No iré'}
                   </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.rsvpPrivacyRow}>
+                <View style={styles.rsvpPrivacyCopy}>
+                  <Text style={styles.rsvpPrivacyTitle}>{english ? 'Show this RSVP on my profile' : 'Mostrar este RSVP en mi perfil'}</Text>
+                  <Text style={styles.helperText}>{english ? "Can't go is never published." : '“No iré” nunca se publica.'}</Text>
+                </View>
+                <Switch
+                  value={showRsvpOnProfile}
+                  onValueChange={(nextValue) => {
+                    if (rsvpMutationLock.current) return;
+                    setShowRsvpOnProfile(nextValue);
+                    if (rsvpStatus !== 'NONE' && token) {
+                      rsvpMutationLock.current = true;
+                      rsvpMutation.mutate({ status: rsvpStatus, profile: nextValue });
+                    }
+                  }}
+                  disabled={rsvpBusy}
+                  accessibilityLabel={english ? 'Show this RSVP on my profile' : 'Mostrar este RSVP en mi perfil'}
+                />
+              </View>
+              {rsvpStatus !== 'NONE' && token ? (
+                <TouchableOpacity
+                  style={[styles.removeRsvpButton, rsvpBusy && styles.buttonDisabled]}
+                  onPress={() => {
+                    if (rsvpMutationLock.current) return;
+                    rsvpMutationLock.current = true;
+                    deleteRsvpMutation.mutate();
+                  }}
+                  disabled={rsvpBusy}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.removeRsvpButtonText}>{english ? 'Remove my RSVP' : 'Eliminar mi RSVP'}</Text>
+                </TouchableOpacity>
+              ) : null}
+              <View style={styles.shareRow}>
+                <TouchableOpacity style={[styles.shareButton, (!event.isPublic || !event.publicListable) && styles.buttonDisabled]} disabled={!event.isPublic || !event.publicListable} onPress={() => void handleShareEvent('native')} accessibilityRole="button">
+                  <Text style={styles.shareButtonText}>{english ? 'Share' : 'Compartir'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.shareButton, (!event.isPublic || !event.publicListable) && styles.buttonDisabled]} disabled={!event.isPublic || !event.publicListable} onPress={() => void handleShareEvent('copy')} accessibilityRole="button">
+                  <Text style={styles.shareButtonText}>{english ? 'Copy link' : 'Copiar enlace'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1732,6 +2017,16 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     marginBottom: 12,
   },
+  cancelledBanner: {
+    alignSelf: 'flex-start',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 999,
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  cancelledBannerText: { color: '#991b1b', fontWeight: '800' },
   tabSwitch: {
     flexDirection: 'row',
     gap: 8,
@@ -1936,6 +2231,15 @@ const styles = StyleSheet.create({
   rsvpButtonActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   rsvpButtonText: { fontSize: 12, fontWeight: '600', color: '#666' },
   rsvpButtonTextActive: { color: '#fff' },
+  rsvpUnavailable: { color: '#991b1b', fontSize: 13, lineHeight: 19 },
+  rsvpPrivacyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, minHeight: 48 },
+  rsvpPrivacyCopy: { flex: 1 },
+  rsvpPrivacyTitle: { color: '#1f2937', fontSize: 14, fontWeight: '700' },
+  removeRsvpButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  removeRsvpButtonText: { color: '#991b1b', fontSize: 14, fontWeight: '700' },
+  shareRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  shareButton: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#2563eb', borderRadius: 8 },
+  shareButtonText: { color: '#1d4ed8', fontSize: 14, fontWeight: '700' },
   actionRow: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginBottom: 8 },
   saveEventButton: {
     flex: 1,

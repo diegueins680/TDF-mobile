@@ -189,6 +189,37 @@ describe('Auth screen', () => {
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory'));
   });
 
+  it('returns to a canonical public event after an existing user logs in', async () => {
+    mockSearchParams = { mode: 'signup', intent: 'events', returnTo: '/eventos/42' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByText('Ingresar'));
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
+    fireEvent.press(screen.getByTestId('loginButton'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/eventos/42'));
+  });
+
+  it('rejects external and backslash return routes', async () => {
+    mockSearchParams = { returnTo: '/\\evil.example/path' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
+    fireEvent.press(screen.getByTestId('loginButton'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory'));
+  });
+
+  it('strips untrusted parameters from an otherwise valid public event return route', async () => {
+    mockSearchParams = { returnTo: '/eventos/42?token=secret&partyId=7' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
+    fireEvent.press(screen.getByTestId('loginButton'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/eventos/42'));
+  });
+
   it('exposes associated field labels, input guidance, and validation errors', async () => {
     render(<AuthScreen />);
     await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());

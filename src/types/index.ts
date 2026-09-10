@@ -234,8 +234,10 @@ export type SocialEvent = {
   workflowStateNameEs: string;
   workflowStateNameEn: string;
   publicListable: boolean;
+  rsvpEligible?: boolean;
   ticketPurchaseEnabled: boolean;
   rsvpCount: number;
+  rsvpInterestedCount?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -300,16 +302,44 @@ export type RSVPStatus = 'GOING' | 'INTERESTED' | 'NOT_GOING' | 'NONE';
 export type EventRSVP = {
   id: ID;
   eventId: ID;
-  userId: ID;
+  userId?: ID;
   status: RSVPStatus;
+  showOnProfile: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
 export type EventRSVPCreate = {
   eventId: ID;
-  userId: ID;
   status: RSVPStatus;
+  showOnProfile: boolean;
+};
+
+export type EventRSVPSummary = {
+  goingCount: number;
+  interestedCount: number;
+};
+
+export type EventRSVPFeedItem = {
+  type: 'event_rsvp';
+  eventId: ID;
+  status: Extract<RSVPStatus, 'GOING' | 'INTERESTED'>;
+  title: string;
+  startTime: string;
+  timezone?: string | null;
+  imageUrl?: string | null;
+  venueName?: string | null;
+  city?: string | null;
+  workflowStateCode: string;
+  actionAt: string;
+  canonicalUrl: string;
+  canEdit: boolean;
+  canShare: boolean;
+};
+
+export type EventRSVPFeedPage = {
+  items: EventRSVPFeedItem[];
+  nextCursor?: string | null;
 };
 
 export type EventInvitationStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED';

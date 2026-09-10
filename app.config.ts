@@ -13,6 +13,7 @@ const IOS_BUNDLE_ID = 'com.tdfrecords.app';
 const ANDROID_PACKAGE = 'com.tdf.records';
 const DEFAULT_TIME_ZONE = 'America/Guayaquil';
 const PUBLIC_SITE_URL = 'https://tdf-app.pages.dev/mobile-app';
+const PUBLIC_UNIVERSAL_LINK_HOST = 'tdf-app.pages.dev';
 const PUBLIC_SUPPORT_URL = `${PUBLIC_SITE_URL}/support.html`;
 const PUBLIC_PRIVACY_POLICY_URL = `${PUBLIC_SITE_URL}/privacy.html`;
 const PUBLIC_TERMS_OF_SERVICE_URL = `${PUBLIC_SITE_URL}/terms.html`;
@@ -147,6 +148,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: IOS_BUNDLE_ID,
     supportsTablet: false,
+    associatedDomains: [`applinks:${PUBLIC_UNIVERSAL_LINK_HOST}`],
     config: {
       usesNonExemptEncryption: false
     }
@@ -154,6 +156,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: ANDROID_PACKAGE,
     versionCode: ANDROID_VERSION_CODE,
+    intentFilters: [
+      {
+        action: 'VIEW',
+        autoVerify: true,
+        data: [
+          {
+            scheme: 'https',
+            host: PUBLIC_UNIVERSAL_LINK_HOST,
+            pathPrefix: '/eventos/',
+          },
+        ],
+        category: ['BROWSABLE', 'DEFAULT'],
+      },
+    ],
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       monochromeImage: './assets/adaptive-icon-monochrome.png',

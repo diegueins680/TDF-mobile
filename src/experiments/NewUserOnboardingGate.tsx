@@ -311,10 +311,14 @@ export function NewUserOnboardingGate({ children }: Props) {
     initialData: featuredProbe?.data,
   });
 
-  const feedRecoveryTriggerRef = useRef<(() => void) | null>(null);
+  const [feedRecoveryPartyId, setFeedRecoveryPartyId] = useState<string | null>(null);
+  const feedRecoveryTriggerRef = useRef<(
+    (showProgress?: boolean) => Promise<void> | undefined
+  ) | null>(null);
   const feedRecoveryRef = useRef<{
     partyId: string;
     promise: Promise<void>;
+    showsProgress: boolean;
   } | null>(null);
   useEffect(() => {
     if (!gateEngaged || !normalizedPartyId || !isConnected) {
@@ -323,11 +327,18 @@ export function NewUserOnboardingGate({ children }: Props) {
     }
     let cancelled = false;
     const ownerPartyId = normalizedPartyId;
-    const recoverFeed = () => {
-      if (cancelled || !ownsParty(ownerPartyId)) return;
+    const recoverFeed = (showProgress = false) => {
+      if (cancelled || !ownsParty(ownerPartyId)) return undefined;
       const activeRecovery = feedRecoveryRef.current;
-      if (activeRecovery?.partyId === ownerPartyId) return;
+      if (activeRecovery?.partyId === ownerPartyId) {
+        if (showProgress && !activeRecovery.showsProgress) {
+          activeRecovery.showsProgress = true;
+          setFeedRecoveryPartyId(ownerPartyId);
+        }
+        return activeRecovery.promise;
+      }
 
+      if (showProgress) setFeedRecoveryPartyId(ownerPartyId);
       const promise = queryClient.refetchQueries(
         {
           queryKey: ['exp-single-feature-onboarding', ownerPartyId],
@@ -338,11 +349,26 @@ export function NewUserOnboardingGate({ children }: Props) {
         .then(() => undefined)
         .catch(() => undefined)
         .finally(() => {
-          if (feedRecoveryRef.current?.promise === promise) {
+          const completedRecovery = feedRecoveryRef.current;
+          if (completedRecovery?.promise === promise) {
             feedRecoveryRef.current = null;
+            if (
+              completedRecovery.showsProgress
+              && !cancelled
+              && ownsParty(ownerPartyId)
+            ) {
+              setFeedRecoveryPartyId((currentPartyId) => (
+                currentPartyId === ownerPartyId ? null : currentPartyId
+              ));
+            }
           }
         });
-      feedRecoveryRef.current = { partyId: ownerPartyId, promise };
+      feedRecoveryRef.current = {
+        partyId: ownerPartyId,
+        promise,
+        showsProgress: showProgress,
+      };
+      return promise;
     };
 
     feedRecoveryTriggerRef.current = recoverFeed;
@@ -608,6 +634,7 @@ export function NewUserOnboardingGate({ children }: Props) {
 
   const loadingFeed = eventsQuery.isLoading || momentsQuery.isLoading;
   const moments = momentsQuery.data ?? [];
+  const feedRetrying = feedRecoveryPartyId === normalizedPartyId;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -631,6 +658,21 @@ export function NewUserOnboardingGate({ children }: Props) {
           <View style={styles.emptyCard}>
             <Text accessibilityRole="header" style={styles.emptyTitle}>{copy.errorTitle}</Text>
             <Text style={styles.emptyBody}>{copy.errorBody}</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={copy.retry}
+              accessibilityState={{ busy: feedRetrying, disabled: feedRetrying }}
+              disabled={feedRetrying}
+              style={[styles.retryBtn, feedRetrying && styles.retryBtnDisabled]}
+              onPress={() => { void feedRecoveryTriggerRef.current?.(true); }}
+            >
+              {feedRetrying ? (
+                <ActivityIndicator size="small" color="#2563eb" />
+              ) : null}
+              <Text style={styles.retryBtnText}>
+                {feedRetrying ? copy.retrying : copy.retry}
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : loadingFeed ? (
           <View style={styles.center}>
@@ -722,6 +764,21 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
   emptyBody: { fontSize: 14, color: '#475569', marginTop: 8, lineHeight: 20 },
+  retryBtn: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    marginTop: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  retryBtnDisabled: { opacity: 0.65 },
+  retryBtnText: { color: '#2563eb', fontSize: 14, fontWeight: '700' },
   emptyPreview: {
     marginTop: 16,
     padding: 14,

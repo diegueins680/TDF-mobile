@@ -434,6 +434,34 @@ describe('NewUserOnboardingGate states', () => {
     });
   });
 
+  it('lets the user retry an errored feed without duplicating the active Party request', async () => {
+    mockEventsState = { data: [], isLoading: false, isError: true };
+    let resolveRefetch!: () => void;
+    mockRefetchQueries.mockReturnValueOnce(new Promise<void>((resolve) => {
+      resolveRefetch = resolve;
+    }));
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Volver a intentar' }));
+    expect(mockRefetchQueries).toHaveBeenCalledWith(
+      {
+        queryKey: ['exp-single-feature-onboarding', '42'],
+        type: 'active',
+      },
+      { cancelRefetch: false },
+    );
+    expect(screen.getByText('Reintentando…')).toBeTruthy();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Volver a intentar' }));
+    expect(mockRefetchQueries).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveRefetch();
+      await Promise.resolve();
+    });
+    expect(screen.getByText('Volver a intentar')).toBeTruthy();
+  });
+
   it('does not refetch the treatment feed when the gate is disengaged', () => {
     mockVariant = 'control';
     renderGate();

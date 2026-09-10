@@ -11,7 +11,11 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MerchReputation, type MerchReviewSubmit } from '../../src/api/merchReputation';
+import {
+  MerchReputation,
+  type MerchReviewEligibility,
+  type MerchReviewSubmit,
+} from '../../src/api/merchReputation';
 import { normalizeRouteParam } from '../../src/lib/routeParams';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
@@ -34,7 +38,7 @@ const labels: Record<string, { es: string; en: string }> = {
   product_quality: { es: 'Calidad del producto', en: 'Product quality' },
 };
 
-type ReviewState = 'available' | 'edit_available' | 'period_expired';
+type ReviewState = MerchReviewEligibility['storeReview']['state'];
 
 function reviewStateLabel(state: ReviewState, eligible: boolean, received: boolean, english: boolean) {
   if (state === 'period_expired') return english ? 'Review period expired' : 'Periodo de evaluación expirado';

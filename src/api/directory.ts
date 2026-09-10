@@ -1,5 +1,6 @@
 import type { components } from './generated/types';
-import { get, patch, post, put } from './client';
+import type { AxiosRequestConfig } from 'axios';
+import { del, get, patch, post, put } from './client';
 
 export type DirectoryEntityType = components['schemas']['DirectoryEntityType'];
 export type DirectorySearchItem = components['schemas']['DirectorySearchItem'];
@@ -16,6 +17,7 @@ export type DirectoryInvitation = components['schemas']['DirectoryInvitation'];
 export type DirectoryReviewPage = components['schemas']['DirectoryReviewPage'];
 export type DirectoryReviewEligibility = components['schemas']['DirectoryReviewEligibility'];
 export type DirectoryReview = components['schemas']['DirectoryReview'];
+export type DirectoryFavorite = components['schemas']['DirectoryFavorite'];
 
 export interface DirectorySearchQuery {
   q?: string;
@@ -97,6 +99,12 @@ export const Directory = {
     post<DirectoryInvitation>('/directory/invitations', body, idempotencyConfig(idempotencyKey)),
   transitionInvitation: (invitationId: string, status: string) =>
     patch<DirectoryInvitation>(`/directory/invitations/${encodeURIComponent(invitationId)}/status`, { status }),
+  favorites: (targetKind?: DirectoryEntityType, config?: AxiosRequestConfig) =>
+    get<DirectoryFavorite[]>(`/directory/favorites${targetKind ? `?targetKind=${encodeURIComponent(targetKind)}` : ''}`, config),
+  addFavorite: (targetKind: DirectoryEntityType, targetId: string, config?: AxiosRequestConfig) =>
+    put<void>(`/directory/favorites/${encodeURIComponent(targetKind)}/${encodeURIComponent(targetId)}`, {}, config),
+  removeFavorite: (targetKind: DirectoryEntityType, targetId: string, config?: AxiosRequestConfig) =>
+    del<void>(`/directory/favorites/${encodeURIComponent(targetKind)}/${encodeURIComponent(targetId)}`, config),
   saveSearch: (body: components['schemas']['SavedSearchCreate'], idempotencyKey?: string) =>
     post<components['schemas']['SavedDirectorySearch']>(
       '/directory/saved-searches',

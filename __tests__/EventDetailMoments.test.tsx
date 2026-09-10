@@ -149,7 +149,17 @@ describe('EventDetail moments tab', () => {
       }
 
       if (queryKey[0] === 'saved-event-ids') {
-        return { data: [], isLoading: false };
+        return {
+          data: {
+            ids: [],
+            pendingImportIds: [],
+            pendingImportError: null,
+            source: 'server',
+            cachedAt: null,
+          },
+          isLoading: false,
+          isError: false,
+        };
       }
 
       if (queryKey[0] === 'event-ticket-tiers') {

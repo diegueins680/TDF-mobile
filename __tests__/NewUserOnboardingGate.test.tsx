@@ -4,7 +4,10 @@ import { Text } from 'react-native';
 
 const mockTrack = jest.fn();
 const mockCapture = jest.fn();
-const mockCompleteOnboarding = jest.fn(() => Promise.resolve());
+const mockCompleteOnboarding = jest.fn(() => Promise.resolve({
+  newlyCompleted: true,
+  progress: { eligible: false },
+}));
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockMarkExperimentExposedOnce = jest.fn(
@@ -40,7 +43,6 @@ jest.mock('../src/lib/eventMomentsRepository', () => ({
 jest.mock('../src/lib/eventMoments', () => ({
   buildMomentActor: () => ({ actorKey: 'party:42' }),
 }));
-jest.mock('../src/lib/onboardingIntent', () => ({ markFirstValueCompleted: jest.fn(() => Promise.resolve(true)) }));
 jest.mock('../src/lib/firstRunFlags', () => ({
   markExperimentExposedOnce: (partyId: string, experimentId: string) => (
     mockMarkExperimentExposedOnce(partyId, experimentId)
@@ -72,10 +74,20 @@ jest.mock('../src/experiments/ExperimentProvider', () => ({
 jest.mock('../src/experiments/useExperimentEvent', () => ({ useExperimentEvent: () => ({ track: mockTrack }) }));
 jest.mock('../src/components/EventMomentCard', () => {
   const ReactModule = require('react');
-  const { Text: NativeText } = require('react-native');
+  const { Text: NativeText, TouchableOpacity: NativeTouchableOpacity } = require('react-native');
   return {
-    EventMomentCard: ({ moment: item }: { moment: { id: string } }) => (
-      ReactModule.createElement(NativeText, null, `Moment card ${item.id}`)
+    EventMomentCard: ({
+      moment: item,
+      onReactionPosted,
+    }: {
+      moment: { id: string };
+      onReactionPosted?: () => void;
+    }) => (
+      ReactModule.createElement(
+        NativeTouchableOpacity,
+        { accessibilityRole: 'button', accessibilityLabel: 'Post reaction', onPress: onReactionPosted },
+        ReactModule.createElement(NativeText, null, `Moment card ${item.id}`),
+      )
     ),
   };
 });
@@ -109,9 +121,13 @@ describe('NewUserOnboardingGate states', () => {
     }));
 
     fireEvent.press(screen.getByRole('button', { name: 'Ver eventos' }));
-    expect(mockCompleteOnboarding).toHaveBeenCalled();
+    expect(mockCompleteOnboarding).toHaveBeenCalledWith();
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/events');
     expect(screen.getByText('Full app shell')).toBeTruthy();
+    await waitFor(() => expect(mockCapture).toHaveBeenCalledWith(
+      'onboarding_completed',
+      { platform: 'mobile', reason: 'explore_events' },
+    ));
   });
 
   it('records control exposure without replacing the full app shell', async () => {
@@ -148,5 +164,42 @@ describe('NewUserOnboardingGate states', () => {
 
     expect(screen.getByText('Moment card moment-1')).toBeTruthy();
     expect(screen.queryByText('Aún no hay momentos publicados')).toBeNull();
+  });
+
+  it('emits conversion analytics only when the server newly completes onboarding', async () => {
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+
+    await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledWith('moment_reaction'));
+    expect(mockTrack).toHaveBeenCalledWith('experiment_converted', expect.objectContaining({
+      experimentId: 'single-feature-onboarding-v1',
+      variant: 'treatment_singlefeature',
+    }));
+    expect(mockCapture).toHaveBeenCalledWith(
+      'first_value_completed',
+      { platform: 'mobile', value: 'moment_reaction' },
+    );
+  });
+
+  it('suppresses completion analytics when onboarding was already completed', async () => {
+    mockCompleteOnboarding.mockResolvedValueOnce({
+      newlyCompleted: false,
+      progress: { eligible: false },
+    });
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+
+    await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledWith('moment_reaction'));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+    expect(mockCapture).not.toHaveBeenCalledWith('first_value_completed', expect.anything());
+    expect(mockCapture).not.toHaveBeenCalledWith('onboarding_completed', expect.anything());
   });
 });

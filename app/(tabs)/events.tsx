@@ -15,12 +15,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Calendar } from 'react-native-calendars';
+import { useRouter } from 'expo-router';
 
 import { Events } from '../../src/api/events';
 import { EventCard } from '../../src/components/EventCard';
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import type { EventCityInput, SocialEvent } from '../../src/types';
-import { listSavedEventIds, toggleSavedEvent } from '../../src/lib/savedEvents';
+import {
+  importPendingSavedEvents,
+  loadSavedEventSnapshot,
+  setSavedEventDesiredState,
+  type SavedEventSnapshot,
+} from '../../src/lib/savedEvents';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
@@ -28,7 +34,6 @@ import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
 import { impactLight } from '../../src/utils/haptics';
 import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
-import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -48,9 +53,10 @@ const toLocalDateKey = (value: string | Date, timeZone: string): string => {
 
 export default function EventsScreen() {
   const qc = useQueryClient();
+  const router = useRouter();
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
-  const { partyId } = useAuth();
+  const { partyId, token } = useAuth();
   const { locale, timezone, countryCode } = useUserSettings();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
@@ -63,6 +69,11 @@ export default function EventsScreen() {
   const [newCountryCode, setNewCountryCode] = useState(countryCode ?? 'US');
   const debouncedSearch = useDebouncedValue(searchFilter, 250);
   const [refreshing, setRefreshing] = useState(false);
+  const [showSavedImportNotice, setShowSavedImportNotice] = useState(true);
+
+  useEffect(() => {
+    setShowSavedImportNotice(true);
+  }, [partyId]);
 
   const { data: events, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['events', 'buyer-upcoming', discoveryScope],
@@ -75,19 +86,26 @@ export default function EventsScreen() {
   });
 
   const savedEventIdsQuery = useQuery({
-    queryKey: ['saved-event-ids'],
-    queryFn: listSavedEventIds
+    queryKey: ['saved-event-ids', partyId],
+    queryFn: () => loadSavedEventSnapshot(partyId as string, token as string),
+    enabled: Boolean(partyId && token),
+    retry: false,
   });
 
-  const savedEventIds = useMemo(() => savedEventIdsQuery.data ?? [], [savedEventIdsQuery.data]);
+  const savedEventIds = useMemo(
+    () => savedEventIdsQuery.data?.ids ?? [],
+    [savedEventIdsQuery.data?.ids],
+  );
 
   const savedEventsQuery = useQuery({
-    queryKey: ['saved-events', 'browse', savedEventIds],
+    queryKey: ['saved-events', partyId, 'browse', savedEventIds],
     enabled: savedEventIds.length > 0,
     queryFn: async () => {
       const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
-      const resolved = settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
-      return resolved;
+      return {
+        events: settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])),
+        unavailableCount: settled.filter((result) => result.status === 'rejected').length,
+      };
     }
   });
 
@@ -95,33 +113,93 @@ export default function EventsScreen() {
     setRefreshing(true);
     try {
       if (eventScope === 'saved') {
-        await savedEventsQuery.refetch();
+        await savedEventIdsQuery.refetch();
+        await qc.invalidateQueries({ queryKey: ['saved-events', partyId] });
       } else {
         await refetch();
       }
     } finally {
       setRefreshing(false);
     }
-  }, [eventScope, refetch, savedEventsQuery]);
+  }, [eventScope, partyId, qc, refetch, savedEventIdsQuery]);
 
   const saveToggleMutation = useMutation({
-    mutationFn: (eventId: string) => toggleSavedEvent(eventId),
-    onSuccess: async (_data, eventId) => {
-      const wasSaved = savedEventIds.includes(eventId);
+    networkMode: 'always',
+    mutationFn: ({
+      eventId,
+      ownerPartyId,
+      desiredSaved,
+    }: {
+      eventId: string;
+      ownerPartyId: string;
+      desiredSaved: boolean;
+    }) => token
+      ? setSavedEventDesiredState(ownerPartyId, eventId, desiredSaved, token)
+      : Promise.reject(new Error('Tu sesión terminó. Vuelve a iniciar sesión.')),
+    onSuccess: ({ saved }, { eventId, ownerPartyId }) => {
+      if (partyId !== ownerPartyId) return;
+      qc.setQueryData<SavedEventSnapshot>(['saved-event-ids', ownerPartyId], (current) => {
+        if (!current) return current;
+        const withoutEvent = current.ids.filter((savedEventId) => savedEventId !== eventId);
+        return {
+          ...current,
+          ids: saved ? [eventId, ...withoutEvent] : withoutEvent,
+          source: 'server',
+          cachedAt: null,
+        };
+      });
+      void qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      void qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
       void impactLight();
       analytics.capture('feature_favorite_changed', {
         platform: 'mobile',
         event_id: eventId,
-        action: wasSaved ? 'unsaved' : 'saved',
+        action: saved ? 'saved' : 'unsaved',
       });
-      if (!wasSaved && await markFirstValueCompleted(partyId, 'event_saved')) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'event_saved' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'event_saved' });
-        if (partyId) await markNewUserOnboardingCompleted(partyId);
+      if (saved && token) {
+        void markFirstValueCompleted(ownerPartyId, 'event_saved', token).then((completed) => {
+          if (!completed) return;
+          analytics.capture('first_value_completed', { platform: 'mobile', value: 'event_saved' });
+          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'event_saved' });
+        });
       }
-      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
-      qc.invalidateQueries({ queryKey: ['saved-events'] });
-    }
+    },
+    onError: (error, { ownerPartyId }) => {
+      if (partyId !== ownerPartyId) return;
+      Alert.alert(
+        'No pudimos actualizar tus guardados',
+        error instanceof Error
+          ? error.message
+          : 'El cambio no se guardó en tu cuenta. Inténtalo nuevamente.',
+      );
+    },
+  });
+
+  const importSavedEventsMutation = useMutation({
+    networkMode: 'always',
+    mutationFn: (ownerPartyId: string) => token
+      ? importPendingSavedEvents(ownerPartyId, token)
+      : Promise.reject(new Error('Tu sesión terminó. Vuelve a iniciar sesión.')),
+    onSuccess: ({ importedCount }, ownerPartyId) => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
+      if (partyId !== ownerPartyId) return;
+      Alert.alert(
+        'Guardados importados',
+        importedCount === 1
+          ? 'Importamos 1 evento a tu cuenta.'
+          : `Importamos ${importedCount} eventos a tu cuenta.`,
+      );
+    },
+    onError: (error, ownerPartyId) => {
+      if (partyId !== ownerPartyId) return;
+      Alert.alert(
+        'Importación incompleta',
+        error instanceof Error
+          ? error.message
+          : 'No borramos la copia de este dispositivo. Inténtalo nuevamente.',
+      );
+    },
   });
 
   const citySubscriptionsMutation = useMutation({
@@ -188,7 +266,7 @@ export default function EventsScreen() {
   }, [draftCities, newCityName, newCountryCode]);
 
   const effectiveEvents = useMemo(() => {
-    const source = eventScope === 'saved' ? savedEventsQuery.data ?? [] : events ?? [];
+    const source = eventScope === 'saved' ? savedEventsQuery.data?.events ?? [] : events ?? [];
     const needle = debouncedSearch.trim().toLocaleLowerCase(locale);
     return source
       .filter((event) => {
@@ -250,7 +328,35 @@ export default function EventsScreen() {
     return marked;
   }, [colors.actionPrimary, eventsByDate, selectedDate]);
 
-  const handleToggleSaved = useCallback((eventId: string) => {
+  const handleToggleSaved = useCallback(async (eventId: string) => {
+    if (!partyId) {
+      Alert.alert(
+        'Inicia sesión',
+        'Necesitas una cuenta vinculada para guardar este evento y verlo en otros dispositivos.',
+        [
+          { text: 'Ahora no', style: 'cancel' },
+          {
+            text: 'Ingresar',
+            onPress: () => router.push({
+              pathname: '/auth',
+              params: { intent: 'events', returnTo: '/(tabs)/events' },
+            }),
+          },
+        ],
+      );
+      return;
+    }
+    if (savedEventIdsQuery.isError) {
+      const result = await savedEventIdsQuery.refetch();
+      if (result.isError) {
+        Alert.alert(
+          'No pudimos cargar tus guardados',
+          'Comprueba tu sesión o conexión e inténtalo nuevamente.',
+        );
+      }
+      return;
+    }
+    if (!token || savedEventIdsQuery.isLoading || !savedEventIdsQuery.data) return;
     const isCurrentlySaved = savedEventIds.includes(eventId);
     if (isCurrentlySaved) {
       Alert.alert(
@@ -258,26 +364,42 @@ export default function EventsScreen() {
         '¿Quieres quitar este evento de tus guardados?',
         [
           { text: 'Cancelar', style: 'cancel' },
-          { text: 'Quitar', style: 'destructive', onPress: () => saveToggleMutation.mutate(eventId) },
+          {
+            text: 'Quitar',
+            style: 'destructive',
+            onPress: () => saveToggleMutation.mutate({
+              eventId,
+              ownerPartyId: partyId,
+              desiredSaved: false,
+            }),
+          },
         ],
       );
     } else {
-      saveToggleMutation.mutate(eventId);
+      saveToggleMutation.mutate({
+        eventId,
+        ownerPartyId: partyId,
+        desiredSaved: true,
+      });
     }
-  }, [saveToggleMutation, savedEventIds]);
-
-  const isCardUpdating = useCallback((eventId: string) => (
-    saveToggleMutation.isPending && String(saveToggleMutation.variables) === eventId
-  ), [saveToggleMutation.isPending, saveToggleMutation.variables]);
+  }, [partyId, router, saveToggleMutation, savedEventIds, savedEventIdsQuery, token]);
 
   const renderEventItem = useCallback(({ item }: { item: SocialEvent }) => (
     <EventCard
       event={item}
       saved={savedEventIds.includes(String(item.id))}
-      onToggleSaved={() => handleToggleSaved(String(item.id))}
-      saveDisabled={isCardUpdating(String(item.id))}
+      onToggleSaved={() => void handleToggleSaved(String(item.id))}
+      saveStatus={!partyId
+        ? 'ready'
+        : savedEventIdsQuery.isError
+            ? 'unavailable'
+          : savedEventIdsQuery.isLoading || !savedEventIdsQuery.data
+            ? 'loading'
+            : saveToggleMutation.isPending
+              ? 'updating'
+              : 'ready'}
     />
-  ), [handleToggleSaved, isCardUpdating, savedEventIds]);
+  ), [handleToggleSaved, partyId, saveToggleMutation.isPending, savedEventIds, savedEventIdsQuery.data, savedEventIdsQuery.isError, savedEventIdsQuery.isLoading]);
 
   const keyExtractor = useCallback((item: SocialEvent) => String(item.id), []);
 
@@ -285,7 +407,9 @@ export default function EventsScreen() {
     ? (savedEventIdsQuery.isLoading || (savedEventIds.length > 0 && savedEventsQuery.isLoading))
     : isLoading;
 
-  const listError = eventScope === 'saved' ? savedEventsQuery.isError : isError;
+  const listError = eventScope === 'saved'
+    ? (savedEventIdsQuery.isError || savedEventsQuery.isError)
+    : isError;
 
   const hasListData = eventScope === 'saved' ? !!savedEventsQuery.data : !!events;
   if (listLoading && !hasListData) {
@@ -305,7 +429,11 @@ export default function EventsScreen() {
           style={[styles.retryButton, { backgroundColor: colors.actionPrimary }]}
           onPress={() => {
             if (eventScope === 'saved') {
-              void savedEventsQuery.refetch();
+              if (savedEventIdsQuery.isError) {
+                void savedEventIdsQuery.refetch();
+              } else {
+                void savedEventsQuery.refetch();
+              }
             } else {
               void refetch();
             }
@@ -352,6 +480,62 @@ export default function EventsScreen() {
         />
         {isFetching && !isLoading ? <ActivityIndicator size="small" color={colors.actionPrimary} /> : null}
       </View>
+
+      {savedEventIdsQuery.data?.source === 'cache' ? (
+        <View style={[styles.savedStatusNotice, { backgroundColor: colors.selected }]}>
+          <Text style={[styles.savedStatusText, { color: colors.textPrimary }]} accessibilityLiveRegion="polite">
+            Mostramos la última lista confirmada en este dispositivo. Conéctate para actualizarla.
+          </Text>
+        </View>
+      ) : null}
+
+      {savedEventIdsQuery.data?.pendingImportError ? (
+        <View style={[styles.savedStatusNotice, { backgroundColor: colors.selected }]}>
+          <Text style={[styles.savedStatusText, { color: colors.textPrimary }]} accessibilityLiveRegion="polite">
+            {savedEventIdsQuery.data.pendingImportError}
+          </Text>
+        </View>
+      ) : null}
+
+      {showSavedImportNotice && (savedEventIdsQuery.data?.pendingImportIds.length ?? 0) > 0 ? (
+        <View style={[styles.savedImportNotice, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+          <Text style={[styles.savedImportTitle, { color: colors.textPrimary }]}>
+            Encontramos guardados de esta cuenta en este dispositivo
+          </Text>
+          <Text style={[styles.savedImportBody, { color: colors.textSecondary }]}>
+            Impórtalos para verlos en tus otros dispositivos.
+          </Text>
+          <View style={styles.savedImportActions}>
+            <TouchableOpacity
+              style={styles.savedImportLater}
+              onPress={() => setShowSavedImportNotice(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Importar eventos guardados más tarde"
+            >
+              <Text style={[styles.savedImportLaterText, { color: colors.textSecondary }]}>Ahora no</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.savedImportButton,
+                { backgroundColor: colors.actionPrimary },
+                importSavedEventsMutation.isPending && styles.manageCitiesButtonDisabled,
+              ]}
+              onPress={() => partyId && importSavedEventsMutation.mutate(partyId)}
+              disabled={importSavedEventsMutation.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Importar eventos guardados a mi cuenta"
+              accessibilityState={{
+                busy: importSavedEventsMutation.isPending,
+                disabled: importSavedEventsMutation.isPending,
+              }}
+            >
+              <Text style={[styles.savedImportButtonText, { color: colors.actionPrimaryContrast }]}>
+                {importSavedEventsMutation.isPending ? 'Importando…' : 'Importar'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
 
       {/* View Mode Toggle */}
       <View style={[styles.toggleContainer, { backgroundColor: colors.surface }]}>
@@ -428,6 +612,14 @@ export default function EventsScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {eventScope === 'saved' && (savedEventsQuery.data?.unavailableCount ?? 0) > 0 ? (
+        <View style={[styles.savedStatusNotice, { backgroundColor: colors.selected }]}>
+          <Text style={[styles.savedStatusText, { color: colors.textPrimary }]} accessibilityLiveRegion="polite">
+            Algunos eventos guardados ya no están disponibles o no pudieron cargarse.
+          </Text>
+        </View>
+      ) : null}
 
       {/* Content */}
       {viewMode === 'calendar' ? (
@@ -664,6 +856,56 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
+  },
+  savedStatusNotice: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  savedStatusText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  savedImportNotice: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+  },
+  savedImportTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  savedImportBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  savedImportActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  savedImportLater: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  savedImportLaterText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  savedImportButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+  },
+  savedImportButtonText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
   toggleContainer: {
     flexDirection: 'row',

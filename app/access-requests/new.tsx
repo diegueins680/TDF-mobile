@@ -17,7 +17,6 @@ import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
-import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
 
 const ACTIONS = new Set<FeatureAction>(['discover', 'view', 'create', 'edit', 'delete', 'archive', 'deactivate', 'import', 'export', 'submit', 'validate', 'approve', 'reject', 'assign', 'publish', 'report', 'administer']);
 
@@ -53,7 +52,6 @@ export default function NewAccessRequestScreen() {
       if (await markFirstValueCompleted(partyId, 'access_requested')) {
         analytics.capture('first_value_completed', { platform: 'mobile', value: 'access_requested' });
         analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'access_requested' });
-        if (partyId) await markNewUserOnboardingCompleted(partyId);
       }
       await queryClient.invalidateQueries({ queryKey: ['access-requests'] });
       router.replace('/access-requests' as Href);

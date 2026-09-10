@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { Redirect, Stack, type Href, usePathname, useSegments, useRouter } from 'expo-router';
+import {
+  Redirect,
+  Stack,
+  type Href,
+  usePathname,
+  useSegments,
+  useRouter,
+  useUnstableGlobalHref,
+} from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import * as Linking from 'expo-linking';
@@ -13,7 +21,7 @@ import { FeatureAccessNotice } from '../src/components/FeatureAccessNotice';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { NetworkBanner } from '../src/providers/NetworkProvider';
 import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
-import { directoryDeepLinkTarget, merchDeepLinkTarget } from '../src/navigation/deepLinks';
+import { currentRouteReturnTo, mobileDeepLinkTarget } from '../src/navigation/deepLinks';
 
 function RootNavigator() {
   const { colorScheme } = useAppTheme();
@@ -49,22 +57,8 @@ function RootNavigator() {
 
 function handleDeepLink(url: string, router: ReturnType<typeof useRouter>, currentPathname: string) {
   try {
-    const { path } = Linking.parse(url);
-    if (!path) return;
-
-    if (path.startsWith('event/')) {
-      const eventId = path.replace('event/', '');
-      router.push(`/eventDetail?eventId=${eventId}`);
-    } else if (path.startsWith('artist/')) {
-      const artistId = path.replace('artist/', '');
-      router.push(`/artistDetail?artistId=${artistId}`);
-    } else if (path === 'stripe-redirect') {
-      router.push('/tickets');
-    } else {
-      const target = merchDeepLinkTarget(path) ?? directoryDeepLinkTarget(path, currentPathname);
-      if (target) router.push(target as Href);
-    }
-    // Add more routes as needed
+    const target = mobileDeepLinkTarget(url, currentPathname);
+    if (target) router.push(target as Href);
   } catch (e) {
     console.warn('Failed to handle deep link:', url, e);
   }
@@ -73,11 +67,13 @@ function handleDeepLink(url: string, router: ReturnType<typeof useRouter>, curre
 function MobileRouteGuard({ children }: { children: ReactNode }) {
   const segments = useSegments();
   const router = useRouter();
+  const globalHref = useUnstableGlobalHref();
   const analytics = useAnalytics();
   const { token, roles, modules, featureFlags, loading } = useAuth();
   const { locale } = useUserSettings();
   const { colors } = useAppTheme();
   const routePath = segments.length > 0 ? `/${segments.join('/')}` : '/';
+  const returnTo = useMemo(() => currentRouteReturnTo(routePath, globalHref), [globalHref, routePath]);
   const routePathRef = useRef(routePath);
   const features = useMemo(() => getFeaturesByMobilePath(routePath), [routePath]);
   const decisions = useMemo(() => features.map((feature) => evaluateFeatureAccess(feature, {
@@ -140,7 +136,7 @@ function MobileRouteGuard({ children }: { children: ReactNode }) {
     );
   }
   if (requiresAuthentication && !token?.trim()) {
-    return <Redirect href={{ pathname: '/auth', params: { returnTo: routePath } } as Href} />;
+    return <Redirect href={{ pathname: '/auth', params: { returnTo: returnTo ?? routePath } } as Href} />;
   }
   if (allowed) return children;
   if (locked || concealed) {

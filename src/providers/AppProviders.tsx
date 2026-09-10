@@ -31,14 +31,14 @@ export function AppProviders({ children }: PropsWithChildren) {
             <AnalyticsProvider>
               <UserSettingsProvider>
                 <AppThemeProvider>
-                  {/* FirstRunProvider derives the 24-hour post-signup cohort
-                      and persists durable onboarding completion. */}
-                  <FirstRunProvider>
-                    {/* ExperimentProvider sits inside Analytics so assignment events have a destination. */}
-                    <ExperimentProvider>
-                      <NetworkProvider>{children}</NetworkProvider>
-                    </ExperimentProvider>
-                  </FirstRunProvider>
+                  <NetworkProvider>
+                    {/* FirstRunProvider derives the 24-hour post-signup cohort
+                        and persists durable onboarding completion. */}
+                    <FirstRunProvider>
+                      {/* ExperimentProvider sits inside Analytics so assignment events have a destination. */}
+                      <ExperimentProvider>{children}</ExperimentProvider>
+                    </FirstRunProvider>
+                  </NetworkProvider>
                 </AppThemeProvider>
               </UserSettingsProvider>
             </AnalyticsProvider>

@@ -64,6 +64,10 @@ import { useAuth } from '../src/providers/AuthProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
+import { recordFirstValueCompletion } from '../src/lib/firstValueCompletion';
+import { recordMomentReactionFirstValue } from '../src/lib/momentReactionFirstValue';
+import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
 import type {
   EventLiveBroadcast,
   EventLiveBroadcastQuality,
@@ -123,6 +127,7 @@ export default function EventDetailScreen() {
   const { eventId: rawEventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const analytics = useAnalytics();
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: normalizedPartyId, session } = useAuth();
   const { locale, timezone, currency, getCatalogItems } = useUserSettings();
@@ -148,6 +153,7 @@ export default function EventDetailScreen() {
   );
   const shouldPreferRemoteMoments = Boolean(token?.trim());
   const shouldPreferRemoteBroadcasts = Boolean(token?.trim());
+  const ownsParty = usePartyOwnership(normalizedPartyId);
   const publisherSessionRef = useRef<LiveBroadcastPublisherSession | null>(null);
   const activeLiveBroadcastRef = useRef<ActiveLiveBroadcastRecord | null>(null);
 
@@ -191,8 +197,12 @@ export default function EventDetailScreen() {
   });
 
   const savedEventIdsQuery = useQuery({
-    queryKey: ['saved-event-ids'],
-    queryFn: listSavedEventIds,
+    queryKey: ['saved-event-ids', normalizedPartyId],
+    queryFn: () => listSavedEventIds(
+      normalizedPartyId as string,
+      () => ownsParty(normalizedPartyId),
+    ),
+    enabled: Boolean(normalizedPartyId),
   });
 
   const ticketTiersQuery = useQuery({
@@ -397,15 +407,38 @@ export default function EventDetailScreen() {
   });
 
   const saveEventMutation = useMutation({
-    mutationFn: () => {
-      if (!eventId) throw new Error('Event not found');
-      return toggleSavedEvent(eventId);
+    mutationFn: ({ targetEventId, ownerPartyId }: { targetEventId: string; ownerPartyId: string }) => {
+      return toggleSavedEvent(
+        ownerPartyId,
+        targetEventId,
+        () => ownsParty(ownerPartyId),
+      );
     },
-    onSuccess: ({ saved }) => {
-      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
-      Alert.alert('Listo', saved ? 'Evento guardado en tu perfil.' : 'Evento removido de guardados.');
+    onSuccess: async ({ saved, serverAcknowledged }, { targetEventId, ownerPartyId }) => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      if (!ownsParty(ownerPartyId)) return;
+      if (serverAcknowledged) {
+        analytics.capture('feature_favorite_changed', {
+          platform: 'mobile',
+          event_id: targetEventId,
+          action: saved ? 'saved' : 'unsaved',
+        });
+        if (saved) void recordFirstValueCompletion(
+          ownerPartyId,
+          'event_saved',
+          () => ownsParty(ownerPartyId),
+          analytics,
+        );
+      }
+      Alert.alert(
+        serverAcknowledged ? 'Listo' : 'Cambio pendiente de sincronización',
+        serverAcknowledged
+          ? (saved ? 'Evento guardado en tu cuenta.' : 'Evento removido de los guardados de tu cuenta.')
+          : 'Lo guardamos en este dispositivo y lo sincronizaremos con tu cuenta cuando vuelva la conexión.',
+      );
     },
-    onError: () => {
+    onError: (_error, { ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
       Alert.alert('Error', 'No pudimos actualizar tus eventos guardados.');
     },
   });
@@ -546,7 +579,11 @@ export default function EventDetailScreen() {
   });
 
   const reactionMutation = useMutation({
-    mutationFn: ({ momentId, reaction }: { momentId: string; reaction: EventMomentReactionOption }) => {
+    mutationFn: ({ momentId, reaction }: {
+      momentId: string;
+      reaction: EventMomentReactionOption;
+      ownerPartyId: string | null;
+    }) => {
       if (!eventId) throw new Error('Event not found');
       return toggleMomentFeedReaction({
         eventId,
@@ -555,8 +592,14 @@ export default function EventDetailScreen() {
         reaction,
       }, { preferRemote: shouldPreferRemoteMoments });
     },
-    onSuccess: () => {
+    onSuccess: (result, { ownerPartyId }) => {
       qc.invalidateQueries({ queryKey: ['event-moments', eventId] });
+      void recordMomentReactionFirstValue(
+        result,
+        ownerPartyId,
+        () => ownsParty(ownerPartyId),
+        analytics,
+      );
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'No pudimos registrar tu reacción.';
@@ -810,9 +853,27 @@ export default function EventDetailScreen() {
     rsvpMutation.mutate(status);
   }, [normalizedPartyId, rsvpMutation]);
 
-  const handleToggleSaved = useCallback(() => {
-    saveEventMutation.mutate();
-  }, [saveEventMutation]);
+  const handleToggleSaved = useCallback(async () => {
+    if (!eventId) {
+      Alert.alert('Error', 'No encontramos este evento.');
+      return;
+    }
+    if (!normalizedPartyId) {
+      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para guardar eventos.');
+      return;
+    }
+    if (savedEventIdsQuery.isError) {
+      const result = await savedEventIdsQuery.refetch();
+      if (result.isError) {
+        Alert.alert(
+          'No pudimos cargar tus guardados',
+          'Comprueba tu conexión, sesión y almacenamiento e inténtalo nuevamente.',
+        );
+      }
+      return;
+    }
+    saveEventMutation.mutate({ targetEventId: eventId, ownerPartyId: normalizedPartyId });
+  }, [eventId, normalizedPartyId, saveEventMutation, savedEventIdsQuery]);
 
   const selectMomentMedia = useCallback(async (
     mode: 'camera' | 'photos' | 'video',
@@ -1151,11 +1212,18 @@ export default function EventDetailScreen() {
                   isSaved && styles.saveEventButtonActive,
                   saveEventMutation.isPending && styles.buttonDisabled,
                 ]}
-                onPress={handleToggleSaved}
+                onPress={() => void handleToggleSaved()}
                 disabled={saveEventMutation.isPending}
+                accessibilityState={{ disabled: saveEventMutation.isPending }}
               >
                 <Text style={[styles.saveEventButtonText, isSaved && styles.saveEventButtonTextActive]}>
-                  {saveEventMutation.isPending ? 'Guardando…' : isSaved ? 'Guardado' : 'Guardar evento'}
+                  {saveEventMutation.isPending
+                    ? 'Guardando…'
+                    : savedEventIdsQuery.isError
+                      ? 'Reintentar guardados'
+                      : isSaved
+                        ? 'Guardado'
+                        : 'Guardar evento'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.inviteButton} onPress={() => setShowInviteModal(true)}>
@@ -1274,7 +1342,11 @@ export default function EventDetailScreen() {
                       commentDraft={commentDrafts[moment.id] ?? ''}
                       onChangeComment={handleCommentChange}
                       onSubmitComment={handleCommentSubmit}
-                      onToggleReaction={(momentId, reaction) => reactionMutation.mutate({ momentId, reaction })}
+                      onToggleReaction={(momentId, reaction) => reactionMutation.mutate({
+                        momentId,
+                        reaction,
+                        ownerPartyId: normalizedPartyId,
+                      })}
                       onConnectAuthor={handleConnectAuthor}
                       onOpenMedia={handleOpenMomentMedia}
                     />

@@ -10,15 +10,22 @@ import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
 import type { ID, SocialEvent } from '../src/types';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
-import { listSavedEventIds, unsaveEvent } from '../src/lib/savedEvents';
+import {
+  getLegacySavedEventCandidate,
+  importLegacySavedEvents,
+  listSavedEventIds,
+  unsaveEvent,
+} from '../src/lib/savedEvents';
 import { formatTicketMoney } from '../src/lib/tickets';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useAuth } from '../src/providers/AuthProvider';
+import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
 
 export default function UserProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const { token, partyId, session } = useAuth();
+  const ownsParty = usePartyOwnership(partyId);
   const {
     colors,
     preferenceId: themePreferenceId,
@@ -73,14 +80,24 @@ export default function UserProfileScreen() {
   });
 
   const savedEventIdsQuery = useQuery({
-    queryKey: ['saved-event-ids'],
-    queryFn: listSavedEventIds
+    queryKey: ['saved-event-ids', partyId],
+    queryFn: () => listSavedEventIds(
+      partyId as string,
+      () => ownsParty(partyId),
+    ),
+    enabled: Boolean(partyId),
+  });
+
+  const legacySavedEventsQuery = useQuery({
+    queryKey: ['legacy-saved-event-candidate', partyId],
+    queryFn: getLegacySavedEventCandidate,
+    enabled: Boolean(partyId),
   });
 
   const savedEventIds = useMemo(() => savedEventIdsQuery.data ?? [], [savedEventIdsQuery.data]);
 
   const savedEventsQuery = useQuery({
-    queryKey: ['saved-events', savedEventIds],
+    queryKey: ['saved-events', partyId, savedEventIds],
     enabled: savedEventIds.length > 0,
     queryFn: async () => {
       const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
@@ -107,15 +124,60 @@ export default function UserProfileScreen() {
   }, [savedEventIds, savedEventsQuery.data]);
 
   const unsaveMutation = useMutation({
-    mutationFn: (eventId: ID) => unsaveEvent(eventId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
-      qc.invalidateQueries({ queryKey: ['saved-events'] });
+    mutationFn: ({ eventId, ownerPartyId }: { eventId: ID; ownerPartyId: string }) =>
+      unsaveEvent(
+        ownerPartyId,
+        eventId,
+        () => ownsParty(ownerPartyId),
+      ),
+    onSuccess: (_ids, { ownerPartyId }) => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
     },
-    onError: () => {
+    onError: (_error, { ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
       Alert.alert('Error', 'No pudimos remover el evento guardado.');
     }
   });
+
+  const legacyImportMutation = useMutation({
+    mutationFn: ({ ownerPartyId }: { ownerPartyId: string }) =>
+      importLegacySavedEvents(
+        ownerPartyId,
+        () => ownsParty(ownerPartyId),
+      ),
+    onSuccess: (result, { ownerPartyId }) => {
+      qc.invalidateQueries({ queryKey: ['legacy-saved-event-candidate'] });
+      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
+      if (!ownsParty(ownerPartyId)) return;
+      Alert.alert(
+        'Importación lista',
+        result.pendingCount > 0
+          ? `Vinculamos ${result.importedCount} eventos a esta cuenta; ${result.pendingCount} se sincronizarán cuando vuelva la conexión.`
+          : `Vinculamos ${result.acknowledgedCount} eventos guardados a esta cuenta.`,
+      );
+    },
+    onError: (_error, { ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
+      Alert.alert('No pudimos importar', 'Los datos anteriores se conservaron. Revisa la sesión y vuelve a intentarlo.');
+    },
+  });
+
+  const handleLegacyImport = useCallback(() => {
+    if (!partyId || !legacySavedEventsQuery.data) return;
+    Alert.alert(
+      'Vincular guardados anteriores',
+      `Este dispositivo tiene ${legacySavedEventsQuery.data.count} evento(s) guardado(s) sin una cuenta identificable. Continúa solo si te pertenecen; se vincularán a la cuenta actual.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Vincular a mi cuenta',
+          onPress: () => legacyImportMutation.mutate({ ownerPartyId: partyId }),
+        },
+      ],
+    );
+  }, [legacyImportMutation, legacySavedEventsQuery.data, partyId]);
 
   const handleCreateArtistProfile = useCallback(() => {
     if (!partyId) {
@@ -140,8 +202,12 @@ export default function UserProfileScreen() {
   }, [router]);
 
   const handleUnsaveEvent = useCallback((eventId: ID) => {
-    unsaveMutation.mutate(eventId);
-  }, [unsaveMutation]);
+    if (!partyId) {
+      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para cambiar tus eventos guardados.');
+      return;
+    }
+    unsaveMutation.mutate({ eventId, ownerPartyId: partyId });
+  }, [partyId, unsaveMutation]);
 
   const handleSaveRegion = useCallback(() => {
     if (countrySearch.trim() && !draftCountryId) {
@@ -438,8 +504,41 @@ export default function UserProfileScreen() {
 
         {activeTab === 'saved' && (
           <View style={styles.section}>
+            {legacySavedEventsQuery.data && (
+              <View style={styles.legacyImportCard}>
+                <Text style={styles.legacyImportTitle}>Guardados anteriores detectados</Text>
+                <Text style={styles.legacyImportText}>
+                  No sabemos qué cuenta creó esos datos. Puedes vincularlos explícitamente a esta cuenta si son tuyos.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.actionButton, legacyImportMutation.isPending && styles.buttonDisabled]}
+                  onPress={handleLegacyImport}
+                  disabled={legacyImportMutation.isPending}
+                  accessibilityRole="button"
+                  accessibilityLabel="Vincular eventos guardados anteriores a esta cuenta"
+                >
+                  <Text style={styles.actionButtonText}>
+                    {legacyImportMutation.isPending ? 'Vinculando…' : 'Revisar y vincular'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {savedEventIdsQuery.isLoading ? (
               <ActivityIndicator size="large" color="#2563eb" />
+            ) : savedEventIdsQuery.isError ? (
+              <>
+                <Text style={styles.noDataText} accessibilityLiveRegion="polite">
+                  No pudimos cargar tus eventos guardados.
+                </Text>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => void savedEventIdsQuery.refetch()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reintentar cargar eventos guardados"
+                >
+                  <Text style={styles.actionButtonText}>Reintentar</Text>
+                </TouchableOpacity>
+              </>
             ) : savedEventIds.length === 0 ? (
               <Text style={styles.noDataText}>Aún no hay eventos guardados. Toca Guardar evento dentro de cualquier evento.</Text>
             ) : savedEventsQuery.isLoading ? (
@@ -503,6 +602,9 @@ const styles = StyleSheet.create({
   tabLabel: { fontSize: 13, fontWeight: '600', color: '#999', textAlign: 'center' },
   tabLabelActive: { color: '#2563eb' },
   section: { backgroundColor: '#fff', borderRadius: 8, padding: 16, borderWidth: 1, borderColor: '#f0f0f0' },
+  legacyImportCard: { backgroundColor: '#fffbeb', borderColor: '#fde68a', borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 16 },
+  legacyImportTitle: { color: '#92400e', fontSize: 14, fontWeight: '700', marginBottom: 6 },
+  legacyImportText: { color: '#78350f', fontSize: 12, lineHeight: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 12 },
   sectionContent: { fontSize: 13, lineHeight: 20, color: '#666', marginBottom: 12 },
   genresContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },

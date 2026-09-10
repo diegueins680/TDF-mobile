@@ -1,5 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
 import EventDetailScreen from '../app/eventDetail';
 
@@ -74,6 +76,12 @@ jest.mock('../src/api/events', () => ({
     sendInvitation: jest.fn(),
     respondToInvitation: jest.fn(),
   },
+}));
+
+jest.mock('../src/api/directoryFavorites', () => ({
+  listDirectoryEventFavorites: jest.fn(async () => []),
+  saveDirectoryEventFavorite: jest.fn(async () => undefined),
+  deleteDirectoryEventFavorite: jest.fn(async () => undefined),
 }));
 
 jest.mock('../src/api/artists', () => ({
@@ -161,7 +169,7 @@ const startedBroadcast = {
   lastHeartbeatAt: '2026-04-10T22:00:00.000Z',
 };
 
-describe('EventDetail live broadcast lifecycle', () => {
+describe('EventDetail persistence and live broadcast lifecycle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockStopPublisher.mockResolvedValue(undefined);
@@ -186,6 +194,27 @@ describe('EventDetail live broadcast lifecycle', () => {
       if (queryKey[0] === 'event-live-followed-artists') return { data: ['99'], isLoading: false };
       return { data: null, isLoading: false };
     });
+  });
+
+  it('does not claim that an event was saved when account-scoped persistence fails', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce(null);
+    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('write failed'));
+
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Guardar evento'));
+
+    await waitFor(() => {
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+        'tdf-saved-event-outbox:party:7',
+        JSON.stringify([{ eventId: '42', desiredSaved: true }]),
+      );
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Error',
+        'No pudimos actualizar tus eventos guardados.',
+      );
+    });
+    expect(alertSpy).not.toHaveBeenCalledWith('Listo', expect.any(String));
   });
 
   it('ends the tracked backend broadcast when the broadcasting screen unmounts', async () => {

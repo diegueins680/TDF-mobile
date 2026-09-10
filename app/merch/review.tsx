@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MerchReputation, type MerchReviewSubmit } from '../../src/api/merchReputation';
 import { normalizeRouteParam } from '../../src/lib/routeParams';
+import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 
 type Selection =
@@ -24,23 +25,35 @@ const dimensionsByKind = {
   product: ['description_accuracy', 'product_quality'],
 } as const;
 
-const labels: Record<string, string> = {
-  preparation_dispatch: 'Preparación y despacho',
-  communication: 'Comunicación',
-  packaging: 'Empaque',
-  problem_resolution: 'Resolución de problemas',
-  description_accuracy: 'Conforme a la descripción',
-  product_quality: 'Calidad del producto',
+const labels: Record<string, { es: string; en: string }> = {
+  preparation_dispatch: { es: 'Preparación y despacho', en: 'Preparation and dispatch' },
+  communication: { es: 'Comunicación', en: 'Communication' },
+  packaging: { es: 'Empaque', en: 'Packaging' },
+  problem_resolution: { es: 'Resolución de problemas', en: 'Problem resolution' },
+  description_accuracy: { es: 'Conforme a la descripción', en: 'Matches the description' },
+  product_quality: { es: 'Calidad del producto', en: 'Product quality' },
 };
+
+type ReviewState = 'available' | 'edit_available' | 'period_expired';
+
+function reviewStateLabel(state: ReviewState, eligible: boolean, received: boolean, english: boolean) {
+  if (state === 'period_expired') return english ? 'Review period expired' : 'Periodo de evaluación expirado';
+  if (state === 'edit_available') return english ? 'Review submitted · Editing available' : 'Evaluación enviada · Edición disponible';
+  if (!eligible && !received) return english ? 'Available after receiving this line' : 'Disponible después de recibir esta línea';
+  if (!eligible) return english ? 'Not eligible for this account' : 'Esta cuenta no puede evaluar';
+  return english ? 'Review available' : 'Evaluación disponible';
+}
 
 function RatingField({
   label,
   value,
   onChange,
+  english,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  english: boolean;
 }) {
   const { colors } = useAppTheme();
   return (
@@ -52,7 +65,7 @@ function RatingField({
             key={rating}
             accessibilityRole="radio"
             accessibilityState={{ selected: value === rating }}
-            accessibilityLabel={rating + ' de 5'}
+            accessibilityLabel={`${label}: ${rating} ${english ? 'of' : 'de'} 5`}
             onPress={() => onChange(rating)}
             style={[
               styles.ratingButton,
@@ -72,6 +85,9 @@ function RatingField({
 
 export default function MerchOrderReviewScreen() {
   const { colors } = useAppTheme();
+  const { locale } = useUserSettings();
+  const english = locale.startsWith('en');
+  const t = (es: string, en: string) => english ? en : es;
   const queryClient = useQueryClient();
   const { orderId: rawOrderId } = useLocalSearchParams<{ orderId?: string | string[] }>();
   const orderId = normalizeRouteParam(rawOrderId);
@@ -81,6 +97,14 @@ export default function MerchOrderReviewScreen() {
   const [comment, setComment] = useState('');
   const [dimensions, setDimensions] = useState<Record<string, number>>({});
   const [validationError, setValidationError] = useState<string | null>(null);
+  const beginReview = (nextSelection: Selection) => {
+    setSelection(nextSelection);
+    setOverall(0);
+    setIssue(false);
+    setComment('');
+    setDimensions({});
+    setValidationError(null);
+  };
   const eligibility = useQuery({
     queryKey: ['merch-review-eligibility', orderId],
     queryFn: () => MerchReputation.eligibility(orderId!),
@@ -115,11 +139,11 @@ export default function MerchOrderReviewScreen() {
 
   const submit = () => {
     if (!selection || overall < 1 || dimensionKeys.some((key) => !dimensions[key])) {
-      setValidationError('Completa la evaluación general y cada categoría.');
+      setValidationError(t('Completa la evaluación general y cada categoría.', 'Complete the overall rating and every category.'));
       return;
     }
     if (comment.trim().length > 0 && comment.trim().length < 10) {
-      setValidationError('El comentario debe tener al menos 10 caracteres.');
+      setValidationError(t('El comentario debe tener al menos 10 caracteres.', 'The comment must be at least 10 characters long.'));
       return;
     }
     setValidationError(null);
@@ -136,28 +160,64 @@ export default function MerchOrderReviewScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.canvas }]}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text accessibilityRole="header" style={[styles.heading, { color: colors.textPrimary }]}>
-          Evalúa tu compra
+          {t('Evalúa tu compra', 'Review your purchase')}
         </Text>
         <Text style={{ color: colors.textSecondary }}>
-          Producto, atención y logística se califican por separado. No necesitas comparar tiendas.
+          {t(
+            'Producto, atención y logística se califican por separado. No necesitas comparar tiendas.',
+            'Product, service, and logistics are rated separately. You do not need to compare stores.',
+          )}
         </Text>
-        {eligibility.isLoading && <ActivityIndicator accessibilityLabel="Cargando evaluación" />}
-        {eligibility.isError && (
-          <Text accessibilityRole="alert" style={{ color: colors.danger }}>
-            No pudimos cargar esta orden o no tienes permiso.
+        {!orderId && (
+          <Text accessibilityRole="alert" style={[styles.errorState, { color: colors.danger }]}>
+            {t('Falta una orden válida para evaluar.', 'A valid order is required to review.')}
           </Text>
         )}
-        {eligibility.data?.storeReview.eligible && (
+        {orderId && eligibility.isLoading && (
+          <ActivityIndicator accessibilityLabel={t('Cargando evaluación', 'Loading review')} />
+        )}
+        {orderId && eligibility.isError && (
+          <View style={styles.errorState}>
+            <Text accessibilityRole="alert" style={{ color: colors.danger }}>
+              {t('No pudimos cargar esta orden o no tienes permiso.', 'We could not load this order, or you do not have permission.')}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => eligibility.refetch()}
+              style={[styles.retry, { borderColor: colors.border }]}
+            >
+              <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{t('Reintentar', 'Try again')}</Text>
+            </Pressable>
+          </View>
+        )}
+        {eligibility.isFetching && !eligibility.isLoading && (
+          <ActivityIndicator accessibilityLabel={t('Actualizando evaluación', 'Refreshing review')} />
+        )}
+        {eligibility.data?.storeReview && (
           <Pressable
             accessibilityRole="button"
-            onPress={() => setSelection({
+            accessibilityState={{ disabled: !eligibility.data.storeReview.eligible }}
+            disabled={!eligibility.data.storeReview.eligible}
+            onPress={() => beginReview({
               kind: 'store',
-              revision: eligibility.data?.storeReview.currentRevision ?? 0,
+              revision: eligibility.data.storeReview.currentRevision,
             })}
-            style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            style={[
+              styles.card,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+              !eligibility.data.storeReview.eligible && styles.disabled,
+            ]}
           >
-            <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Experiencia con la tienda</Text>
-            <Text style={{ color: colors.textSecondary }}>Atención y logística</Text>
+            <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{t('Experiencia con la tienda', 'Store experience')}</Text>
+            <Text style={{ color: colors.textSecondary }}>{t('Atención y logística', 'Service and logistics')}</Text>
+            <Text style={{ color: colors.textSecondary }}>
+              {reviewStateLabel(
+                eligibility.data.storeReview.state,
+                eligibility.data.storeReview.eligible,
+                ['delivered', 'picked_up', 'partially_delivered'].includes(eligibility.data.fulfillmentState),
+                english,
+              )}
+            </Text>
           </Pressable>
         )}
         {eligibility.data?.productLines.map((line) => (
@@ -166,7 +226,7 @@ export default function MerchOrderReviewScreen() {
             accessibilityRole="button"
             accessibilityState={{ disabled: !line.eligible }}
             disabled={!line.eligible}
-            onPress={() => setSelection({
+            onPress={() => beginReview({
               kind: 'product',
               lineId: line.lineId,
               name: line.productName,
@@ -176,32 +236,40 @@ export default function MerchOrderReviewScreen() {
           >
             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{line.productName}</Text>
             <Text style={{ color: colors.textSecondary }}>
-              {line.eligible ? 'Valoración del artículo recibido' : 'Disponible después de recibir esta línea'}
+              {t('Valoración del producto', 'Product rating')} · {reviewStateLabel(
+                line.state,
+                line.eligible,
+                ['delivered', 'picked_up'].includes(line.fulfillmentState),
+                english,
+              )}
             </Text>
           </Pressable>
         ))}
         {selection && (
           <View style={[styles.form, { borderColor: colors.border, backgroundColor: colors.surface }]}>
             <Text accessibilityRole="header" style={[styles.cardTitle, { color: colors.textPrimary }]}>
-              {selection.kind === 'store' ? 'Experiencia comercial' : selection.name}
+              {selection.kind === 'store' ? t('Experiencia comercial', 'Commercial experience') : selection.name}
             </Text>
-            <RatingField label="Evaluación general" value={overall} onChange={setOverall} />
+            <RatingField label={t('Evaluación general', 'Overall rating')} value={overall} onChange={setOverall} english={english} />
             {selection.kind === 'store' && (
               <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: issue }} onPress={() => setIssue(!issue)}>
-                <Text style={{ color: colors.textPrimary }}>{issue ? '☑' : '☐'} Hubo un problema que resolver</Text>
+                <Text style={{ color: colors.textPrimary }}>
+                  {issue ? '☑' : '☐'} {t('Hubo un problema que resolver', 'There was a problem to resolve')}
+                </Text>
               </Pressable>
             )}
             {dimensionKeys.map((key) => (
               <RatingField
                 key={key}
-                label={labels[key] ?? key}
+                label={labels[key]?.[english ? 'en' : 'es'] ?? key}
                 value={dimensions[key] ?? 0}
                 onChange={(value) => setDimensions((current) => ({ ...current, [key]: value }))}
+                english={english}
               />
             ))}
-            <Text style={[styles.label, { color: colors.textPrimary }]}>Comentario opcional</Text>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>{t('Comentario opcional', 'Optional comment')}</Text>
             <TextInput
-              accessibilityLabel="Comentario opcional"
+              accessibilityLabel={t('Comentario opcional', 'Optional comment')}
               multiline
               maxLength={3000}
               value={comment}
@@ -210,7 +278,7 @@ export default function MerchOrderReviewScreen() {
             />
             {(validationError || mutation.isError) && (
               <Text accessibilityRole="alert" style={{ color: colors.danger }}>
-                {validationError ?? 'No se guardó. Inténtalo nuevamente.'}
+                {validationError ?? t('No se guardó. Inténtalo nuevamente.', 'It was not saved. Please try again.')}
               </Text>
             )}
             <Pressable
@@ -221,7 +289,11 @@ export default function MerchOrderReviewScreen() {
               style={[styles.submit, { backgroundColor: colors.actionPrimary }]}
             >
               <Text style={{ color: colors.actionPrimaryContrast, fontWeight: '800' }}>
-                {selection.revision > 0 ? 'Guardar cambios' : 'Enviar evaluación'}
+                {mutation.isPending
+                  ? t('Guardando…', 'Saving…')
+                  : selection.revision > 0
+                    ? t('Guardar cambios', 'Save changes')
+                    : t('Enviar evaluación', 'Submit review')}
               </Text>
             </Pressable>
           </View>
@@ -235,6 +307,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { padding: 16, gap: 14, paddingBottom: 40 },
   heading: { fontSize: 28, fontWeight: '900' },
+  errorState: { gap: 10 },
+  retry: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10 },
   card: { borderWidth: 1, borderRadius: 12, padding: 16, gap: 4 },
   cardTitle: { fontSize: 18, fontWeight: '800' },
   disabled: { opacity: 0.55 },

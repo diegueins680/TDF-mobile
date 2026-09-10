@@ -107,6 +107,21 @@ const appendQuery = (
   return registeredInternalRoute(encoded ? `${path}?${encoded}` : path);
 };
 
+export function merchDeepLinkTarget(path: string): string | null {
+  const normalized = path.replace(/^\/+|\/+$/g, '');
+  if (normalized === 'merch') return '/merch';
+  if (normalized === 'merch/seller') return '/merchSeller';
+  const order = /^merch\/order\/([^/]+)$/.exec(normalized);
+  if (order) return `/merch?orderId=${encodeURIComponent(decodeURIComponent(order[1]))}`;
+  const product = /^merch\/store\/([^/]+)\/product\/([^/]+)$/.exec(normalized);
+  if (product) return `/merch?storeSlug=${encodeURIComponent(decodeURIComponent(product[1]))}&productSlug=${encodeURIComponent(decodeURIComponent(product[2]))}`;
+  const cart = /^merch\/store\/([^/]+)\/cart$/.exec(normalized);
+  if (cart) return `/merch?storeSlug=${encodeURIComponent(decodeURIComponent(cart[1]))}&view=cart`;
+  const store = /^merch\/store\/([^/]+)$/.exec(normalized);
+  if (store) return `/merch?storeSlug=${encodeURIComponent(decodeURIComponent(store[1]))}`;
+  return null;
+}
+
 export function mobileDeepLinkTarget(url: string, currentPathname: string): string | null {
   if (!url || url.length > 2_048) return null;
 
@@ -140,6 +155,9 @@ export function mobileDeepLinkTarget(url: string, currentPathname: string): stri
     if (safeSegments.length === 1 && safeSegments[0] === 'directory') {
       return appendQuery('/(tabs)/directory', parsed.searchParams);
     }
+
+    const merchTarget = merchDeepLinkTarget(safeSegments.join('/'));
+    if (merchTarget) return safeInternalRoute(merchTarget);
 
     const directoryTarget = directoryDeepLinkTarget(safeSegments.join('/'), currentPathname);
     return directoryTarget ? appendQuery(directoryTarget, parsed.searchParams) : null;

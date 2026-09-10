@@ -48,6 +48,8 @@ function RootNavigator() {
         <Stack.Screen name="catalogs" />
         <Stack.Screen name="catalogEditor" />
         <Stack.Screen name="input-list/[id]" />
+        <Stack.Screen name="merch" />
+        <Stack.Screen name="merchSeller" />
       </Stack>
     </MobileRouteGuard>
   );

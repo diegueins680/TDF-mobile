@@ -13,7 +13,7 @@ import { FeatureAccessNotice } from '../src/components/FeatureAccessNotice';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { NetworkBanner } from '../src/providers/NetworkProvider';
 import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
-import { directoryDeepLinkTarget } from '../src/navigation/deepLinks';
+import { directoryDeepLinkTarget, merchDeepLinkTarget } from '../src/navigation/deepLinks';
 
 function RootNavigator() {
   const { colorScheme } = useAppTheme();
@@ -40,6 +40,8 @@ function RootNavigator() {
         <Stack.Screen name="catalogs" />
         <Stack.Screen name="catalogEditor" />
         <Stack.Screen name="input-list/[id]" />
+        <Stack.Screen name="merch" />
+        <Stack.Screen name="merchSeller" />
       </Stack>
     </MobileRouteGuard>
   );
@@ -59,7 +61,7 @@ function handleDeepLink(url: string, router: ReturnType<typeof useRouter>, curre
     } else if (path === 'stripe-redirect') {
       router.push('/tickets');
     } else {
-      const target = directoryDeepLinkTarget(path, currentPathname);
+      const target = merchDeepLinkTarget(path) ?? directoryDeepLinkTarget(path, currentPathname);
       if (target) router.push(target as Href);
     }
     // Add more routes as needed

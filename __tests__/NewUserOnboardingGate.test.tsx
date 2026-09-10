@@ -9,6 +9,12 @@ const mockCompleteOnboarding = jest.fn(() => Promise.resolve({
   newlyCompleted: true,
   progress: { eligible: false },
 }));
+const mockInvalidateQueries = jest.fn();
+const mockRefetchQueries = jest.fn();
+const mockQueryClient = {
+  invalidateQueries: mockInvalidateQueries,
+  refetchQueries: mockRefetchQueries,
+};
 const mockToggleMomentFeedReaction = jest.fn(() => Promise.resolve({
   source: 'remote',
   selected: true,
@@ -56,7 +62,7 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+  useQueryClient: () => mockQueryClient,
   useQueries: () => mockProbeState,
   useQuery: ({ queryKey }: { queryKey: unknown[] }) => (
     queryKey.includes('events') ? mockEventsState : mockMomentsState
@@ -168,6 +174,8 @@ describe('NewUserOnboardingGate states', () => {
       completedAt: null,
       firstValue: null,
     });
+    mockInvalidateQueries.mockReset();
+    mockRefetchQueries.mockReset().mockResolvedValue(undefined);
     mockMarkExperimentExposedOnce.mockReset().mockResolvedValue(acknowledgedExposure);
     mockPersistPendingExperimentConversion.mockReset().mockResolvedValue(true);
     mockReadPendingExperimentConversion.mockReset().mockResolvedValue(null);
@@ -370,6 +378,69 @@ describe('NewUserOnboardingGate states', () => {
     } else {
       expect(screen.getByRole('header', { name: expected })).toBeTruthy();
     }
+  });
+
+  it('refetches the active Party feed when connectivity returns', async () => {
+    mockIsConnected = false;
+    const view = renderGate();
+    expect(mockRefetchQueries).not.toHaveBeenCalled();
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+
+    await waitFor(() => expect(mockRefetchQueries).toHaveBeenCalledWith(
+      {
+        queryKey: ['exp-single-feature-onboarding', '42'],
+        type: 'active',
+      },
+      { cancelRefetch: false },
+    ));
+  });
+
+  it('refetches the active Party feed when the online app foregrounds', () => {
+    renderGate();
+
+    act(() => emitAppStateChange('active'));
+
+    expect(mockRefetchQueries).toHaveBeenCalledWith(
+      {
+        queryKey: ['exp-single-feature-onboarding', '42'],
+        type: 'active',
+      },
+      { cancelRefetch: false },
+    );
+  });
+
+  it('coalesces reconnect and foreground feed recovery', async () => {
+    mockIsConnected = false;
+    let resolveRefetch!: () => void;
+    mockRefetchQueries.mockReturnValueOnce(new Promise<void>((resolve) => {
+      resolveRefetch = resolve;
+    }));
+    const view = renderGate();
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    act(() => emitAppStateChange('active'));
+
+    expect(mockRefetchQueries).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveRefetch();
+      await Promise.resolve();
+    });
+  });
+
+  it('does not refetch the treatment feed when the gate is disengaged', () => {
+    mockVariant = 'control';
+    renderGate();
+
+    act(() => emitAppStateChange('active'));
+
+    expect(mockRefetchQueries).not.toHaveBeenCalled();
   });
 
   it('renders moment content as the success state', () => {

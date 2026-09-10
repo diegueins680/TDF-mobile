@@ -311,6 +311,49 @@ export function NewUserOnboardingGate({ children }: Props) {
     initialData: featuredProbe?.data,
   });
 
+  const feedRecoveryTriggerRef = useRef<(() => void) | null>(null);
+  const feedRecoveryRef = useRef<{
+    partyId: string;
+    promise: Promise<void>;
+  } | null>(null);
+  useEffect(() => {
+    if (!gateEngaged || !normalizedPartyId || !isConnected) {
+      feedRecoveryTriggerRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    const ownerPartyId = normalizedPartyId;
+    const recoverFeed = () => {
+      if (cancelled || !ownsParty(ownerPartyId)) return;
+      const activeRecovery = feedRecoveryRef.current;
+      if (activeRecovery?.partyId === ownerPartyId) return;
+
+      const promise = queryClient.refetchQueries(
+        {
+          queryKey: ['exp-single-feature-onboarding', ownerPartyId],
+          type: 'active',
+        },
+        { cancelRefetch: false },
+      )
+        .then(() => undefined)
+        .catch(() => undefined)
+        .finally(() => {
+          if (feedRecoveryRef.current?.promise === promise) {
+            feedRecoveryRef.current = null;
+          }
+        });
+      feedRecoveryRef.current = { partyId: ownerPartyId, promise };
+    };
+
+    feedRecoveryTriggerRef.current = recoverFeed;
+    return () => {
+      cancelled = true;
+      if (feedRecoveryTriggerRef.current === recoverFeed) {
+        feedRecoveryTriggerRef.current = null;
+      }
+    };
+  }, [gateEngaged, isConnected, normalizedPartyId, ownsParty, queryClient]);
+
   // Conversion detection: fire experiment_converted the first time the user
   // successfully posts a reaction via the moment card.
   const convertedConversionKeyRef = useRef<string | null>(null);
@@ -439,6 +482,7 @@ export function NewUserOnboardingGate({ children }: Props) {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState !== 'active') return;
       exposureTriggerRef.current?.();
+      feedRecoveryTriggerRef.current?.();
       conversionRecoveryTriggerRef.current?.();
     });
     return () => subscription.remove();
@@ -449,6 +493,7 @@ export function NewUserOnboardingGate({ children }: Props) {
     previousConnectivityRef.current = isConnected;
     if (!wasConnected && isConnected) {
       exposureTriggerRef.current?.();
+      feedRecoveryTriggerRef.current?.();
       conversionRecoveryTriggerRef.current?.();
     }
   }, [isConnected]);

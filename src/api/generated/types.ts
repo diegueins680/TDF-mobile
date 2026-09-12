@@ -8546,7 +8546,7 @@ export interface components {
         };
         CommerceProviderAccount: {
             /** @enum {string} */
-            cpaProvider: "datafast" | "paypal" | "placetopay" | "payphone";
+            cpaProvider: "datafast" | "paypal" | "placetopay" | "payphone" | "bank_transfer";
             /** @enum {string} */
             cpaEnvironment: "sandbox" | "production";
             /** @enum {string} */
@@ -8576,6 +8576,60 @@ export interface components {
             cpiCapturedMinor: number;
             /** Format: int64 */
             cpiRefundedMinor: number;
+        };
+        CommerceAmountComponentSummary: {
+            /** @enum {string} */
+            cacComponentType: "subtotal" | "discount" | "tax" | "customer_fee" | "provider_fee" | "platform_commission" | "seller_payable" | "withholding" | "refund" | "chargeback" | "fx_adjustment";
+            /** @enum {string} */
+            cacSource: "quote" | "provider_estimate" | "provider_actual" | "tax_document" | "manual_adjustment";
+            cacCurrency: string;
+            /** Format: int64 */
+            cacCount: number;
+            /** Format: int64 */
+            cacAmountMinor: number;
+        };
+        CommerceCommissionSummary: {
+            ccmProvider: string;
+            /** @enum {string} */
+            ccmEnvironment: "sandbox" | "production";
+            ccmCurrency: string;
+            /** Format: int64 */
+            ccmCount: number;
+            /** Format: int64 */
+            ccmBasisAmountMinor: number;
+            /** Format: int64 */
+            ccmCommissionMinor: number;
+            /** Format: int64 */
+            ccmProviderFeeMinor: number;
+            /** Format: int64 */
+            ccmTaxMinor: number;
+            /** Format: int64 */
+            ccmSellerNetMinor: number;
+        };
+        CommerceRefundSummary: {
+            crfProvider: string;
+            /** @enum {string} */
+            crfEnvironment: "sandbox" | "production";
+            /** @enum {string} */
+            crfStatus: "requested" | "approved" | "processing" | "succeeded" | "failed" | "cancelled";
+            crfCurrency: string;
+            /** Format: int64 */
+            crfCount: number;
+            /** Format: int64 */
+            crfAmountMinor: number;
+        };
+        CommerceDisputeSummary: {
+            cdsProvider: string;
+            /** @enum {string} */
+            cdsEnvironment: "sandbox" | "production";
+            /** @enum {string} */
+            cdsKind: "inquiry" | "dispute" | "chargeback";
+            cdsStatus: string;
+            cdsCurrency: string;
+            /** Format: int64 */
+            cdsCount: number;
+            /** Format: int64 */
+            cdsAmountMinor: number;
         };
         CommerceReconciliationSummary: {
             crsProvider: string;
@@ -8636,6 +8690,10 @@ export interface components {
             cpoGeneratedAt: string;
             cpoProviderAccounts: components["schemas"]["CommerceProviderAccount"][];
             cpoPaymentIntents: components["schemas"]["CommercePaymentIntentSummary"][];
+            cpoAmountComponents: components["schemas"]["CommerceAmountComponentSummary"][];
+            cpoCommissions: components["schemas"]["CommerceCommissionSummary"][];
+            cpoRefunds: components["schemas"]["CommerceRefundSummary"][];
+            cpoDisputes: components["schemas"]["CommerceDisputeSummary"][];
             cpoReconciliationExceptions: components["schemas"]["CommerceReconciliationSummary"][];
             cpoSettlements: components["schemas"]["CommerceSettlementSummary"][];
             cpoSellerBalances: components["schemas"]["CommerceSellerBalanceSummary"][];
@@ -8645,7 +8703,7 @@ export interface components {
             /** Format: uuid */
             cpeId: string;
             /** @enum {string} */
-            cpeProvider: "paypal" | "datafast" | "stripe" | "bank_transfer" | "cash" | "pos" | "cardano";
+            cpeProvider: "paypal" | "datafast" | "placetopay" | "payphone" | "stripe" | "bank_transfer" | "cash" | "pos" | "cardano";
             /** @enum {string} */
             cpeEnvironment: "sandbox" | "production";
             cpeProviderEventId: string;

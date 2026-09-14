@@ -11,6 +11,7 @@
       "env": {
         "EXPO_PUBLIC_API_BASE": "http://localhost:8080",
         "EXPO_PUBLIC_UPLOAD_URL": "http://localhost:8080/drive/upload",
+        "EXPO_PUBLIC_WEB_CHECKOUT_BASE_URL": "http://localhost:5173",
         "EXPO_PUBLIC_TZ": "UTC"
       }
     },
@@ -20,6 +21,7 @@
       "env": {
         "EXPO_PUBLIC_API_BASE": "https://tdf-hq.fly.dev",
         "EXPO_PUBLIC_UPLOAD_URL": "https://tdf-hq.fly.dev/drive/upload",
+        "EXPO_PUBLIC_WEB_CHECKOUT_BASE_URL": "https://tdf-app.pages.dev",
         "EXPO_PUBLIC_TZ": "UTC",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1016946267087-mvr22vuc8dql37fem7aa1msdnatjvhh4.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "1016946267087-p40em8ihkugloistpfnjt7es94mguhgv.apps.googleusercontent.com",
@@ -35,6 +37,7 @@
       "env": {
         "EXPO_PUBLIC_API_BASE": "https://tdf-hq.fly.dev",
         "EXPO_PUBLIC_UPLOAD_URL": "https://tdf-hq.fly.dev/drive/upload",
+        "EXPO_PUBLIC_WEB_CHECKOUT_BASE_URL": "https://tdf-app.pages.dev",
         "EXPO_PUBLIC_TZ": "UTC",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1016946267087-mvr22vuc8dql37fem7aa1msdnatjvhh4.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "1016946267087-p40em8ihkugloistpfnjt7es94mguhgv.apps.googleusercontent.com",

@@ -14,11 +14,8 @@ describe('onboarding intent', () => {
     expect(parseOnboardingIntent('Admin')).toBeNull();
   });
 
-  it('routes governed intents to access requests unless the returned session is authorized', () => {
-    expect(resolveMobileIntentDestination('artist_profile', ['Customer'])).toEqual({
-      pathname: '/access-requests/new',
-      params: { feature: 'artist.onboarding', action: 'create' },
-    });
+  it('routes artists directly to profile creation and retains internship access requests', () => {
+    expect(resolveMobileIntentDestination('artist_profile', ['Customer'])).toBe('/createArtistProfile');
     expect(resolveMobileIntentDestination('artist_profile', ['Artist'])).toBe('/createArtistProfile');
     expect(resolveMobileIntentDestination('internships', ['Customer'])).toEqual({
       pathname: '/access-requests/new',

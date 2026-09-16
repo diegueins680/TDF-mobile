@@ -3,6 +3,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 const mockMutate = jest.fn();
 const mockReplace = jest.fn();
+const mockRedirect = jest.fn((_props: unknown) => null);
+let mockSearchParams = { feature: 'events.manage', action: 'create' };
 const mockInvalidateQueries = jest.fn(async () => undefined);
 const mockCapture = jest.fn();
 type FirstValueCompletionArgs = [
@@ -17,7 +19,7 @@ const mockMutationOptions: Array<{
 }> = [];
 
 const feature = {
-  id: 'artist.onboarding',
+  id: 'events.manage',
   technical: false,
   accessRequestEligible: true,
   description: { es: 'Crea tu perfil', en: 'Create your profile' },
@@ -33,7 +35,8 @@ jest.mock('@tanstack/react-query', () => ({
 
 jest.mock('expo-router', () => ({
   Stack: { Screen: () => null },
-  useLocalSearchParams: () => ({ feature: 'artist.onboarding', action: 'create' }),
+  useLocalSearchParams: () => mockSearchParams,
+  Redirect: (props: unknown) => mockRedirect(props),
   useRouter: () => ({ replace: mockReplace }),
 }));
 
@@ -73,11 +76,11 @@ jest.mock('../src/features/featureRegistry', () => ({
   getFeatureById: () => feature,
   evaluateFeatureAccess: () => ({
     state: 'locked',
-    missingRoles: ['artist'],
+    missingRoles: ['manager'],
     missingModules: [],
   }),
-  featureLabel: () => 'Perfil de artista',
-  resolveMobileDestination: () => '/createArtistProfile',
+  featureLabel: () => 'Gestionar eventos',
+  resolveMobileDestination: () => '/createEvent',
 }));
 
 jest.mock('../src/api/accessRequests', () => ({
@@ -98,6 +101,14 @@ describe('access request first-value ownership', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockMutationOptions.length = 0;
+    mockSearchParams = { feature: 'events.manage', action: 'create' };
+  });
+
+  it('redirects legacy artist requests to immediate creation', () => {
+    mockSearchParams = { feature: 'artist.onboarding', action: 'create' };
+    render(<NewAccessRequestScreen />);
+    expect(mockRedirect).toHaveBeenCalledWith({ href: '/createArtistProfile' });
+    expect(mockMutate).not.toHaveBeenCalled();
   });
 
   it('carries the initiating Party through submission and completion', async () => {
@@ -108,7 +119,7 @@ describe('access request first-value ownership', () => {
 
     await act(async () => {
       await mockMutationOptions[0].onSuccess?.(
-        { featureId: 'artist.onboarding', action: 'create' },
+        { featureId: 'events.manage', action: 'create' },
         { ownerPartyId: '42' },
       );
     });

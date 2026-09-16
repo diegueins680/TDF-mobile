@@ -22,6 +22,7 @@ type RemoteModeOptions = {
 export type MomentMutationResult = {
   source: 'remote' | 'local';
   fallbackReason?: string;
+  selected?: boolean;
 };
 
 export type CreateMomentMutationResult = MomentMutationResult & {
@@ -118,22 +119,31 @@ export async function toggleMomentFeedReaction(input: {
   reaction: EventMomentReactionOption;
 }, options?: RemoteModeOptions): Promise<MomentMutationResult> {
   if (!options?.preferRemote || isLocalMomentId(input.momentId)) {
-    await toggleLocalMomentReaction({ ...input, reactionTypeId: input.reaction.id });
-    return { source: 'local' };
+    const moments = await toggleLocalMomentReaction({ ...input, reactionTypeId: input.reaction.id });
+    const updated = moments.find((moment) => moment.id === input.momentId);
+    return {
+      source: 'local',
+      selected: updated?.reactions[input.reaction.id]?.includes(input.actorKey) === true,
+    };
   }
 
   try {
-    await Events.reactToMoment(input.eventId, input.momentId, input.reaction);
-    return { source: 'remote' };
+    const moment = await Events.reactToMoment(input.eventId, input.momentId, input.reaction);
+    return {
+      source: 'remote',
+      selected: moment.reactions[input.reaction.id]?.includes(input.actorKey) === true,
+    };
   } catch (error) {
     if (!shouldFallbackToLocal(error)) {
       throw error;
     }
 
-    await toggleLocalMomentReaction({ ...input, reactionTypeId: input.reaction.id });
+    const moments = await toggleLocalMomentReaction({ ...input, reactionTypeId: input.reaction.id });
+    const updated = moments.find((moment) => moment.id === input.momentId);
     return {
       source: 'local',
       fallbackReason: getFallbackReason(error),
+      selected: updated?.reactions[input.reaction.id]?.includes(input.actorKey) === true,
     };
   }
 }

@@ -149,6 +149,35 @@ describe('event moments repository', () => {
     expect(mockLocalMoments.toggleMomentReaction).toHaveBeenCalledWith(expect.objectContaining({ reactionTypeId: '50800000-0000-4000-8000-000000000001' }));
   });
 
+  it('reports an acknowledged remote reaction as selected only when the returned moment contains the Party', async () => {
+    mockEvents.reactToMoment.mockResolvedValue({
+      id: '88',
+      eventId: '42',
+      authorName: 'Remote author',
+      media: { kind: 'image', uri: 'https://example.com/remote.jpg', mimeType: 'image/jpeg' },
+      createdAt: '2026-04-10T21:00:00.000Z',
+      reactions: { '50800000-0000-4000-8000-000000000001': ['party:7'] },
+      comments: [],
+    });
+
+    await expect(toggleMomentFeedReaction({
+      eventId: '42',
+      momentId: '88',
+      actorKey: 'party:7',
+      reaction: {
+        id: '50800000-0000-4000-8000-000000000001',
+        code: 'fire',
+        label: 'Fuego',
+        nameEs: 'Fuego',
+        nameEn: 'Fire',
+        emoji: '🔥',
+      },
+    }, { preferRemote: true })).resolves.toMatchObject({
+      source: 'remote',
+      selected: true,
+    });
+  });
+
   it('does not silently downgrade backend validation errors to local comments', async () => {
     mockEvents.commentOnMoment.mockRejectedValue({
       isAxiosError: true,

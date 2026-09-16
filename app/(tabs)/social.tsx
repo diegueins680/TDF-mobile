@@ -11,8 +11,8 @@ import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { impactMedium } from '../../src/utils/haptics';
-import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
-import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
+import { recordFirstValueCompletion } from '../../src/lib/firstValueCompletion';
+import { usePartyOwnership } from '../../src/hooks/usePartyOwnership';
 
 type TabKey = 'following' | 'followers';
 
@@ -25,6 +25,7 @@ export default function SocialScreen() {
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
   const { token, partyId: effectivePartyId, session, loading } = useAuth();
+  const ownsParty = usePartyOwnership(effectivePartyId);
   const { locale } = useUserSettings();
   const english = locale.startsWith('en');
 
@@ -68,48 +69,55 @@ export default function SocialScreen() {
     qc.invalidateQueries({ queryKey: ['social-following'] });
   };
 
-  const followMutation = useMutation<void, Error, number>({
-    mutationFn: async (targetId) => {
+  const followMutation = useMutation<void, Error, { targetId: number; ownerPartyId: string }>({
+    mutationFn: async ({ targetId }) => {
       if (!canUseSocial) throw new Error('Inicia sesión para actualizar tu red.');
       if (!isPositivePartyId(targetId)) throw new Error('No pudimos reconocer ese perfil.');
       await Social.addFriend(targetId);
     },
-    onSuccess: async (_data, targetId) => {
+    onSuccess: (_data, { targetId, ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
       invalidateAll();
       void impactMedium();
       analytics.capture('artist_followed', { platform: 'mobile', target_party_id: targetId });
-      if (await markFirstValueCompleted(effectivePartyId, 'artist_followed')) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'artist_followed' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'artist_followed' });
-        if (effectivePartyId) await markNewUserOnboardingCompleted(effectivePartyId);
-      }
+      void recordFirstValueCompletion(
+        ownerPartyId,
+        'artist_followed',
+        () => ownsParty(ownerPartyId),
+        analytics,
+      );
       Alert.alert('Listo', 'Ahora sigues a esta persona.');
     },
-    onError: (err) => {
+    onError: (err, { ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
       const msg = err instanceof Error ? err.message : 'No pudimos seguir a esta persona.';
       Alert.alert('Error', msg);
     }
   });
 
-  const artistFollowMutation = useMutation<void, Error, ArtistProfile>({
-    mutationFn: async (artist) => {
-      if (!effectivePartyId) throw new Error(english ? 'Sign in to follow an artist.' : 'Inicia sesión para seguir a un artista.');
-      await Artists.follow(artist.id, effectivePartyId);
+  const artistFollowMutation = useMutation<void, Error, { artist: ArtistProfile; ownerPartyId: string }>({
+    mutationFn: async ({ artist, ownerPartyId }) => {
+      await Artists.follow(artist.id, ownerPartyId);
     },
-    onSuccess: async (_data, artist) => {
+    onSuccess: (_data, { artist, ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
       setFollowedArtistIds((current) => new Set(current).add(String(artist.id)));
       void impactMedium();
       analytics.capture('artist_followed', { platform: 'mobile', artist_id: String(artist.id) });
-      if (await markFirstValueCompleted(effectivePartyId, 'artist_followed')) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'artist_followed' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'artist_followed' });
-        if (effectivePartyId) await markNewUserOnboardingCompleted(effectivePartyId);
-      }
+      void recordFirstValueCompletion(
+        ownerPartyId,
+        'artist_followed',
+        () => ownsParty(ownerPartyId),
+        analytics,
+      );
     },
-    onError: (error) => Alert.alert(
-      english ? 'Could not follow artist' : 'No pudimos seguir al artista',
-      error instanceof Error ? error.message : (english ? 'Try again.' : 'Intenta de nuevo.'),
-    ),
+    onError: (error, { ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
+      Alert.alert(
+        english ? 'Could not follow artist' : 'No pudimos seguir al artista',
+        error instanceof Error ? error.message : (english ? 'Try again.' : 'Intenta de nuevo.'),
+      );
+    },
   });
 
   const unfollowMutation = useMutation<void, Error, number>({
@@ -163,7 +171,7 @@ export default function SocialScreen() {
                 { backgroundColor: colors.actionPrimary, paddingHorizontal: 12, paddingVertical: 10 },
                 (!canUseSocial || followMutation.isPending) && styles.buttonDisabled
               ]}
-              onPress={() => followMutation.mutate(targetId)}
+              onPress={() => effectivePartyId && followMutation.mutate({ targetId, ownerPartyId: effectivePartyId })}
               disabled={!canUseSocial || followMutation.isPending}
               accessibilityRole="button"
               accessibilityLabel={`Seguir a ${label}`}
@@ -261,7 +269,7 @@ export default function SocialScreen() {
                     <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{artist.name}</Text>
                     <TouchableOpacity
                       style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }, followed && styles.buttonDisabled]}
-                      onPress={() => artistFollowMutation.mutate(artist)}
+                      onPress={() => effectivePartyId && artistFollowMutation.mutate({ artist, ownerPartyId: effectivePartyId })}
                       disabled={followed || artistFollowMutation.isPending}
                       accessibilityRole="button"
                       accessibilityLabel={`${english ? 'Follow' : 'Seguir a'} ${artist.name}`}

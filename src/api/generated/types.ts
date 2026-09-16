@@ -8673,6 +8673,8 @@ export interface components {
             cpaCapabilities: components["schemas"]["CommerceProviderCapability"][];
         };
         CommercePaymentIntentSummary: {
+            /** @enum {string} */
+            cpiEnvironment: "sandbox" | "production";
             cpiStatus: string;
             cpiCurrency: string;
             /** Format: int64 */
@@ -8687,6 +8689,8 @@ export interface components {
             cpiRefundedMinor: number;
         };
         CommerceAmountComponentSummary: {
+            /** @enum {string} */
+            cacEnvironment: "sandbox" | "production";
             /** @enum {string} */
             cacComponentType: "subtotal" | "discount" | "tax" | "customer_fee" | "provider_fee" | "platform_commission" | "seller_payable" | "withholding" | "refund" | "chargeback" | "fx_adjustment";
             /** @enum {string} */

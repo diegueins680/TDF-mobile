@@ -43,8 +43,10 @@ import {
 import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
 import { authCopy, onboardingLanguage } from '../src/localization/onboardingCopy';
 import { isValidSignupPassword } from '../src/lib/passwordPolicy';
+import { readEventRsvpIntent } from '../src/lib/eventRsvpIntent';
 import { safeInternalRoute } from '../src/navigation/deepLinks';
 
+const PUBLIC_EVENT_RETURN_ROUTE = /^\/eventos\/[1-9]\d{0,18}$/;
 const ACCOUNT_TERMS_VERSION = 'tdf-account-terms-v1';
 const TERMS_URL = 'https://tdf-app.pages.dev/account/terms.html';
 const PRIVACY_URL = 'https://tdf-app.pages.dev/account/privacy.html';
@@ -64,6 +66,8 @@ const resolveAuthorizedReturnTo = (
 ): Href | null => {
   if (!candidate) return null;
   const path = typeof candidate === 'string' ? candidate : candidate.pathname;
+  const normalizedPath = path.split(/[?#]/, 1)[0];
+  if (PUBLIC_EVENT_RETURN_ROUTE.test(normalizedPath)) return normalizedPath as Href;
   const features = getFeaturesByMobilePath(path);
   if (features.length === 0) return null;
   return features.some((feature) => evaluateFeatureAccess(
@@ -334,6 +338,12 @@ export default function AuthScreen() {
             ? destination.value
             : destination.value.pathname,
       });
+      const pendingRsvpIntent = await readEventRsvpIntent();
+      if (pendingRsvpIntent?.sharedAttribution) {
+        analytics.capture('event_shared_visit_to_signup', {
+          platform: 'mobile', event_id: pendingRsvpIntent.eventId, method: 'password',
+        });
+      }
       setFeedbackMessage(copy.signupSuccess);
       finishAuthNavigation(destination);
     } catch (error) {
@@ -403,6 +413,12 @@ export default function AuthScreen() {
         method: 'google',
         ...(googleCreatedAccount ? { intent: selectedIntent } : {}),
       });
+      const pendingRsvpIntent = googleCreatedAccount ? await readEventRsvpIntent() : null;
+      if (pendingRsvpIntent?.sharedAttribution) {
+        analytics.capture('event_shared_visit_to_signup', {
+          platform: 'mobile', event_id: pendingRsvpIntent.eventId, method: 'google',
+        });
+      }
       setFeedbackMessage(copy.googleSuccess);
       const authorizedReturnTo = resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []);
       const destination = mode === 'signup'

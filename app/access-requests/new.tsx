@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type Href, Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { type Href, Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { submitAccessRequest } from '../../src/api/accessRequests';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
@@ -63,6 +63,10 @@ export default function NewAccessRequestScreen() {
       router.replace('/access-requests' as Href);
     },
   });
+
+  if (selection?.featureId === 'artist.onboarding' && selection.action === 'create') {
+    return <Redirect href="/createArtistProfile" />;
+  }
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.canvas }]} keyboardShouldPersistTaps="handled">

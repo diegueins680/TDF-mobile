@@ -51,11 +51,103 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List social events using canonical catalog identifiers */
+        /**
+         * List social events using canonical catalog identifiers
+         * @description Returns events whose canonical metadata does not mark them private and whose workflow state has the persisted `public-listable` capability, plus non-public events owned by the authenticated Party. Strict administrators retain internal visibility.
+         */
         get: operations["listSocialEvents"];
         put?: never;
         /** Create a social event using a canonical event type identifier */
         post: operations["createSocialEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/rsvp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        /** Get the authenticated user's RSVP for an event */
+        get: operations["getMyEventRsvp"];
+        /** Atomically create or update the authenticated user's RSVP */
+        put: operations["upsertMyEventRsvp"];
+        post?: never;
+        /** Delete the authenticated user's RSVP */
+        delete: operations["deleteMyEventRsvp"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/rsvp-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get privacy-safe aggregate RSVP counts */
+        get: operations["getEventRsvpSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/rsvps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List RSVPs for an authorized organizer */
+        get: operations["listEventRsvpsForOrganizer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/profiles/{partyId}/rsvp-feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the privacy-filtered event RSVP profile feed */
+        get: operations["getEventRsvpProfileFeed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/directory-profiles/{slug}/rsvp-feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get RSVP activity for an unambiguously person-linked public directory profile */
+        get: operations["getDirectoryProfileEventRsvpFeed"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -71,7 +163,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Toggle a persisted reaction type on an event moment */
+        /**
+         * Set a persisted reaction type on an event moment
+         * @description Uses the authenticated Party and returns the resulting moment state. Supplying emrrActive makes retries idempotent; omitting it preserves legacy toggle behavior. Reaction rows retain count-compatible cardinality, but only the caller's own row includes Party identity and activity time.
+         */
         post: operations["reactToSocialEventMoment"];
         delete?: never;
         options?: never;
@@ -432,7 +527,7 @@ export interface paths {
         put?: never;
         /**
          * Complete eligible onboarding idempotently
-         * @description Marks an authoritative new-account onboarding record complete after a successful action, or after an explicit optional-onboarding exit. Every accepted first-value label requires Party-bound server evidence created during the signup eligibility window; event saves and moment reactions must also reference currently public events. Repeated calls, missing server evidence, and calls from accounts outside the eligibility window return newlyCompleted=false.
+         * @description Marks an authoritative new-account onboarding record complete after a successful action, or after an explicit optional-onboarding exit. A supplied first value is a validated observation only; the server selects the earliest Party-bound supported evidence created during the signup eligibility window, using the same stable tie order as reconciliation. The idempotent handshake may safely be retried after that window, and verified action evidence takes precedence over an exit request. Artist follows and moment-reaction additions use durable engagement evidence, access requests use their persisted request, and event saves use a validated favorite audit. Repeated calls, missing or out-of-window server evidence, and late explicit exits without valid evidence return newlyCompleted=false.
          */
         post: operations["completeOnboarding"];
         delete?: never;
@@ -441,27 +536,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/session/experiments/{experimentId}/assignment": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Resolve an account-bound experiment assignment
-         * @description Returns a stable, versioned assignment for the authenticated Party only while the server-side experiment flag is enabled and authoritative onboarding eligibility is active. Paused, unknown, expired, completed, and legacy cohorts fail closed.
-         */
-        get: operations["getExperimentAssignment"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/session/experiments/{experimentId}/exposure": {
+    "/session/onboarding/reconcile": {
         parameters: {
             query?: never;
             header?: never;
@@ -471,10 +546,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Record an account-bound experiment exposure once
-         * @description Atomically records first exposure for the authenticated Party's active, versioned assignment. Paused or ineligible assignments are never exposed.
+         * Reconcile onboarding from authoritative evidence
+         * @description Completes an incomplete signup onboarding record by inferring the earliest Party-bound first useful action created during the signup eligibility window. This supports recovery on another device without accepting a client-supplied action, role, module, or permission. Exact-timestamp ties use the stable order artist_followed, access_requested, event_saved, then moment_reaction. The mutation is idempotent; completed accounts, accounts without a signup marker, and accounts without in-window evidence return newlyCompleted=false.
          */
-        post: operations["recordExperimentExposure"];
+        post: operations["reconcileOnboarding"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1198,6 +1273,26 @@ export interface paths {
         get: operations["listFanArtists"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/artists/me/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate my artist profile immediately
+         * @description Creates the authenticated account's artist profile and grants only the Artist role through an audited automatic policy in one transaction. No manual approval or invitation is required. Repeated calls preserve existing profile content and create no duplicate grant. Revoked roles and inactive accounts cannot be reactivated this way. No target party or role is accepted.
+         */
+        post: operations["activateMyArtistProfile"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4264,7 +4359,7 @@ export interface paths {
         put?: never;
         /**
          * Create an honest unpaid tentative booking
-         * @description Compatibility path used when no approved payable-booking policy is active. It never reports payment or confirmation.
+         * @description Compatibility path used when no approved payable-booking policy is active. The Idempotency-Key durably returns the original booking for an identical replay and rejects changed payloads. It never reports payment or confirmation.
          */
         post: operations["createPublicTentativeBooking"];
         delete?: never;
@@ -6661,6 +6756,905 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        MerchReputationSummary: {
+            /** @enum {string} */
+            subjectKind: "store" | "product";
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            storeId?: string;
+            /** Format: uuid */
+            productId?: string;
+            name?: string;
+            storeName?: string;
+            productName?: string;
+            slug?: string;
+            /** @description True only for store aggregates; never an artistic score */
+            commercialReputation?: boolean;
+            reputationLabel?: string;
+            /** @enum {string} */
+            state: "new_store" | "unrated" | "published";
+            rating?: number | null;
+            verifiedReviewCount?: number;
+            verifiedPurchaseReviewCount?: number;
+            historicalReviewCount?: number;
+            /** @enum {string} */
+            confidence?: "new" | "limited" | "moderate" | "strong";
+            formulaVersion?: string | null;
+            dimensions?: components["schemas"]["MerchDimensionAggregate"][];
+            objectiveSignals?: {
+                [key: string]: unknown;
+            };
+            badges?: {
+                [key: string]: unknown;
+            }[];
+        };
+        MerchDimensionAggregate: {
+            code: string;
+            average?: number | null;
+            count: number;
+            distribution?: {
+                [key: string]: number;
+            };
+        };
+        MerchReviewPublic: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "store" | "product";
+            rating: number;
+            comment?: string | null;
+            /** @enum {string} */
+            status: "published" | "limited";
+            /** @enum {boolean} */
+            verifiedPurchase: true;
+            /** @enum {string} */
+            badge: "Compra verificada";
+            /** @description Public name/avatar according to buyer privacy preferences */
+            author: {
+                [key: string]: unknown;
+            };
+            dimensions: {
+                [key: string]: number;
+            };
+            images: {
+                /** Format: uuid */
+                assetId: string;
+                url: string;
+                altText: string;
+                position: number;
+            }[];
+            sellerResponse?: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        MerchReviewPage: {
+            items: components["schemas"]["MerchReviewPublic"][];
+            /** Format: uuid */
+            nextCursor?: string | null;
+        };
+        MerchReviewImageInput: {
+            /** Format: uuid */
+            mediaAssetId: string;
+            altText: string;
+        };
+        MerchReviewSubmit: {
+            overallRating: number;
+            issueOccurred: boolean;
+            comment?: string;
+            dimensions: {
+                [key: string]: number;
+            };
+            images?: components["schemas"]["MerchReviewImageInput"][];
+            expectedRevision: number;
+        };
+        MerchReviewMutation: {
+            /** Format: uuid */
+            reviewId: string;
+            revision: number;
+            status: string;
+            /** @enum {boolean} */
+            verifiedPurchase: true;
+            /** Format: date-time */
+            editDeadline: string;
+        };
+        MerchReviewBuyerClaim: {
+            /** Format: uuid */
+            orderId: string;
+            /** @enum {boolean} */
+            buyerLinked: true;
+        };
+        MerchReviewEligibility: {
+            /** Format: uuid */
+            orderId: string;
+            /** Format: uuid */
+            storeId: string;
+            /** @enum {string} */
+            orderState: "created" | "confirmed" | "cancelled" | "completed";
+            /** @enum {string} */
+            fulfillmentState: "pending" | "preparing" | "partially_delivered" | "delivered" | "picked_up" | "cancelled";
+            storeReview: {
+                [key: string]: unknown;
+            };
+            productLines: {
+                [key: string]: unknown;
+            }[];
+        };
+        MerchSellerResponseSubmit: {
+            responseBody: string;
+            responseExpectedRevision: number;
+        };
+        MerchContentReport: {
+            /** @enum {string} */
+            reportTargetType: "review" | "seller_response";
+            /** Format: uuid */
+            reportTargetId: string;
+            /** @enum {string} */
+            reportReason: "offensive" | "personal_information" | "spam" | "extortion" | "conflict_of_interest" | "false_review" | "coordinated_manipulation" | "duplicate" | "irrelevant";
+            reportDetails?: string;
+            authorizedEvidence?: {
+                [key: string]: unknown;
+            }[];
+        };
+        MerchModerationDecision: {
+            /** @enum {string} */
+            moderationDecision: "approve" | "reject_report" | "hide" | "restore" | "limit";
+            /** @enum {string} */
+            moderationReasonCode: "legitimate_negative_opinion" | "offensive" | "personal_information" | "spam" | "extortion" | "conflict_of_interest" | "false_review" | "coordinated_manipulation" | "duplicate" | "irrelevant";
+            moderationRationale: string;
+            moderationEvidence: {
+                [key: string]: unknown;
+            };
+        };
+        MerchModerationWorkflow: {
+            /** @enum {string} */
+            moderationAction: "triage" | "request_evidence" | "provisionally_hide" | "resume_review";
+            workflowRationale: string;
+            workflowEvidence: {
+                [key: string]: unknown;
+            };
+        };
+        MerchAppeal: {
+            appealGrounds: string;
+        };
+        MerchAppealDecision: {
+            /** @enum {string} */
+            appealOutcome: "upheld" | "reversed";
+            appealRationale: string;
+            appealEvidence: {
+                [key: string]: unknown;
+            };
+        };
+        MerchCategorySuggestionSubmit: {
+            /** @enum {string} */
+            suggestionSubjectKind: "store" | "product";
+            suggestionLabel: string;
+            suggestionDefinition: string;
+        };
+        MerchCategorySuggestionDecision: {
+            /** @enum {string} */
+            suggestionStatus: "duplicate" | "testing" | "approved" | "rejected";
+            suggestionMinimumSample?: number;
+            suggestionBiasTest?: {
+                [key: string]: unknown;
+            };
+            suggestionUtilityTest?: {
+                [key: string]: unknown;
+            };
+            suggestionDecisionReason: string;
+        };
+        MerchReputationPrioritySubmit: {
+            orderedDimensionCodes: string[];
+            priorityExpectedRevision: number;
+        };
+        MerchReputationPriorities: {
+            /** @enum {string} */
+            subjectKind: "store" | "product";
+            revision: number;
+            /** @enum {boolean} */
+            affectsPublicScore: false;
+            orderedDimensions: {
+                code: string;
+                nameEs: string;
+                nameEn: string;
+                definitionEs: string;
+                definitionEn: string;
+            }[];
+        };
+        MerchNotificationPreferences: {
+            /** @default false */
+            reviewInvitation: boolean;
+            /** @default false */
+            reviewReminder: boolean;
+            /** @default false */
+            sellerResponseNotification: boolean;
+            /** @default false */
+            moderationChange: boolean;
+            /** @default false */
+            evidenceRequest: boolean;
+            /** @default false */
+            appealResult: boolean;
+            /** @default false */
+            badgeChange: boolean;
+        };
+        MerchCapabilities: {
+            /** @enum {string} */
+            environment: "sandbox" | "staging" | "production";
+            market: {
+                /** @enum {string} */
+                countryCode: "EC";
+                /** @enum {string} */
+                currency: "USD";
+            };
+            features: {
+                storefronts: boolean;
+                sellerApplications: boolean;
+                publicCatalog: boolean;
+                /** @description True only when at least one payment method is enabled and fully configured. */
+                checkout: boolean;
+                /** @description Enables preparation and dual-control approval only; provider execution has a separate adapter gate. */
+                refundOperations: boolean;
+                /** @description Enables the read-only canonical provider dispute queue. */
+                disputeMonitoring: boolean;
+                reviews: boolean;
+                notifications: boolean;
+                experimental: boolean;
+            };
+            paymentMethods: {
+                /** @description True only with an enabled flag and complete server credentials. */
+                datafast: boolean;
+                /** @description True only with an enabled flag and complete server credentials. */
+                paypal: boolean;
+                /** @description True only when independent receipt review is operational. */
+                bankTransfer: boolean;
+            };
+            /** @enum {boolean} */
+            automaticPayouts: false;
+            message: string;
+        };
+        /** @enum {string} */
+        MerchProductCategory: "apparel" | "vinyl" | "cd" | "cassette" | "poster" | "accessory" | "limited_edition" | "bundle" | "other";
+        /** @enum {string} */
+        MerchProductStatus: "draft" | "pending_review" | "published" | "sold_out" | "paused" | "rejected" | "archived";
+        /** @enum {string} */
+        MerchFulfillmentStatus: "pending" | "preparing" | "ready_for_pickup" | "shipped" | "delivered" | "return_requested" | "returned" | "problem" | "cancelled";
+        MerchPermissions: {
+            catalog: boolean;
+            stock: boolean;
+            orders: boolean;
+            fulfillment: boolean;
+            finance: boolean;
+            settings: boolean;
+        };
+        MerchStorefront: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            profileId?: string;
+            slug: string;
+            displayName: string;
+            description?: string | null;
+            coverImageUrl?: string | null;
+            logoImageUrl?: string | null;
+            /** @enum {string} */
+            countryCode?: "EC";
+            /** @enum {string} */
+            currency: "USD";
+            discovery?: {
+                /** @description True while no public numeric store score is eligible. */
+                newStore: boolean;
+                /** @description Neutral exploration signal; it is never inherited from an owner or artist. */
+                explorationEligible: boolean;
+            };
+            /** @enum {string} */
+            applicationStatus?: "requested" | "under_review" | "approved" | "rejected" | "withdrawn";
+            /** @enum {string} */
+            operationalStatus?: "inactive" | "active" | "suspended" | "closed";
+            permissions?: components["schemas"]["MerchPermissions"];
+            products?: components["schemas"]["MerchProduct"][];
+            policies?: {
+                [key: string]: unknown;
+            };
+            shippingZones?: components["schemas"]["MerchShippingZone"][];
+        } & {
+            [key: string]: unknown;
+        };
+        MerchStoreApplicationRequest: {
+            /** Format: uuid */
+            profileId: string;
+            slug: string;
+            displayName: string;
+            description?: string | null;
+            applicationNote: string;
+        };
+        MerchStoreUpdateRequest: {
+            displayName: string;
+            description?: string | null;
+            coverImageUrl?: string | null;
+            logoImageUrl?: string | null;
+        };
+        MerchStoreReviewRequest: {
+            /** @enum {string} */
+            decision: "approve" | "reject" | "suspend" | "reactivate";
+            reviewerNotes: string;
+            /** @description 1000 is 10%; 0 may be used for an audited pilot override. */
+            commissionBps?: number | null;
+            commissionReason?: string | null;
+        };
+        MerchStoreMember: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            partyId: number;
+            displayName: string;
+            username?: string | null;
+            avatarUrl?: string | null;
+            /** @enum {string} */
+            role: "owner" | "collaborator";
+            /** @enum {string} */
+            status: "pending" | "accepted" | "revoked" | "expired";
+            permissions: components["schemas"]["MerchPermissions"];
+            /** Format: date-time */
+            expiresAt?: string | null;
+        };
+        MerchMemberInviteRequest: {
+            /**
+             * Format: int64
+             * @description Selected by PartySelector search; never entered manually.
+             */
+            partyId: number;
+            permissions: components["schemas"]["MerchPermissions"];
+        };
+        MerchMemberUpdateRequest: {
+            /** @enum {string} */
+            status: "accepted" | "revoked";
+            permissions?: components["schemas"]["MerchPermissions"];
+            reason?: string | null;
+        };
+        MerchPolicyRequest: {
+            shippingPolicy: string;
+            returnPolicy: string;
+            preorderPolicy?: string | null;
+            /** Format: email */
+            supportEmail?: string | null;
+        };
+        MerchShippingZoneRequest: {
+            name: string;
+            /** @enum {string} */
+            countryCode: "EC";
+            subdivisionCodes: string[];
+            /** @enum {string} */
+            deliveryMethod: "national_shipping" | "coordinated_pickup";
+            /** Format: int64 */
+            rateMinor: number;
+            /** Format: int64 */
+            freeShippingMinMinor?: number | null;
+            estimatedMinDays?: number | null;
+            estimatedMaxDays?: number | null;
+            active: boolean;
+        };
+        MerchShippingZone: components["schemas"]["MerchShippingZoneRequest"] & {
+            /** Format: uuid */
+            id: string;
+        };
+        MerchVariantRequest: {
+            /** Format: uuid */
+            id?: string | null;
+            sku: string;
+            name: string;
+            optionValues: {
+                [key: string]: string;
+            };
+            /** Format: int64 */
+            priceMinor: number;
+            /** Format: int64 */
+            compareAtPriceMinor?: number | null;
+            /** @enum {string} */
+            currency: "USD";
+            weightGrams: number;
+            customsDescription?: string | null;
+            /** @enum {string} */
+            stockMode: "finite" | "made_to_order";
+            stockOnHand: number;
+            reorderThreshold: number;
+            active: boolean;
+        };
+        MerchStockRequest: {
+            stockOnHand: number;
+            reorderThreshold: number;
+            active: boolean;
+            /** Format: int64 */
+            version: number;
+        };
+        MerchProductRequest: {
+            slug: string;
+            name: string;
+            description: string;
+            category: components["schemas"]["MerchProductCategory"];
+            /** @enum {string} */
+            visibility: "public" | "unlisted" | "hidden";
+            /** @enum {string} */
+            availabilityMode: "in_stock" | "preorder" | "made_to_order";
+            /** Format: date-time */
+            preorderReleaseAt?: string | null;
+            /** Format: date-time */
+            publishAt?: string | null;
+            /** Format: date-time */
+            unpublishAt?: string | null;
+            buyerLimit?: number | null;
+            /** Format: uuid */
+            policyId?: string | null;
+            variants: components["schemas"]["MerchVariantRequest"][];
+        };
+        MerchProduct: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            storeId: string;
+            storeSlug?: string;
+            storeName?: string;
+            slug: string;
+            name: string;
+            description?: string;
+            category: components["schemas"]["MerchProductCategory"];
+            status: components["schemas"]["MerchProductStatus"];
+            /** @enum {string} */
+            visibility?: "public" | "unlisted" | "hidden";
+            /** @enum {string} */
+            availabilityMode: "in_stock" | "preorder" | "made_to_order";
+            /** Format: date-time */
+            preorderReleaseAt?: string | null;
+            /** Format: date-time */
+            publishAt?: string | null;
+            /** Format: date-time */
+            unpublishAt?: string | null;
+            buyerLimit?: number | null;
+            /** Format: uuid */
+            policyId?: string | null;
+            /** Format: int64 */
+            priceFromMinor?: number;
+            /** @enum {string} */
+            currency?: "USD";
+            available?: boolean;
+            imageUrl?: string | null;
+            canonicalUrl?: string;
+            rejectionReason?: string | null;
+            variants?: components["schemas"]["MerchVariant"][];
+            images?: components["schemas"]["MerchProductImage"][];
+            related?: {
+                [key: string]: unknown;
+            }[];
+            reviewsEnabled?: boolean;
+            reviews?: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        MerchVariant: {
+            /** Format: uuid */
+            id: string;
+            sku: string;
+            name: string;
+            optionValues: {
+                [key: string]: string;
+            };
+            /** Format: int64 */
+            priceMinor: number;
+            /** Format: int64 */
+            compareAtPriceMinor?: number | null;
+            /** @enum {string} */
+            currency: "USD";
+            weightGrams: number;
+            /** @enum {string} */
+            stockMode: "finite" | "made_to_order";
+            stockOnHand?: number;
+            stockReserved?: number;
+            stockSold?: number;
+            availableQuantity?: number | null;
+            available?: boolean;
+            /** Format: int64 */
+            version: number;
+            reorderThreshold?: number;
+            active: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        MerchProductImage: {
+            /** Format: uuid */
+            id: string;
+            url: string;
+            variants: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            altText: string;
+            sortOrder: number;
+            /** @enum {string} */
+            scanStatus?: "pending" | "clean" | "rejected";
+            /** @enum {string} */
+            moderationStatus?: "pending" | "allowed" | "blocked";
+            width?: number;
+            height?: number;
+        };
+        MerchCartCreateRequest: {
+            storeSlug: string;
+        };
+        MerchCartItemRequest: {
+            /** Format: uuid */
+            variantId: string;
+            quantity: number;
+        };
+        MerchCart: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            storeId: string;
+            /** @description Present only on creation. */
+            lookupToken?: string;
+            /** @enum {string} */
+            currency: "USD";
+            /** @enum {string} */
+            status: "active" | "checkout_started" | "converted" | "expired" | "abandoned";
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: int64 */
+            productSubtotalMinor: number;
+            /** Format: int64 */
+            totalMinor: number;
+            items: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        MerchRecipientRequest: {
+            name: string;
+            /** Format: email */
+            email: string;
+            phone?: string | null;
+            /** @enum {string} */
+            countryCode: "EC";
+            subdivision?: string | null;
+            city: string;
+            addressLine1: string;
+            addressLine2?: string | null;
+            postalCode?: string | null;
+            deliveryNote?: string | null;
+        };
+        MerchCheckoutRequest: {
+            recipient: components["schemas"]["MerchRecipientRequest"];
+            /** Format: uuid */
+            shippingZoneId: string;
+            createAccount?: boolean | null;
+            /** @enum {string|null} */
+            locale?: "es" | "en" | null;
+        };
+        MerchOrder: {
+            /** Format: uuid */
+            id: string;
+            orderNumber: string;
+            /** @description Present only on creation. */
+            lookupToken?: string;
+            /** @enum {string} */
+            currency: "USD";
+            /** Format: int64 */
+            productSubtotalMinor: number;
+            /** Format: int64 */
+            discountMinor?: number;
+            /** Format: int64 */
+            taxMinor: number;
+            /** Format: int64 */
+            shippingMinor: number;
+            /** Format: int64 */
+            processorFeeMinor?: number;
+            /** Format: int64 */
+            tdfCommissionMinor?: number;
+            /** Format: int64 */
+            sellerNetMinor?: number;
+            /** Format: int64 */
+            totalMinor: number;
+            commercialStatus: string;
+            paymentStatus: string;
+            fulfillmentStatus: components["schemas"]["MerchFulfillmentStatus"];
+            refundStatus: string;
+            disputeStatus: string;
+            settlementStatus?: string;
+            lines: {
+                [key: string]: unknown;
+            }[];
+            timeline?: {
+                [key: string]: unknown;
+            }[];
+            issues?: components["schemas"]["MerchOrderIssue"][];
+        } & {
+            [key: string]: unknown;
+        };
+        MerchIssueRequest: {
+            /** @enum {string} */
+            issueType: "general" | "address" | "stock" | "shipping" | "damaged" | "missing" | "cancellation" | "return" | "refund" | "dispute";
+            message: string;
+        };
+        MerchCancellationRequest: {
+            reason: string;
+        };
+        MerchOrderIssue: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            issueType: "general" | "address" | "stock" | "shipping" | "damaged" | "missing" | "cancellation" | "return" | "refund" | "dispute" | "fraud";
+            /** @enum {string} */
+            status: "open" | "seller_review" | "staff_review" | "awaiting_buyer" | "resolved" | "rejected" | "cancelled";
+            message: string;
+            resolution?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        MerchIssueStatus: "open" | "seller_review" | "staff_review" | "awaiting_buyer" | "resolved" | "rejected" | "cancelled";
+        MerchOperationalIssue: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            storeId: string;
+            /** Format: uuid */
+            orderId: string;
+            orderNumber: string;
+            storeName: string;
+            customerName: string;
+            /** Format: email */
+            customerEmail: string;
+            /** @enum {string} */
+            issueType: "general" | "address" | "stock" | "shipping" | "damaged" | "missing" | "cancellation" | "return" | "refund" | "dispute" | "fraud";
+            status: components["schemas"]["MerchIssueStatus"];
+            message: string;
+            resolution?: string | null;
+            /** @description Visible only to an authorized seller or strict administrator. */
+            internalNotes?: string | null;
+            /** @enum {string} */
+            currency?: "USD";
+            /** Format: int64 */
+            totalMinor?: number;
+            /** Format: int64 */
+            refundedMinor?: number;
+            paymentStatus?: string;
+            refundStatus?: string;
+            disputeStatus?: string;
+            settlementStatus?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            closedAt?: string | null;
+        };
+        /** @description For terminal statuses, publicResponse must contain at least 10 characters. Seller financial cases may only be escalated to staff review. */
+        MerchIssueTriageRequest: {
+            status: components["schemas"]["MerchIssueStatus"];
+            publicResponse?: string | null;
+            internalNotes?: string | null;
+        };
+        MerchRefundRequest: {
+            /**
+             * Format: uuid
+             * @description Eligible financial support case currently in staff review.
+             */
+            issueId: string;
+            /**
+             * Format: int64
+             * @description Omit for the remaining unreserved paid balance.
+             */
+            amountMinor?: number | null;
+            reasonCode: string;
+            note?: string | null;
+        };
+        MerchRefundReviewRequest: {
+            /** @enum {string} */
+            decision: "approve" | "cancel";
+            reviewNote: string;
+        };
+        /** @enum {string} */
+        MerchRefundStatus: "requested" | "approved" | "processing" | "succeeded" | "failed" | "cancelled";
+        MerchRefund: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            orderId: string;
+            orderNumber: string;
+            /** Format: uuid */
+            storeId: string;
+            storeName: string;
+            /** Format: uuid */
+            issueId: string;
+            status: components["schemas"]["MerchRefundStatus"];
+            /** Format: int64 */
+            amountMinor: number;
+            /** @enum {string} */
+            currency: "USD";
+            reasonCode: string;
+            requestNote?: string | null;
+            /** @enum {string} */
+            provider: "datafast" | "paypal" | "stripe" | "bank_transfer" | "cash" | "pos";
+            /** @description Present only after verified provider evidence is recorded through a future gated adapter. */
+            providerRefundId?: string | null;
+            /** Format: int64 */
+            requestedBy: number;
+            requestedByName: string;
+            /** Format: int64 */
+            approvedBy?: number | null;
+            approvedByName?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            completedAt?: string | null;
+            settlementStatus: string;
+            /** @enum {boolean} */
+            executionAvailable: false;
+            executionMessage: string;
+        };
+        MerchDispute: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            orderId: string;
+            orderNumber: string;
+            /** Format: uuid */
+            storeId: string;
+            storeName: string;
+            providerDisputeId: string;
+            /** @enum {string} */
+            kind: "inquiry" | "dispute" | "chargeback";
+            status: string;
+            /** Format: int64 */
+            amountMinor: number;
+            /** @enum {string} */
+            currency: "USD";
+            reasonCode?: string | null;
+            /** Format: date-time */
+            openedAt: string;
+            /** Format: date-time */
+            dueAt?: string | null;
+            /** Format: date-time */
+            closedAt?: string | null;
+            /** @enum {boolean} */
+            readOnly: true;
+        };
+        MerchStatusRequest: {
+            status: string;
+            reason?: string | null;
+        };
+        MerchFulfillmentRequest: {
+            status: components["schemas"]["MerchFulfillmentStatus"];
+            publicNote?: string | null;
+            privateNote?: string | null;
+            carrier?: string | null;
+            trackingNumber?: string | null;
+            /** Format: uri */
+            trackingUrl?: string | null;
+        };
+        MerchSettlementRequest: {
+            /** Format: uuid */
+            storeId: string;
+            /** Format: date */
+            periodStart: string;
+            /** Format: date */
+            periodEnd: string;
+            orderIds: string[];
+            reviewNotes?: string | null;
+        };
+        MerchSettlementPaymentEvidenceRequest: {
+            /**
+             * Format: binary
+             * @description JPEG or PNG receipt, at most 10 MB and 40 megapixels. It is re-encoded as a private JPEG.
+             */
+            file: string;
+            /**
+             * Format: date-time
+             * @description Timestamp from the independently verified transfer evidence.
+             */
+            paidAt: string;
+            /** @description Non-secret bank or accounting reference. */
+            externalReference: string;
+            notes?: string | null;
+        };
+        /** @enum {string} */
+        MerchSettlementStatus: "draft" | "under_review" | "approved" | "paid" | "held" | "reversed";
+        MerchSettlementEligibleOrder: {
+            /** Format: uuid */
+            id: string;
+            orderNumber: string;
+            /** @enum {string} */
+            currency: "USD";
+            /** Format: int64 */
+            productSubtotalMinor: number;
+            /** Format: int64 */
+            discountMinor: number;
+            /** Format: int64 */
+            taxMinor: number;
+            /** Format: int64 */
+            shippingMinor: number;
+            /** Format: int64 */
+            processorFeeMinor: number;
+            /** Format: int64 */
+            tdfCommissionMinor: number;
+            /** Format: int64 */
+            sellerNetMinor: number;
+            /** Format: int64 */
+            refundsMinor: number;
+            /** Format: int64 */
+            adjustmentsMinor: number;
+            /** @enum {string} */
+            paymentStatus: "paid" | "partially_refunded";
+            /** @enum {string} */
+            fulfillmentStatus: "delivered" | "returned";
+            /** @enum {string} */
+            settlementStatus: "not_ready" | "ready";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        MerchSettlement: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            storeId: string;
+            /** Format: date-time */
+            periodStart: string;
+            /** Format: date-time */
+            periodEnd: string;
+            /** @enum {string} */
+            currency: "USD";
+            status: components["schemas"]["MerchSettlementStatus"];
+            storeName: string;
+            /** Format: int64 */
+            grossProductMinor: number;
+            /** Format: int64 */
+            discountsMinor: number;
+            /** Format: int64 */
+            taxesMinor: number;
+            /** Format: int64 */
+            shippingMinor: number;
+            /** Format: int64 */
+            processorFeesMinor: number;
+            /** Format: int64 */
+            tdfCommissionMinor: number;
+            /** Format: int64 */
+            refundsMinor: number;
+            /** Format: int64 */
+            adjustmentsMinor: number;
+            /** Format: int64 */
+            sellerNetMinor: number;
+            /** Format: int64 */
+            preparedBy: number;
+            preparedByName: string;
+            /** Format: int64 */
+            approvedBy?: number | null;
+            approvedByName?: string | null;
+            /** Format: int64 */
+            paidBy?: number | null;
+            paidByName?: string | null;
+            /** Format: date-time */
+            approvedAt?: string | null;
+            /** Format: date-time */
+            paidAt?: string | null;
+            evidenceObjectKey?: string | null;
+            /** @enum {string|null} */
+            evidenceMimeType?: "image/jpeg" | null;
+            /** Format: int64 */
+            evidenceByteSize?: number | null;
+            evidenceChecksumSha256?: string | null;
+            externalReference?: string | null;
+            /** Format: int64 */
+            orderCount: number;
+        } & {
+            [key: string]: unknown;
+        };
         PublicDomoStorefront: {
             checkoutAvailable: boolean;
             unavailableReason?: string | null;
@@ -7940,6 +8934,8 @@ export interface components {
              * @description Canonical UUID of an active published item in the `reaction-types` catalog.
              */
             emrrReactionTypeId: string;
+            /** @description Desired selected state for the authenticated Party. Repeating the same value is idempotent. Omit only for legacy toggle behavior. */
+            emrrActive?: boolean;
         };
         ContentReactionRequest: {
             /**
@@ -7990,9 +8986,13 @@ export interface components {
             readonly emrReactionNameEs: string;
             readonly emrReactionNameEn: string;
             readonly emrReactionEmoji: string;
-            emrPartyId: string;
-            /** Format: date-time */
-            emrCreatedAt?: string | null;
+            /** @description Authenticated Party identifier when this is the caller's own reaction; null for every other count row. */
+            readonly emrPartyId?: string | null;
+            /**
+             * Format: date-time
+             * @description Caller reaction time when this is the caller's own reaction; null for every other count row.
+             */
+            readonly emrCreatedAt?: string | null;
         };
         EventMomentComment: {
             emcId?: string | null;
@@ -8151,6 +9151,70 @@ export interface components {
             /** Format: date-time */
             erChangeCreatedAt: string;
         };
+        /**
+         * @description Canonical persisted vocabulary. Clients localize these values at the presentation boundary.
+         * @enum {string}
+         */
+        EventRsvpStatus: "accepted" | "maybe" | "declined";
+        EventRsvp: {
+            readonly rsvpEventId: string;
+            rsvpStatus: components["schemas"]["EventRsvpStatus"];
+            rsvpShowOnProfile: boolean;
+            /** Format: date-time */
+            readonly rsvpCreatedAt?: string | null;
+            /** Format: date-time */
+            readonly rsvpUpdatedAt?: string | null;
+        };
+        EventRsvpWrite: {
+            rsvpStatus: components["schemas"]["EventRsvpStatus"];
+            /** @description Explicit decision for this RSVP. Declined RSVPs are never published regardless of this value. */
+            rsvpShowOnProfile: boolean;
+        };
+        EventRsvpSummary: {
+            rsvpAcceptedCount: number;
+            rsvpMaybeCount: number;
+        };
+        EventRsvpAdmin: {
+            adminRsvpId: string;
+            adminRsvpPartyId: string;
+            adminRsvpStatus: components["schemas"]["EventRsvpStatus"];
+            adminRsvpShowOnProfile: boolean;
+            /** Format: date-time */
+            adminRsvpCreatedAt: string;
+            /** Format: date-time */
+            adminRsvpUpdatedAt: string;
+        };
+        EventRsvpAdminPage: {
+            adminRsvpItems: components["schemas"]["EventRsvpAdmin"][];
+            adminRsvpNextCursor?: string | null;
+        };
+        EventRsvpFeedItem: {
+            /** @enum {string} */
+            feedItemType: "event_rsvp";
+            feedEventId: string;
+            /** @enum {string} */
+            feedStatus: "accepted" | "maybe";
+            /** @enum {boolean} */
+            feedShowOnProfile: true;
+            feedEventTitle: string;
+            /** Format: date-time */
+            feedEventStart: string;
+            feedEventTimezone?: string | null;
+            /** Format: uri */
+            feedEventImageUrl?: string | null;
+            feedVenueName?: string | null;
+            feedCity?: string | null;
+            feedWorkflowStateCode: string;
+            /** Format: date-time */
+            feedActionAt: string;
+            feedCanonicalUrl: string;
+            feedCanEdit: boolean;
+            feedCanShare: boolean;
+        };
+        EventRsvpFeedPage: {
+            feedItems: components["schemas"]["EventRsvpFeedItem"][];
+            feedNextCursor?: string | null;
+        };
         SocialEvent: {
             eventId?: string | null;
             eventOrganizerPartyId?: string | null;
@@ -8182,6 +9246,7 @@ export interface components {
             readonly eventWorkflowStateNameEs?: string | null;
             readonly eventWorkflowStateNameEn?: string | null;
             readonly eventPublicListable?: boolean | null;
+            readonly eventRsvpEligible?: boolean | null;
             readonly eventTicketPurchaseEnabled?: boolean | null;
             eventCurrency?: string | null;
             eventBudgetCents?: number | null;
@@ -8288,7 +9353,7 @@ export interface components {
         };
         OnboardingCompletionRequest: {
             /**
-             * @description Optional successful first useful action. Every value requires Party-bound server evidence created during the signup eligibility window; event saves and moment reactions must reference currently public events. Omit when the user explicitly exits optional onboarding.
+             * @description Optional observation of a successful first useful action. The server requires Party-bound evidence during the signup eligibility window and persists the earliest supported evidence across all categories, independent of this hint. Artist follows and moment-reaction additions use durable engagement evidence, access requests use their persisted request, and event_saved uses a validated event-favorite audit. Omit when the user explicitly exits optional onboarding; existing verified evidence still takes precedence.
              * @enum {string}
              */
             firstValue?: "artist_followed" | "access_requested" | "event_saved" | "moment_reaction";
@@ -8299,40 +9364,42 @@ export interface components {
             /** Format: date-time */
             signupCompletedAt: string | null;
             onboardingIntent: components["schemas"]["OnboardingIntent"] | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Server time when the completion handshake was accepted.
+             */
             completedAt: string | null;
             /** @enum {string|null} */
             firstValue: "artist_followed" | "access_requested" | "event_saved" | "moment_reaction" | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Server evidence time for first useful actions accepted by the current contract; it can precede completedAt when a handshake is retried. Legacy completed rows may retain the earlier handshake-time meaning.
+             */
             firstValueCompletedAt: string | null;
             /** Format: date-time */
             updatedAt: string | null;
         };
         OnboardingCompletionResult: {
             progress: components["schemas"]["OnboardingProgress"];
-            /** @description True only for the single request that changed an eligible account from incomplete to complete. */
+            /** @description True only for the single request that changed an incomplete account to complete using an eligible explicit exit or in-window first-value evidence. */
             newlyCompleted: boolean;
         };
         ExperimentAssignment: {
-            /** @enum {string} */
-            experimentId: "single-feature-onboarding-v1";
+            experimentId: string;
             experimentVersion: number;
             experimentEnabled: boolean;
             experimentEligible: boolean;
-            /** @enum {string} */
-            variant: "control" | "treatment_singlefeature";
+            variant: string;
             /** Format: date-time */
             assignedAt: string | null;
             /** Format: date-time */
             eligibleUntil: string | null;
             /** Format: date-time */
             exposedAt: string | null;
-            /** @description True only for the request that atomically persisted this Party/version assignment. */
             newlyAssigned: boolean;
         };
         ExperimentExposureResult: {
             assignment: components["schemas"]["ExperimentAssignment"];
-            /** @description True only for the request that atomically persisted the first exposure. */
             newlyExposed: boolean;
         };
         SessionResponse: {
@@ -8376,6 +9443,8 @@ export interface components {
             countryId?: string | null;
             /** @description Presentation and external-wire code resolved from countryId; legacy rows may use preserved migration evidence until backfilled. */
             readonly countryCode?: string | null;
+            /** @description Default presented for new public-event RSVPs. Every RSVP still records an explicit per-action decision. */
+            showEventRsvpsOnProfile: boolean;
         };
         LocalePreferencesUpdate: {
             /**
@@ -8394,6 +9463,8 @@ export interface components {
              * @description Canonical active country identity. Null explicitly clears the preference.
              */
             countryId?: string | null;
+            /** @description Optional new default for subsequent RSVP decisions. */
+            showEventRsvpsOnProfile?: boolean;
         };
         CurrencyConversionAuditCreate: {
             sourceCurrency: string;
@@ -10484,6 +11555,8 @@ export interface components {
              * @description Internal subject identifier; clients must not expose it unnecessarily.
              */
             requesterPartyId: number;
+            /** @description Requester's display name, or null when unavailable. Visible only to the requester and authorized reviewers. */
+            requesterName: string | null;
             featureId: string;
             action: string;
             roleContext: string[];
@@ -10889,905 +11962,6 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
-        MerchReputationSummary: {
-            /** @enum {string} */
-            subjectKind: "store" | "product";
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            storeId?: string;
-            /** Format: uuid */
-            productId?: string;
-            name?: string;
-            storeName?: string;
-            productName?: string;
-            slug?: string;
-            /** @description True only for store aggregates; never an artistic score */
-            commercialReputation?: boolean;
-            reputationLabel?: string;
-            /** @enum {string} */
-            state: "new_store" | "unrated" | "published";
-            rating?: number | null;
-            verifiedReviewCount?: number;
-            verifiedPurchaseReviewCount?: number;
-            historicalReviewCount?: number;
-            /** @enum {string} */
-            confidence?: "new" | "limited" | "moderate" | "strong";
-            formulaVersion?: string | null;
-            dimensions?: components["schemas"]["MerchDimensionAggregate"][];
-            objectiveSignals?: {
-                [key: string]: unknown;
-            };
-            badges?: {
-                [key: string]: unknown;
-            }[];
-        };
-        MerchDimensionAggregate: {
-            code: string;
-            average?: number | null;
-            count: number;
-            distribution?: {
-                [key: string]: number;
-            };
-        };
-        MerchReviewPublic: {
-            /** Format: uuid */
-            id: string;
-            /** @enum {string} */
-            kind: "store" | "product";
-            rating: number;
-            comment?: string | null;
-            /** @enum {string} */
-            status: "published" | "limited";
-            /** @enum {boolean} */
-            verifiedPurchase: true;
-            /** @enum {string} */
-            badge: "Compra verificada";
-            /** @description Public name/avatar according to buyer privacy preferences */
-            author: {
-                [key: string]: unknown;
-            };
-            dimensions: {
-                [key: string]: number;
-            };
-            images: {
-                /** Format: uuid */
-                assetId: string;
-                url: string;
-                altText: string;
-                position: number;
-            }[];
-            sellerResponse?: {
-                [key: string]: unknown;
-            } | null;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: date-time */
-            updatedAt?: string;
-        };
-        MerchReviewPage: {
-            items: components["schemas"]["MerchReviewPublic"][];
-            /** Format: uuid */
-            nextCursor?: string | null;
-        };
-        MerchReviewImageInput: {
-            /** Format: uuid */
-            mediaAssetId: string;
-            altText: string;
-        };
-        MerchReviewSubmit: {
-            overallRating: number;
-            issueOccurred: boolean;
-            comment?: string;
-            dimensions: {
-                [key: string]: number;
-            };
-            images?: components["schemas"]["MerchReviewImageInput"][];
-            expectedRevision: number;
-        };
-        MerchReviewMutation: {
-            /** Format: uuid */
-            reviewId: string;
-            revision: number;
-            status: string;
-            /** @enum {boolean} */
-            verifiedPurchase: true;
-            /** Format: date-time */
-            editDeadline: string;
-        };
-        MerchReviewBuyerClaim: {
-            /** Format: uuid */
-            orderId: string;
-            /** @enum {boolean} */
-            buyerLinked: true;
-        };
-        MerchReviewEligibility: {
-            /** Format: uuid */
-            orderId: string;
-            /** Format: uuid */
-            storeId: string;
-            /** @enum {string} */
-            orderState: "created" | "confirmed" | "cancelled" | "completed";
-            /** @enum {string} */
-            fulfillmentState: "pending" | "preparing" | "partially_delivered" | "delivered" | "picked_up" | "cancelled";
-            storeReview: {
-                [key: string]: unknown;
-            };
-            productLines: {
-                [key: string]: unknown;
-            }[];
-        };
-        MerchSellerResponseSubmit: {
-            responseBody: string;
-            responseExpectedRevision: number;
-        };
-        MerchContentReport: {
-            /** @enum {string} */
-            reportTargetType: "review" | "seller_response";
-            /** Format: uuid */
-            reportTargetId: string;
-            /** @enum {string} */
-            reportReason: "offensive" | "personal_information" | "spam" | "extortion" | "conflict_of_interest" | "false_review" | "coordinated_manipulation" | "duplicate" | "irrelevant";
-            reportDetails?: string;
-            authorizedEvidence?: {
-                [key: string]: unknown;
-            }[];
-        };
-        MerchModerationDecision: {
-            /** @enum {string} */
-            moderationDecision: "approve" | "reject_report" | "hide" | "restore" | "limit";
-            /** @enum {string} */
-            moderationReasonCode: "legitimate_negative_opinion" | "offensive" | "personal_information" | "spam" | "extortion" | "conflict_of_interest" | "false_review" | "coordinated_manipulation" | "duplicate" | "irrelevant";
-            moderationRationale: string;
-            moderationEvidence: {
-                [key: string]: unknown;
-            };
-        };
-        MerchModerationWorkflow: {
-            /** @enum {string} */
-            moderationAction: "triage" | "request_evidence" | "provisionally_hide" | "resume_review";
-            workflowRationale: string;
-            workflowEvidence: {
-                [key: string]: unknown;
-            };
-        };
-        MerchAppeal: {
-            appealGrounds: string;
-        };
-        MerchAppealDecision: {
-            /** @enum {string} */
-            appealOutcome: "upheld" | "reversed";
-            appealRationale: string;
-            appealEvidence: {
-                [key: string]: unknown;
-            };
-        };
-        MerchCategorySuggestionSubmit: {
-            /** @enum {string} */
-            suggestionSubjectKind: "store" | "product";
-            suggestionLabel: string;
-            suggestionDefinition: string;
-        };
-        MerchCategorySuggestionDecision: {
-            /** @enum {string} */
-            suggestionStatus: "duplicate" | "testing" | "approved" | "rejected";
-            suggestionMinimumSample?: number;
-            suggestionBiasTest?: {
-                [key: string]: unknown;
-            };
-            suggestionUtilityTest?: {
-                [key: string]: unknown;
-            };
-            suggestionDecisionReason: string;
-        };
-        MerchReputationPrioritySubmit: {
-            orderedDimensionCodes: string[];
-            priorityExpectedRevision: number;
-        };
-        MerchReputationPriorities: {
-            /** @enum {string} */
-            subjectKind: "store" | "product";
-            revision: number;
-            /** @enum {boolean} */
-            affectsPublicScore: false;
-            orderedDimensions: {
-                code: string;
-                nameEs: string;
-                nameEn: string;
-                definitionEs: string;
-                definitionEn: string;
-            }[];
-        };
-        MerchNotificationPreferences: {
-            /** @default false */
-            reviewInvitation: boolean;
-            /** @default false */
-            reviewReminder: boolean;
-            /** @default false */
-            sellerResponseNotification: boolean;
-            /** @default false */
-            moderationChange: boolean;
-            /** @default false */
-            evidenceRequest: boolean;
-            /** @default false */
-            appealResult: boolean;
-            /** @default false */
-            badgeChange: boolean;
-        };
-        MerchCapabilities: {
-            /** @enum {string} */
-            environment: "sandbox" | "staging" | "production";
-            market: {
-                /** @enum {string} */
-                countryCode: "EC";
-                /** @enum {string} */
-                currency: "USD";
-            };
-            features: {
-                storefronts: boolean;
-                sellerApplications: boolean;
-                publicCatalog: boolean;
-                /** @description True only when at least one payment method is enabled and fully configured. */
-                checkout: boolean;
-                /** @description Enables preparation and dual-control approval only; provider execution has a separate adapter gate. */
-                refundOperations: boolean;
-                /** @description Enables the read-only canonical provider dispute queue. */
-                disputeMonitoring: boolean;
-                reviews: boolean;
-                notifications: boolean;
-                experimental: boolean;
-            };
-            paymentMethods: {
-                /** @description True only with an enabled flag and complete server credentials. */
-                datafast: boolean;
-                /** @description True only with an enabled flag and complete server credentials. */
-                paypal: boolean;
-                /** @description True only when independent receipt review is operational. */
-                bankTransfer: boolean;
-            };
-            /** @enum {boolean} */
-            automaticPayouts: false;
-            message: string;
-        };
-        /** @enum {string} */
-        MerchProductCategory: "apparel" | "vinyl" | "cd" | "cassette" | "poster" | "accessory" | "limited_edition" | "bundle" | "other";
-        /** @enum {string} */
-        MerchProductStatus: "draft" | "pending_review" | "published" | "sold_out" | "paused" | "rejected" | "archived";
-        /** @enum {string} */
-        MerchFulfillmentStatus: "pending" | "preparing" | "ready_for_pickup" | "shipped" | "delivered" | "return_requested" | "returned" | "problem" | "cancelled";
-        MerchPermissions: {
-            catalog: boolean;
-            stock: boolean;
-            orders: boolean;
-            fulfillment: boolean;
-            finance: boolean;
-            settings: boolean;
-        };
-        MerchStorefront: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            profileId?: string;
-            slug: string;
-            displayName: string;
-            description?: string | null;
-            coverImageUrl?: string | null;
-            logoImageUrl?: string | null;
-            /** @enum {string} */
-            countryCode?: "EC";
-            /** @enum {string} */
-            currency: "USD";
-            discovery?: {
-                /** @description True while no public numeric store score is eligible. */
-                newStore: boolean;
-                /** @description Neutral exploration signal; it is never inherited from an owner or artist. */
-                explorationEligible: boolean;
-            };
-            /** @enum {string} */
-            applicationStatus?: "requested" | "under_review" | "approved" | "rejected" | "withdrawn";
-            /** @enum {string} */
-            operationalStatus?: "inactive" | "active" | "suspended" | "closed";
-            permissions?: components["schemas"]["MerchPermissions"];
-            products?: components["schemas"]["MerchProduct"][];
-            policies?: {
-                [key: string]: unknown;
-            };
-            shippingZones?: components["schemas"]["MerchShippingZone"][];
-        } & {
-            [key: string]: unknown;
-        };
-        MerchStoreApplicationRequest: {
-            /** Format: uuid */
-            profileId: string;
-            slug: string;
-            displayName: string;
-            description?: string | null;
-            applicationNote: string;
-        };
-        MerchStoreUpdateRequest: {
-            displayName: string;
-            description?: string | null;
-            coverImageUrl?: string | null;
-            logoImageUrl?: string | null;
-        };
-        MerchStoreReviewRequest: {
-            /** @enum {string} */
-            decision: "approve" | "reject" | "suspend" | "reactivate";
-            reviewerNotes: string;
-            /** @description 1000 is 10%; 0 may be used for an audited pilot override. */
-            commissionBps?: number | null;
-            commissionReason?: string | null;
-        };
-        MerchStoreMember: {
-            /** Format: uuid */
-            id: string;
-            /** Format: int64 */
-            partyId: number;
-            displayName: string;
-            username?: string | null;
-            avatarUrl?: string | null;
-            /** @enum {string} */
-            role: "owner" | "collaborator";
-            /** @enum {string} */
-            status: "pending" | "accepted" | "revoked" | "expired";
-            permissions: components["schemas"]["MerchPermissions"];
-            /** Format: date-time */
-            expiresAt?: string | null;
-        };
-        MerchMemberInviteRequest: {
-            /**
-             * Format: int64
-             * @description Selected by PartySelector search; never entered manually.
-             */
-            partyId: number;
-            permissions: components["schemas"]["MerchPermissions"];
-        };
-        MerchMemberUpdateRequest: {
-            /** @enum {string} */
-            status: "accepted" | "revoked";
-            permissions?: components["schemas"]["MerchPermissions"];
-            reason?: string | null;
-        };
-        MerchPolicyRequest: {
-            shippingPolicy: string;
-            returnPolicy: string;
-            preorderPolicy?: string | null;
-            /** Format: email */
-            supportEmail?: string | null;
-        };
-        MerchShippingZoneRequest: {
-            name: string;
-            /** @enum {string} */
-            countryCode: "EC";
-            subdivisionCodes: string[];
-            /** @enum {string} */
-            deliveryMethod: "national_shipping" | "coordinated_pickup";
-            /** Format: int64 */
-            rateMinor: number;
-            /** Format: int64 */
-            freeShippingMinMinor?: number | null;
-            estimatedMinDays?: number | null;
-            estimatedMaxDays?: number | null;
-            active: boolean;
-        };
-        MerchShippingZone: components["schemas"]["MerchShippingZoneRequest"] & {
-            /** Format: uuid */
-            id: string;
-        };
-        MerchVariantRequest: {
-            /** Format: uuid */
-            id?: string | null;
-            sku: string;
-            name: string;
-            optionValues: {
-                [key: string]: string;
-            };
-            /** Format: int64 */
-            priceMinor: number;
-            /** Format: int64 */
-            compareAtPriceMinor?: number | null;
-            /** @enum {string} */
-            currency: "USD";
-            weightGrams: number;
-            customsDescription?: string | null;
-            /** @enum {string} */
-            stockMode: "finite" | "made_to_order";
-            stockOnHand: number;
-            reorderThreshold: number;
-            active: boolean;
-        };
-        MerchStockRequest: {
-            stockOnHand: number;
-            reorderThreshold: number;
-            active: boolean;
-            /** Format: int64 */
-            version: number;
-        };
-        MerchProductRequest: {
-            slug: string;
-            name: string;
-            description: string;
-            category: components["schemas"]["MerchProductCategory"];
-            /** @enum {string} */
-            visibility: "public" | "unlisted" | "hidden";
-            /** @enum {string} */
-            availabilityMode: "in_stock" | "preorder" | "made_to_order";
-            /** Format: date-time */
-            preorderReleaseAt?: string | null;
-            /** Format: date-time */
-            publishAt?: string | null;
-            /** Format: date-time */
-            unpublishAt?: string | null;
-            buyerLimit?: number | null;
-            /** Format: uuid */
-            policyId?: string | null;
-            variants: components["schemas"]["MerchVariantRequest"][];
-        };
-        MerchProduct: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            storeId: string;
-            storeSlug?: string;
-            storeName?: string;
-            slug: string;
-            name: string;
-            description?: string;
-            category: components["schemas"]["MerchProductCategory"];
-            status: components["schemas"]["MerchProductStatus"];
-            /** @enum {string} */
-            visibility?: "public" | "unlisted" | "hidden";
-            /** @enum {string} */
-            availabilityMode: "in_stock" | "preorder" | "made_to_order";
-            /** Format: date-time */
-            preorderReleaseAt?: string | null;
-            /** Format: date-time */
-            publishAt?: string | null;
-            /** Format: date-time */
-            unpublishAt?: string | null;
-            buyerLimit?: number | null;
-            /** Format: uuid */
-            policyId?: string | null;
-            /** Format: int64 */
-            priceFromMinor?: number;
-            /** @enum {string} */
-            currency?: "USD";
-            available?: boolean;
-            imageUrl?: string | null;
-            canonicalUrl?: string;
-            rejectionReason?: string | null;
-            variants?: components["schemas"]["MerchVariant"][];
-            images?: components["schemas"]["MerchProductImage"][];
-            related?: {
-                [key: string]: unknown;
-            }[];
-            reviewsEnabled?: boolean;
-            reviews?: {
-                [key: string]: unknown;
-            }[];
-        } & {
-            [key: string]: unknown;
-        };
-        MerchVariant: {
-            /** Format: uuid */
-            id: string;
-            sku: string;
-            name: string;
-            optionValues: {
-                [key: string]: string;
-            };
-            /** Format: int64 */
-            priceMinor: number;
-            /** Format: int64 */
-            compareAtPriceMinor?: number | null;
-            /** @enum {string} */
-            currency: "USD";
-            weightGrams: number;
-            /** @enum {string} */
-            stockMode: "finite" | "made_to_order";
-            stockOnHand?: number;
-            stockReserved?: number;
-            stockSold?: number;
-            availableQuantity?: number | null;
-            available?: boolean;
-            /** Format: int64 */
-            version: number;
-            reorderThreshold?: number;
-            active: boolean;
-        } & {
-            [key: string]: unknown;
-        };
-        MerchProductImage: {
-            /** Format: uuid */
-            id: string;
-            url: string;
-            variants: {
-                [key: string]: {
-                    [key: string]: unknown;
-                };
-            };
-            altText: string;
-            sortOrder: number;
-            /** @enum {string} */
-            scanStatus?: "pending" | "clean" | "rejected";
-            /** @enum {string} */
-            moderationStatus?: "pending" | "allowed" | "blocked";
-            width?: number;
-            height?: number;
-        };
-        MerchCartCreateRequest: {
-            storeSlug: string;
-        };
-        MerchCartItemRequest: {
-            /** Format: uuid */
-            variantId: string;
-            quantity: number;
-        };
-        MerchCart: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            storeId: string;
-            /** @description Present only on creation. */
-            lookupToken?: string;
-            /** @enum {string} */
-            currency: "USD";
-            /** @enum {string} */
-            status: "active" | "checkout_started" | "converted" | "expired" | "abandoned";
-            /** Format: date-time */
-            expiresAt?: string;
-            /** Format: int64 */
-            productSubtotalMinor: number;
-            /** Format: int64 */
-            totalMinor: number;
-            items: {
-                [key: string]: unknown;
-            }[];
-        } & {
-            [key: string]: unknown;
-        };
-        MerchRecipientRequest: {
-            name: string;
-            /** Format: email */
-            email: string;
-            phone?: string | null;
-            /** @enum {string} */
-            countryCode: "EC";
-            subdivision?: string | null;
-            city: string;
-            addressLine1: string;
-            addressLine2?: string | null;
-            postalCode?: string | null;
-            deliveryNote?: string | null;
-        };
-        MerchCheckoutRequest: {
-            recipient: components["schemas"]["MerchRecipientRequest"];
-            /** Format: uuid */
-            shippingZoneId: string;
-            createAccount?: boolean | null;
-            /** @enum {string|null} */
-            locale?: "es" | "en" | null;
-        };
-        MerchOrder: {
-            /** Format: uuid */
-            id: string;
-            orderNumber: string;
-            /** @description Present only on creation. */
-            lookupToken?: string;
-            /** @enum {string} */
-            currency: "USD";
-            /** Format: int64 */
-            productSubtotalMinor: number;
-            /** Format: int64 */
-            discountMinor?: number;
-            /** Format: int64 */
-            taxMinor: number;
-            /** Format: int64 */
-            shippingMinor: number;
-            /** Format: int64 */
-            processorFeeMinor?: number;
-            /** Format: int64 */
-            tdfCommissionMinor?: number;
-            /** Format: int64 */
-            sellerNetMinor?: number;
-            /** Format: int64 */
-            totalMinor: number;
-            commercialStatus: string;
-            paymentStatus: string;
-            fulfillmentStatus: components["schemas"]["MerchFulfillmentStatus"];
-            refundStatus: string;
-            disputeStatus: string;
-            settlementStatus?: string;
-            lines: {
-                [key: string]: unknown;
-            }[];
-            timeline?: {
-                [key: string]: unknown;
-            }[];
-            issues?: components["schemas"]["MerchOrderIssue"][];
-        } & {
-            [key: string]: unknown;
-        };
-        MerchIssueRequest: {
-            /** @enum {string} */
-            issueType: "general" | "address" | "stock" | "shipping" | "damaged" | "missing" | "cancellation" | "return" | "refund" | "dispute";
-            message: string;
-        };
-        MerchCancellationRequest: {
-            reason: string;
-        };
-        MerchOrderIssue: {
-            /** Format: uuid */
-            id: string;
-            /** @enum {string} */
-            issueType: "general" | "address" | "stock" | "shipping" | "damaged" | "missing" | "cancellation" | "return" | "refund" | "dispute" | "fraud";
-            /** @enum {string} */
-            status: "open" | "seller_review" | "staff_review" | "awaiting_buyer" | "resolved" | "rejected" | "cancelled";
-            message: string;
-            resolution?: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        /** @enum {string} */
-        MerchIssueStatus: "open" | "seller_review" | "staff_review" | "awaiting_buyer" | "resolved" | "rejected" | "cancelled";
-        MerchOperationalIssue: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            storeId: string;
-            /** Format: uuid */
-            orderId: string;
-            orderNumber: string;
-            storeName: string;
-            customerName: string;
-            /** Format: email */
-            customerEmail: string;
-            /** @enum {string} */
-            issueType: "general" | "address" | "stock" | "shipping" | "damaged" | "missing" | "cancellation" | "return" | "refund" | "dispute" | "fraud";
-            status: components["schemas"]["MerchIssueStatus"];
-            message: string;
-            resolution?: string | null;
-            /** @description Visible only to an authorized seller or strict administrator. */
-            internalNotes?: string | null;
-            /** @enum {string} */
-            currency?: "USD";
-            /** Format: int64 */
-            totalMinor?: number;
-            /** Format: int64 */
-            refundedMinor?: number;
-            paymentStatus?: string;
-            refundStatus?: string;
-            disputeStatus?: string;
-            settlementStatus?: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-            /** Format: date-time */
-            closedAt?: string | null;
-        };
-        /** @description For terminal statuses, publicResponse must contain at least 10 characters. Seller financial cases may only be escalated to staff review. */
-        MerchIssueTriageRequest: {
-            status: components["schemas"]["MerchIssueStatus"];
-            publicResponse?: string | null;
-            internalNotes?: string | null;
-        };
-        MerchRefundRequest: {
-            /**
-             * Format: uuid
-             * @description Eligible financial support case currently in staff review.
-             */
-            issueId: string;
-            /**
-             * Format: int64
-             * @description Omit for the remaining unreserved paid balance.
-             */
-            amountMinor?: number | null;
-            reasonCode: string;
-            note?: string | null;
-        };
-        MerchRefundReviewRequest: {
-            /** @enum {string} */
-            decision: "approve" | "cancel";
-            reviewNote: string;
-        };
-        /** @enum {string} */
-        MerchRefundStatus: "requested" | "approved" | "processing" | "succeeded" | "failed" | "cancelled";
-        MerchRefund: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            orderId: string;
-            orderNumber: string;
-            /** Format: uuid */
-            storeId: string;
-            storeName: string;
-            /** Format: uuid */
-            issueId: string;
-            status: components["schemas"]["MerchRefundStatus"];
-            /** Format: int64 */
-            amountMinor: number;
-            /** @enum {string} */
-            currency: "USD";
-            reasonCode: string;
-            requestNote?: string | null;
-            /** @enum {string} */
-            provider: "datafast" | "paypal" | "stripe" | "bank_transfer" | "cash" | "pos";
-            /** @description Present only after verified provider evidence is recorded through a future gated adapter. */
-            providerRefundId?: string | null;
-            /** Format: int64 */
-            requestedBy: number;
-            requestedByName: string;
-            /** Format: int64 */
-            approvedBy?: number | null;
-            approvedByName?: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            completedAt?: string | null;
-            settlementStatus: string;
-            /** @enum {boolean} */
-            executionAvailable: false;
-            executionMessage: string;
-        };
-        MerchDispute: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            orderId: string;
-            orderNumber: string;
-            /** Format: uuid */
-            storeId: string;
-            storeName: string;
-            providerDisputeId: string;
-            /** @enum {string} */
-            kind: "inquiry" | "dispute" | "chargeback";
-            status: string;
-            /** Format: int64 */
-            amountMinor: number;
-            /** @enum {string} */
-            currency: "USD";
-            reasonCode?: string | null;
-            /** Format: date-time */
-            openedAt: string;
-            /** Format: date-time */
-            dueAt?: string | null;
-            /** Format: date-time */
-            closedAt?: string | null;
-            /** @enum {boolean} */
-            readOnly: true;
-        };
-        MerchStatusRequest: {
-            status: string;
-            reason?: string | null;
-        };
-        MerchFulfillmentRequest: {
-            status: components["schemas"]["MerchFulfillmentStatus"];
-            publicNote?: string | null;
-            privateNote?: string | null;
-            carrier?: string | null;
-            trackingNumber?: string | null;
-            /** Format: uri */
-            trackingUrl?: string | null;
-        };
-        MerchSettlementRequest: {
-            /** Format: uuid */
-            storeId: string;
-            /** Format: date */
-            periodStart: string;
-            /** Format: date */
-            periodEnd: string;
-            orderIds: string[];
-            reviewNotes?: string | null;
-        };
-        MerchSettlementPaymentEvidenceRequest: {
-            /**
-             * Format: binary
-             * @description JPEG or PNG receipt, at most 10 MB and 40 megapixels. It is re-encoded as a private JPEG.
-             */
-            file: string;
-            /**
-             * Format: date-time
-             * @description Timestamp from the independently verified transfer evidence.
-             */
-            paidAt: string;
-            /** @description Non-secret bank or accounting reference. */
-            externalReference: string;
-            notes?: string | null;
-        };
-        /** @enum {string} */
-        MerchSettlementStatus: "draft" | "under_review" | "approved" | "paid" | "held" | "reversed";
-        MerchSettlementEligibleOrder: {
-            /** Format: uuid */
-            id: string;
-            orderNumber: string;
-            /** @enum {string} */
-            currency: "USD";
-            /** Format: int64 */
-            productSubtotalMinor: number;
-            /** Format: int64 */
-            discountMinor: number;
-            /** Format: int64 */
-            taxMinor: number;
-            /** Format: int64 */
-            shippingMinor: number;
-            /** Format: int64 */
-            processorFeeMinor: number;
-            /** Format: int64 */
-            tdfCommissionMinor: number;
-            /** Format: int64 */
-            sellerNetMinor: number;
-            /** Format: int64 */
-            refundsMinor: number;
-            /** Format: int64 */
-            adjustmentsMinor: number;
-            /** @enum {string} */
-            paymentStatus: "paid" | "partially_refunded";
-            /** @enum {string} */
-            fulfillmentStatus: "delivered" | "returned";
-            /** @enum {string} */
-            settlementStatus: "not_ready" | "ready";
-            /** Format: date-time */
-            createdAt: string;
-        };
-        MerchSettlement: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            storeId: string;
-            /** Format: date-time */
-            periodStart: string;
-            /** Format: date-time */
-            periodEnd: string;
-            /** @enum {string} */
-            currency: "USD";
-            status: components["schemas"]["MerchSettlementStatus"];
-            storeName: string;
-            /** Format: int64 */
-            grossProductMinor: number;
-            /** Format: int64 */
-            discountsMinor: number;
-            /** Format: int64 */
-            taxesMinor: number;
-            /** Format: int64 */
-            shippingMinor: number;
-            /** Format: int64 */
-            processorFeesMinor: number;
-            /** Format: int64 */
-            tdfCommissionMinor: number;
-            /** Format: int64 */
-            refundsMinor: number;
-            /** Format: int64 */
-            adjustmentsMinor: number;
-            /** Format: int64 */
-            sellerNetMinor: number;
-            /** Format: int64 */
-            preparedBy: number;
-            preparedByName: string;
-            /** Format: int64 */
-            approvedBy?: number | null;
-            approvedByName?: string | null;
-            /** Format: int64 */
-            paidBy?: number | null;
-            paidByName?: string | null;
-            /** Format: date-time */
-            approvedAt?: string | null;
-            /** Format: date-time */
-            paidAt?: string | null;
-            evidenceObjectKey?: string | null;
-            /** @enum {string|null} */
-            evidenceMimeType?: "image/jpeg" | null;
-            /** Format: int64 */
-            evidenceByteSize?: number | null;
-            evidenceChecksumSha256?: string | null;
-            externalReference?: string | null;
-            /** Format: int64 */
-            orderCount: number;
-        } & {
-            [key: string]: unknown;
-        };
         /** @enum {string} */
         DirectoryEntityType: "profile" | "classified" | "event" | "venue";
         /** @description Safe public location; exact residential address and private coordinates are structurally absent. */
@@ -11853,11 +12027,6 @@ export interface components {
             sponsoredItems: components["schemas"]["DirectorySearchItem"][];
             facets: components["schemas"]["DirectoryFacets"];
             nextCursor?: string | null;
-        };
-        ApiError: {
-            error: string;
-            code?: string;
-            correlationId?: string;
         };
         DirectorySuggestion: {
             label: string;
@@ -11981,6 +12150,11 @@ export interface components {
                 reviewCount?: number;
             };
             canonicalUrl: string;
+        };
+        ApiError: {
+            error: string;
+            code?: string;
+            correlationId?: string;
         };
         /** @enum {string} */
         DirectoryInteractionType: "booking" | "service_order" | "marketplace_order" | "event_collaboration" | "confirmed_collaboration";
@@ -12391,12 +12565,20 @@ export interface components {
             authorProfile: components["schemas"]["DirectoryProfileReference"];
             subjectProfile: components["schemas"]["DirectoryProfileReference"];
         };
+        DirectoryFavoriteResult: {
+            type: components["schemas"]["DirectoryEntityType"];
+            id: string;
+            slug: string;
+            title: string;
+            city?: string | null;
+        };
         DirectoryFavorite: {
             targetKind: components["schemas"]["DirectoryEntityType"];
+            /** @description Canonical identifier for this favorite kind. */
             targetId: string;
             /** Format: date-time */
             createdAt: string;
-            result?: components["schemas"]["DirectorySearchItem"];
+            result: components["schemas"]["DirectoryFavoriteResult"] | null;
         };
         SavedSearchCreate: {
             name: string;
@@ -12590,15 +12772,6 @@ export interface components {
         };
     };
     responses: {
-        /** @description Invalid input */
-        BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ApiError"];
-            };
-        };
         /** @description Not found or not publicly eligible */
         NotFound: {
             headers: {
@@ -12608,8 +12781,25 @@ export interface components {
                 "application/json": components["schemas"]["ApiError"];
             };
         };
+        /** @description Invalid input */
+        BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ApiError"];
+            };
+        };
     };
     parameters: {
+        MerchCartId: string;
+        /** @description Unguessable token returned once when a guest cart is created. */
+        MerchCartLookupToken: string;
+        MerchStoreId: string;
+        MerchProductId: string;
+        MerchOrderId: string;
+        MerchIssueId: string;
+        MerchSettlementId: string;
         PublicEventId: number;
         PublicEventTicketOrderId: number;
         /** @description Immutable canonical UUID of the Domo quote runtime. */
@@ -12642,14 +12832,6 @@ export interface components {
         OrderLookupToken: string;
         /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
         IdempotencyKey: string;
-        MerchCartId: string;
-        /** @description Unguessable token returned once when a guest cart is created. */
-        MerchCartLookupToken: string;
-        MerchStoreId: string;
-        MerchProductId: string;
-        MerchOrderId: string;
-        MerchIssueId: string;
-        MerchSettlementId: string;
         SearchQuery: string;
         /** @description Opaque stable keyset cursor */
         Cursor: string;
@@ -12659,6 +12841,7 @@ export interface components {
         ProfileId: string;
         ClassifiedId: string;
         TargetKind: components["schemas"]["DirectoryEntityType"];
+        /** @description Event and venue IDs are canonical positive integers; profile and classified IDs are UUIDs. DELETE also accepts an exact invalid legacy value so an owner can remove historical data. */
         TargetId: string;
         "parameters-TargetKind": components["schemas"]["ExperienceReviewTargetKind"];
         "parameters-TargetId": string;
@@ -12786,6 +12969,318 @@ export interface operations {
             };
         };
     };
+    getMyEventRsvp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current RSVP or null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvp"] | null;
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event is missing or not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    upsertMyEventRsvp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventRsvpWrite"];
+            };
+        };
+        responses: {
+            /** @description Authoritative current RSVP */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvp"];
+                };
+            };
+            /** @description Unknown status or unknown request field */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event is missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event no longer accepts RSVPs */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mutation rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteMyEventRsvp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description RSVP absent after the idempotent operation */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mutation rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventRsvpSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Separate accepted and interested counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvpSummary"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event is missing or not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listEventRsvpsForOrganizer: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized administrative list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvpAdminPage"];
+                };
+            };
+            /** @description Cursor is malformed or limit is outside 1 through 50 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organizer permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventRsvpProfileFeed: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                partyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stable cursor page with accepted and interested RSVPs only */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvpFeedPage"];
+                };
+            };
+            /** @description Cursor is malformed or limit is outside 1 through 50 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profile is missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getDirectoryProfileEventRsvpFeed: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Privacy-filtered cursor page; organization and ambiguous profiles fail closed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvpFeedPage"];
+                };
+            };
+            /** @description Cursor is malformed or limit is outside 1 through 50 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profile is missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     reactToSocialEventMoment: {
         parameters: {
             query?: never;
@@ -12802,7 +13297,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Moment with canonical reaction references */
+            /** @description Moment with canonical reaction references, anonymous counts, and only the caller's own reaction identity */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -12810,6 +13305,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EventMoment"];
                 };
+            };
+            /** @description Event or moment identifier is malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event or moment was not found or the moment does not belong to the event */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Reaction type UUID is unknown, inactive, deprecated, or unpublished */
             422: {
@@ -13481,71 +13997,26 @@ export interface operations {
             };
         };
     };
-    getExperimentAssignment: {
+    reconcileOnboarding: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                experimentId: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Current authoritative assignment state */
+            /** @description Reconciliation result */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ExperimentAssignment"];
+                    "application/json": components["schemas"]["OnboardingCompletionResult"];
                 };
             };
             /** @description Authentication required */
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unsupported experiment */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    recordExperimentExposure: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                experimentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Current assignment and whether this request recorded its first exposure */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExperimentExposureResult"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unsupported experiment */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14649,6 +15120,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ArtistProfile"][];
                 };
+            };
+        };
+    };
+    activateMyArtistProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Artist profile ready to edit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistProfile"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account or automatic artist policy does not allow activation */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -21000,7 +21505,10 @@ export interface operations {
     createPublicTentativeBooking: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -21010,7 +21518,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Tentative booking created */
+            /** @description Tentative booking created or replayed from the same request */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -21019,7 +21527,14 @@ export interface operations {
                     "application/json": components["schemas"]["Booking"];
                 };
             };
-            /** @description Resource was reserved by another request */
+            /** @description Missing or invalid idempotency key or booking input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Idempotency-key payload conflict or resource was reserved by another request */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21525,7 +22040,13 @@ export interface operations {
                     "application/json": components["schemas"]["DirectorySearchResponse"];
                 };
             };
-            400: components["responses"]["BadRequest"];
+            /** @description Unsupported target kind filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     suggestDirectoryQuery: {
@@ -22131,7 +22652,7 @@ export interface operations {
     listDirectoryFavorites: {
         parameters: {
             query?: {
-                /** @description Restrict the Party-scoped result to one supported favorite kind. Mobile saved-event synchronization uses `event`. */
+                /** @description Restrict the authenticated Party's favorites to one supported kind. Saved-event synchronization uses `event`. */
                 targetKind?: components["schemas"]["DirectoryEntityType"];
             };
             header?: never;
@@ -22140,7 +22661,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Current authenticated Party's favorites */
+            /** @description Current authenticated Party favorites */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -22149,13 +22670,7 @@ export interface operations {
                     "application/json": components["schemas"]["DirectoryFavorite"][];
                 };
             };
-            /** @description Unsupported target kind */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+            400: components["responses"]["BadRequest"];
         };
     };
     saveDirectoryFavorite: {
@@ -22164,27 +22679,28 @@ export interface operations {
             header?: never;
             path: {
                 targetKind: components["parameters"]["TargetKind"];
+                /** @description Event and venue IDs are canonical positive integers; profile and classified IDs are UUIDs. DELETE also accepts an exact invalid legacy value so an owner can remove historical data. */
                 targetId: components["parameters"]["TargetId"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Favorite desired state is saved idempotently; event targets must exist in the public event projection */
+            /** @description Desired saved state confirmed idempotently after validating the canonical public target; event targets must still be upcoming */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Invalid target kind or identifier */
+            /** @description Unsupported kind or malformed target identifier */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Event target does not exist or is not publicly visible */
+            /** @description Target not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -22199,14 +22715,22 @@ export interface operations {
             header?: never;
             path: {
                 targetKind: components["parameters"]["TargetKind"];
+                /** @description Event and venue IDs are canonical positive integers; profile and classified IDs are UUIDs. DELETE also accepts an exact invalid legacy value so an owner can remove historical data. */
                 targetId: components["parameters"]["TargetId"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Favorite removed */
+            /** @description Desired removed state confirmed idempotently; canonical and valid legacy identifier variants are removed together */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported kind or empty/oversized target identifier */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -392,9 +392,7 @@ export function resolveMobileIntentDestination(
     case 'follow_artists':
       return '/(tabs)/social';
     case 'artist_profile':
-      return hasAny(roles, ['artist', 'artista', 'admin'])
-        ? '/createArtistProfile'
-        : ({ pathname: '/access-requests/new', params: { feature: 'artist.onboarding', action: 'create' } } as unknown as Href);
+      return '/createArtistProfile';
     case 'internships':
       return hasAny(roles, ['intern', 'admin']) && hasAny(modules, ['internships', 'admin'])
         ? '/(tabs)/more' as unknown as Href

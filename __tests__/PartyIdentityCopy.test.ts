@@ -26,7 +26,7 @@ describe('mobile Party identity copy', () => {
   });
 
   it('describes missing canonical identity as an account or session state', () => {
-    expect(eventDetail).toContain('Inicia sesión con una cuenta vinculada');
+    expect(eventDetail).toContain('Elige una opción y te llevaremos a crear una cuenta');
     expect(liveBroadcasts).toContain('Tu sesión no tiene una identidad vinculada');
   });
 

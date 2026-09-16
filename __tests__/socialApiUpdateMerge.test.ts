@@ -520,22 +520,26 @@ describe('Social API update merge behavior', () => {
     await expect(
       Events.rsvp({
         eventId: 9,
-        userId: 12,
         status: 'NONE',
+        showOnProfile: true,
       }),
     ).rejects.toThrow('RSVP status NONE cannot be submitted.');
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('Events.rsvp rejects invalid party ids before posting', async () => {
-    await expect(
-      Events.rsvp({
-        eventId: 9,
-        userId: 'abc',
-        status: 'GOING',
-      }),
-    ).rejects.toThrow('Party ID inválido para RSVP.');
-    expect(post).not.toHaveBeenCalled();
+  it('Events.rsvp sends only the canonical status and explicit profile preference', async () => {
+    put.mockResolvedValueOnce({
+      rsvpEventId: 9,
+      rsvpStatus: 'accepted',
+      rsvpShowOnProfile: true,
+    });
+
+    await Events.rsvp({ eventId: 9, status: 'GOING', showOnProfile: true });
+
+    expect(put).toHaveBeenCalledWith('/social-events/events/9/rsvp', {
+      rsvpStatus: 'accepted',
+      rsvpShowOnProfile: true,
+    });
   });
 
   it('Artists.update preserves name and genres when omitted in patch', async () => {

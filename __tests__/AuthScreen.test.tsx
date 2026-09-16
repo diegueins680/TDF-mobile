@@ -208,7 +208,7 @@ describe('Auth screen', () => {
   });
 
   it('drops a syntactically safe returnTo when the returned session cannot use it', async () => {
-    mockSearchParams = { returnTo: '/createArtistProfile' };
+    mockSearchParams = { returnTo: '/access-requests/review' };
     mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
     render(<AuthScreen />);
     fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
@@ -253,6 +253,37 @@ describe('Auth screen', () => {
     fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
     fireEvent.press(screen.getByTestId('loginButton'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory'));
+  });
+
+  it('returns to a canonical public event after an existing user logs in', async () => {
+    mockSearchParams = { mode: 'signup', intent: 'events', returnTo: '/eventos/42' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByText('Ingresar'));
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
+    fireEvent.press(screen.getByTestId('loginButton'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/eventos/42'));
+  });
+
+  it('rejects external and backslash return routes', async () => {
+    mockSearchParams = { returnTo: '/\\evil.example/path' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
+    fireEvent.press(screen.getByTestId('loginButton'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory'));
+  });
+
+  it('strips untrusted parameters from an otherwise valid public event return route', async () => {
+    mockSearchParams = { returnTo: '/eventos/42?token=secret&partyId=7' };
+    mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
+    render(<AuthScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');
+    fireEvent.changeText(screen.getByPlaceholderText(/tu contraseña/i), 'password');
+    fireEvent.press(screen.getByTestId('loginButton'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/eventos/42'));
   });
 
   it('exposes associated field labels, input guidance, and validation errors', async () => {
@@ -349,10 +380,7 @@ describe('Auth screen', () => {
     expect(mockSignupRequest.mock.calls[0]?.[0]).not.toHaveProperty('roles');
     expect(mockSignupRequest.mock.calls[0]?.[0]).toHaveProperty('onboardingIntent', 'artist_profile');
     await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
-    expect(mockReplace).toHaveBeenCalledWith({
-      pathname: '/access-requests/new',
-      params: { feature: 'artist.onboarding', action: 'create' },
-    });
+    expect(mockReplace).toHaveBeenCalledWith('/createArtistProfile');
   });
 
   it('restores an interrupted signup intent from bounded local storage', async () => {

@@ -8757,6 +8757,8 @@ export interface components {
             cpaCapabilities: components["schemas"]["CommerceProviderCapability"][];
         };
         CommercePaymentIntentSummary: {
+            /** @enum {string} */
+            cpiEnvironment: "sandbox" | "production";
             cpiStatus: string;
             cpiCurrency: string;
             /** Format: int64 */
@@ -8771,6 +8773,8 @@ export interface components {
             cpiRefundedMinor: number;
         };
         CommerceAmountComponentSummary: {
+            /** @enum {string} */
+            cacEnvironment: "sandbox" | "production";
             /** @enum {string} */
             cacComponentType: "subtotal" | "discount" | "tax" | "customer_fee" | "provider_fee" | "platform_commission" | "seller_payable" | "withholding" | "refund" | "chargeback" | "fx_adjustment";
             /** @enum {string} */
@@ -12026,6 +12030,8 @@ export interface components {
              * @description Internal subject identifier; clients must not expose it unnecessarily.
              */
             requesterPartyId: number;
+            /** @description Requester's display name, or null when unavailable. Visible only to the requester and authorized reviewers. */
+            requesterName: string | null;
             featureId: string;
             action: string;
             roleContext: string[];

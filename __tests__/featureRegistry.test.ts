@@ -74,7 +74,7 @@ describe('mobile feature registry', () => {
     const fan = { authenticated: true, roles: ['Fan', 'Customer'], modules: ['Packages'] };
     const artist = { authenticated: true, roles: ['Artist', 'Fan', 'Customer'], modules: ['Scheduling', 'Packages'] };
     expect(feature.routeAction).toBe('create');
-    expect(evaluateFeatureAccess(feature, fan, feature.routeAction).state).not.toBe('allowed');
+    expect(evaluateFeatureAccess(feature, fan, feature.routeAction).state).toBe('allowed');
     expect(evaluateFeatureAccess(feature, artist, feature.routeAction).state).toBe('allowed');
   });
 

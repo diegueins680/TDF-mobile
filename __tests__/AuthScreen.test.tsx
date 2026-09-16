@@ -208,7 +208,7 @@ describe('Auth screen', () => {
   });
 
   it('drops a syntactically safe returnTo when the returned session cannot use it', async () => {
-    mockSearchParams = { returnTo: '/createArtistProfile' };
+    mockSearchParams = { returnTo: '/access-requests/review' };
     mockLoginRequest.mockResolvedValue({ token: 'token', partyId: 5, roles: ['Customer'], modules: [] });
     render(<AuthScreen />);
     fireEvent.changeText(screen.getByPlaceholderText(/usuario o correo/i), 'customer');

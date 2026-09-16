@@ -84,10 +84,6 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
   }),
 }));
 
-jest.mock('../src/analytics/AnalyticsProvider', () => ({
-  useAnalytics: () => ({ capture: jest.fn() }),
-}));
-
 jest.mock('../src/api/events', () => ({
   Events: {
     getById: jest.fn(),
@@ -306,7 +302,7 @@ describe('EventDetail moments tab', () => {
       ownerPartyId: '7',
     }));
 
-    const reactionOptions = mockMutationOptions[5];
+    const reactionOptions = mockMutationOptions[6];
     const result = { source: 'remote', selected: true };
     reactionOptions.onSuccess?.(result, { ownerPartyId: '7' });
 
@@ -329,7 +325,7 @@ describe('EventDetail moments tab', () => {
       ownerPartyId: '7',
     });
 
-    const saveOptions = mockMutationOptions[3];
+    const saveOptions = mockMutationOptions[4];
     saveOptions.onSuccess?.(
       { saved: true, serverAcknowledged: true },
       { targetEventId: '42', ownerPartyId: '7' },

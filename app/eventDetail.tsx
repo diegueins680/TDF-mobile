@@ -70,7 +70,6 @@ import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
-import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { recordFirstValueCompletion } from '../src/lib/firstValueCompletion';
 import { recordMomentReactionFirstValue } from '../src/lib/momentReactionFirstValue';
 import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
@@ -141,7 +140,6 @@ export default function EventDetailScreen() {
   const analytics = useAnalytics();
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: normalizedPartyId, session } = useAuth();
-  const analytics = useAnalytics();
   const { locale, timezone, currency, showEventRsvpsOnProfile, getCatalogItems } = useUserSettings();
   const displayName = session?.displayName ?? null;
   const reactionOptions = useMemo<EventMomentReactionOption[]>(

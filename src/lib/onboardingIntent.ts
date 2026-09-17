@@ -422,7 +422,7 @@ const resolvePublicWebFeature = (
     'view',
   ).state !== 'allowed') return null;
   const destination = resolveMobileDestination(feature);
-  return destination?.kind === 'web' ? destination : null;
+  return destination?.kind === 'web' ? { kind: 'web', value: destination.value } : null;
 };
 
 export function resolveMobileIntentNavigation(

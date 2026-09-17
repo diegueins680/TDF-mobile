@@ -108,6 +108,7 @@ export default function AuthScreen() {
   const [signupEmail, setSignupEmail] = useState('');
   const [selectedIntent, setSelectedIntent] = useState<OnboardingIntent>(initialIntent);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [policyError, setPolicyError] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const lastNameInputRef = useRef<TextInput>(null);
@@ -721,13 +722,24 @@ export default function AuthScreen() {
                     <Text style={styles.checkboxText}>{copy.accept}</Text>
                   </TouchableOpacity>
                   <View style={styles.legalLinks}>
-                    <TouchableOpacity accessibilityRole="link" onPress={() => void Linking.openURL(TERMS_URL)}>
+                    <TouchableOpacity accessibilityRole="link" onPress={() => {
+                      setPolicyError(false);
+                      void Linking.openURL(TERMS_URL).catch(() => setPolicyError(true));
+                    }}>
                       <Text style={styles.legalLink}>{copy.terms}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity accessibilityRole="link" onPress={() => void Linking.openURL(PRIVACY_URL)}>
+                    <TouchableOpacity accessibilityRole="link" onPress={() => {
+                      setPolicyError(false);
+                      void Linking.openURL(PRIVACY_URL).catch(() => setPolicyError(true));
+                    }}>
                       <Text style={styles.legalLink}>{copy.privacy}</Text>
                     </TouchableOpacity>
                   </View>
+                  {policyError && (
+                    <Text style={styles.errorText} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                      {copy.policyOpenFailure}
+                    </Text>
+                  )}
                   <TouchableOpacity
                     style={styles.checkboxRow}
                     onPress={() => setMarketingOptIn((current) => !current)}
@@ -1062,6 +1074,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   checkboxChecked: { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary },
   checkboxMark: { color: colors.actionPrimaryContrast, fontWeight: '900' },
   checkboxText: { flex: 1, color: colors.textPrimary, fontSize: 13, lineHeight: 18 },
-  legalLinks: { flexDirection: 'row', gap: 20, paddingLeft: 34 },
+  legalLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, paddingLeft: 34 },
   legalLink: { color: colors.actionPrimary, minHeight: 44, textAlignVertical: 'center', fontWeight: '600', fontSize: 13 },
 });

@@ -333,6 +333,24 @@ describe('Auth screen', () => {
     );
   });
 
+  it('preserves signup input and offers a retry when a policy document cannot open', async () => {
+    mockSearchParams = { mode: 'signup' };
+    mockOpenURL.mockRejectedValueOnce(new Error('browser unavailable'));
+    render(<AuthScreen />);
+    const email = await screen.findByPlaceholderText('tu@correo.com');
+    fireEvent.changeText(email, 'synthetic@example.test');
+    fireEvent.press(screen.getByRole('link', { name: 'Ver términos' }));
+    const failureCopy = 'No pudimos abrir el documento. Toca el enlace para volver a intentarlo; tus datos siguen aquí.';
+    const message = await screen.findByText(failureCopy);
+    expect(message.props.accessibilityRole).toBe('alert');
+    expect(screen.getByDisplayValue('synthetic@example.test')).toBeTruthy();
+    expect(mockSignupRequest).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole('link', { name: 'Ver términos' }));
+    await waitFor(() => expect(screen.queryByText(failureCopy)).toBeNull());
+    expect(mockOpenURL).toHaveBeenCalledTimes(2);
+    expect(mockOpenURL).toHaveBeenLastCalledWith('https://tdf-app.pages.dev/account/terms.html');
+  });
+
   it('creates an account without caller-selected roles and stores the returned session', async () => {
     mockSignupRequest.mockResolvedValue({
       token: 'Bearer new-fan-token',

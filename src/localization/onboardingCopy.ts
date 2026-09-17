@@ -48,6 +48,7 @@ export const authCopy = {
     googlePlayUnavailable: 'Google Play Services no está disponible en este dispositivo.', googleFailure: 'No pudimos iniciar sesión con Google.',
     sessionClosed: 'Sesión cerrada.', sessionStatus: 'Estado de sesión', sessionLoading: 'Cargando sesión guardada…',
     session: 'Sesión', sessionActive: 'Activa', sessionInactive: 'No iniciada', signOut: 'Cerrar sesión',
+    policyOpenFailure: 'No pudimos abrir el documento. Toca el enlace para volver a intentarlo; tus datos siguen aquí.',
   },
   en: {
     createTitle: 'Create your account', loginTitle: 'Log in', resetTitle: 'Reset password',
@@ -77,6 +78,7 @@ export const authCopy = {
     googlePlayUnavailable: 'Google Play Services is unavailable on this device.', googleFailure: 'We could not sign you in with Google.',
     sessionClosed: 'Signed out.', sessionStatus: 'Session status', sessionLoading: 'Loading saved session…',
     session: 'Session', sessionActive: 'Active', sessionInactive: 'Not signed in', signOut: 'Sign out',
+    policyOpenFailure: 'We could not open the document. Tap the link to try again; your details are still here.',
   },
 } as const;
 

@@ -1,6 +1,7 @@
+import { AccessRequestDetail } from '../../src/notifications/AccessRequestDetail';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type Href, Stack, useRouter } from 'expo-router';
+import { type Href, Stack, useRouter, useLocalSearchParams } from 'expo-router';
 
 import { cancelAccessRequest, listMyAccessRequests } from '../../src/api/accessRequests';
 import { getFeatureById, featureLabel, evaluateFeatureAccess } from '../../src/features/featureRegistry';
@@ -15,6 +16,12 @@ const STATUS: Record<string, { es: string; en: string }> = {
 };
 
 export default function AccessRequestsScreen() {
+  const { request } = useLocalSearchParams<{ request?: string }>();
+  if (request && /^[1-9]\d*$/.test(request) && Number.isSafeInteger(Number(request))) return <AccessRequestDetail id={Number(request)} />;
+  return <AccessRequestsList />;
+}
+
+function AccessRequestsList() {
   const router = useRouter();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();

@@ -1,3 +1,4 @@
+import { useNotificationResponses } from '../src/navigation/useNotificationResponses';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   Redirect,
@@ -24,6 +25,7 @@ import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/
 import { currentRouteReturnTo, mobileDeepLinkTarget } from '../src/navigation/deepLinks';
 
 function RootNavigator() {
+  useNotificationResponses();
   const { colorScheme } = useAppTheme();
   const analytics = useAnalytics();
   const pathname = usePathname();

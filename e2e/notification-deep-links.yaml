@@ -1,10 +1,10 @@
 # Run on a dedicated simulator: maestro --device <id> test e2e/notification-deep-links.yaml
+# Android: add -e APP_ID=com.tdf.records after `test`; iOS uses the default below.
 # No credentials are submitted; synthetic IDs exercise sign-in handoff only.
-appId: com.tdfrecords.app
+appId: ${APP_ID || "com.tdfrecords.app"}
 ---
-- launchApp:
-    clearState: true
 - stopApp
+- clearState
 - openLink:
     link: "tdf://notification/900000001"
     autoVerify: true

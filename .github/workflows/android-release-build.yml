@@ -1,0 +1,82 @@
+name: Android Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: Unused Play version code for version 1.0.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-signed-release
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    if: github.ref == 'refs/heads/main'
+    environment: android-release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      ANDROID_VERSION_CODE: ${{ inputs.version_code }}
+      EXPO_PUBLIC_API_BASE: https://tdf-hq.fly.dev
+      EXPO_PUBLIC_UPLOAD_URL: https://tdf-hq.fly.dev/drive/upload
+      EXPO_PUBLIC_TZ: UTC
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 1016946267087-mvr22vuc8dql37fem7aa1msdnatjvhh4.apps.googleusercontent.com
+      NODE_ENV: production
+      TDF_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/tdf-upload.jks
+      TDF_ANDROID_CERT_SHA256: 34e42cebcd7bca3e6df710bd8bb10a2c76ca69e21dd8e1247a3d43a662cb2432
+      BUNDLETOOL_PATH: ${{ runner.temp }}/bundletool.jar
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install and verify source
+        run: |
+          npm ci --include=dev
+          npm run release:check
+          env -u EXPO_PUBLIC_API_BASE -u EXPO_PUBLIC_UPLOAD_URL -u EXPO_PUBLIC_TZ -u EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID NODE_ENV=test npm test -- --watch=false --runInBand
+          python3 -m unittest discover -s scripts/tests -p 'test_android_release.py'
+      - name: Install checksum-pinned bundle inspection tool
+        run: |
+          curl --fail --location --retry 2 https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar --output "$BUNDLETOOL_PATH"
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $BUNDLETOOL_PATH" | sha256sum --check
+      - name: Prepare existing upload signing key
+        env:
+          TDF_ANDROID_KEYSTORE_BASE64: ${{ secrets.TDF_ANDROID_KEYSTORE_BASE64 }}
+          TDF_ANDROID_STORE_PASSWORD: ${{ secrets.TDF_ANDROID_STORE_PASSWORD }}
+          TDF_ANDROID_KEY_ALIAS: ${{ secrets.TDF_ANDROID_KEY_ALIAS }}
+        run: python3 scripts/android-release.py prepare
+      - name: Build and qualify signed bundle
+        env:
+          TDF_ANDROID_STORE_PASSWORD: ${{ secrets.TDF_ANDROID_STORE_PASSWORD }}
+          TDF_ANDROID_KEY_ALIAS: ${{ secrets.TDF_ANDROID_KEY_ALIAS }}
+          TDF_ANDROID_KEY_PASSWORD: ${{ secrets.TDF_ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          ./gradlew :app:bundleRelease --no-daemon --max-workers=2
+          cd ..
+          python3 scripts/android-release.py verify
+      - name: Remove private signing key
+        if: always()
+        run: python3 -c 'import os; from pathlib import Path; Path(os.environ["TDF_ANDROID_KEYSTORE_PATH"]).unlink(missing_ok=True)'
+      - name: Retain qualified bundle for Play submission
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: tdf-android-${{ github.sha }}-${{ inputs.version_code }}
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0

@@ -9,7 +9,7 @@ import { useAuth } from '../src/providers/AuthProvider';
 
 export default function Index() {
   const [target, setTarget] = useState<Href | null>(null);
-  const { loading } = useAuth();
+  const { loading, token } = useAuth();
 
   useEffect(() => {
     let active = true;
@@ -23,7 +23,10 @@ export default function Index() {
     };
   }, []);
 
-  if (!target || loading) {
+  // A deep-link login can legitimately bypass the optional welcome marker.
+  // Current hydrated authentication takes priority, even if storage never replies.
+  const destination = token ? MOBILE_LANDING_ROUTE : target;
+  if (!destination || loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" />
@@ -31,5 +34,5 @@ export default function Index() {
     );
   }
 
-  return <Redirect href={target} />;
+  return <Redirect href={destination} />;
 }

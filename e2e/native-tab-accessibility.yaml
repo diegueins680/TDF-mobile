@@ -1,0 +1,23 @@
+# Precondition: a legitimate authenticated test session, Spanish preferences.
+# Read-only navigation plus reversible language preference; restores Spanish.
+appId: com.tdfrecords.app
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Directorio, pestaña 1 de 5"
+    timeout: 45000
+- tapOn: "Perfil, pestaña 5 de 5"
+- assertVisible: "Sesión conectada"
+- tapOn: "Inglés"
+- assertVisible: "Profile, tab 5 of 5"
+- assertVisible: "Directory, tab 1 of 5"
+- tapOn: "Español"
+- assertVisible: "Perfil, pestaña 5 de 5"
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Perfil, pestaña 5 de 5"
+    timeout: 45000
+- tapOn: "Perfil, pestaña 5 de 5"
+- assertVisible: "Sesión conectada"

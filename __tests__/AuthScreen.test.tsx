@@ -485,6 +485,23 @@ describe('Auth screen', () => {
     expect(screen.getByText('Sesión con Google iniciada.')).toBeTruthy();
   });
 
+  it('connects Google only after an explicit existing-account password confirmation', async () => {
+    mockGoogleSignIn.mockResolvedValue({ type: 'success', data: { idToken: 'verified-google-token' } });
+    mockGoogleLoginRequest.mockRejectedValueOnce(new Error('Accept the terms and privacy policy through the signup flow before creating a Google account'))
+      .mockResolvedValueOnce({ token: 'linked-token', partyId: 88, roles: [], modules: [], accountCreated: false });
+    render(<AuthScreen />);
+    fireEvent.press(await screen.findByText('Continuar con Google'));
+    await screen.findByText('Conectar Google a mi cuenta TDF');
+    expect(mockSetToken).not.toHaveBeenCalled();
+    fireEvent.changeText(screen.getByPlaceholderText('usuario o correo'), 'existing-user');
+    fireEvent.changeText(screen.getByPlaceholderText('Tu contraseña'), 'existing-password');
+    fireEvent.press(screen.getByText('Conectar Google a mi cuenta TDF'));
+    await waitFor(() => expect(mockGoogleLoginRequest).toHaveBeenLastCalledWith({
+      idToken: 'verified-google-token', linkAccount: { username: 'existing-user', password: 'existing-password' },
+    }));
+    await waitFor(() => expect(mockSetToken).toHaveBeenCalled());
+  });
+
   it('uses and retains a restored intent when Google persistence fails', async () => {
     mockReadPendingOnboardingIntent.mockResolvedValue('internships');
     mockUpdateOnboardingIntent.mockRejectedValueOnce(new Error('offline'));

@@ -13,6 +13,7 @@ export type AccessRequestHistory = {
 export type AccessRequest = {
   id: number;
   requesterPartyId: number;
+  requesterName?: string | null;
   featureId: string;
   action: FeatureAction;
   roleContext: string[];
@@ -34,3 +35,5 @@ export const submitAccessRequest = (payload: { featureId: string; action: Featur
 export const cancelAccessRequest = (id: number): Promise<AccessRequest> => patch(`/access-requests/${id}/cancel`, { cancellationNote: null });
 export const listAccessRequestsForReview = (status: AccessRequestStatus = 'pending'): Promise<AccessRequest[]> => get(`/access-requests/review?status=${encodeURIComponent(status)}`);
 export const decideAccessRequest = (id: number, decision: 'approved' | 'rejected', notes: string | null): Promise<AccessRequest> => patch(`/access-requests/${id}/decision`, { decision, notes });
+
+export const getAccessRequest = (id: number): Promise<{ request: AccessRequest; canReview: boolean; canCancel: boolean }> => get(`/access-requests/${id}`);

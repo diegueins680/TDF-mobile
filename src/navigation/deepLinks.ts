@@ -135,6 +135,15 @@ export function mobileDeepLinkTarget(url: string, currentPathname: string): stri
     if (segments.some((segment) => segment === null)) return null;
     const safeSegments = segments as string[];
 
+    if ((safeSegments[0] === 'notification' || safeSegments[0] === 'notifications' || safeSegments[0] === 'notificaciones')
+      && safeSegments.length === 2 && /^[1-9]\d*$/.test(safeSegments[1])
+      && Number.isSafeInteger(Number(safeSegments[1]))) {
+      return safeInternalRoute(`/notifications?notificationId=${safeSegments[1]}`);
+    }
+    if (safeSegments[0] === 'access-requests' && safeSegments.length === 2
+      && /^[1-9]\d*$/.test(safeSegments[1]) && Number.isSafeInteger(Number(safeSegments[1]))) {
+      return safeInternalRoute(`/access-requests?request=${safeSegments[1]}`);
+    }
     if (safeSegments[0] === 'event' && safeSegments.length === 2) {
       return appendQuery(
         `/eventDetail?eventId=${encodeURIComponent(safeSegments[1])}`,

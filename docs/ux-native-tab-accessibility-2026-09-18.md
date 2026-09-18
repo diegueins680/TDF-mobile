@@ -33,3 +33,17 @@ these labels. Parent must qualify the exact published source and preserve newer
 contracts if its backend base changes before updating the gitlink. No API/schema or
 entitlement changes occur here. Canonical finding/release status remains in the parent
 repository's docs/ux-ui-audit/2026-09-17 records, not a separate findings tracker.
+
+Actual corrected artifact verification, 2026-09-18 07:15 UTC:
+EAS simulator4696e1b9-97e3-42a8-ace1-64ed1a637a20 FINISHED from
+`afbd5dcc7f42b612ce1ca678871b1b1aa69227cc`; archive SHA256
+`c2304379eedb1da8fea0ac758c9aeba2983443658b334a2f175583dc83c3b4a9`.
+Installed on isolated iOS18.3 simulator97AB8B7E. Actual Info.plist is1.0.1/build1;
+EAS metadata20 is not a claim that this is the signed App Store20 binary.
+Maestro passed the existing legitimate App Review session: directory1of5,
+profile5of5, authenticated profile, stop/relaunch and authenticated return.
+A second flow passed ES→EN→ES with current accessible labels and restored Spanish.
+Screenshots are in `docs/evidence/native-tabs-2026-09-18/`.
+No account creation, consequential business action or credential is included.
+This verifies the simulator accessibility tree, not a human VoiceOver session,
+physical devices, Android runtime, signed build, or store publication.

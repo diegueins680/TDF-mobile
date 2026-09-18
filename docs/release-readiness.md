@@ -6,7 +6,10 @@ Follow-up: a regression reproduced a pending artist follow applying twice after
 A → B → A. Artist mutation variables now capture the session occurrence (including
 credential changes), checked before dispatch, response and onboarding handshake.
 The stale callback cannot write query state or completion for the renewed session.
-499 tests, TypeScript and lint pass. An initial full run was interrupted by shared
+500 tests, TypeScript and lint pass. A second negative regression confirms
+revocation before React rerenders: the captured predicate now also checks the
+actual HTTP client credential, so immediate logout cannot dispatch or apply the
+old command while the UI still holds its previous render. An initial full run was interrupted by shared
 disk exhaustion; the affected experiment suite and then all84suites passed after
 removing only the audit-created simulator. Physical Android qualification of this
 final source is still pending; earlier60fccd5 evidence is not relabeled.

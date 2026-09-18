@@ -1,4 +1,5 @@
 import React from 'react';
+import { setAuthToken } from '../src/api/client';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockMutate = jest.fn();
@@ -109,6 +110,7 @@ describe('Social screen', () => {
     jest.clearAllMocks();
     mockMutationOptions.length = 0;
     mockFollows = [];
+    setAuthToken('Bearer demo');
     jest.requireMock('../src/providers/AuthProvider').useAuth.mockReturnValue({ token: 'Bearer demo', partyId: '42', session: { displayName: 'Demo Fan' }, loading: false });
   });
 
@@ -199,6 +201,18 @@ describe('Social screen', () => {
       oldOptions.onSuccess?.({ ffArtistId: 71, ffArtistName: 'Artista Uno' }, variables);
       currentOptions.onSuccess?.({ ffArtistId: 71, ffArtistName: 'Artista Uno' }, variables);
     });
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+    expect(mockRecordFirstValueCompletion).not.toHaveBeenCalled();
+  });
+
+  it('rejects dispatch and receipt after credentials are revoked before React rerenders', async () => {
+    render(<SocialScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Seguir a Artista Uno' }));
+    const variables = mockMutate.mock.calls[0][0];
+    const options = mockMutationOptions[1];
+    setAuthToken(null);
+    await expect(options.mutationFn?.(variables)).rejects.toThrow('sesión');
+    options.onSuccess?.({ ffArtistId: 71, ffArtistName: 'Artista Uno' }, variables);
     expect(mockSetQueryData).not.toHaveBeenCalled();
     expect(mockRecordFirstValueCompletion).not.toHaveBeenCalled();
   });

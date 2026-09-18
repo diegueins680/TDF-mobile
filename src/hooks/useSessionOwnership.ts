@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { isCurrentAuthToken } from '../api/client';
 
 // Capture a particular session occurrence, including A -> B -> A. Keeping the
 // predicate in mutation variables also protects callbacks replaced by a rerender.
@@ -14,6 +15,6 @@ export function useSessionOwnership(partyId: string | null | undefined, token: s
   }, []);
   return useCallback(() => {
     const owner = session.current;
-    return () => mounted.current && Boolean(owner.partyId && owner.token?.trim()) && session.current === owner;
+    return () => mounted.current && Boolean(owner.partyId) && isCurrentAuthToken(owner.token) && session.current === owner;
   }, []);
 }

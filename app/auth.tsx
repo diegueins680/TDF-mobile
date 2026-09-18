@@ -101,6 +101,8 @@ export default function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgotPassword'>(requestedMode === 'signup' ? 'signup' : 'login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [googleConnectionRequired, setGoogleConnectionRequired] = useState(false);
+  useEffect(() => { setGoogleConnectionRequired(false); }, [mode]);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
@@ -362,6 +364,10 @@ export default function AuthScreen() {
       return;
     }
 
+    if (mode === 'login' && googleConnectionRequired && (!username.trim() || !password)) {
+      setErrorMessage(copy.googleConnectExplanation);
+      return;
+    }
     setIsGoogleSubmitting(true);
     const pendingIntentPromise = mode === 'signup'
       ? Promise.resolve(selectedIntent)
@@ -387,6 +393,9 @@ export default function AuthScreen() {
 
       const session = await googleLoginRequest({
         idToken: response.data.idToken,
+        ...(mode === 'login' && googleConnectionRequired ? {
+          linkAccount: { username: username.trim(), password },
+        } : {}),
         ...(mode === 'signup' ? {
           marketingOptIn,
           termsAccepted: true,
@@ -450,6 +459,11 @@ export default function AuthScreen() {
         method: 'google',
         ...(mode === 'signup' ? { intent: selectedIntent } : {}),
       });
+      if (mode === 'login' && readErrorMessage(error, '') === 'Accept the terms and privacy policy through the signup flow before creating a Google account') {
+        setGoogleConnectionRequired(true);
+        setFeedbackMessage(copy.googleConnectExplanation);
+        return;
+      }
       setErrorMessage(readErrorMessage(error, copy.googleFailure));
     } finally {
       setIsGoogleSubmitting(false);
@@ -818,7 +832,7 @@ export default function AuthScreen() {
                       <ActivityIndicator color={colors.textPrimary} />
                     ) : (
                       <Text style={styles.secondaryButtonText}>
-                        {mode === 'signup' ? copy.googleCreate : copy.googleLogin}
+                        {mode === 'signup' ? copy.googleCreate : googleConnectionRequired ? copy.googleConnect : copy.googleLogin}
                       </Text>
                     )}
                   </TouchableOpacity>

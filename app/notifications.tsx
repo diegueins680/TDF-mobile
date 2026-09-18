@@ -57,6 +57,7 @@ export default function NotificationScreen() {
           ? (english ? 'Continue to this resource on TDF web. Sign in there if needed.' : 'Continúa a este recurso en TDF web. Inicia sesión allí si es necesario.')
           : (english ? 'The specific destination is unavailable or its original reference was not retained.' : 'El destino específico no está disponible o no se conservó su referencia original.')}</Text></>}
     {path && <TouchableOpacity accessibilityRole="link" style={{ minHeight: 44, padding: 12 }} onPress={() => { void Linking.openURL(`https://tdf-app.pages.dev${path}`); }}><Text style={{ color: colors.actionPrimary }}>{english ? 'Open on TDF web' : 'Abrir en TDF web'}</Text></TouchableOpacity>}
+    <Link href="/" style={{ color: colors.actionPrimary, minHeight: 44 }}>{english ? 'Home' : 'Inicio'}</Link>
     <Link href="/access-requests" style={{ color: colors.actionPrimary, minHeight: 44 }}>{english ? 'My access requests' : 'Mis solicitudes de acceso'}</Link>
   </ScrollView>;
 }

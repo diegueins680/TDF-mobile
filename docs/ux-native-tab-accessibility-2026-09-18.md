@@ -47,3 +47,34 @@ Screenshots are in `docs/evidence/native-tabs-2026-09-18/`.
 No account creation, consequential business action or credential is included.
 This verifies the simulator accessibility tree, not a human VoiceOver session,
 physical devices, Android runtime, signed build, or store publication.
+
+## Continuation: native text scaling, 2026-09-18 17:10 UTC
+
+On the physical Samsung SM-S928B / Android16, system font_scale2.0 truncated
+Directorio/Seguir/Explorar in the fixed-height bottom bar. The custom labels now
+retain unrestricted system scaling and wrapping. Native text layout measures the
+tallest label and reserves that height plus icon/padding and the bottom safe area.
+Measurements reset when width, scale, language or authentication changes.
+Accessible names and authorized destinations retain the existing contracts.
+
+508 tests in85 suites and release:check passed. The component regression checks
+measured multiline height, safe-area allowance and unrestricted scaling. Actual
+production Hermes export completed2315modules; the isolated QA package used its
+existing native base46b1cca1-f38e-4105-b9c4-68947bcdd52d with only the JS bundle
+replaced and re-signed with its existing QA key. This is a native visual prototype,
+not a complete new cloud/store artifact. Before/after screenshots and receipts are
+in docs/evidence/native-tabs-text-2026-09-18/. At1.0 and2.0 labels are complete;
+long words wrap within their tab. font_scale was restored to its original1.0.
+The screenshot's session/API state does not qualify authentication or persistence.
+The phone subsequently disconnected; further native journey checks remain pending.
+No TalkBack/VoiceOver or physical-iPhone execution is claimed.
+
+Primary implementation references checked2026-09-18:
+- https://reactnative.dev/docs/text#ontextlayout — measure native line geometry.
+- https://reactnative.dev/docs/text#allowfontscaling — preserve the user setting.
+- https://reactnavigation.org/docs/bottom-tab-navigator/#tabbarlabel — custom label
+  with the navigator's active/inactive color.
+
+No auth/permission/payment transition changes; existing formal properties remain
+applicable, but model checking does not prove this visual geometry. Signed iOS24
+and a subsequent Android artifact must include this fix before store qualification.

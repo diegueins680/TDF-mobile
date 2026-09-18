@@ -1,0 +1,11 @@
+{
+  "baseArtifact": "46b1cca1-f38e-4105-b9c4-68947bcdd52d",
+  "baseSource": "6f8a998ed0fbc997e84770fea3d8e0c9edb3fe8e",
+  "JSbase": "751d261fd162fd6a0e9c8b0ea9969c4c1a5e2572",
+  "localDiff": "adaptive tab label uncommitted prototype",
+  "sha256": "064bdecb531c9e588c6db71cae53f719868a0258a5bf0b35be1890faf09ee2e6",
+  "bundleSHA256": "8b40dcbebc97b9491c94291ddcd26f869049e6d7040b0036ec6d07ad596c97a9",
+  "package": "com.tdf.records.uxaudit",
+  "signatureVerified": true,
+  "qualification": "Local production Hermes bundle in compatible existing native QA artifact; not a full cloud build or store artifact"
+}

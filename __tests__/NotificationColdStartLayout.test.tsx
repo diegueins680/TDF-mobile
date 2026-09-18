@@ -1,9 +1,12 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { renderRouter, screen, waitFor } from 'expo-router/testing-library';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import * as Linking from 'expo-linking';
 import RootLayout from '../app/_layout';
 import { redirectSystemPath } from '../app/+native-intent';
+
+afterEach(() => jest.restoreAllMocks());
 
 jest.mock('../src/providers/AppProviders', () => ({ AppProviders: ({ children }: { children: React.ReactNode }) => children }));
 jest.mock('../src/providers/AuthProvider', () => ({ useAuth: () => ({ token: null, roles: [], modules: [], featureFlags: [], loading: false }) }));
@@ -15,12 +18,13 @@ jest.mock('../src/analytics/AnalyticsProvider', () => {
 });
 jest.mock('../src/providers/NetworkProvider', () => ({ NetworkBanner: () => null }));
 jest.mock('../src/navigation/useNotificationResponses', () => ({ useNotificationResponses: () => {} }));
-jest.mock('expo-linking', () => ({ ...jest.requireActual('expo-linking'), getInitialURL: async () => null }));
 
 it.each([
   ['tdf:///notification/17', '/notifications?notificationId=17'],
   ['tdf:///access-requests/23', '/access-requests?request=23'],
 ])('the actual root guard preserves a signed-out cold start: %s', async (initialUrl, expected) => {
+  const initial = jest.spyOn(Linking, 'getInitialURL').mockResolvedValue(initialUrl);
+  const push = jest.spyOn(router, 'push');
   function SignIn() {
     const { returnTo } = useLocalSearchParams<{ returnTo: string }>();
     return <Text>{returnTo}</Text>;
@@ -33,5 +37,7 @@ it.each([
     auth: SignIn,
   }, { initialUrl });
   await waitFor(() => expect(screen.getByText(expected)).toBeTruthy());
+  await waitFor(() => expect(initial).toHaveBeenCalled());
+  expect(push).not.toHaveBeenCalled();
   expect(screen.queryByText('Private notification')).toBeNull();
 });

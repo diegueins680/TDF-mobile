@@ -1,5 +1,30 @@
 # Release Readiness — Go / No-Go
 
+## UX audit checkpoint — 2026-09-18
+
+Current evidence takes precedence over the historical matrix below. UX-260917-037
+corrects native onboarding to use the existing FanHub catalog and follow contract.
+The previous social-event follow persisted in a separate namespace but did not
+satisfy authoritative onboarding evidence. The correction reads persisted follows
+per Party, rejects stale account results, and keeps long names within the card.
+
+Validation: 498 Jest tests, lint, TypeScript and release checks passed; the final
+people-network heading also passed 10 focused tests. Metro started on an isolated
+port. An exported Hermes production bundle ran in the EAS QA native shell on an
+iPhone SE3/iOS18.3 simulator against isolated HTTP/PostgreSQL: native follow and
+app reopen persisted, web FanHub saw the same follow/completed onboarding after
+reload, and a second account's prior completion remained unchanged. This is not
+a signed store artifact, Android or physical Google OAuth result. No native
+modules/dependencies changed relative to that QA shell.
+
+Canonical findings and source/artifact receipts remain in the parent repository's
+[existing UX audit](https://github.com/diegueins680/tdf-app/tree/main/docs/ux-ui-audit/2026-09-17),
+including STATE-01 and UX-260917-033/035/037. The integrated source retains the
+notification fix from #102 and explicit Google creation contract; #102 Android
+qualification, final native artifacts, physical Google OAuth and store publication
+remain release gates. Older Android12/iOS21 must not be promoted as final fixes.
+
+
 | Item | Status | Last Verified | Evidence / Blocker |
 |---|---|---|---|
 | Username/password auth | ✅ REGRESSION PASSED | 2026-05-11 | `evidence/release-regression-postclick3-20260511-0139.png` (fresh install, no 403, parties list loaded) |

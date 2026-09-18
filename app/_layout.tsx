@@ -10,7 +10,7 @@ import {
   useUnstableGlobalHref,
 } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import * as Linking from 'expo-linking';
 
 import { AppProviders } from '../src/providers/AppProviders';
@@ -60,6 +60,9 @@ function RootNavigator() {
 function handleDeepLink(url: string, router: ReturnType<typeof useRouter>, currentPathname: string) {
   try {
     const target = mobileDeepLinkTarget(url, currentPathname);
+    // Expo Router owns these native links through +native-intent. Replaying the
+    // initial URL here can repeatedly undo the authentication redirect.
+    if (Platform.OS !== 'web' && (target?.startsWith('/notifications?') || target?.startsWith('/access-requests?'))) return;
     if (target) router.push(target as Href);
   } catch (e) {
     console.warn('Failed to handle deep link:', url, e);

@@ -118,3 +118,33 @@ Sources checked 2026-09-18: [GitHub billing](https://docs.github.com/en/billing/
 [Apple signing on GitHub](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications),
 [macOS runner image](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md),
 [Apple SDK requirement](https://developer.apple.com/news/upcoming-requirements/?id=04282026a).
+
+## Android bundle on GitHub Actions (2026-09-18)
+
+The manual Android Release Build workflow uses standard ubuntu-24.04, Java17
+and the existing Gradle8.14.3 wrapper (distribution SHA256 pinned). Both EAS Free
+platform quotas were15/15 when checked2026-09-18; no paid plan is required here.
+Dispatch from main with an unused Play version code (17 is the next reserved
+candidate;16 was consumed by a cancelled build). Do not start a competing EAS
+build with that number.
+
+The main-only android-release environment holds the existing upload keystore and
+passwords as encrypted secrets. The certificate fingerprint is checked against
+Android15's existing upload certificate before and after signing. The helper
+modifies only the ephemeral native release build's signing/version configuration;
+the checked-in debug setup is retained. It fails if the expected native structure
+changes. No credential is embedded in source, Gradle text or the artifact receipt.
+The private key is removed in an always-run step.
+
+Source release checks, Jest and signing-configuration negative controls run before
+the build. Bundletool1.18.3 is checksum-pinned; the actual AAB is checked for app,
+version, nondebuggable manifest, signature/certificate, ZIP integrity and embedded
+production API before upload as a one-day GitHub artifact. Store upload, review,
+closed-testing availability and production are separate steps through the existing
+Play account. This workflow has no Play submission key and does not publish.
+
+Initial run remains pending until recorded in the parent audit. Preserve the
+12-real-testers/14-days production gate and the existing invitations.
+Primary sources checked2026-09-18:
+https://developer.android.com/build/building-cmdline and
+https://github.com/google/bundletool/releases/tag/1.18.3.

@@ -480,7 +480,7 @@ export default function AuthScreen() {
     setIsForgotPasswordSubmitting(true);
 
     try {
-      await requestPasswordReset(forgotPasswordEmail.trim().toLowerCase());
+      await requestPasswordReset(forgotPasswordEmail.trim().toLowerCase(), language);
       setForgotPasswordSuccess(true);
     } catch (error) {
       setForgotPasswordError(readErrorMessage(error, copy.resetFailure));

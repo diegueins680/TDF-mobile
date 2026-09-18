@@ -61,9 +61,10 @@ export async function signupRequest(payload: SignupRequestDTO): Promise<LoginRes
   }
 }
 
-export async function requestPasswordReset(email: string): Promise<void> {
+export async function requestPasswordReset(email: string, locale?: string): Promise<void> {
   try {
-    await http.post('/v1/password-reset', { email });
+    const query = locale ? `?locale=${locale.toLowerCase().startsWith('es') ? 'es' : 'en'}` : '';
+    await http.post(`/v1/password-reset${query}`, { email });
   } catch (error) {
     throw new Error(readErrorMessage(error, 'No pudimos iniciar el reset. Verifica el correo.'));
   }

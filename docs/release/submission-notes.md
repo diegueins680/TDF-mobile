@@ -2,7 +2,7 @@
 
 ## Reviewer Access
 
-- The app is intended for TDF Records staff and invited collaborators.
+- The app supports public/community accounts and role-restricted staff/collaborator functions.
 - Protected features require a bearer token from the TDF Records backend.
 - Replace this placeholder before submission with a real review credential:
   `Reviewer token: Bearer REPLACE_WITH_STAGING_REVIEW_TOKEN`
@@ -23,6 +23,6 @@
 
 ## Notes For Apple Review
 
-- No account creation exists in-app.
-- The app has no public social feed or user-generated public posting.
+- Public signup and login are available; protected operational features still require explicit roles.
+- Public profiles and social features require an implementation-based review of user-generated content, reporting, blocking and moderation before completing store declarations.
 - If reviewer access to backend endpoints is limited, the protected CRM screens will show restricted-access states instead of editable data.

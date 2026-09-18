@@ -52,7 +52,9 @@ jobs:
       - name: Verify release source
         run: |
           npm run release:check
-          NODE_ENV=test npm test -- --watch=false --runInBand
+          # Expo's Babel transform captures public env values before test fixtures run.
+          # Keep production values for native compilation and isolate Jest's fixtures.
+          env -u EXPO_PUBLIC_API_BASE -u EXPO_PUBLIC_UPLOAD_URL -u EXPO_PUBLIC_TZ -u EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID -u EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID -u GOOGLE_IOS_URL_SCHEME NODE_ENV=test npm test -- --watch=false --runInBand
           python3 -m unittest discover -s scripts/tests -p 'test_ios_signing.py'
       - name: Install locked native dependencies
         working-directory: ios

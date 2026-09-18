@@ -78,3 +78,33 @@ Primary implementation references checked2026-09-18:
 No auth/permission/payment transition changes; existing formal properties remain
 applicable, but model checking does not prove this visual geometry. Signed iOS24
 and a subsequent Android artifact must include this fix before store qualification.
+
+## iOS counterexample and repair — 2026-09-18 17:45 UTC
+
+The Android wrapping implementation in109 still clips long words on iOS18.3 at
+accessibility-extra-large. React Native0.81 TextKit uses clipping for an unlimited
+line count; bounding lines by title code-point count removes that mode but alone
+still ellipsizes because layout is constrained to the bar's old height. The actual
+two failed screenshots are not passing evidence.
+
+Measure iOS labels outside the bar's constrained layout, at the exact per-tab width
+and font settings, then reserve the tallest measured line geometry. Measurement
+views ignore touches and are hidden from accessibility. One possible line per code
+point allows every character to wrap without capping font scale. Android retains
+109's visible-label measurement and unrestricted lines. Width/insets, scale, locale
+and account changes invalidate old measurements.
+
+The actual compatible simulator native binary with production Hermes now displays
+all five full labels at accessibility-extra-large and after restoring large. Its
+hierarchy reports five localized accessible tabs and zero measurement nodes.
+Images/receipts are in docs/evidence/native-tabs-text-2026-09-18/. Simulator was
+shut down afterward. No human VoiceOver or physical Google OAuth claim. Seven
+focused component tests cover measurement, locale reset, hidden nodes and unchanged
+Android path; release:check is recorded separately. Hosted full suite and signed
+iOS25 must pass before advancing the release. iOS24 was Apple-validated/uploaded
+but remains an intermediate artifact; it must not be promoted as this correction.
+
+Implementation evidence: installed React Native RCTTextLayoutManager.mm lines228–231
+and React Navigation BottomTabItem.tsx; these renderer constraints explain the
+actual native counterexample. The Android17 source retains the qualified Android
+behavior; this successor is an iOS-specific visual correction with no API changes.

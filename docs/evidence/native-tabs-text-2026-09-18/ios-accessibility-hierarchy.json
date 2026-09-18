@@ -1,0 +1,26 @@
+{
+  "tabs": [
+    {
+      "text": "Directorio, pestaña 1 de 5",
+      "bounds": "[0,613][75,667]"
+    },
+    {
+      "text": "Seguir, pestaña 2 de 5",
+      "bounds": "[75,613][150,667]"
+    },
+    {
+      "text": "Explorar, pestaña 3 de 5",
+      "bounds": "[150,613][225,667]"
+    },
+    {
+      "text": "Crear, pestaña 4 de 5",
+      "bounds": "[225,613][300,667]"
+    },
+    {
+      "text": "Perfil, pestaña 5 de 5",
+      "bounds": "[300,613][375,667]"
+    }
+  ],
+  "exposedMeasurementNodes": 0,
+  "kind": "simulator accessibility hierarchy, not human VoiceOver"
+}

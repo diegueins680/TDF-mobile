@@ -1,4 +1,5 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import TabsLayout from '../app/(tabs)/_layout';
 import { useAuth } from '../src/providers/AuthProvider';
@@ -11,7 +12,7 @@ jest.mock('../src/experiments/NewUserOnboardingGate', () => ({
   NewUserOnboardingGate: ({ children }: { children: React.ReactNode }) => children,
 }));
 jest.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: () => null }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 24 }) }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 24, left: 0, right: 0 }) }));
 jest.mock('expo-router', () => {
   const React = require('react');
   const { View, Text } = require('react-native');
@@ -73,8 +74,35 @@ test('wrapped native labels retain text scaling and reserve measured lines above
   const screen = render(<TabsLayout />);
   const label = screen.getByText('Directorio');
   expect(label.props.allowFontScaling).toBe(true);
-  expect(label.props.numberOfLines).toBeUndefined();
-  fireEvent(label, 'textLayout', { nativeEvent: { lines: [{ y: 0, height: 28 }, { y: 28, height: 28 }] } });
+  expect(label.props.numberOfLines).toBeGreaterThanOrEqual(Array.from('Directorio').length);
+  fireEvent(screen.getByTestId('tab-measure-directory', { includeHiddenElements: true }), 'textLayout', { nativeEvent: { lines: [{ y: 0, height: 28 }, { y: 28, height: 28 }] } });
   expect(screen.getByTestId('tab-bar').props.style.height).toBeGreaterThanOrEqual(24 + 56 + 40);
   expect(screen.getByLabelText('Directorio, pestaña 1 de 5')).toBeTruthy();
+});
+
+test('iOS measuring labels are hidden from accessibility and reset after a locale change', () => {
+  const screen = render(<TabsLayout />);
+  expect(screen.queryByTestId('tab-measure-directory')).toBeNull();
+  fireEvent(screen.getByTestId('tab-measure-directory', { includeHiddenElements: true }), 'textLayout', { nativeEvent: { lines: [{ y: 0, height: 80 }] } });
+  expect(screen.getByTestId('tab-bar').props.style.height).toBeGreaterThanOrEqual(144);
+  locale('en-US');
+  screen.rerender(<TabsLayout />);
+  expect(screen.getByTestId('tab-bar').props.style.height).toBeLessThan(144);
+  expect(screen.getByLabelText('Directory, tab 1 of 5')).toBeTruthy();
+});
+
+test('Android retains the physically verified visible-label measurement path', () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    const screen = render(<TabsLayout />);
+    expect(screen.queryByTestId('tab-measure-directory', { includeHiddenElements: true })).toBeNull();
+    const label = screen.getByText('Directorio');
+    expect(label.props.numberOfLines).toBeUndefined();
+    fireEvent(label, 'textLayout', { nativeEvent: { lines: [{ y: 0, height: 28 }, { y: 28, height: 28 }] } });
+    expect(screen.getByTestId('tab-bar').props.style.height).toBeGreaterThanOrEqual(120);
+    expect(screen.getByLabelText('Directorio')).toBeTruthy();
+  } finally {
+    Platform.OS = original;
+  }
 });

@@ -48,8 +48,6 @@ import { safeInternalRoute } from '../src/navigation/deepLinks';
 
 const PUBLIC_EVENT_RETURN_ROUTE = /^\/eventos\/[1-9]\d{0,18}$/;
 const ACCOUNT_TERMS_VERSION = 'tdf-account-terms-v1';
-const TERMS_URL = 'https://tdf-app.pages.dev/account/terms.html';
-const PRIVACY_URL = 'https://tdf-app.pages.dev/account/privacy.html';
 
 const readErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
@@ -724,13 +722,13 @@ export default function AuthScreen() {
                   <View style={styles.legalLinks}>
                     <TouchableOpacity accessibilityRole="link" onPress={() => {
                       setPolicyError(false);
-                      void Linking.openURL(TERMS_URL).catch(() => setPolicyError(true));
+                      void Linking.openURL(`https://tdf-app.pages.dev/account/terms${language === 'en' ? '' : '-es'}.html`).catch(() => setPolicyError(true));
                     }}>
                       <Text style={styles.legalLink}>{copy.terms}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity accessibilityRole="link" onPress={() => {
                       setPolicyError(false);
-                      void Linking.openURL(PRIVACY_URL).catch(() => setPolicyError(true));
+                      void Linking.openURL(`https://tdf-app.pages.dev/account/privacy${language === 'en' ? '' : '-es'}.html`).catch(() => setPolicyError(true));
                     }}>
                       <Text style={styles.legalLink}>{copy.privacy}</Text>
                     </TouchableOpacity>

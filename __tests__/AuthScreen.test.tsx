@@ -24,6 +24,7 @@ let mockAuthConfig = {
   GOOGLE_IOS_CLIENT_ID: 'ios-client-id.apps.googleusercontent.com',
   GOOGLE_IOS_URL_SCHEME: 'com.googleusercontent.apps.123456',
 };
+let mockLocale = 'es';
 let mockSearchParams: Record<string, string> = {};
 let mockStoredValues = new Map<string, string>();
 
@@ -39,7 +40,7 @@ jest.mock('../src/providers/AuthProvider', () => ({
 
 jest.mock('../src/providers/UserSettingsProvider', () => ({
   useUserSettings: () => ({
-    locale: 'es',
+    locale: mockLocale,
     getCatalogItems: () => [
       { id: 'locale-es', code: 'es' },
       { id: 'locale-en', code: 'en' },
@@ -125,6 +126,7 @@ const AuthScreen = require('../app/auth').default;
 
 describe('Auth screen', () => {
   beforeEach(() => {
+  mockLocale = 'es';
     jest.clearAllMocks();
     mockStoredValues = new Map();
     jest.mocked(AsyncStorage.getItem).mockReset().mockImplementation(async (key) =>
@@ -325,12 +327,22 @@ describe('Auth screen', () => {
 
     expect(mockOpenURL).toHaveBeenNthCalledWith(
       1,
-      'https://tdf-app.pages.dev/account/terms.html',
+      'https://tdf-app.pages.dev/account/terms-es.html',
     );
     expect(mockOpenURL).toHaveBeenNthCalledWith(
       2,
-      'https://tdf-app.pages.dev/account/privacy.html',
+      'https://tdf-app.pages.dev/account/privacy-es.html',
     );
+  });
+
+  it('keeps the original policy URLs for English signup', async () => {
+    mockLocale = 'en';
+    mockSearchParams = { mode: 'signup' };
+    render(<AuthScreen />);
+    fireEvent.press(await screen.findByRole('link', { name: 'View terms' }));
+    fireEvent.press(screen.getByRole('link', { name: 'View privacy' }));
+    expect(mockOpenURL).toHaveBeenNthCalledWith(1, 'https://tdf-app.pages.dev/account/terms.html');
+    expect(mockOpenURL).toHaveBeenNthCalledWith(2, 'https://tdf-app.pages.dev/account/privacy.html');
   });
 
   it('preserves signup input and offers a retry when a policy document cannot open', async () => {
@@ -348,7 +360,7 @@ describe('Auth screen', () => {
     fireEvent.press(screen.getByRole('link', { name: 'Ver términos' }));
     await waitFor(() => expect(screen.queryByText(failureCopy)).toBeNull());
     expect(mockOpenURL).toHaveBeenCalledTimes(2);
-    expect(mockOpenURL).toHaveBeenLastCalledWith('https://tdf-app.pages.dev/account/terms.html');
+    expect(mockOpenURL).toHaveBeenLastCalledWith('https://tdf-app.pages.dev/account/terms-es.html');
   });
 
   it('creates an account without caller-selected roles and stores the returned session', async () => {

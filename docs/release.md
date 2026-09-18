@@ -148,3 +148,10 @@ Initial run remains pending until recorded in the parent audit. Preserve the
 Primary sources checked2026-09-18:
 https://developer.android.com/build/building-cmdline and
 https://github.com/google/bundletool/releases/tag/1.18.3.
+
+Android first native run35375029184 failed at dependency lint with JVM Metaspace
+exhaustion (512MiB default), after746 tasks; it did not produce a qualified bundle.
+The standard runner invocation now allocates4GiB heap/2GiB Metaspace with two
+workers. Release lint and all four native architectures remain enabled. This is
+a build-environment repair; retry version17 only after the corrected workflow
+merges. The previous dispatch-context failure35374641857 executed no build.

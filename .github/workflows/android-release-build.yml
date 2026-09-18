@@ -68,7 +68,7 @@ jobs:
           TDF_ANDROID_KEY_PASSWORD: ${{ secrets.TDF_ANDROID_KEY_PASSWORD }}
         run: |
           cd android
-          ./gradlew :app:bundleRelease --no-daemon --max-workers=2
+          ./gradlew :app:bundleRelease --no-daemon --max-workers=2 '-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=2g -Dfile.encoding=UTF-8'
           cd ..
           python3 scripts/android-release.py verify
       - name: Remove private signing key

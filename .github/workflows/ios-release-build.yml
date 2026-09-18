@@ -1,0 +1,84 @@
+name: iOS Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: Unused App Store Connect build number for version 1.0.1
+        required: true
+        default: '23'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-signed-release
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    if: github.ref == 'refs/heads/main'
+    environment: ios-release
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+      IOS_BUILD_NUMBER: ${{ inputs.build_number }}
+      EXPO_PUBLIC_API_BASE: https://tdf-hq.fly.dev
+      EXPO_PUBLIC_UPLOAD_URL: https://tdf-hq.fly.dev/drive/upload
+      EXPO_PUBLIC_TZ: UTC
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 1016946267087-mvr22vuc8dql37fem7aa1msdnatjvhh4.apps.googleusercontent.com
+      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 1016946267087-p40em8ihkugloistpfnjt7es94mguhgv.apps.googleusercontent.com
+      GOOGLE_IOS_URL_SCHEME: com.googleusercontent.apps.1016946267087-p40em8ihkugloistpfnjt7es94mguhgv
+      NODE_ENV: production
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Check release inputs and Xcode
+        run: |
+          python3 -c 'import importlib.util, os; s=importlib.util.spec_from_file_location("signing", "scripts/ios-signing.py"); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); m.validate_build_number(os.environ["IOS_BUILD_NUMBER"])'
+          xcodebuild -version
+          test "$(xcrun --sdk iphoneos --show-sdk-version | cut -d. -f1)" -ge 26
+      - name: Install locked dependencies
+        run: npm ci --include=dev
+      - name: Verify release source
+        run: |
+          npm run release:check
+          NODE_ENV=test npm test -- --watch=false --runInBand
+          python3 -m unittest discover -s scripts/tests -p 'test_ios_signing.py'
+      - name: Install locked native dependencies
+        working-directory: ios
+        run: pod install --deployment
+      - name: Install existing App Store signing identity
+        env:
+          TDF_IOS_DISTRIBUTION_P12: ${{ secrets.TDF_IOS_DISTRIBUTION_P12 }}
+          TDF_IOS_P12_PASSWORD: ${{ secrets.TDF_IOS_P12_PASSWORD }}
+          TDF_IOS_PROVISIONING_PROFILE: ${{ secrets.TDF_IOS_PROVISIONING_PROFILE }}
+        run: python3 scripts/ios-signing.py prepare
+      - name: Archive and export signed IPA
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/TDFRecords.xcworkspace -scheme TDFRecords -configuration Release -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/TDFRecords.xcarchive" -derivedDataPath "$RUNNER_TEMP/tdf-derived" archive
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/TDFRecords.xcarchive" -exportPath "$RUNNER_TEMP/tdf-ios-artifact" -exportOptionsPlist "$RUNNER_TEMP/tdf-ios-signing/ExportOptions.plist"
+          python3 scripts/verify-ios-artifact.py "$RUNNER_TEMP/tdf-ios-artifact"
+      - name: Remove signing credentials
+        if: always()
+        run: python3 scripts/ios-signing.py cleanup
+      - name: Retain qualified build for TestFlight submission
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: tdf-ios-${{ github.sha }}-${{ inputs.build_number }}
+          path: |
+            ${{ runner.temp }}/tdf-ios-artifact/*.ipa
+            ${{ runner.temp }}/tdf-ios-artifact/receipt.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0

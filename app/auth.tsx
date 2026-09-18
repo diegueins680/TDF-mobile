@@ -397,6 +397,7 @@ export default function AuthScreen() {
           linkAccount: { username: username.trim(), password },
         } : {}),
         ...(mode === 'signup' ? {
+          createNewAccount: true,
           marketingOptIn,
           termsAccepted: true,
           termsVersion: ACCOUNT_TERMS_VERSION,

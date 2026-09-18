@@ -559,6 +559,7 @@ describe('Auth screen', () => {
       marketingOptIn: false,
       termsAccepted: true,
       termsVersion: 'tdf-account-terms-v1',
+      createNewAccount: true,
       onboardingIntent: 'follow_artists',
     }));
     await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));

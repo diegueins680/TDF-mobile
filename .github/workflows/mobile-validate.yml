@@ -38,5 +38,8 @@ jobs:
       - name: Run tests
         run: npm test -- --watch=false
 
+      - name: Verify iOS signing input guards
+        run: python3 -m unittest discover -s scripts/tests -p 'test_ios_signing.py'
+
       - name: Run Expo Doctor
         run: npm run doctor

@@ -81,3 +81,37 @@ npx eas-cli@latest submit --platform android --profile production --latest
 - EAS remote versioning owns iOS build numbers and Android version codes for release builds.
 - Permission copy is configured for camera, photo library, and foreground location because those capabilities already exist in the app.
 - If the Expo project has not been initialized yet, run `npx eas-cli@latest project:init` or `npx eas-cli@latest build:configure` once while authenticated, then persist the resulting project ID.
+
+## iOS archive on GitHub Actions (2026-09-18)
+
+The `iOS Release Build` workflow uses the standard `macos-15` runner with Xcode
+26.2, without an EAS cloud build or an Expo subscription. Standard hosted runners
+are free for this public repository. This does not remove Apple's membership,
+physical-device testing or review requirements.
+
+Run the workflow manually from `main`, supplying an unused App Store Connect build
+number (next reserved candidate: 23 for app version 1.0.1). Do not run a competing
+EAS iOS build with that number. Concurrent workflow executions are serialized.
+The `ios-release` environment permits `main` only and stores the existing
+`TDF_IOS_DISTRIBUTION_P12`, `TDF_IOS_P12_PASSWORD` and
+`TDF_IOS_PROVISIONING_PROFILE` as encrypted secrets. The workflow validates the
+profile's app, team, distribution type, expiration and certificate match. Signing
+uses an ephemeral keychain and removes the credentials even after failure.
+
+Dependencies use `npm ci --include=dev` and `pod install --deployment`; source
+release checks and tests must pass. Xcode archives the existing native project and
+exports an App Store IPA. The artifact gate checks its signature, SDK, app/build
+versions, Google/deep-link schemes and embedded production API. The one-day
+artifact includes the IPA and a SHA256/source/run receipt, not signing secrets.
+Download it promptly for the existing Apple validation/upload process.
+
+A successful archive is **not** a TestFlight upload, App Review submission or
+publication. Execute `docs/google-oauth-manual-test.md` on a physical iPhone before
+production; preserve the manual release setting in App Store Connect. The initial
+workflow execution and final source qualification are pending until their actual
+run and artifact are recorded in the parent UX audit.
+
+Sources checked 2026-09-18: [GitHub billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions),
+[Apple signing on GitHub](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications),
+[macOS runner image](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md),
+[Apple SDK requirement](https://developer.apple.com/news/upcoming-requirements/?id=04282026a).

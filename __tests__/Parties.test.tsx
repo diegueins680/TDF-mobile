@@ -1,7 +1,9 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { act, render, screen, fireEvent } from '@testing-library/react-native';
 import Parties from '../app/(tabs)/parties';
 
+const mockCreateParty = jest.fn();
+jest.mock('../src/api/parties', () => ({ listParties: jest.fn(), createParty: (...args: unknown[]) => mockCreateParty(...args) }));
 const mockRefetch = jest.fn();
 const mockMutate = jest.fn();
 jest.mock('@tanstack/react-query', () => ({
@@ -75,4 +77,21 @@ describe('Parties tab', () => {
     fireEvent.press(authBtn);
     expect(mockPush).toHaveBeenCalledWith('/auth');
   });
+});
+
+it('keeps creation identity through a lost response and edits, then resets after success', async () => {
+  jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: 'synthetic', loading: false });
+  const useMutation = require('@tanstack/react-query').useMutation as jest.Mock;
+  render(<Parties />);
+  const config = useMutation.mock.calls.at(-1)[0] as {
+    mutationFn: (body: { name: string }) => Promise<unknown>;
+    onSuccess: () => void;
+  };
+  mockCreateParty.mockRejectedValueOnce(new Error('response lost')).mockResolvedValue({ id: 1, name: 'New' });
+  await expect(config.mutationFn({ name: 'New' })).rejects.toThrow('response lost');
+  await config.mutationFn({ name: 'Corrected' });
+  expect(mockCreateParty.mock.calls[0][1]).toBe(mockCreateParty.mock.calls[1][1]);
+  act(() => config.onSuccess());
+  await config.mutationFn({ name: 'Corrected' });
+  expect(mockCreateParty.mock.calls[2][1]).not.toBe(mockCreateParty.mock.calls[1][1]);
 });

@@ -4,6 +4,57 @@
  */
 
 export interface paths {
+    "/trials/v1/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates an unverified enquiry contact. A request key identifies one submission; email never establishes account ownership. Unsupported credential fields are rejected. */
+        post: operations["createTrialSignupEnquiry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trials/v1/trial-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates an enquiry and unverified contact atomically, without login credentials or access grants. Identical retries return the saved request even if availability changes. */
+        post: operations["createPublicTrialRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trials/v1/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Requires school authorization. Creates a new student contact and applies the existing student policy. Retries are scoped to the authenticated actor; shared email cannot adopt another person. */
+        post: operations["createSchoolStudent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/social/v2/me": {
         parameters: {
             query?: never;
@@ -2957,7 +3008,7 @@ export interface paths {
         put?: never;
         /**
          * Submit a Live Session intake
-         * @description Creates a Live Session intake using canonical persisted genre and instrument UUIDs. Musicians and setlist are JSON-encoded strings inside the multipart form. Copied genre, instrument, role, label, code, and slug fields are rejected.
+         * @description Atomically creates an intake and its contacts, using canonical persisted genre and instrument UUIDs. Email never selects an existing person. Explicit contact IDs require existing access. Intake does not create login credentials or grant roles. Musicians and setlist are JSON-encoded strings inside the multipart form. Copied genre, instrument, role, label, code, and slug fields are rejected.
          */
         post: operations["createLiveSessionIntake"];
         delete?: never;
@@ -13226,6 +13277,183 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    createTrialSignupEnquiry: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    firstName: string;
+                    lastName: string;
+                    email: string;
+                    phone?: string;
+                    marketingOptIn: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted enquiry or identical retry. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: boolean;
+                    };
+                };
+            };
+            /** @description Invalid input or missing retry key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The accepted request has different details. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createPublicTrialRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    subjectId: number;
+                    preferred: {
+                        /** Format: date-time */
+                        startAt: string;
+                        /** Format: date-time */
+                        endAt: string;
+                    }[];
+                    fullName?: string;
+                    email: string;
+                    phone?: string;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted request or identical retry. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        requestId: number;
+                        status: string;
+                    };
+                };
+            };
+            /** @description Invalid input or missing retry key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The accepted request has different details. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No suitable teacher availability. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createSchoolStudent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fullName: string;
+                    email: string;
+                    phone?: string;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted student or identical retry. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        studentId: number;
+                        displayName: string;
+                        email: string | null;
+                        phone: string | null;
+                    };
+                };
+            };
+            /** @description Invalid input or missing retry key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description School access required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The accepted request has different details. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getSocialV2Me: {
         parameters: {
             query?: never;
@@ -16382,9 +16610,9 @@ export interface operations {
     createParty: {
         parameters: {
             query?: never;
-            header?: {
+            header: {
                 /** @description Stable request key scoped to the authenticated actor. Reuse on retries with the same body; a changed body returns 409. Contact attributes never establish identity. */
-                "Idempotency-Key"?: string;
+                "Idempotency-Key": string;
             };
             path?: never;
             cookie?: never;
@@ -18851,7 +19079,10 @@ export interface operations {
     createLiveSessionIntake: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Stable identity for one submission, scoped to the authenticated actor. Reuse unchanged requests after failures; changed accepted requests return 409. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -18882,7 +19113,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A supplied musician identity is ambiguous */
+            /** @description The actor cannot select a supplied contact */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The accepted submission changed or an archived contact requires review */
             409: {
                 headers: {
                     [name: string]: unknown;

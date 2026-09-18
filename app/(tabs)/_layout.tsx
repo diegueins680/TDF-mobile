@@ -42,8 +42,9 @@ function TabsInner({ authenticated }: { authenticated: boolean }) {
   const language = onboardingLanguage(locale);
   const visibleTabs = getVisibleMobileTabs(language, authenticated);
   const { width, fontScale } = useWindowDimensions();
-  const { bottom } = useSafeAreaInsets();
-  const measurementKey = `${width}:${fontScale}:${language}:${authenticated}`;
+  const { bottom, left, right } = useSafeAreaInsets();
+  const labelWidth = Math.max(1, (width - left - right) / visibleTabs.length - 10);
+  const measurementKey = `${Platform.OS === 'ios' ? labelWidth : width}:${fontScale}:${language}:${authenticated}`;
   const [measurement, setMeasurement] = useState({ key: '', height: 0 });
   const measureLabel = useCallback((height: number) => {
     if (!Number.isFinite(height) || height <= 0) return;
@@ -57,6 +58,29 @@ function TabsInner({ authenticated }: { authenticated: boolean }) {
   const labelHeight = Math.max(14 * fontScale, measurement.key === measurementKey ? measurement.height : 0);
 
   return (
+    <>
+    {/* Measure outside the bar: iOS otherwise constrains lines to its old height. */}
+    {Platform.OS === 'ios' && <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{ position: 'absolute', top: 0, left: 0, opacity: 0 }}
+    >
+      {visibleTabs.map(tab => (
+        <Text
+          key={`${measurementKey}:${tab.name}`}
+          testID={`tab-measure-${tab.name}`}
+          allowFontScaling
+          numberOfLines={Array.from(tab.title).length}
+          style={{ fontSize: 12, lineHeight: 14, fontWeight: '600', width: labelWidth }}
+          onTextLayout={({ nativeEvent }) => measureLabel(nativeEvent.lines.reduce(
+            (height, line) => Math.max(height, line.y + line.height), 0,
+          ))}
+        >
+          {tab.title}
+        </Text>
+      ))}
+    </View>}
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -82,8 +106,11 @@ function TabsInner({ authenticated }: { authenticated: boolean }) {
               <Text
                 accessible={false}
                 allowFontScaling
+                // iOS TextKit clips an oversized word with unlimited lines.
+                // One line per code point allows the full title to wrap at any supported size.
+                numberOfLines={Platform.OS === 'ios' ? Array.from(tab.title).length : undefined}
                 style={{ color, fontSize: 12, lineHeight: 14, fontWeight: '600', textAlign: 'center', width: '100%', flexShrink: 0 }}
-                onTextLayout={({ nativeEvent }) => measureLabel(nativeEvent.lines.reduce(
+                onTextLayout={Platform.OS === 'ios' ? undefined : ({ nativeEvent }) => measureLabel(nativeEvent.lines.reduce(
                   (height, line) => Math.max(height, line.y + line.height), 0,
                 ))}
               >
@@ -107,5 +134,6 @@ function TabsInner({ authenticated }: { authenticated: boolean }) {
         <Tabs.Screen key={name} name={name} options={{ href: null }} />
       ))}
     </Tabs>
+    </>
   );
 }

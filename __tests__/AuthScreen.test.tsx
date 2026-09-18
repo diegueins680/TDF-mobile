@@ -6,6 +6,7 @@ import { Linking } from 'react-native';
 const mockSetToken = jest.fn();
 const mockClearToken = jest.fn();
 const mockLoginRequest = jest.fn();
+const mockRequestPasswordReset = jest.fn();
 const mockGoogleLoginRequest = jest.fn();
 const mockSignupRequest = jest.fn();
 const mockGoogleHasPlayServices = jest.fn();
@@ -77,6 +78,7 @@ jest.mock('../src/theme/ThemeProvider', () => {
 });
 
 jest.mock('../src/api/auth', () => ({
+  requestPasswordReset: (...args: unknown[]) => mockRequestPasswordReset(...args),
   loginRequest: (...args: unknown[]) => mockLoginRequest(...args),
   googleLoginRequest: (...args: unknown[]) => mockGoogleLoginRequest(...args),
   signupRequest: (...args: unknown[]) => mockSignupRequest(...args),
@@ -166,6 +168,16 @@ describe('Auth screen', () => {
         PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
       },
     });
+  });
+
+  it.each(['es', 'en', 'fr'])('requests recovery in the supported UI language for %s', async (locale) => {
+    mockLocale = locale;
+    mockRequestPasswordReset.mockResolvedValue(undefined);
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByText(locale !== 'en' ? '¿Olvidaste tu contraseña?' : 'Forgot your password?'));
+    fireEvent.changeText(screen.getByLabelText(locale !== 'en' ? 'Correo electrónico' : 'Email'), 'Recovery@Example.test');
+    fireEvent.press(screen.getByText(locale !== 'en' ? 'Enviar enlace' : 'Send link'));
+    await waitFor(() => expect(mockRequestPasswordReset).toHaveBeenCalledWith('recovery@example.test', locale !== 'en' ? 'es' : 'en'));
   });
 
   it('submits username/password login and stores the returned token', async () => {

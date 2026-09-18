@@ -22,7 +22,7 @@ export const onboardingCopy = {
 export const authCopy = {
   es: {
     createTitle: 'Crea tu cuenta', loginTitle: 'Inicia sesión', resetTitle: 'Restablecer contraseña',
-    createSubtitle: 'Solo toma un minuto. Después continuaremos con lo que elegiste.',
+    createSubtitle: 'Crea tu cuenta para continuar con lo que elegiste.',
     loginSubtitle: 'Accede a tus eventos, compras y códigos QR con tu cuenta de TDF Records.',
     resetSubtitle: 'Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña.',
     loginTab: 'Ingresar', signupTab: 'Crear cuenta', firstName: 'Nombre', lastName: 'Apellido',
@@ -52,7 +52,7 @@ export const authCopy = {
   },
   en: {
     createTitle: 'Create your account', loginTitle: 'Log in', resetTitle: 'Reset password',
-    createSubtitle: 'It only takes a minute. Then we will continue with what you chose.',
+    createSubtitle: 'Create your account to continue with what you chose.',
     loginSubtitle: 'Access your events, purchases, and QR codes with your TDF Records account.',
     resetSubtitle: 'Enter your email and we will send you a password reset link.',
     loginTab: 'Log in', signupTab: 'Create account', firstName: 'First name', lastName: 'Last name',

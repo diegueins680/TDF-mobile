@@ -13,6 +13,7 @@ import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { impactMedium } from '../../src/utils/haptics';
 import { recordFirstValueCompletion } from '../../src/lib/firstValueCompletion';
 import { usePartyOwnership } from '../../src/hooks/usePartyOwnership';
+import { useSessionOwnership } from '../../src/hooks/useSessionOwnership';
 
 type TabKey = 'following' | 'followers';
 
@@ -26,6 +27,7 @@ export default function SocialScreen() {
   const analytics = useAnalytics();
   const { token, partyId: effectivePartyId, session, loading } = useAuth();
   const ownsParty = usePartyOwnership(effectivePartyId);
+  const captureSession = useSessionOwnership(effectivePartyId, token);
   const { locale } = useUserSettings();
   const english = locale.startsWith('en');
 
@@ -103,13 +105,13 @@ export default function SocialScreen() {
     }
   });
 
-  const artistFollowMutation = useMutation<FanArtistFollow, Error, { artist: FanArtist; ownerPartyId: string }>({
-    mutationFn: async ({ artist, ownerPartyId }) => {
-      if (!ownsParty(ownerPartyId)) throw new Error(english ? 'Your session changed. Try again.' : 'Tu sesión cambió. Intenta de nuevo.');
+  const artistFollowMutation = useMutation<FanArtistFollow, Error, { artist: FanArtist; ownerPartyId: string; stillOwnsSession: () => boolean }>({
+    mutationFn: async ({ artist, ownerPartyId, stillOwnsSession }) => {
+      if (!stillOwnsSession() || !ownsParty(ownerPartyId)) throw new Error(english ? 'Your session changed. Try again.' : 'Tu sesión cambió. Intenta de nuevo.');
       return FanArtists.follow(artist.apArtistId);
     },
-    onSuccess: (follow, { artist, ownerPartyId }) => {
-      if (!ownsParty(ownerPartyId)) return;
+    onSuccess: (follow, { artist, ownerPartyId, stillOwnsSession }) => {
+      if (!stillOwnsSession() || !ownsParty(ownerPartyId)) return;
       qc.setQueryData<FanArtistFollow[]>(['fan-artist-follows', ownerPartyId], current => [
         ...(current ?? []).filter(row => row.ffArtistId !== follow.ffArtistId), follow,
       ]);
@@ -119,12 +121,12 @@ export default function SocialScreen() {
       void recordFirstValueCompletion(
         ownerPartyId,
         'artist_followed',
-        () => ownsParty(ownerPartyId),
+        () => stillOwnsSession() && ownsParty(ownerPartyId),
         analytics,
       );
     },
-    onError: (error, { ownerPartyId }) => {
-      if (!ownsParty(ownerPartyId)) return;
+    onError: (error, { ownerPartyId, stillOwnsSession }) => {
+      if (!stillOwnsSession() || !ownsParty(ownerPartyId)) return;
       Alert.alert(
         english ? 'Could not follow artist' : 'No pudimos seguir al artista',
         error instanceof Error ? error.message : (english ? 'Try again.' : 'Intenta de nuevo.'),
@@ -281,7 +283,7 @@ export default function SocialScreen() {
                     <Text style={[styles.itemTitle, styles.discoveryName, { color: colors.textPrimary }]}>{artist.apDisplayName}</Text>
                     <TouchableOpacity
                       style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }, followed && styles.buttonDisabled]}
-                      onPress={() => effectivePartyId && artistFollowMutation.mutate({ artist, ownerPartyId: effectivePartyId })}
+                      onPress={() => effectivePartyId && artistFollowMutation.mutate({ artist, ownerPartyId: effectivePartyId, stillOwnsSession: captureSession() })}
                       disabled={followed || artistFollowsQuery.isLoading || artistFollowMutation.isPending}
                       accessibilityRole="button"
                       accessibilityLabel={`${followed ? (english ? 'Following' : 'Siguiendo a') : (english ? 'Follow' : 'Seguir a')} ${artist.apDisplayName}`}

@@ -61,9 +61,11 @@ jobs:
         run: |
           # Match Podfile.lock instead of inheriting the runner image's CocoaPods.
           gem install cocoapods --version 1.16.2 --user-install --no-document
+          # Older JSON pretty-printers expand empty arrays, changing local podspec hashes.
+          gem install json --version 2.18.0 --user-install --no-document
           export PATH="$(ruby -r rubygems -e 'puts Gem.user_dir')/bin:$PATH"
           test "$(pod _1.16.2_ --version)" = "1.16.2"
-          pod _1.16.2_ install --deployment
+          ruby -e 'gem "json", "2.18.0"; gem "cocoapods", "1.16.2"; load Gem.bin_path("cocoapods", "pod", "1.16.2")' -- install --deployment
       - name: Install existing App Store signing identity
         env:
           TDF_IOS_DISTRIBUTION_P12: ${{ secrets.TDF_IOS_DISTRIBUTION_P12 }}

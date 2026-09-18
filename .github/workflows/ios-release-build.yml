@@ -58,7 +58,12 @@ jobs:
           python3 -m unittest discover -s scripts/tests -p 'test_ios_signing.py'
       - name: Install locked native dependencies
         working-directory: ios
-        run: pod install --deployment
+        run: |
+          # Match Podfile.lock instead of inheriting the runner image's CocoaPods.
+          gem install cocoapods --version 1.16.2 --user-install --no-document
+          export PATH="$(ruby -r rubygems -e 'puts Gem.user_dir')/bin:$PATH"
+          test "$(pod _1.16.2_ --version)" = "1.16.2"
+          pod _1.16.2_ install --deployment
       - name: Install existing App Store signing identity
         env:
           TDF_IOS_DISTRIBUTION_P12: ${{ secrets.TDF_IOS_DISTRIBUTION_P12 }}

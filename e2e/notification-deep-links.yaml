@@ -1,0 +1,47 @@
+# Run on a dedicated simulator: maestro --device <id> test e2e/notification-deep-links.yaml
+# No credentials are submitted; synthetic IDs exercise sign-in handoff only.
+appId: com.tdfrecords.app
+---
+- launchApp:
+    clearState: true
+- stopApp
+- openLink:
+    link: "tdf://notification/900000001"
+    autoVerify: true
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "usernameInput"
+    timeout: 30000
+- assertVisible:
+    id: "passwordInput"
+- takeScreenshot: /tmp/tdf-notification-native-cold-start
+- stopApp
+- openLink:
+    link: "tdf://access-requests/900000002"
+    autoVerify: true
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "usernameInput"
+    timeout: 30000
+- assertVisible:
+    id: "passwordInput"
+- takeScreenshot: /tmp/tdf-request-native-cold-start
+- openLink:
+    link: "tdf://notifications/900000003"
+    autoVerify: true
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "usernameInput"
+    timeout: 30000
+- assertVisible:
+    id: "passwordInput"
+- takeScreenshot: /tmp/tdf-notification-native-warm-start

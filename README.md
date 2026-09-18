@@ -69,9 +69,9 @@ npm run doctor
 npm run expo:config
 npm run prebuild:check
 npm run build:ios:preview
-npm run build:ios:production
+npm run build:ios:production -- -f build_number=UNUSED_IOS_NUMBER
 npm run build:android:preview
-npm run build:android:production
+npm run build:android:production -- -f version_code=UNUSED_ANDROID_NUMBER
 npm run submit:ios:production
 npm run submit:android:production
 ```
@@ -97,7 +97,7 @@ npm run submit:android:production
 
 - Expo config is centralized in `app.config.ts`.
 - Store-ready app identifiers are `com.tdfrecords.app` for iOS and `com.tdf.records` for Android.
-- EAS production builds use remote versioning from `eas.json`; do not set local build numbers for release builds.
+- Production build commands dispatch the standard GitHub runners from `main`; replace the placeholder with a store-verified unused build number. See [release instructions](docs/release.md). EAS commands remain explicitly available under `eas:build:*`; do not run a competing build or reuse numbers.
 - Release assets are generated from shared TDF branding in the parent workspace by `scripts/generate_release_assets.py`.
 - The release gate validates the committed app icon, adaptive icons, favicon, and splash dimensions without requiring that parent workspace.
 - The `/about` screen shows the resolved API base, health status, and version info.

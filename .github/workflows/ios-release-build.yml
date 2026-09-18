@@ -6,7 +6,6 @@ on:
       build_number:
         description: Unused App Store Connect build number for version 1.0.1
         required: true
-        default: '23'
         type: string
 
 permissions:

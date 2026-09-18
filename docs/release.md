@@ -98,7 +98,8 @@ The `ios-release` environment permits `main` only and stores the existing
 profile's app, team, distribution type, expiration and certificate match. Signing
 uses an ephemeral keychain and removes the credentials even after failure.
 
-Dependencies use `npm ci --include=dev` and `pod install --deployment`; source
+Dependencies use `npm ci --include=dev` and CocoaPods1.16.2 (matching Podfile.lock)
+with `pod _1.16.2_ install --deployment`; source
 release checks and tests must pass. Xcode archives the existing native project and
 exports an App Store IPA. The artifact gate checks its signature, SDK, app/build
 versions, Google/deep-link schemes and embedded production API. The one-day

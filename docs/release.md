@@ -90,7 +90,7 @@ are free for this public repository. This does not remove Apple's membership,
 physical-device testing or review requirements.
 
 Run the workflow manually from `main`, supplying an unused App Store Connect build
-number (next reserved candidate: 23 for app version 1.0.1). Do not run a competing
+number (next reserved candidate: 24 for app version 1.0.1). Do not run a competing
 EAS iOS build with that number. Concurrent workflow executions are serialized.
 The `ios-release` environment permits `main` only and stores the existing
 `TDF_IOS_DISTRIBUTION_P12`, `TDF_IOS_P12_PASSWORD` and
@@ -108,9 +108,11 @@ Download it promptly for the existing Apple validation/upload process.
 
 A successful archive is **not** a TestFlight upload, App Review submission or
 publication. Execute `docs/google-oauth-manual-test.md` on a physical iPhone before
-production; preserve the manual release setting in App Store Connect. The initial
-workflow execution and final source qualification are pending until their actual
-run and artifact are recorded in the parent UX audit.
+production; preserve the manual release setting in App Store Connect. The first signed run [35370877715](https://github.com/diegueins680/TDF-mobile/actions/runs/35370877715)
+passed on source751d261fd162fd6a0e9c8b0ea9969c4c1a5e2572: IPA1.0.1(23),
+SDK26.2, SHA2566d5b3c3a2b658314b7c04db1719a522f5e54d964d0029444471ff4754fad9cbe.
+It has not been uploaded to Apple. A successor must include the native text-scaling
+fix before final source qualification.
 
 Sources checked 2026-09-18: [GitHub billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions),
 [Apple signing on GitHub](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications),

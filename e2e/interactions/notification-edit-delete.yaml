@@ -27,7 +27,26 @@ appId: ${APP_ID || "com.tdfrecords.app"}
       visible: "Speed up your typing.*"
     commands:
       - tapOn: "^Continue$"
-- eraseText
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - longPressOn:
+          text: "Escribe un comentario"
+          index: 1
+      - runFlow:
+          when:
+            notVisible: "Select all|Select All|Seleccionar todo"
+          commands:
+            - tapOn: "More options|Más opciones"
+      - tapOn: "Select all|Select All|Seleccionar todo"
+      - eraseText: 1
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - eraseText
+- assertVisible: "0/4096"
 - inputText: "${TDF_COMMENT_BODY} edited"
 - tapOn: "API publication"
 - scrollUntilVisible:

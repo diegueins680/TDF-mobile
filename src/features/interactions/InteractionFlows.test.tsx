@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AccessibilityInfo } from 'react-native';
@@ -21,7 +22,7 @@ const summary: InteractionSummary = { id: target, kind: 'recording', key: 'recor
   canManage: false, reactable: true, commentable: true, shareable: true, version: 1, commentPolicy: 'everyone', canReact: true, canComment: true, canModerate: false,
   commentCount: 2, rootCount: 1, reactions: [{ id: 'like', code: 'like', emoji: '👍', label: 'Me gusta', count: 0, selectable: true }], myReactionTypeId: null, subscription: 'participating', defaultSort: 'newest' };
 let root: InteractionComment, reply: InteractionComment, client: QueryClient;
-function view(component: React.ReactElement) {
+function view(component: ReactElement) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } } });
   return render(<QueryClientProvider client={client}>{component}</QueryClientProvider>);
 }

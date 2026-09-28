@@ -5,7 +5,6 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:www.tdfrecords.net</string>
-		<string>applinks:tdfrecords.net</string>
 		<string>applinks:tdf-app.pages.dev</string>
 	</array>
 </dict>

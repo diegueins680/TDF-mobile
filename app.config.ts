@@ -13,7 +13,8 @@ const IOS_BUNDLE_ID = 'com.tdfrecords.app';
 const ANDROID_PACKAGE = 'com.tdf.records';
 const DEFAULT_TIME_ZONE = 'America/Guayaquil';
 const PUBLIC_SITE_URL = 'https://tdf-app.pages.dev/mobile-app';
-const PUBLIC_UNIVERSAL_LINK_HOSTS = ['www.tdfrecords.net', 'tdfrecords.net', 'tdf-app.pages.dev'];
+// The apex redirects; verified hosts must serve association files directly.
+const PUBLIC_UNIVERSAL_LINK_HOSTS = ['www.tdfrecords.net', 'tdf-app.pages.dev'];
 const PUBLIC_SUPPORT_URL = `${PUBLIC_SITE_URL}/support.html`;
 const PUBLIC_PRIVACY_POLICY_URL = `${PUBLIC_SITE_URL}/privacy.html`;
 const PUBLIC_TERMS_OF_SERVICE_URL = `${PUBLIC_SITE_URL}/terms.html`;

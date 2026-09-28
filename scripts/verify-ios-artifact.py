@@ -11,6 +11,12 @@ import tempfile
 import zipfile
 
 
+def read_signed_entitlements(app):
+    # Current codesign defaults to a human-readable summary, not a plist.
+    result = subprocess.run(['codesign', '-d', '--entitlements', '-', '--xml', str(app)],
+                            capture_output=True, check=True)
+    return plistlib.loads(result.stdout)
+
 
 def validate_interaction_release(entitlements, configs, updates):
     runtime = json.loads((Path(__file__).parents[1] / 'app.json').read_text())['expo']['runtimeVersion']
@@ -55,7 +61,7 @@ def main():
         assert not profile['Entitlements'].get('get-task-allow'), 'Development signing is not an App Store release'
         config_files = list(app.rglob('app.config'))
         configs = [json.loads(p.read_text()) for p in config_files]
-        entitlements = plistlib.loads(subprocess.run(['codesign', '-d', '--entitlements', '-', str(app)], capture_output=True, check=True).stdout)
+        entitlements = read_signed_entitlements(app)
         validate_interaction_release(entitlements, configs, plistlib.loads((app / 'Expo.plist').read_bytes()))
         receipt = {'sourceSHA': os.environ['GITHUB_SHA'], 'runId': os.environ['GITHUB_RUN_ID'], 'runAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'bundleIdentifier': info['CFBundleIdentifier'], 'version': expected_version, 'build': info['CFBundleVersion'], 'sdk': info['DTSDKName'], 'xcode': info.get('DTXcode'), 'artifact': ipa.name, 'bytes': ipa.stat().st_size, 'sha256': hashlib.file_digest(ipa.open('rb'), 'sha256').hexdigest(), 'signatureVerified': True, 'embeddedProductionAPI': True, 'publication': 'not uploaded or submitted', 'physicalGoogleOAuth': 'required separately before production'}
         (directory / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')

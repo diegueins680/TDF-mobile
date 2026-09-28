@@ -41,9 +41,25 @@ appId: ${APP_ID || "com.tdfrecords.app"}
 - extendedWaitUntil:
     visible: "Comentario eliminado"
     timeout: 30000
+- scrollUntilVisible:
+    element: ${TDF_REPLY_BODY}
+    direction: DOWN
+    timeout: 30000
 - assertVisible: ${TDF_REPLY_BODY}
+- scrollUntilVisible:
+    element: "Ocultar respuestas.*"
+    direction: UP
+    timeout: 30000
 - tapOn: "Ocultar respuestas.*"
+- scrollUntilVisible:
+    element: "Ver 1 respuestas"
+    direction: DOWN
+    timeout: 30000
 - tapOn: "Ver 1 respuestas"
+- scrollUntilVisible:
+    element: ${TDF_REPLY_BODY}
+    direction: DOWN
+    timeout: 30000
 - extendedWaitUntil:
     visible: ${TDF_REPLY_BODY}
     timeout: 30000

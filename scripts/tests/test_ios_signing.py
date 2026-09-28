@@ -15,7 +15,7 @@ artifact_spec.loader.exec_module(artifact)
 class SigningContract(unittest.TestCase):
     def setUp(self):
         self.now = datetime.datetime(2026, 9, 18, tzinfo=datetime.timezone.utc)
-        self.profile = {'ExpirationDate': datetime.datetime(2027, 1, 1), 'TeamIdentifier': ['83J23NPXG7'], 'Entitlements': {'application-identifier': '83J23NPXG7.com.tdfrecords.app', 'get-task-allow': False}, 'UUID': 'ebc7d007-b938-45ff-af73-8ffd86b4c546', 'DeveloperCertificates': [b'fixture']}
+        self.profile = {'ExpirationDate': datetime.datetime(2027, 1, 1), 'TeamIdentifier': ['83J23NPXG7'], 'Entitlements': {'application-identifier': '83J23NPXG7.com.tdfrecords.app', 'get-task-allow': False, 'com.apple.developer.associated-domains': ['*']}, 'UUID': 'ebc7d007-b938-45ff-af73-8ffd86b4c546', 'DeveloperCertificates': [b'fixture']}
 
     def test_current_app_store_profile(self):
         self.assertEqual(signing.validate_profile(self.profile, self.now), self.profile['UUID'])
@@ -27,6 +27,11 @@ class SigningContract(unittest.TestCase):
                 profile[field] = value
                 with self.assertRaises(ValueError):
                     signing.validate_profile(profile, self.now)
+
+    def test_rejects_profile_without_universal_link_capability(self):
+        self.profile['Entitlements'].pop('com.apple.developer.associated-domains')
+        with self.assertRaisesRegex(ValueError, 'Associated Domains'):
+            signing.validate_profile(self.profile, self.now)
 
     def test_rejects_debug_entitlement(self):
         self.profile['Entitlements']['get-task-allow'] = True

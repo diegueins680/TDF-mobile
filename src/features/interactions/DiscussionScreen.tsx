@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, View, findNodeHandle } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { randomUUID } from 'expo-crypto';
 import * as Clipboard from 'expo-clipboard';
 import { Interactions } from '../../api/interactions';
-import type { InteractionCommand, InteractionComment, InteractionDestination, InteractionSort } from '../../api/interactions';
+import type { InteractionCommand, InteractionComment, InteractionDestination, InteractionPage, InteractionSort } from '../../api/interactions';
 import { useAuth } from '../../providers/AuthProvider';
 import { useAppTheme } from '../../theme/ThemeProvider';
 import { getAnalyticsClient } from '../../analytics/posthog';
@@ -13,7 +13,7 @@ import { DiscussionControls } from './DiscussionControls';
 import { CommentBody } from './CommentBody';
 import { CommentComposer } from './CommentComposer';
 import { InteractionBar } from './InteractionBar';
-import { commandAnalyticsEvents, discussionLink } from './model';
+import { createDiscussionCursorHistory, discussionWindowPages, commandAnalyticsEvents, discussionLink } from './model';
 
 export default function DiscussionScreen() {
   const { destinationKind, destinationId } = useLocalSearchParams<{ destinationKind: string; destinationId: string }>();
@@ -44,9 +44,12 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
   const heading = useRef<Text>(null); const composer = useRef<Text>(null);
   const summary = useQuery({ queryKey: ['interactions', token ? `account:${partyId ?? 'pending'}` : 'anonymous', destination.kind, destination.key, 'summary'],
     queryFn: ({ signal }) => Interactions.summary(identity, Boolean(token), signal), retry: false, refetchInterval: 30000 });
+  const commentCursors = useMemo(createDiscussionCursorHistory, [partyId, destination.kind, destination.key, thread, sort]);
   const comments = useInfiniteQuery({ queryKey: ['interactions', token ? `account:${partyId ?? 'pending'}` : 'anonymous', destination.kind, destination.key, 'comments', thread, sort],
-    initialPageParam: undefined as string | undefined, queryFn: ({ pageParam, signal }) => Interactions.comments(identity, Boolean(token), thread ? 'oldest' : sort, thread, pageParam, signal),
-    getNextPageParam: (page) => page.nextCursor ?? undefined, retry: false, refetchInterval: 30000 });
+    initialPageParam: '', maxPages: discussionWindowPages,
+    getPreviousPageParam: (_page, _pages, cursor) => commentCursors.previous(cursor),
+    queryFn: async ({ pageParam, signal }) => { const page = await Interactions.comments(identity, Boolean(token), thread ? 'oldest' : sort, thread, pageParam || undefined, signal); commentCursors.remember(pageParam, page.nextCursor); return page; },
+    getNextPageParam: (page: InteractionPage) => page.nextCursor ?? undefined, retry: false, refetchInterval: 30000 });
   const context = useQuery({ queryKey: ['interactions', token ? `account:${partyId ?? 'pending'}` : 'anonymous', destination.kind, destination.key, 'context', thread],
     queryFn: ({ signal }) => Interactions.context(identity, Boolean(token), destination.context?.root.id === thread ? destination.commentId! : thread!, signal),
     enabled: Boolean(thread), retry: false });
@@ -92,6 +95,7 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
         ListHeaderComponent={<View style={{ gap: 8 }}>
           <Text ref={heading} accessibilityRole="header" style={{ color: colors.textPrimary, fontSize: 24, fontWeight: '700' }}>{destination.title}</Text>
           <InteractionBar {...identity} />
+          {comments.hasPreviousPage && button('Ver comentarios anteriores', () => { void comments.fetchPreviousPage(); }, comments.isFetchingPreviousPage)}
           {thread ? button('Ocultar respuestas · Ver todos los comentarios', () => { setThread(undefined); setReply(null); getAnalyticsClient().capture('thread_collapsed', { platform: 'mobile', entity_kind: destination.kind }); })
             : <View style={{ flexDirection: 'row' }}>{button(sort === 'newest' ? 'Más recientes ✓' : 'Más recientes', () => setSort('newest'))}{button(sort === 'oldest' ? 'Más antiguos ✓' : 'Más antiguos', () => setSort('oldest'))}</View>}
           {token ? button('Opciones de conversación', () => setControls(true)) : button('Iniciar sesión para participar', () => router.push('/auth'))}

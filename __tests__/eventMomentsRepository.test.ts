@@ -6,7 +6,7 @@ import * as local from '../src/lib/eventMoments';
 jest.mock('../src/api/events', () => ({ Events: { listMoments: jest.fn(), createMoment: jest.fn(), reactToMoment: jest.fn(), commentOnMoment: jest.fn() } }));
 jest.mock('../src/lib/eventMoments', () => ({ listEventMoments: jest.fn(), createEventMoment: jest.fn(), toggleMomentReaction: jest.fn(), addMomentComment: jest.fn() }));
 const remote = jest.mocked(Events); const drafts = jest.mocked(local);
-const reaction = { id: '50800000-0000-4000-8000-000000000001', code: 'fire', label: 'Fuego', emoji: '🔥' };
+const reaction = { id: '50800000-0000-4000-8000-000000000001', code: 'fire', label: 'Fuego', nameEs: 'Fuego', nameEn: 'Fire', emoji: '🔥' };
 const input = { eventId: '42', momentId: '77', actorKey: 'party:9', reaction };
 const draft = { eventId: '42', authorName: 'Ana', media: { kind: 'image' as const, uri: 'file:///draft.jpg', mimeType: 'image/jpeg' } };
 const published = { ...draft, id: '77', createdAt: '2026-09-28T12:00:00Z', reactions: { [reaction.id]: ['party:9'] }, comments: [] };

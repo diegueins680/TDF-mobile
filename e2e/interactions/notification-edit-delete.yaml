@@ -26,6 +26,7 @@ appId: ${APP_ID || "com.tdfrecords.app"}
 - inputText: "${TDF_COMMENT_BODY} edited"
 - tapOn: "API publication"
 - scrollUntilVisible:
+    centerElement: true
     element: "^Publicar$"
     direction: DOWN
     timeout: 30000
@@ -42,21 +43,25 @@ appId: ${APP_ID || "com.tdfrecords.app"}
     visible: "Comentario eliminado"
     timeout: 30000
 - scrollUntilVisible:
+    centerElement: true
     element: ${TDF_REPLY_BODY}
     direction: DOWN
     timeout: 30000
 - assertVisible: ${TDF_REPLY_BODY}
 - scrollUntilVisible:
+    centerElement: true
     element: "Ocultar respuestas.*"
     direction: UP
     timeout: 30000
 - tapOn: "Ocultar respuestas.*"
 - scrollUntilVisible:
+    centerElement: true
     element: "Ver 1 respuestas"
     direction: DOWN
     timeout: 30000
 - tapOn: "Ver 1 respuestas"
 - scrollUntilVisible:
+    centerElement: true
     element: ${TDF_REPLY_BODY}
     direction: DOWN
     timeout: 30000

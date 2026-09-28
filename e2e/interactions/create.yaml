@@ -11,6 +11,11 @@ appId: ${APP_ID || "com.tdfrecords.app"}
     optional: true
 - runFlow:
     when:
+      visible: "I already have an account|Ya tengo una cuenta"
+    commands:
+      - tapOn: "I already have an account|Ya tengo una cuenta"
+- runFlow:
+    when:
       notVisible:
         id: usernameInput
     commands:
@@ -47,6 +52,7 @@ appId: ${APP_ID || "com.tdfrecords.app"}
 - inputText: ${TDF_COMMENT_BODY}
 - tapOn: "API publication"
 - scrollUntilVisible:
+    centerElement: true
     element: "^Publicar$"
     direction: DOWN
     timeout: 30000

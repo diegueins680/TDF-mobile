@@ -1,8 +1,17 @@
 # Run through the isolated backend fixture runner, never against production.
 appId: ${APP_ID || "com.tdfrecords.app"}
 ---
-- launchApp:
-    clearState: true
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - launchApp:
+          clearState: true
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - clearState
 - openLink:
     link: "tdf://auth"
     autoVerify: true

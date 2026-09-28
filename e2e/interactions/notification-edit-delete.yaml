@@ -22,6 +22,11 @@ appId: ${APP_ID || "com.tdfrecords.app"}
 - tapOn:
     text: "Escribe un comentario"
     index: 1
+- runFlow:
+    when:
+      visible: "Speed up your typing.*"
+    commands:
+      - tapOn: "^Continue$"
 - eraseText
 - inputText: "${TDF_COMMENT_BODY} edited"
 - tapOn: "API publication"

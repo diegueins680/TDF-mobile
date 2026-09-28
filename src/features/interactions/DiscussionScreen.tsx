@@ -98,7 +98,7 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
           {comments.hasPreviousPage && button('Ver comentarios anteriores', () => { void comments.fetchPreviousPage(); }, comments.isFetchingPreviousPage)}
           {thread ? button('Ocultar respuestas · Ver todos los comentarios', () => { setThread(undefined); setReply(null); getAnalyticsClient().capture('thread_collapsed', { platform: 'mobile', entity_kind: destination.kind }); })
             : <View style={{ flexDirection: 'row' }}>{button(sort === 'newest' ? 'Más recientes ✓' : 'Más recientes', () => setSort('newest'))}{button(sort === 'oldest' ? 'Más antiguos ✓' : 'Más antiguos', () => setSort('oldest'))}</View>}
-          {token ? button('Opciones de conversación', () => setControls(true)) : button('Iniciar sesión para participar', () => router.push('/auth'))}
+          {token ? button('Opciones de conversación', () => setControls(true)) : button('Iniciar sesión para participar', () => router.push({ pathname: '/auth', params: { returnTo: discussionLink(destination.commentId ? 'comment' : 'target', destination.commentId ?? destination.targetId) } }))}
           {data?.commentPolicy === 'off' && <Text style={{ color: colors.textSecondary }}>Los comentarios están desactivados.</Text>}
           {data && !data.canComment && data.commentPolicy !== 'off' && token && <Text style={{ color: colors.textSecondary }}>No tienes permiso para comentar en esta publicación.</Text>}
           {data?.canComment && <View><Text ref={composer} style={{ color: colors.textPrimary }}>{editing ? 'Editar comentario' : reply ? `Responder a ${reply.author?.displayName ?? 'este comentario'}` : 'Participar'}</Text>

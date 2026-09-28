@@ -8,12 +8,13 @@ import { CommentComposer } from './CommentComposer';
 import DiscussionScreen from './DiscussionScreen';
 jest.setTimeout(20000);
 const mockApi = { summary: jest.fn(), command: jest.fn(), comments: jest.fn(), context: jest.fn(), destination: jest.fn(), reactors: jest.fn(), preferences: jest.fn(), blockedAccounts: jest.fn(), moderation: jest.fn() };
+let mockAuth: { partyId: string | null; token: string | null } = { partyId: '7', token: 'synthetic' };
 const mockPush = jest.fn(); let mockParams = { destinationKind: 'target', destinationId: '10000000-0000-4000-8000-000000000001' }; let mockOrdinal = 0;
 jest.mock('../../api/interactions', () => ({ Interactions: new Proxy({}, { get: (_object, key) => (...args: unknown[]) => mockApi[key as keyof typeof mockApi](...args) }) }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }), useLocalSearchParams: () => mockParams }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => `20000000-0000-4000-8000-${String(++mockOrdinal).padStart(12, '0')}` }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../../providers/AuthProvider', () => ({ useAuth: () => ({ partyId: '7', token: 'synthetic' }) }));
+jest.mock('../../providers/AuthProvider', () => ({ useAuth: () => mockAuth }));
 jest.mock('../../theme/ThemeProvider', () => ({ useAppTheme: () => ({ colors: {} }) }));
 jest.mock('../../analytics/posthog', () => ({ getAnalyticsClient: () => ({ capture: jest.fn() }) }));
 jest.mock('../../components/PartySelector', () => ({ PartySelector: () => null, PartyMultiSelector: () => null }));
@@ -27,7 +28,7 @@ function view(component: ReactElement) {
   return render(<QueryClientProvider client={client}>{component}</QueryClientProvider>);
 }
 beforeEach(() => {
-  jest.clearAllMocks(); mockParams = { destinationKind: 'target', destinationId: target };
+  jest.clearAllMocks(); mockAuth = { partyId: '7', token: 'synthetic' }; mockParams = { destinationKind: 'target', destinationId: target };
   root = { id: rootId, targetId: target, parentId: null, rootId, depth: 0, version: 1, createdAt: '2026-09-28T10:00:00Z', editedAt: null, state: 'visible', body: 'Root comment', author: { id: 7, displayName: 'Ana', avatarUrl: null }, canEdit: true, canDelete: true, mentions: [], replyCount: 1 };
   reply = { ...root, id: replyId, parentId: rootId, depth: 1, body: 'A reply', author: { id: 8, displayName: 'Luis', avatarUrl: null }, canEdit: false, canDelete: false, replyCount: 0 };
   mockApi.summary.mockResolvedValue(summary); mockApi.command.mockResolvedValue({});
@@ -71,4 +72,14 @@ it('does not keep cached discussion bodies visible after access is revoked', asy
   const ui = view(<DiscussionScreen />); await ui.findByText('Root comment', {}, { timeout: 10000 }); mockApi.summary.mockRejectedValue(new Error('404'));
   await act(async () => { await client.invalidateQueries({ queryKey: ['interactions'] }); });
   await ui.findByText('Tus permisos cambiaron o la conversación no está disponible.'); expect(ui.queryByText('Root comment')).toBeNull();
+});
+
+it.each(['target', 'comment'])('preserves the exact %s discussion through guest sign-in', async (kind) => {
+  mockAuth = { partyId: null, token: null };
+  mockParams = { destinationKind: kind, destinationId: kind === 'comment' ? replyId : target };
+  mockApi.summary.mockResolvedValue({ ...summary, canComment: false, canReact: false });
+  const ui = view(<DiscussionScreen />);
+  fireEvent.press(await ui.findByText('Iniciar sesión para participar'));
+  expect(mockPush).toHaveBeenCalledWith({ pathname: '/auth', params: { returnTo: `/conversacion/${kind}/${kind === 'comment' ? replyId : target}` } });
+  expect(ui.queryByLabelText('Escribe un comentario')).toBeNull();
 });

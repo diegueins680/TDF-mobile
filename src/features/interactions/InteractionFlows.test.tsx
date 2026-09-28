@@ -6,6 +6,7 @@ import type { InteractionComment, InteractionSummary } from '../../api/interacti
 import { InteractionBar } from './InteractionBar';
 import { CommentComposer } from './CommentComposer';
 import DiscussionScreen from './DiscussionScreen';
+import { DiscussionControls } from './DiscussionControls';
 jest.setTimeout(20000);
 const mockApi = { summary: jest.fn(), command: jest.fn(), comments: jest.fn(), context: jest.fn(), destination: jest.fn(), reactors: jest.fn(), preferences: jest.fn(), blockedAccounts: jest.fn(), moderation: jest.fn() };
 let mockAuth: { partyId: string | null; token: string | null } = { partyId: '7', token: 'synthetic' };
@@ -104,4 +105,16 @@ it.each(['target', 'comment'])('preserves the exact %s discussion through guest 
   fireEvent.press(await ui.findByText('Iniciar sesión para participar'));
   expect(mockPush).toHaveBeenCalledWith({ pathname: '/auth', params: { returnTo: `/conversacion/${kind}/${kind === 'comment' ? replyId : target}` } });
   expect(ui.queryByLabelText('Escribe un comentario')).toBeNull();
+});
+
+
+it('shows moderator report reasons before resolving a report', async () => {
+  mockApi.moderation.mockResolvedValue({ items: [{ ...root, moderationBody: 'Reported comment', openReports: 1, reportReasons: ['Unwanted personal information'] }], nextCursor: null });
+  const execute = jest.fn().mockResolvedValue(undefined);
+  const ui = view(<DiscussionControls summary={{ ...summary, canModerate: true }} scope="7" onClose={jest.fn()} execute={execute} />);
+  fireEvent.press(ui.getByText('Moderación'));
+  expect(await ui.findByText('Unwanted personal information')).toBeTruthy();
+  fireEvent.changeText(ui.getByLabelText('Motivo de la decisión'), 'Reviewed the report');
+  fireEvent.press(ui.getByText('Desestimar reportes'));
+  await waitFor(() => expect(execute).toHaveBeenCalledWith(expect.objectContaining({ operation: 'comment.report.resolve', commentId: rootId })));
 });

@@ -1,3 +1,4 @@
+import { InteractionBar } from '../features/interactions/InteractionBar';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
@@ -181,6 +182,7 @@ export function DirectoryPublicDetailScreen({ kind, identifier }: { kind: Direct
         {arrayValue(data.professions).length ? (
           <View style={styles.chips}>{arrayValue(data.professions).map((profession) => <Text key={textValue(profession.id)} style={[styles.chip, { backgroundColor: colors.selected, color: colors.textPrimary }]}>{textValue(profession.name)}</Text>)}</View>
         ) : null}
+        {kind !== 'venue' && <InteractionBar kind={kind === 'profile' ? 'directory_profile' : kind} entityKey={id} />}
         {kind === 'profile' ? (
           <ProfileReviewsPanel
             pages={reviews.data?.pages ?? []}

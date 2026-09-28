@@ -1,3 +1,4 @@
+import { InteractionBar } from '../src/features/interactions/InteractionBar';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
@@ -1274,6 +1275,7 @@ export default function EventDetailScreen() {
         )}
 
         <Text style={styles.title}>{event.title}</Text>
+        <InteractionBar kind="event" entityKey={String(event.id)} />
         {event.workflowStateCode === 'cancelled' ? (
           <View style={styles.cancelledBanner} accessibilityRole="text">
             <Text style={styles.cancelledBannerText}>{english ? 'Cancelled' : 'Cancelado'}</Text>
@@ -1630,6 +1632,10 @@ export default function EventDetailScreen() {
                         reaction,
                         ownerPartyId: normalizedPartyId,
                       })}
+                      onCanonicalReactionPosted={() => { void recordMomentReactionFirstValue(
+                        { source: 'remote', selected: true }, normalizedPartyId,
+                        () => ownsParty(normalizedPartyId), analytics,
+                      ); }}
                       onConnectAuthor={handleConnectAuthor}
                       onOpenMedia={handleOpenMomentMedia}
                     />

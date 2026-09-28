@@ -1,0 +1,43 @@
+# Run through the isolated backend fixture runner, never against production.
+appId: ${APP_ID || "com.tdfrecords.app"}
+---
+- launchApp:
+    clearState: true
+- openLink:
+    link: "tdf://auth"
+    autoVerify: true
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: usernameInput
+    timeout: 30000
+- tapOn:
+    id: usernameInput
+- inputText: ${TDF_USERNAME}
+- tapOn:
+    id: passwordInput
+- inputText: ${TDF_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: loginButton
+- extendedWaitUntil:
+    notVisible:
+      id: loginButton
+    timeout: 30000
+- openLink:
+    link: "tdf://conversacion/target/${TDF_TARGET_ID}"
+    autoVerify: true
+- extendedWaitUntil:
+    visible: "API publication"
+    timeout: 30000
+- tapOn: "Me gusta:.*"
+- tapOn: "Escribe un comentario"
+- inputText: ${TDF_COMMENT_BODY}
+- hideKeyboard
+- tapOn: "^Publicar$"
+- extendedWaitUntil:
+    visible: ${TDF_COMMENT_BODY}
+    timeout: 30000
+- takeScreenshot: /tmp/tdf-interaction-native-created

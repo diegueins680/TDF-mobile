@@ -1,0 +1,44 @@
+appId: ${APP_ID || "com.tdfrecords.app"}
+---
+- stopApp
+- openLink:
+    link: "tdf://notification/${TDF_NOTIFICATION_ID}"
+    autoVerify: true
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible: "Abrir conversación|Open discussion"
+    timeout: 30000
+- tapOn: "Abrir conversación|Open discussion"
+- extendedWaitUntil:
+    visible: ${TDF_REPLY_BODY}
+    timeout: 30000
+- assertVisible: ${TDF_COMMENT_BODY}
+- tapOn:
+    text: "Opciones del comentario"
+    index: 0
+- tapOn: "^Editar$"
+- tapOn: "Escribe un comentario"
+- eraseText
+- inputText: "${TDF_COMMENT_BODY} edited"
+- hideKeyboard
+- tapOn: "^Publicar$"
+- extendedWaitUntil:
+    visible: "${TDF_COMMENT_BODY} edited"
+    timeout: 30000
+- tapOn:
+    text: "Opciones del comentario"
+    index: 0
+- tapOn: "Eliminar mi comentario"
+- tapOn: "^Confirmar$"
+- extendedWaitUntil:
+    visible: "Comentario eliminado"
+    timeout: 30000
+- assertVisible: ${TDF_REPLY_BODY}
+- tapOn: "Ocultar respuestas.*"
+- tapOn: "Ver 1 respuestas"
+- extendedWaitUntil:
+    visible: ${TDF_REPLY_BODY}
+    timeout: 30000
+- takeScreenshot: /tmp/tdf-interaction-native-tombstone-thread

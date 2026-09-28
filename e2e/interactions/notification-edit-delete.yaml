@@ -19,10 +19,16 @@ appId: ${APP_ID || "com.tdfrecords.app"}
     text: "Opciones del comentario"
     index: 0
 - tapOn: "^Editar$"
-- tapOn: "Escribe un comentario"
+- tapOn:
+    text: "Escribe un comentario"
+    index: 1
 - eraseText
 - inputText: "${TDF_COMMENT_BODY} edited"
-- hideKeyboard
+- tapOn: "API publication"
+- scrollUntilVisible:
+    element: "^Publicar$"
+    direction: DOWN
+    timeout: 30000
 - tapOn: "^Publicar$"
 - extendedWaitUntil:
     visible: "${TDF_COMMENT_BODY} edited"

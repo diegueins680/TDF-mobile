@@ -19,13 +19,11 @@ appId: ${APP_ID || "com.tdfrecords.app"}
 - tapOn:
     id: passwordInput
 - inputText: ${TDF_PASSWORD}
-- hideKeyboard
-- tapOn:
-    id: loginButton
+- pressKey: Enter
 - extendedWaitUntil:
     notVisible:
-      id: loginButton
-    timeout: 30000
+      id: usernameInput
+    timeout: 120000
 - openLink:
     link: "tdf://conversacion/target/${TDF_TARGET_ID}"
     autoVerify: true
@@ -33,9 +31,15 @@ appId: ${APP_ID || "com.tdfrecords.app"}
     visible: "API publication"
     timeout: 30000
 - tapOn: "Me gusta:.*"
-- tapOn: "Escribe un comentario"
+- tapOn:
+    text: "Escribe un comentario"
+    index: 1
 - inputText: ${TDF_COMMENT_BODY}
-- hideKeyboard
+- tapOn: "API publication"
+- scrollUntilVisible:
+    element: "^Publicar$"
+    direction: DOWN
+    timeout: 30000
 - tapOn: "^Publicar$"
 - extendedWaitUntil:
     visible: ${TDF_COMMENT_BODY}

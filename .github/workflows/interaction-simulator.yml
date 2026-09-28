@@ -38,10 +38,23 @@ jobs:
           gem install cocoapods --version 1.16.2 --user-install --no-document
           gem install json --version 2.18.0 --user-install --no-document
           ruby -e 'gem "json", "2.18.0"; gem "cocoapods", "1.16.2"; load Gem.bin_path("cocoapods", "pod", "1.16.2")' -- install --deployment
+      - name: Configure isolated simulator identity and disable OTA
+        run: |
+          python3 - <<'PYTEST'
+          import pathlib, plistlib
+          p=pathlib.Path('ios/TDFRecords/TDFRecords.entitlements')
+          value=plistlib.loads(p.read_bytes())
+          value['application-identifier']='TDFTEST000.com.tdfrecords.app'
+          value['keychain-access-groups']=['TDFTEST000.com.tdfrecords.app']
+          p.write_bytes(plistlib.dumps(value))
+          p=pathlib.Path('ios/TDFRecords/Supporting/Expo.plist')
+          value=plistlib.loads(p.read_bytes()); value['EXUpdatesEnabled']=False
+          p.write_bytes(plistlib.dumps(value))
+          PYTEST
       - name: Build simulator application with bundled JavaScript
         run: |
           set -o pipefail
-          xcodebuild -workspace ios/TDFRecords.xcworkspace -scheme TDFRecords -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/tdf-interactions" CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/tdf-interaction-xcode.log" 2>&1 || { tail -n 100 "$RUNNER_TEMP/tdf-interaction-xcode.log"; exit 1; }
+          xcodebuild -workspace ios/TDFRecords.xcworkspace -scheme TDFRecords -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/tdf-interactions" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= build > "$RUNNER_TEMP/tdf-interaction-xcode.log" 2>&1 || { tail -n 100 "$RUNNER_TEMP/tdf-interaction-xcode.log"; exit 1; }
           APP="$RUNNER_TEMP/tdf-interactions/Build/Products/Release-iphonesimulator/TDFRecords.app"
           test -s "$APP/main.jsbundle"
           tar -czf "$RUNNER_TEMP/tdf-interaction-simulator.tgz" -C "$(dirname "$APP")" TDFRecords.app

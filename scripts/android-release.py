@@ -56,6 +56,26 @@ def prepare():
     gradle.write_text(prepare_gradle(gradle.read_text(), number))
 
 
+
+def validate_interaction_release(root, config, bundle):
+    android = '{http://schemas.android.com/apk/res/android}'
+    expected = {(host, route) for host in ('www.tdfrecords.net', 'tdf-app.pages.dev')
+                for route in ('/eventos/', '/conversacion/')}
+    actual = set()
+    for intent in root.findall('.//intent-filter'):
+        if intent.get(android + 'autoVerify') != 'true':
+            continue
+        for data in intent.findall('data'):
+            if data.get(android + 'scheme') == 'https':
+                actual.add((data.get(android + 'host'), data.get(android + 'pathPrefix')))
+    if actual != expected:
+        raise ValueError('Verified app links do not match the deployed hosts and routes')
+    if config.get('extra', {}).get('apiBase') != 'https://api.tdfrecords.net':
+        raise ValueError('Wrong embedded production API')
+    if b'https://api.tdfrecords.net' not in bundle or b'127.0.0.1:18128' in bundle or b'127.0.0.1:18631' in bundle:
+        raise ValueError('Wrong bundled production API')
+
+
 def verify():
     aab = Path('android/app/build/outputs/bundle/release/app-release.aab')
     subprocess.run(['jarsigner', '-verify', str(aab)], check=True, capture_output=True)
@@ -74,9 +94,8 @@ def verify():
     with zipfile.ZipFile(aab) as archive:
         assert archive.testzip() is None, 'Corrupt archive'
         config = json.loads(archive.read('base/assets/app.config'))
-        assert config['extra']['apiBase'] == 'https://tdf-hq.fly.dev', 'Wrong embedded API'
         bundle = archive.read('base/assets/index.android.bundle')
-        assert b'https://tdf-hq.fly.dev' in bundle and b'127.0.0.1:18631' not in bundle, 'Wrong bundled API'
+        validate_interaction_release(root, config, bundle)
     output = Path('release-artifacts')
     output.mkdir(exist_ok=True)
     receipt = {'sourceSHA': os.environ['GITHUB_SHA'], 'runId': os.environ['GITHUB_RUN_ID'], 'package': 'com.tdf.records', 'version': version, 'build': os.environ['ANDROID_VERSION_CODE'], 'sha256': hashlib.file_digest(aab.open('rb'), 'sha256').hexdigest(), 'bytes': aab.stat().st_size, 'certificateSHA256': actual, 'signatureVerified': True, 'embeddedProductionAPI': True, 'publication': 'not uploaded or submitted'}

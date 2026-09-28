@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import xml.etree.ElementTree as ET
 
 spec = importlib.util.spec_from_file_location('release', Path(__file__).parents[1] / 'android-release.py')
 release = importlib.util.module_from_spec(spec)
@@ -27,6 +28,22 @@ class AndroidReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.prepare_gradle('versionCode 9', '17')
 
+
+
+    def test_signed_bundle_requires_current_api_and_verified_discussion_links(self):
+        root = ET.parse(Path(__file__).parents[2] / 'android/app/src/main/AndroidManifest.xml').getroot()
+        config = {'extra': {'apiBase': 'https://api.tdfrecords.net'}}
+        bundle = b'production https://api.tdfrecords.net'
+        release.validate_interaction_release(root, config, bundle)
+        for bad in ({}, {'extra': {'apiBase': 'https://tdf-hq.fly.dev'}}):
+            with self.subTest(config=bad), self.assertRaises(ValueError):
+                release.validate_interaction_release(root, bad, bundle)
+        for bad in (b'https://tdf-hq.fly.dev', bundle + b'http://127.0.0.1:18128'):
+            with self.subTest(bundle=bad), self.assertRaises(ValueError):
+                release.validate_interaction_release(root, config, bad)
+        root.find('.//intent-filter[@{http://schemas.android.com/apk/res/android}autoVerify="true"]').set('{http://schemas.android.com/apk/res/android}autoVerify', 'false')
+        with self.assertRaises(ValueError):
+            release.validate_interaction_release(root, config, bundle)
 
 if __name__ == '__main__':
     unittest.main()

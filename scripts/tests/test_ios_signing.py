@@ -8,6 +8,10 @@ spec = importlib.util.spec_from_file_location('signing', Path(__file__).parents[
 signing = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(signing)
 
+artifact_spec = importlib.util.spec_from_file_location('artifact', Path(__file__).parents[1] / 'verify-ios-artifact.py')
+artifact = importlib.util.module_from_spec(artifact_spec)
+artifact_spec.loader.exec_module(artifact)
+
 class SigningContract(unittest.TestCase):
     def setUp(self):
         self.now = datetime.datetime(2026, 9, 18, tzinfo=datetime.timezone.utc)
@@ -34,6 +38,21 @@ class SigningContract(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 signing.validate_build_number(value)
         self.assertEqual(signing.validate_build_number('23'), '23')
+
+
+    def test_signed_artifact_requires_current_api_and_both_verified_hosts(self):
+        entitlements = {'application-identifier': '83J23NPXG7.com.tdfrecords.app',
+                        'com.apple.developer.associated-domains': ['applinks:www.tdfrecords.net', 'applinks:tdf-app.pages.dev']}
+        configs = [{'extra': {'apiBase': 'https://api.tdfrecords.net'}}]
+        artifact.validate_interaction_release(entitlements, configs)
+        for bad in ({}, {**entitlements, 'application-identifier': 'ANOTHER.app'},
+                    {**entitlements, 'com.apple.developer.associated-domains': ['applinks:tdfrecords.net']}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                artifact.validate_interaction_release(bad, configs)
+        for bad in ([], [{}], [{'extra': {'apiBase': 'https://tdf-hq.fly.dev'}}],
+                    configs + [{'extra': {'apiBase': 'http://127.0.0.1:18128'}}]):
+            with self.subTest(configs=bad), self.assertRaises(ValueError):
+                artifact.validate_interaction_release(entitlements, bad)
 
 if __name__ == '__main__':
     unittest.main()

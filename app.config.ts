@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import appManifest from './app.json';
 import fs from 'fs';
 import path from 'path';
 import { withDangerousMod, type ConfigPlugin } from '@expo/config-plugins';
@@ -140,7 +141,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   version: APP_VERSION,
   description: 'TDF Records mobile app for bookings, events, venues, inventory, pipelines, and social tools.',
   icon: './assets/icon.png',
-  runtimeVersion: APP_VERSION,
+  runtimeVersion: appManifest.expo.runtimeVersion,
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',

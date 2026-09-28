@@ -12,7 +12,10 @@ import zipfile
 
 
 
-def validate_interaction_release(entitlements, configs):
+def validate_interaction_release(entitlements, configs, updates):
+    runtime = json.loads((Path(__file__).parents[1] / 'app.json').read_text())['expo']['runtimeVersion']
+    if updates.get('EXUpdatesRuntimeVersion') != runtime or any(c.get('runtimeVersion') != runtime for c in configs):
+        raise ValueError('Wrong OTA runtime in signed native or embedded Expo config')
     required = {'applinks:www.tdfrecords.net', 'applinks:tdf-app.pages.dev'}
     if entitlements.get('application-identifier') != '83J23NPXG7.com.tdfrecords.app':
         raise ValueError('Wrong signed application identifier')
@@ -53,7 +56,7 @@ def main():
         config_files = list(app.rglob('app.config'))
         configs = [json.loads(p.read_text()) for p in config_files]
         entitlements = plistlib.loads(subprocess.run(['codesign', '-d', '--entitlements', '-', str(app)], capture_output=True, check=True).stdout)
-        validate_interaction_release(entitlements, configs)
+        validate_interaction_release(entitlements, configs, plistlib.loads((app / 'Expo.plist').read_bytes()))
         receipt = {'sourceSHA': os.environ['GITHUB_SHA'], 'runId': os.environ['GITHUB_RUN_ID'], 'runAttempt': os.environ['GITHUB_RUN_ATTEMPT'], 'bundleIdentifier': info['CFBundleIdentifier'], 'version': expected_version, 'build': info['CFBundleVersion'], 'sdk': info['DTSDKName'], 'xcode': info.get('DTXcode'), 'artifact': ipa.name, 'bytes': ipa.stat().st_size, 'sha256': hashlib.file_digest(ipa.open('rb'), 'sha256').hexdigest(), 'signatureVerified': True, 'embeddedProductionAPI': True, 'publication': 'not uploaded or submitted', 'physicalGoogleOAuth': 'required separately before production'}
         (directory / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
         print(json.dumps(receipt))

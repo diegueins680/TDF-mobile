@@ -1,4 +1,5 @@
 import copy
+import json
 import datetime
 import importlib.util
 from pathlib import Path
@@ -48,16 +49,24 @@ class SigningContract(unittest.TestCase):
     def test_signed_artifact_requires_current_api_and_both_verified_hosts(self):
         entitlements = {'application-identifier': '83J23NPXG7.com.tdfrecords.app',
                         'com.apple.developer.associated-domains': ['applinks:www.tdfrecords.net', 'applinks:tdf-app.pages.dev']}
-        configs = [{'extra': {'apiBase': 'https://api.tdfrecords.net'}}]
-        artifact.validate_interaction_release(entitlements, configs)
+        runtime = json.loads((Path(__file__).parents[2] / 'app.json').read_text())['expo']['runtimeVersion']
+        updates = {'EXUpdatesRuntimeVersion': runtime}
+        configs = [{'runtimeVersion': runtime, 'extra': {'apiBase': 'https://api.tdfrecords.net'}}]
+        artifact.validate_interaction_release(entitlements, configs, updates)
         for bad in ({}, {**entitlements, 'application-identifier': 'ANOTHER.app'},
                     {**entitlements, 'com.apple.developer.associated-domains': ['applinks:tdfrecords.net']}):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
-                artifact.validate_interaction_release(bad, configs)
+                artifact.validate_interaction_release(bad, configs, updates)
         for bad in ([], [{}], [{'extra': {'apiBase': 'https://tdf-hq.fly.dev'}}],
                     configs + [{'extra': {'apiBase': 'http://127.0.0.1:18128'}}]):
             with self.subTest(configs=bad), self.assertRaises(ValueError):
-                artifact.validate_interaction_release(entitlements, bad)
+                artifact.validate_interaction_release(entitlements, bad, updates)
+        for bad in ({}, {'EXUpdatesRuntimeVersion': '1.0.1'}):
+            with self.subTest(updates=bad), self.assertRaisesRegex(ValueError, 'OTA runtime'):
+                artifact.validate_interaction_release(entitlements, configs, bad)
+        with self.assertRaisesRegex(ValueError, 'OTA runtime'):
+            artifact.validate_interaction_release(entitlements, [{**configs[0], 'runtimeVersion': '1.0.1'}], updates)
+
 
 if __name__ == '__main__':
     unittest.main()

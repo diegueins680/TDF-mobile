@@ -163,7 +163,7 @@ export function EventMomentCard({
       {moment.caption ? <Text style={styles.caption}>{moment.caption}</Text> : null}
 
       {/^[1-9][0-9]*$/.test(moment.id) ? <InteractionBar kind="event_moment" entityKey={moment.id} onReactionAdded={onCanonicalReactionPosted} /> : <>
-        <Text style={styles.metaText}>{pending ? 'Publicando…' : 'Borrador privado en este dispositivo'}</Text>
+        {!pending && <Text style={styles.metaText}>Borrador privado en este dispositivo</Text>}
       <View style={styles.reactionRow}>
         {reactionOptions.map((reaction) => {
           const actors = moment.reactions[reaction.id] ?? [];

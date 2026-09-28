@@ -1,0 +1,62 @@
+name: Interaction simulator build
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/interaction-simulator.yml'
+      - 'src/features/interactions/**'
+      - 'ios/**'
+      - 'package-lock.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: interaction-simulator-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+      EXPO_PUBLIC_API_BASE: http://127.0.0.1:18128
+      EXPO_PUBLIC_UPLOAD_URL: http://127.0.0.1:18128/drive/upload
+      EXPO_PUBLIC_TZ: UTC
+      NODE_ENV: production
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --include=dev
+      - name: Install locked native dependencies
+        working-directory: ios
+        run: |
+          gem install cocoapods --version 1.16.2 --user-install --no-document
+          gem install json --version 2.18.0 --user-install --no-document
+          ruby -e 'gem "json", "2.18.0"; gem "cocoapods", "1.16.2"; load Gem.bin_path("cocoapods", "pod", "1.16.2")' -- install --deployment
+      - name: Build simulator application with bundled JavaScript
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/TDFRecords.xcworkspace -scheme TDFRecords -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/tdf-interactions" CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/tdf-interaction-xcode.log" 2>&1 || { tail -n 100 "$RUNNER_TEMP/tdf-interaction-xcode.log"; exit 1; }
+          APP="$RUNNER_TEMP/tdf-interactions/Build/Products/Release-iphonesimulator/TDFRecords.app"
+          test -s "$APP/main.jsbundle"
+          tar -czf "$RUNNER_TEMP/tdf-interaction-simulator.tgz" -C "$(dirname "$APP")" TDFRecords.app
+          git rev-parse HEAD > "$RUNNER_TEMP/tdf-interaction-source.txt"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: interaction-simulator-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/tdf-interaction-simulator.tgz
+            ${{ runner.temp }}/tdf-interaction-source.txt
+          if-no-files-found: error
+          retention-days: 3
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: failure()
+        with:
+          name: interaction-simulator-build-log
+          path: ${{ runner.temp }}/tdf-interaction-xcode.log
+          retention-days: 3

@@ -7,7 +7,7 @@ const mockRead = jest.fn();
 const mockRequest = jest.fn();
 const mockDecide = jest.fn();
 const mockCancel = jest.fn();
-jest.mock('expo-router', () => ({ useLocalSearchParams: () => ({ notificationId: '3' }), Link: require('react-native').Text }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }), useLocalSearchParams: () => ({ notificationId: '3' }), Link: require('react-native').Text }));
 jest.mock('../api/client', () => ({ get: (...args: unknown[]) => mockGet(...args) }));
 jest.mock('../api/notifications', () => ({ getNotification: (...args: unknown[]) => mockNotification(...args), markNotificationRead: (...args: unknown[]) => mockRead(...args) }));
 jest.mock('../api/accessRequests', () => ({ getAccessRequest: (...args: unknown[]) => mockRequest(...args), decideAccessRequest: mockDecide, cancelAccessRequest: mockCancel }));

@@ -52,7 +52,7 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
     getAnalyticsClient().capture('comment_deep_link_opened', { platform: 'mobile', entity_kind: destination.kind });
     highlightTimer.current = setTimeout(() => setHighlight(null), 5000);
   }).current;
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 10 }).current;
   useEffect(() => () => { clearTimeout(highlightTimer.current); }, []);
   const heading = useRef<Text>(null); const composer = useRef<Text>(null);
   const summary = useQuery({ queryKey: ['interactions', token ? `account:${partyId ?? 'pending'}` : 'anonymous', destination.kind, destination.key, 'summary'],

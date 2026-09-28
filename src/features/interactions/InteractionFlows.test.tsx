@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AccessibilityInfo, FlatList } from 'react-native';
+import { AccessibilityInfo, FlatList, Text, View } from 'react-native';
 import type { InteractionComment, InteractionSummary } from '../../api/interactions';
 import { InteractionBar } from './InteractionBar';
 import { CommentComposer } from './CommentComposer';
@@ -77,6 +77,14 @@ it('opens exact reply context, announces it, and preserves replies after author 
   expect(offset).toHaveBeenCalledWith({ offset: 700, animated: false });
   fireEvent(list, 'viewableItemsChanged', { viewableItems: [{ item: root, isViewable: true }] });
   expect(announce).not.toHaveBeenCalled();
+  const viewport = ui.UNSAFE_getAllByType(View).find(node => node.props.testID === 'discussion-viewport')!.instance;
+  const linkedHeading = ui.UNSAFE_getAllByType(Text).find(node => node.props.children === 'Luis')!.instance;
+  viewport.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 40, 400, 800));
+  linkedHeading.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 1000, 200, 24));
+  fireEvent(list, 'viewableItemsChanged', { viewableItems: [{ item: reply, isViewable: true }] });
+  expect(announce).not.toHaveBeenCalled(); // A stale virtualized view token cannot stop scrolling.
+  await waitFor(() => expect(offset).toHaveBeenCalledWith({ offset: 720, animated: false }));
+  linkedHeading.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 300, 200, 24));
   fireEvent(list, 'viewableItemsChanged', { viewableItems: [{ item: reply, isViewable: true }] });
   await waitFor(() => expect(announce).toHaveBeenCalledWith('Comentario enlazado'));
   fireEvent.press(ui.getAllByLabelText('Opciones del comentario')[0]); fireEvent.press(ui.getByText('Eliminar mi comentario')); fireEvent.press(ui.getByText('Confirmar'));

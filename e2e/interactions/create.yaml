@@ -15,7 +15,11 @@ appId: ${APP_ID || "com.tdfrecords.app"}
     timeout: 30000
 - tapOn:
     id: usernameInput
+- waitForAnimationToEnd
+- tapOn:
+    id: usernameInput
 - inputText: ${TDF_USERNAME}
+- assertVisible: ${TDF_USERNAME}
 - tapOn:
     id: passwordInput
 - inputText: ${TDF_PASSWORD}

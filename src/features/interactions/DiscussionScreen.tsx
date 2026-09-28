@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, View, findNodeHandle } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, SafeAreaView, ScrollView, Text, TextInput, View, findNodeHandle, type ViewToken } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { randomUUID } from 'expo-crypto';
@@ -25,7 +25,7 @@ export default function DiscussionScreen() {
     <Text accessibilityRole="alert" style={{ color: colors.textPrimary }}>La conversación no está disponible. Puede haberse retirado o requerir acceso.</Text>
   </SafeAreaView>;
   if (!query.data) return <ActivityIndicator accessibilityLabel="Cargando conversación" />;
-  return <Discussion key={`${query.data.targetId}:${token ? `account:${partyId ?? 'pending'}` : 'anonymous'}`} destination={query.data} />;
+  return <Discussion key={`${query.data.targetId}:${query.data.commentId ?? "root"}:${token ? `account:${partyId ?? 'pending'}` : 'anonymous'}`} destination={query.data} />;
 }
 
 function Discussion({ destination }: { destination: InteractionDestination }) {
@@ -41,6 +41,19 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
   const attemptedCommands = useRef(new Map<string, InteractionCommand>());
   const pendingKey = useRef<string | null>(null); const list = useRef<FlatList<InteractionComment>>(null); const focused = useRef(false);
   const targetHeading = useRef<Text | null>(null);
+  const headerHeight = useRef(0); const [listReady, setListReady] = useState(false);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken<InteractionComment>[] }) => {
+    if (focused.current || !destination.commentId || !viewableItems.some((row) => row.isViewable && row.item.id === destination.commentId)) return;
+    focused.current = true;
+    const handle = targetHeading.current && findNodeHandle(targetHeading.current);
+    if (handle) AccessibilityInfo.setAccessibilityFocus(handle);
+    AccessibilityInfo.announceForAccessibility('Comentario enlazado');
+    getAnalyticsClient().capture('comment_deep_link_opened', { platform: 'mobile', entity_kind: destination.kind });
+    highlightTimer.current = setTimeout(() => setHighlight(null), 5000);
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
+  useEffect(() => () => { clearTimeout(highlightTimer.current); }, []);
   const heading = useRef<Text>(null); const composer = useRef<Text>(null);
   const summary = useQuery({ queryKey: ['interactions', token ? `account:${partyId ?? 'pending'}` : 'anonymous', destination.kind, destination.key, 'summary'],
     queryFn: ({ signal }) => Interactions.summary(identity, Boolean(token), signal), retry: false, refetchInterval: 30000 });
@@ -63,7 +76,7 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
     if (attempted.size > 16) attempted.delete(attempted.keys().next().value!);
     await mutation.mutateAsync({ command: attempted.get(key)!, key }); attempted.delete(key);
   };
-  const data = summary.data;
+  const data = summary.data; const hasSummary = Boolean(data);
   const seed = context.data;
   const nodes = [...(thread && seed ? [seed.root, seed.parent, seed.comment, ...seed.surrounding].filter((comment): comment is InteractionComment => !!comment) : []),
     ...(comments.data?.pages.flatMap((page) => page.items) ?? [])];
@@ -71,18 +84,16 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
   if (thread) items.sort((a, b) => a.id === thread ? -1 : b.id === thread ? 1 : a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   const targetIndex = items.findIndex((comment) => comment.id === destination.commentId);
   useEffect(() => {
-    if (!destination.commentId || focused.current || targetIndex < 0) return;
-    focused.current = true;
-    const timer = setTimeout(() => {
+    if (!listReady || !hasSummary || !destination.commentId || focused.current || targetIndex < 0) return;
+    let attempts = 0; let timer: ReturnType<typeof setTimeout>;
+    const reveal = () => {
+      if (focused.current) return;
       list.current?.scrollToIndex({ index: targetIndex, animated: false, viewPosition: 0.3 });
-      const targetHandle = targetHeading.current && findNodeHandle(targetHeading.current);
-      if (targetHandle) AccessibilityInfo.setAccessibilityFocus(targetHandle);
-      AccessibilityInfo.announceForAccessibility('Comentario enlazado');
-      getAnalyticsClient().capture('comment_deep_link_opened', { platform: 'mobile', entity_kind: destination.kind });
-    }, 250);
-    const highlightTimer = setTimeout(() => setHighlight(null), 5000);
-    return () => { clearTimeout(timer); clearTimeout(highlightTimer); };
-  }, [targetIndex, destination.commentId, destination.kind]);
+      if (++attempts < 20) timer = setTimeout(reveal, 250);
+    };
+    timer = setTimeout(reveal, 100);
+    return () => clearTimeout(timer);
+  }, [listReady, hasSummary, targetIndex, destination.commentId]);
   const focus = (element: Text | null) => { const handle = element && findNodeHandle(element); if (handle) AccessibilityInfo.setAccessibilityFocus(handle); };
   const closeMenu = () => { if (actionPending) return; setMenu(null); setAction(null); setReason(''); setError(''); focus(heading.current); };
   const buttonStyle = { minHeight: 48, padding: 12, justifyContent: 'center' as const };
@@ -91,8 +102,10 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}>
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FlatList ref={list} data={comments.isError || context.isError ? [] : items} keyExtractor={(comment) => comment.id} keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 16, gap: 8 }} onScrollToIndexFailed={({ index, averageItemLength }) => list.current?.scrollToOffset({ offset: averageItemLength * index, animated: false })}
-        ListHeaderComponent={<View style={{ gap: 8 }}>
+        contentContainerStyle={{ padding: 16, gap: 8 }} onLayout={() => setListReady(true)}
+        onViewableItemsChanged={onViewableItemsChanged} viewabilityConfig={viewabilityConfig}
+        onScrollToIndexFailed={({ index, averageItemLength }) => list.current?.scrollToOffset({ offset: headerHeight.current + averageItemLength * index, animated: false })}
+        ListHeaderComponent={<View onLayout={(event) => { headerHeight.current = event.nativeEvent.layout.height; }} style={{ gap: 8 }}>
           <Text ref={heading} accessibilityRole="header" style={{ color: colors.textPrimary, fontSize: 24, fontWeight: '700' }}>{destination.title}</Text>
           <InteractionBar {...identity} />
           {comments.hasPreviousPage && button('Ver comentarios anteriores', () => { void comments.fetchPreviousPage(); }, comments.isFetchingPreviousPage)}

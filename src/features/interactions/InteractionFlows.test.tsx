@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, FlatList } from 'react-native';
 import type { InteractionComment, InteractionSummary } from '../../api/interactions';
 import { InteractionBar } from './InteractionBar';
 import { CommentComposer } from './CommentComposer';
@@ -62,11 +62,25 @@ it('discloses replies without fetching them until expansion and collapses back t
 });
 it('opens exact reply context, announces it, and preserves replies after author deletion', async () => {
   const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  const scroll = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {});
+  const offset = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
   mockParams = { destinationKind: 'comment', destinationId: replyId };
   mockApi.command.mockImplementation(async (_target, command) => { if (command.operation === 'comment.delete') root = { ...root, body: '', state: 'deleted', version: 2, author: null, canEdit: false, canDelete: false }; return root; });
-  const ui = view(<DiscussionScreen />); await ui.findByText('A reply'); await waitFor(() => expect(announce).toHaveBeenCalledWith('Comentario enlazado'));
+  const ui = view(<DiscussionScreen />); await ui.findByText('A reply');
+  expect(announce).not.toHaveBeenCalled();
+  const list = ui.UNSAFE_getByType(FlatList);
+  expect(scroll).not.toHaveBeenCalled();
+  fireEvent(list, 'layout', { nativeEvent: { layout: { height: 800, width: 400 } } });
+  await waitFor(() => expect(scroll).toHaveBeenCalledWith({ index: 1, animated: false, viewPosition: 0.3 }));
+  act(() => list.props.ListHeaderComponent.props.onLayout({ nativeEvent: { layout: { height: 600 } } }));
+  fireEvent(list, 'scrollToIndexFailed', { index: 1, averageItemLength: 100 });
+  expect(offset).toHaveBeenCalledWith({ offset: 700, animated: false });
+  fireEvent(list, 'viewableItemsChanged', { viewableItems: [{ item: root, isViewable: true }] });
+  expect(announce).not.toHaveBeenCalled();
+  fireEvent(list, 'viewableItemsChanged', { viewableItems: [{ item: reply, isViewable: true }] });
+  await waitFor(() => expect(announce).toHaveBeenCalledWith('Comentario enlazado'));
   fireEvent.press(ui.getAllByLabelText('Opciones del comentario')[0]); fireEvent.press(ui.getByText('Eliminar mi comentario')); fireEvent.press(ui.getByText('Confirmar'));
-  await ui.findByText('Comentario eliminado'); expect(ui.getByText('A reply')).toBeTruthy(); announce.mockRestore();
+  await ui.findByText('Comentario eliminado'); expect(ui.getByText('A reply')).toBeTruthy(); announce.mockRestore(); scroll.mockRestore(); offset.mockRestore();
 });
 it('does not keep cached discussion bodies visible after access is revoked', async () => {
   const ui = view(<DiscussionScreen />); await ui.findByText('Root comment', {}, { timeout: 10000 }); mockApi.summary.mockRejectedValue(new Error('404'));

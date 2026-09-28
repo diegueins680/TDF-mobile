@@ -15,8 +15,8 @@ export EXPO_PUBLIC_TZ=America/Guayaquil
 EAS `preview` and `production` builds inject these release endpoints from `eas.json`:
 
 ```bash
-EXPO_PUBLIC_API_BASE=https://tdf-hq.fly.dev
-EXPO_PUBLIC_UPLOAD_URL=https://tdf-hq.fly.dev/drive/upload
+EXPO_PUBLIC_API_BASE=https://api.tdfrecords.net
+EXPO_PUBLIC_UPLOAD_URL=https://api.tdfrecords.net/drive/upload
 EXPO_PUBLIC_TZ=America/Guayaquil
 ```
 

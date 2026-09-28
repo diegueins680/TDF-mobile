@@ -74,9 +74,9 @@ def verify():
     with zipfile.ZipFile(aab) as archive:
         assert archive.testzip() is None, 'Corrupt archive'
         config = json.loads(archive.read('base/assets/app.config'))
-        assert config['extra']['apiBase'] == 'https://tdf-hq.fly.dev', 'Wrong embedded API'
+        assert config['extra']['apiBase'] == 'https://api.tdfrecords.net', 'Wrong embedded API'
         bundle = archive.read('base/assets/index.android.bundle')
-        assert b'https://tdf-hq.fly.dev' in bundle and b'127.0.0.1:18631' not in bundle, 'Wrong bundled API'
+        assert b'https://api.tdfrecords.net' in bundle and b'127.0.0.1:18631' not in bundle, 'Wrong bundled API'
     output = Path('release-artifacts')
     output.mkdir(exist_ok=True)
     receipt = {'sourceSHA': os.environ['GITHUB_SHA'], 'runId': os.environ['GITHUB_RUN_ID'], 'package': 'com.tdf.records', 'version': version, 'build': os.environ['ANDROID_VERSION_CODE'], 'sha256': hashlib.file_digest(aab.open('rb'), 'sha256').hexdigest(), 'bytes': aab.stat().st_size, 'certificateSHA256': actual, 'signatureVerified': True, 'embeddedProductionAPI': True, 'publication': 'not uploaded or submitted'}

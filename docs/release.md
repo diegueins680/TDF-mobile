@@ -31,8 +31,8 @@ export EXPO_PUBLIC_TZ=America/Guayaquil
 EAS `preview` and `production` profiles set the release backend automatically via `eas.json`:
 
 ```bash
-EXPO_PUBLIC_API_BASE=https://tdf-hq.fly.dev
-EXPO_PUBLIC_UPLOAD_URL=https://tdf-hq.fly.dev/drive/upload
+EXPO_PUBLIC_API_BASE=https://api.tdfrecords.net
+EXPO_PUBLIC_UPLOAD_URL=https://api.tdfrecords.net/drive/upload
 EXPO_PUBLIC_TZ=America/Guayaquil
 ```
 
@@ -164,3 +164,11 @@ exhaustion (512MiB default), after746 tasks; it did not produce a qualified bund
 The standard runner invocation now allocates4GiB heap/2GiB Metaspace with two
 workers. Release lint and all four native architectures remain enabled. This is
 a build-environment repair; the corrected retry35376997735 passed in18m46s. The previous dispatch-context failure35374641857 executed no build.
+
+
+The 2026-09-28 web-first cutover retired the Fly API. Preview/production API
+and upload URLs, and the Android/iOS embedded-API verification gates, now target
+`https://api.tdfrecords.net`. Development still defaults to localhost and explicit
+environment overrides remain available. This source update does not publish a
+native release or repair already installed binaries; those need a separately
+reviewed build/release and physical login/upload validation against the new host.

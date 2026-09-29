@@ -130,3 +130,13 @@ it('lets owners hide blocked-author content without administrative removal power
   fireEvent.press(ui.getByText('Ocultar en mi contenido'));
   await waitFor(() => expect(execute).toHaveBeenCalledWith(expect.objectContaining({ operation: 'comment.hide', commentId: rootId })));
 });
+
+it('keeps malformed discussion pages recoverable and loads a valid retry', async () => {
+  mockApi.comments.mockRejectedValueOnce(new Error('Invalid interaction comments response'));
+  const screen = view(<DiscussionScreen />);
+  await screen.findByText('No se pudo cargar la conversación.');
+  expect(screen.queryByText('Root comment')).toBeNull();
+  fireEvent.press(screen.getByText('Reintentar'));
+  await screen.findByText('Root comment');
+  expect(screen.queryByText('No se pudo cargar la conversación.')).toBeNull();
+});

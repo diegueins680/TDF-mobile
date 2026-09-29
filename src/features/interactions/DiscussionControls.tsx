@@ -95,6 +95,7 @@ export function DiscussionControls({ summary, scope, onClose, execute }: {
           </View>}
           <Text style={{ color: colors.textSecondary }}>{comment.state === 'hidden' ? 'Oculto' : `${comment.openReports ?? 0} reportes`}</Text>
           {tab === 'reports' ? action('Abrir conversación para revisar', () => { onClose(); router.push(discussionLink('comment', comment.id) as never); }) : <>
+            {summary.canManage && comment.state === 'visible' && action('Ocultar en mi contenido', () => { void perform(() => execute({ operation: 'comment.hide', commentId: comment.id, expectedVersion: comment.version, reason })); }, !reason.trim())}
             {comment.state === 'hidden' && action('Restaurar', () => { void perform(() => execute({ operation: 'comment.restore', commentId: comment.id, expectedVersion: comment.version, reason })); }, !reason.trim())}
             {summary.canModerate && ['visible', 'hidden'].includes(comment.state) && action('Retirar como administrador', () => { void perform(() => execute({ operation: 'comment.remove', commentId: comment.id, expectedVersion: comment.version, reason })); }, !reason.trim())}
             {summary.canModerate && (comment.openReports ?? 0) > 0 && action('Desestimar reportes', () => { void perform(() => execute({ operation: 'comment.report.resolve', commentId: comment.id, expectedVersion: comment.version, reason, decision: 'dismissed' })); }, !reason.trim())}

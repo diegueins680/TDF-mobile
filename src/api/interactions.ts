@@ -41,10 +41,10 @@ const boolean = (value: unknown) => typeof value === 'boolean';
 const nullableBoolean = (value: unknown) => value === null || boolean(value);
 const author = (value: unknown) => object(value) && positive(value['id']) && text(value['displayName']) && nullableText(value['avatarUrl']);
 const mention = (value: unknown) => object(value) && positive(value['partyId']) && count(value['start']) && count(value['end']) && value['end'] > value['start'];
-const arrayOf = (value: unknown, valid: (item: unknown) => boolean) => Array.isArray(value) && value['every'](valid);
+const arrayOf = (value: unknown, valid: (item: unknown) => boolean) => Array.isArray(value) && value.every(valid);
 const context = (value: unknown) => object(value) && text(value['kind']) && text(value['key'])
   && (value['ownerId'] === null || positive(value['ownerId'])) && text(value['title']) && text(value['route'])
-  && value['route']['startsWith']('/') && !value['route']['startsWith']('//') && boolean(value['public'])
+  && value['route'].startsWith('/') && !value['route'].startsWith('//') && boolean(value['public'])
   && boolean(value['canManage']) && boolean(value['reactable']) && boolean(value['commentable']) && boolean(value['shareable']);
 const comment = (value: unknown): boolean => object(value) && text(value['id']) && text(value['targetId'])
   && nullableText(value['parentId']) && text(value['rootId']) && count(value['depth']) && positive(value['version'])

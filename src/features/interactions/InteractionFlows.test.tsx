@@ -140,3 +140,19 @@ it('keeps malformed discussion pages recoverable and loads a valid retry', async
   await screen.findByText('Root comment');
   expect(screen.queryByText('No se pudo cargar la conversación.')).toBeNull();
 });
+
+it.each([null, 8])('offers follower policy only with a real publication owner: %s', async (ownerId) => {
+  const execute = jest.fn().mockResolvedValue(undefined);
+  const ui = view(<DiscussionControls summary={{ ...summary, ownerId, canManage: true }} scope="7" onClose={jest.fn()} execute={execute} />);
+  if (ownerId === null) expect(ui.queryByText('Seguidores')).toBeNull();
+  else expect(ui.getByText('Seguidores')).toBeTruthy();
+  fireEvent.press(ui.getByText('Comentarios desactivados')); fireEvent.press(ui.getByText('Guardar permisos'));
+  await waitFor(() => expect(execute).toHaveBeenCalledWith(expect.objectContaining({ operation: 'settings.update', commentPolicy: 'off' })));
+});
+
+it('reconciles a stale ownerless follower selection to the equivalent disabled state', async () => {
+  const execute = jest.fn().mockResolvedValue(undefined);
+  const ui = view(<DiscussionControls summary={{ ...summary, ownerId: null, canManage: true, commentPolicy: 'followers' }} scope="7" onClose={jest.fn()} execute={execute} />);
+  expect(ui.queryByText('Seguidores')).toBeNull(); fireEvent.press(ui.getByText('Guardar permisos'));
+  await waitFor(() => expect(execute).toHaveBeenCalledWith(expect.objectContaining({ commentPolicy: 'off' })));
+});

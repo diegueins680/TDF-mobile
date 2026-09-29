@@ -85,9 +85,25 @@ it('opens exact reply context, announces it, and preserves replies after author 
   fireEvent(list, 'viewableItemsChanged', { viewableItems: [{ item: reply, isViewable: true }] });
   expect(announce).not.toHaveBeenCalled(); // A stale virtualized view token cannot stop scrolling.
   await waitFor(() => expect(offset).toHaveBeenCalledWith({ offset: 720, animated: false }));
+  // Android reported the author heading visible at the bottom while the reply
+  // body remained below the viewport. This must not complete initial focus.
+  linkedHeading.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 790, 200, 24));
+  fireEvent(list, 'viewableItemsChanged', { viewableItems: [{ item: reply, isViewable: true }] });
+  expect(announce).not.toHaveBeenCalled();
+  fireEvent(list, 'contentSizeChange', 400, 1400);
+  expect(offset).toHaveBeenCalledWith({ offset: 510, animated: false });
   linkedHeading.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 300, 200, 24));
   fireEvent(list, 'viewableItemsChanged', { viewableItems: [{ item: reply, isViewable: true }] });
   await waitFor(() => expect(announce).toHaveBeenCalledWith('Comentario enlazado'));
+  linkedHeading.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 790, 200, 24));
+  fireEvent(list, 'contentSizeChange', 400, 1600);
+  expect(offset).toHaveBeenLastCalledWith({ offset: 510, animated: false });
+  expect(announce).toHaveBeenCalledTimes(1);
+  fireEvent(list, 'scrollBeginDrag');
+  offset.mockClear();
+  fireEvent(list, 'contentSizeChange', 400, 1800);
+  expect(offset).not.toHaveBeenCalled();
+
   fireEvent.press(ui.getAllByLabelText('Opciones del comentario')[0]); fireEvent.press(ui.getByText('Eliminar mi comentario')); fireEvent.press(ui.getByText('Confirmar'));
   await ui.findByText('Comentario eliminado'); expect(ui.getByText('A reply')).toBeTruthy(); announce.mockRestore(); scroll.mockRestore(); offset.mockRestore();
 });

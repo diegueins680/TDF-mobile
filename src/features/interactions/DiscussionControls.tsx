@@ -8,7 +8,7 @@ import type { PartySelectorOption } from '../../api/partySelector';
 import { Interactions } from '../../api/interactions';
 import type { InteractionCommand, InteractionPreferences, InteractionSummary } from '../../api/interactions';
 import { useAppTheme } from '../../theme/ThemeProvider';
-import { discussionLink } from './model';
+import { commentPolicyAvailable, discussionLink } from './model';
 
 const policyLabels = { everyone: 'Todos con acceso', followers: 'Seguidores', mentioned: 'Personas mencionadas', off: 'Comentarios desactivados' };
 const preferenceLabels: Record<keyof InteractionPreferences, string> = { reactions: 'Reacciones', comments: 'Comentarios', replies: 'Respuestas', mentions: 'Menciones' };
@@ -17,7 +17,7 @@ export function DiscussionControls({ summary, scope, onClose, execute }: {
 }) {
   const { colors } = useAppTheme(); const router = useRouter(); const client = useQueryClient();
   const [tab, setTab] = useState<'discussion' | 'moderation' | 'preferences' | 'blocks' | 'reports'>('discussion');
-  const [policy, setPolicy] = useState(summary.commentPolicy);
+  const [policy, setPolicy] = useState(commentPolicyAvailable(summary.commentPolicy, summary.ownerId) ? summary.commentPolicy : 'off');
   const [people, setPeople] = useState<PartySelectorOption[]>((summary.mentionedPeople ?? []).map((person) => ({ partyId: person.id,
     displayName: person.displayName, avatarUrl: person.avatarUrl, username: null, secondaryLabel: null, partyType: 'person', accountStatus: 'active' })));
   const [reason, setReason] = useState(''); const [pending, setPending] = useState(false); const [error, setError] = useState('');
@@ -54,7 +54,7 @@ export function DiscussionControls({ summary, scope, onClose, execute }: {
           () => { void perform(() => execute({ operation: 'subscription.set', mode })); }, false, summary.subscription === mode)}</View>)}
         {summary.canManage && <>
           {heading('Quién puede comentar')}
-          {(Object.keys(policyLabels) as (keyof typeof policyLabels)[]).map((key) => <View key={key}>{action(policyLabels[key], () => setPolicy(key), false, policy === key)}</View>)}
+          {(Object.keys(policyLabels) as (keyof typeof policyLabels)[]).filter((key) => commentPolicyAvailable(key, summary.ownerId)).map((key) => <View key={key}>{action(policyLabels[key], () => setPolicy(key), false, policy === key)}</View>)}
           {policy === 'mentioned' && <PartyMultiSelector label="Personas mencionadas" value={people} onChange={setPeople} context="interaction_mention" scopeId={summary.id} />}
           {action('Guardar permisos', () => { void perform(() => execute({ operation: 'settings.update', commentPolicy: policy,
             expectedVersion: summary.version, mentionedPartyIds: people.map((person) => person.partyId) })); }, policy === 'mentioned' && people.length === 0)}

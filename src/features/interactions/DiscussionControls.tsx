@@ -89,6 +89,10 @@ export function DiscussionControls({ summary, scope, onClose, execute }: {
           style={{ padding: 12, minHeight: 80, borderWidth: 1, borderColor: colors.border, color: colors.textPrimary }} />}
         {moderation.data?.pages.flatMap((page) => page.items).map((comment) => <View key={comment.id} style={{ gap: 8 }}>
           <Text style={{ color: colors.textPrimary }}>{comment.moderationBody || 'Texto retirado'}</Text>
+          {!!comment.reportReasons?.length && <View style={{ gap: 8 }}>
+            <Text accessibilityRole="header" style={{ color: colors.textSecondary }}>Motivos recientes ({comment.reportReasons.length} de {comment.openReports ?? 0})</Text>
+            {comment.reportReasons.map((text, index) => <Text key={index} style={{ color: colors.textPrimary }}>{text}</Text>)}
+          </View>}
           <Text style={{ color: colors.textSecondary }}>{comment.state === 'hidden' ? 'Oculto' : `${comment.openReports ?? 0} reportes`}</Text>
           {tab === 'reports' ? action('Abrir conversación para revisar', () => { onClose(); router.push(discussionLink('comment', comment.id) as never); }) : <>
             {comment.state === 'hidden' && action('Restaurar', () => { void perform(() => execute({ operation: 'comment.restore', commentId: comment.id, expectedVersion: comment.version, reason })); }, !reason.trim())}

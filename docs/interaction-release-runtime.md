@@ -19,3 +19,9 @@ OTA disabled; their successful discussion journeys are separate from signed
 artifact/runtime qualification.
 
 See [Expo runtime compatibility](https://docs.expo.dev/eas-update/runtime-versions/).
+
+The moderation follow-up displays the latest bounded report reasons returned by
+canonical moderator endpoints before removal or dismissal. Reporter identities
+are not included. The API field is optional for compatibility with an older server;
+permission enforcement remains on the server. A rendered native regression opens
+the moderation queue, reads a report reason, and submits the scoped decision.

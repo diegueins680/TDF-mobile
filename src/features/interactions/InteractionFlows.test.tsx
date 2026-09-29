@@ -118,3 +118,15 @@ it('shows moderator report reasons before resolving a report', async () => {
   fireEvent.press(ui.getByText('Desestimar reportes'));
   await waitFor(() => expect(execute).toHaveBeenCalledWith(expect.objectContaining({ operation: 'comment.report.resolve', commentId: rootId })));
 });
+
+it('lets owners hide blocked-author content without administrative removal powers', async () => {
+  mockApi.moderation.mockResolvedValue({ items: [{ ...root, author: null, body: '', moderationBody: 'Blocked author content', canEdit: false, canDelete: false }], nextCursor: null });
+  const execute = jest.fn().mockResolvedValue(undefined);
+  const ui = view(<DiscussionControls summary={{ ...summary, canManage: true }} scope="7" onClose={jest.fn()} execute={execute} />);
+  fireEvent.press(ui.getByText('Moderación'));
+  expect(await ui.findByText('Blocked author content')).toBeTruthy();
+  expect(ui.queryByText('Retirar como administrador')).toBeNull();
+  fireEvent.changeText(ui.getByLabelText('Motivo de la decisión'), 'Publication policy');
+  fireEvent.press(ui.getByText('Ocultar en mi contenido'));
+  await waitFor(() => expect(execute).toHaveBeenCalledWith(expect.objectContaining({ operation: 'comment.hide', commentId: rootId })));
+});

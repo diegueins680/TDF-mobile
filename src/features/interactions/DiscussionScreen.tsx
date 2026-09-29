@@ -43,20 +43,25 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
   const pendingKey = useRef<string | null>(null); const list = useRef<FlatList<InteractionComment>>(null); const focused = useRef(false);
   const targetHeading = useRef<Text | null>(null); const viewport = useRef<View>(null);
   const mounted = useRef(true); const scrollOffset = useRef(0);
+  const anchoring = useRef(true); const announced = useRef(false);
   const headerHeight = useRef(0); const [listReady, setListReady] = useState(false);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // VirtualizedList may report a row visible before the dynamic header is measured.
   // Confirm native screen coordinates before stopping retries or moving a11y focus.
   const confirmTargetVisible = useRef((reveal = false) => {
-    if (focused.current || !destination.commentId) return;
+    if (focused.current || !anchoring.current || !destination.commentId) return;
     viewport.current?.measureInWindow((_x, top, _width, height) => {
       targetHeading.current?.measureInWindow((_tx, y, _tw, headingHeight) => {
-        if (!mounted.current || focused.current || height <= 0 || headingHeight <= 0) return;
-        if (y < top || y + headingHeight > top + height) {
+        if (!mounted.current || focused.current || !anchoring.current || height <= 0 || headingHeight <= 0) return;
+        // A heading at the bottom edge hides the actual reply body. Keep the
+        // heading in the upper half, leaving reading space below it.
+        if (y < top || y > top + height * 0.5 || y + headingHeight > top + height) {
           if (reveal) list.current?.scrollToOffset({ offset: Math.max(0, scrollOffset.current + y - top - height * 0.3), animated: false });
           return;
         }
         focused.current = true;
+        if (announced.current) return;
+        announced.current = true;
         const handle = targetHeading.current && findNodeHandle(targetHeading.current);
         if (handle) AccessibilityInfo.setAccessibilityFocus(handle);
         AccessibilityInfo.announceForAccessibility('Comentario enlazado');
@@ -103,7 +108,7 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
     if (!listReady || !hasSummary || !destination.commentId || focused.current || targetIndex < 0) return;
     let attempts = 0; let timer: ReturnType<typeof setTimeout>;
     const reveal = () => {
-      if (focused.current) return;
+      if (focused.current || !anchoring.current) return;
       list.current?.scrollToIndex({ index: targetIndex, animated: false, viewPosition: 0.3 });
       confirmTargetVisible(true);
       if (++attempts < 120) timer = setTimeout(reveal, 250);
@@ -118,9 +123,15 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
   if (summary.isError) return <SafeAreaView style={{ flex: 1, padding: 24, backgroundColor: colors.canvas }}><Text accessibilityRole="alert" style={{ color: colors.textPrimary }}>Tus permisos cambiaron o la conversación no está disponible.</Text></SafeAreaView>;
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}>
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View ref={viewport} testID="discussion-viewport" style={{ flex: 1 }}>
+      <View ref={viewport} testID="discussion-viewport" style={{ flex: 1 }} onTouchStart={() => { anchoring.current = false; }}>
       <FlatList ref={list} data={comments.isError || context.isError ? [] : items} keyExtractor={(comment) => comment.id} keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 16, gap: 8 }} onLayout={() => setListReady(true)}
+        onScrollBeginDrag={() => { anchoring.current = false; }}
+        onContentSizeChange={() => {
+          // Late header/media layout must not move a cold-linked reply offscreen.
+          // Once the user interacts, preserve their position instead.
+          if (anchoring.current) { focused.current = false; confirmTargetVisible(true); }
+        }}
         onScroll={(event) => { scrollOffset.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16}
         onViewableItemsChanged={onViewableItemsChanged} viewabilityConfig={viewabilityConfig}
         onScrollToIndexFailed={({ index, averageItemLength }) => list.current?.scrollToOffset({ offset: headerHeight.current + averageItemLength * index, animated: false })}

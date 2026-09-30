@@ -1,17 +1,49 @@
 import copy
+import json
 import datetime
 import importlib.util
 from pathlib import Path
 import unittest
+import plistlib
+import subprocess
+import sys
+import shutil
+import tempfile
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('signing', Path(__file__).parents[1] / 'ios-signing.py')
 signing = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(signing)
 
+artifact_spec = importlib.util.spec_from_file_location('artifact', Path(__file__).parents[1] / 'verify-ios-artifact.py')
+artifact = importlib.util.module_from_spec(artifact_spec)
+artifact_spec.loader.exec_module(artifact)
+
 class SigningContract(unittest.TestCase):
+    def test_codesign_requests_machine_readable_entitlements(self):
+        expected = {'application-identifier': '83J23NPXG7.com.tdfrecords.app'}
+        def codesign(command, **kwargs):
+            output = plistlib.dumps(expected) if '--xml' in command else b'[Dict]\n'
+            self.assertTrue(kwargs['check'])
+            return subprocess.CompletedProcess(command, 0, stdout=output)
+        with patch.object(artifact.subprocess, 'run', side_effect=codesign):
+            self.assertEqual(artifact.read_signed_entitlements('/synthetic/Test.app'), expected)
+
+    @unittest.skipUnless(sys.platform == 'darwin', 'codesign requires macOS')
+    def test_actual_codesign_output_is_a_plist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            binary = Path(directory) / 'synthetic-signing-test'
+            shutil.copyfile('/usr/bin/true', binary)
+            expected = {'com.apple.security.get-task-allow': True}
+            entitlements = Path(directory) / 'entitlements.plist'
+            entitlements.write_bytes(plistlib.dumps(expected))
+            subprocess.run(['codesign', '--force', '--sign', '-', '--entitlements',
+                            str(entitlements), str(binary)], capture_output=True, check=True)
+            self.assertEqual(artifact.read_signed_entitlements(binary), expected)
+
     def setUp(self):
         self.now = datetime.datetime(2026, 9, 18, tzinfo=datetime.timezone.utc)
-        self.profile = {'ExpirationDate': datetime.datetime(2027, 1, 1), 'TeamIdentifier': ['83J23NPXG7'], 'Entitlements': {'application-identifier': '83J23NPXG7.com.tdfrecords.app', 'get-task-allow': False}, 'UUID': 'ebc7d007-b938-45ff-af73-8ffd86b4c546', 'DeveloperCertificates': [b'fixture']}
+        self.profile = {'ExpirationDate': datetime.datetime(2027, 1, 1), 'TeamIdentifier': ['83J23NPXG7'], 'Entitlements': {'application-identifier': '83J23NPXG7.com.tdfrecords.app', 'get-task-allow': False, 'com.apple.developer.associated-domains': ['*']}, 'UUID': 'ebc7d007-b938-45ff-af73-8ffd86b4c546', 'DeveloperCertificates': [b'fixture']}
 
     def test_current_app_store_profile(self):
         self.assertEqual(signing.validate_profile(self.profile, self.now), self.profile['UUID'])
@@ -24,6 +56,11 @@ class SigningContract(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     signing.validate_profile(profile, self.now)
 
+    def test_rejects_profile_without_universal_link_capability(self):
+        self.profile['Entitlements'].pop('com.apple.developer.associated-domains')
+        with self.assertRaisesRegex(ValueError, 'Associated Domains'):
+            signing.validate_profile(self.profile, self.now)
+
     def test_rejects_debug_entitlement(self):
         self.profile['Entitlements']['get-task-allow'] = True
         with self.assertRaises(ValueError):
@@ -34,6 +71,29 @@ class SigningContract(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 signing.validate_build_number(value)
         self.assertEqual(signing.validate_build_number('23'), '23')
+
+
+    def test_signed_artifact_requires_current_api_and_both_verified_hosts(self):
+        entitlements = {'application-identifier': '83J23NPXG7.com.tdfrecords.app',
+                        'com.apple.developer.associated-domains': ['applinks:www.tdfrecords.net', 'applinks:tdf-app.pages.dev']}
+        runtime = json.loads((Path(__file__).parents[2] / 'app.json').read_text())['expo']['runtimeVersion']
+        updates = {'EXUpdatesRuntimeVersion': runtime}
+        configs = [{'runtimeVersion': runtime, 'extra': {'apiBase': 'https://api.tdfrecords.net'}}]
+        artifact.validate_interaction_release(entitlements, configs, updates)
+        for bad in ({}, {**entitlements, 'application-identifier': 'ANOTHER.app'},
+                    {**entitlements, 'com.apple.developer.associated-domains': ['applinks:tdfrecords.net']}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                artifact.validate_interaction_release(bad, configs, updates)
+        for bad in ([], [{}], [{'extra': {'apiBase': 'https://tdf-hq.fly.dev'}}],
+                    configs + [{'extra': {'apiBase': 'http://127.0.0.1:18128'}}]):
+            with self.subTest(configs=bad), self.assertRaises(ValueError):
+                artifact.validate_interaction_release(entitlements, bad, updates)
+        for bad in ({}, {'EXUpdatesRuntimeVersion': '1.0.1'}):
+            with self.subTest(updates=bad), self.assertRaisesRegex(ValueError, 'OTA runtime'):
+                artifact.validate_interaction_release(entitlements, configs, bad)
+        with self.assertRaisesRegex(ValueError, 'OTA runtime'):
+            artifact.validate_interaction_release(entitlements, [{**configs[0], 'runtimeVersion': '1.0.1'}], updates)
+
 
 if __name__ == '__main__':
     unittest.main()

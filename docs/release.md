@@ -1,6 +1,6 @@
 # TDF Mobile Release Setup
 
-Last updated: 2026-09-18
+Last updated: 2026-09-29
 
 ## App Identity
 
@@ -33,7 +33,7 @@ EAS `preview` and `production` profiles set the release backend automatically vi
 ```bash
 EXPO_PUBLIC_API_BASE=https://api.tdfrecords.net
 EXPO_PUBLIC_UPLOAD_URL=https://api.tdfrecords.net/drive/upload
-EXPO_PUBLIC_TZ=America/Guayaquil
+EXPO_PUBLIC_TZ=UTC
 ```
 
 `app.config.ts` also falls back to these same release URLs whenever `EAS_BUILD_PROFILE` is `preview` or `production`. That keeps cloud builds from failing or defaulting to `localhost` if Expo evaluates the config before profile env injection completes.
@@ -165,6 +165,15 @@ The standard runner invocation now allocates4GiB heap/2GiB Metaspace with two
 workers. Release lint and all four native architectures remain enabled. This is
 a build-environment repair; the corrected retry35376997735 passed in18m46s. The previous dispatch-context failure35374641857 executed no build.
 
+## Signed entitlement inspection
+
+Artifact verification requests XML explicitly with `codesign -d --entitlements -
+--xml`. Current macOS otherwise returns a human-readable dictionary that cannot
+be parsed as a plist. Run 36493156554 archived and exported successfully but was
+correctly withheld when this parser failed; it was not uploaded. The regression
+creates an isolated ad-hoc signed executable and reads its actual entitlements
+on macOS, in addition to rejecting missing/mismatched release capabilities.
+See [Apple’s entitlement inspection guidance](https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles).
 
 The 2026-09-28 web-first cutover retired the Fly API. Preview/production API
 and upload URLs, and the Android/iOS embedded-API verification gates, now target

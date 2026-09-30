@@ -5,7 +5,7 @@ import { mobileDeepLinkTarget } from '../src/navigation/deepLinks';
 export function redirectSystemPath({ path }: { path: string; initial: boolean }): string {
   const candidate = path.startsWith('/') && !path.startsWith('//') ? `tdf://${path.slice(1)}` : path;
   const target = mobileDeepLinkTarget(candidate, '/');
-  if (target?.startsWith('/notifications?') || target?.startsWith('/access-requests?')) return target;
+  if (target?.startsWith('/conversacion/') || target?.startsWith('/notifications?') || target?.startsWith('/access-requests?')) return target;
 
   try {
     const url = new URL(candidate);

@@ -56,6 +56,36 @@ def prepare():
     gradle.write_text(prepare_gradle(gradle.read_text(), number))
 
 
+
+def validate_interaction_release(root, config, bundle, runtime_dump):
+    android = '{http://schemas.android.com/apk/res/android}'
+    runtime = json.loads((Path(__file__).parents[1] / 'app.json').read_text())['expo']['runtimeVersion']
+    values = re.findall(r'\[STR\] "([^"\n]+)"', runtime_dump)
+    resource = re.search(r'(0x[0-9a-fA-F]+) - string/expo_runtime_version', runtime_dump)
+    metadata = root.find(".//meta-data[@" + android + "name='expo.modules.updates.EXPO_RUNTIME_VERSION']")
+    allowed = {'@string/expo_runtime_version', runtime}
+    if resource:
+        allowed.add('@' + resource[1])
+    if (config.get('runtimeVersion') != runtime or not values or any(value != runtime for value in values)
+            or metadata is None or metadata.get(android + 'value') not in allowed):
+        raise ValueError('Wrong OTA runtime in compiled Android resources or embedded Expo config')
+    expected = {(host, route) for host in ('www.tdfrecords.net', 'tdf-app.pages.dev')
+                for route in ('/eventos/', '/conversacion/')}
+    actual = set()
+    for intent in root.findall('.//intent-filter'):
+        if intent.get(android + 'autoVerify') != 'true':
+            continue
+        for data in intent.findall('data'):
+            if data.get(android + 'scheme') == 'https':
+                actual.add((data.get(android + 'host'), data.get(android + 'pathPrefix')))
+    if actual != expected:
+        raise ValueError('Verified app links do not match the deployed hosts and routes')
+    if config.get('extra', {}).get('apiBase') != 'https://api.tdfrecords.net':
+        raise ValueError('Wrong embedded production API')
+    if b'https://api.tdfrecords.net' not in bundle or b'127.0.0.1:18128' in bundle or b'127.0.0.1:18631' in bundle:
+        raise ValueError('Wrong bundled production API')
+
+
 def verify():
     aab = Path('android/app/build/outputs/bundle/release/app-release.aab')
     subprocess.run(['jarsigner', '-verify', str(aab)], check=True, capture_output=True)
@@ -74,9 +104,9 @@ def verify():
     with zipfile.ZipFile(aab) as archive:
         assert archive.testzip() is None, 'Corrupt archive'
         config = json.loads(archive.read('base/assets/app.config'))
-        assert config['extra']['apiBase'] == 'https://api.tdfrecords.net', 'Wrong embedded API'
         bundle = archive.read('base/assets/index.android.bundle')
-        assert b'https://api.tdfrecords.net' in bundle and b'127.0.0.1:18631' not in bundle, 'Wrong bundled API'
+        runtime_dump = subprocess.run(['java', '-jar', tool, 'dump', 'resources', '--bundle=' + str(aab), '--resource=string/expo_runtime_version', '--values'], check=True, capture_output=True, text=True).stdout
+        validate_interaction_release(root, config, bundle, runtime_dump)
     output = Path('release-artifacts')
     output.mkdir(exist_ok=True)
     receipt = {'sourceSHA': os.environ['GITHUB_SHA'], 'runId': os.environ['GITHUB_RUN_ID'], 'package': 'com.tdf.records', 'version': version, 'build': os.environ['ANDROID_VERSION_CODE'], 'sha256': hashlib.file_digest(aab.open('rb'), 'sha256').hexdigest(), 'bytes': aab.stat().st_size, 'certificateSHA256': actual, 'signatureVerified': True, 'embeddedProductionAPI': True, 'publication': 'not uploaded or submitted'}

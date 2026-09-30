@@ -47,7 +47,7 @@ const releaseIdentityChecks = [
       `const IOS_BUNDLE_ID = '${canonicalIosBundleId}';`,
       `const ANDROID_PACKAGE = '${canonicalAndroidPackage}';`,
       `const DEFAULT_EAS_PROJECT_ID = '${canonicalEasProjectId}';`,
-      'runtimeVersion: APP_VERSION,',
+      'runtimeVersion: appManifest.expo.runtimeVersion,',
       'bundleIdentifier: IOS_BUNDLE_ID,',
       'package: ANDROID_PACKAGE,',
       'projectId: EAS_PROJECT_ID',
@@ -125,6 +125,14 @@ for (const check of releaseIdentityChecks) {
       errors.push(`${check.path} still contains stale release identity: ${snippet}`);
     }
   }
+}
+
+// Native capability changes must never share OTA compatibility with old binaries.
+const otaRuntime = JSON.parse(readRepoFile('app.json')).expo.runtimeVersion;
+const iosRuntime = readRepoFile('ios/TDFRecords/Supporting/Expo.plist').match(/<key>EXUpdatesRuntimeVersion<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+const androidRuntime = readRepoFile('android/app/src/main/res/values/strings.xml').match(/name="expo_runtime_version"[^>]*>([^<]+)</)?.[1];
+if (typeof otaRuntime !== 'string' || ['1.0.0', '1.0.1'].includes(otaRuntime) || otaRuntime !== iosRuntime || otaRuntime !== androidRuntime) {
+  errors.push('The interaction OTA runtime must be isolated from legacy binaries and identical in Expo/iOS/Android.');
 }
 
 try {

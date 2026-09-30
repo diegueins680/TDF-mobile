@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity } from 'react-native';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getAnalyticsClient } from '../src/analytics/posthog';
 import { get } from '../src/api/client';
 import { getNotification, markNotificationRead } from '../src/api/notifications';
 import { notificationTargetPath, positiveNotificationId } from '../src/navigation/notificationTarget';
@@ -23,6 +24,7 @@ function FollowerProfile({ id }: { id: number }) {
 }
 
 export default function NotificationScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ notificationId?: string }>();
   const id = typeof params.notificationId === 'string' && /^\d+$/.test(params.notificationId)
     ? positiveNotificationId(Number(params.notificationId)) : null;
@@ -53,10 +55,10 @@ export default function NotificationScreen() {
     {notification?.nTargetType === 'party_profile' && targetId ? <FollowerProfile id={Number(targetId)} />
       : notification?.nTargetType === 'feature_access_request' && targetId ? <AccessRequestDetail id={Number(targetId)} />
       : <><Text style={{ color: colors.textPrimary }}>{notification?.nBody}</Text>
-        <Text style={{ color: colors.textSecondary }}>{path
+        <Text style={{ color: colors.textSecondary }}>{path?.startsWith('/conversacion/') ? (english ? 'Open the exact conversation below.' : 'Abre la conversación exacta a continuación.') : path
           ? (english ? 'Continue to this resource on TDF web. Sign in there if needed.' : 'Continúa a este recurso en TDF web. Inicia sesión allí si es necesario.')
           : (english ? 'The specific destination is unavailable or its original reference was not retained.' : 'El destino específico no está disponible o no se conservó su referencia original.')}</Text></>}
-    {path && <TouchableOpacity accessibilityRole="link" style={{ minHeight: 44, padding: 12 }} onPress={() => { void Linking.openURL(`https://tdf-app.pages.dev${path}`); }}><Text style={{ color: colors.actionPrimary }}>{english ? 'Open on TDF web' : 'Abrir en TDF web'}</Text></TouchableOpacity>}
+    {path && <TouchableOpacity accessibilityRole="link" style={{ minHeight: 44, padding: 12 }} onPress={() => { getAnalyticsClient().capture('notification_opened', { platform: 'mobile', notification_type: notification?.nType }); if (path.startsWith('/conversacion/')) router.push(path as never); else void Linking.openURL(`https://www.tdfrecords.net${path}`); }}><Text style={{ color: colors.actionPrimary }}>{path.startsWith('/conversacion/') ? (english ? 'Open discussion' : 'Abrir conversación') : (english ? 'Open on TDF web' : 'Abrir en TDF web')}</Text></TouchableOpacity>}
     <Link href="/" style={{ color: colors.actionPrimary, minHeight: 44 }}>{english ? 'Home' : 'Inicio'}</Link>
     <Link href="/access-requests" style={{ color: colors.actionPrimary, minHeight: 44 }}>{english ? 'My access requests' : 'Mis solicitudes de acceso'}</Link>
   </ScrollView>;

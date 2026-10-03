@@ -174,3 +174,10 @@ correctly withheld when this parser failed; it was not uploaded. The regression
 creates an isolated ad-hoc signed executable and reads its actual entitlements
 on macOS, in addition to rejecting missing/mismatched release capabilities.
 See [Apple’s entitlement inspection guidance](https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles).
+
+The 2026-09-28 web-first cutover retired the Fly API. Preview/production API
+and upload URLs, and the Android/iOS embedded-API verification gates, now target
+`https://api.tdfrecords.net`. Development still defaults to localhost and explicit
+environment overrides remain available. This source update does not publish a
+native release or repair already installed binaries; those need a separately
+reviewed build/release and physical login/upload validation against the new host.

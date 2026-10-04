@@ -31,13 +31,8 @@ import {
   ticketTierAvailability,
   ticketTierSaleStateLabel,
 } from '../src/lib/tickets';
-import {
-  getStripeCoreApiVersion,
-  initNativePaymentSheet,
-  initNativeStripe,
-  presentNativePaymentSheet,
-} from '../src/lib/nativeStripe';
 import { normalizeRouteParam } from '../src/lib/routeParams';
+import { buildProviderNeutralTicketCheckoutUrl } from '../src/lib/providerNeutralCheckout';
 import { notificationSuccess } from '../src/utils/haptics';
 import {
   clearTicketCheckoutKey,
@@ -49,29 +44,19 @@ import { useAuth } from '../src/providers/AuthProvider';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
 import type {
   EventTicketOrder,
-  EventTicketPaymentIntent,
   EventTicketTier,
   ID,
 } from '../src/types';
 
 type PurchaseResult =
   | { kind: 'zero-total-confirmed'; orderId: string; quantity: number }
-  | { kind: 'payment-received'; orderId: string; quantity: number }
-  | { kind: 'verification-needed'; orderId: string }
-  | { kind: 'cancelled'; orderId: string; releasedReservation: boolean };
+  | { kind: 'provider-neutral-opened'; checkoutUrl: string };
 
 type Feedback = {
   tone: 'success' | 'warning' | 'error';
   title: string;
   message: string;
 };
-
-const STRIPE_MERCHANT_DISPLAY_NAME = 'TDF Records';
-const STRIPE_RETURN_URL = 'tdf://stripe-redirect';
-const STRIPE_MERCHANT_IDENTIFIER =
-  process.env.STRIPE_MERCHANT_IDENTIFIER?.trim() ||
-  process.env.EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER?.trim() ||
-  undefined;
 
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message.trim() ? error.message.trim() : fallback;
@@ -230,13 +215,6 @@ export default function TicketCheckoutScreen() {
     }
   }, [forgetCheckoutFingerprint, orders, submittedOrderId]);
 
-  const releasePendingOrder = useCallback(async (orderId: string): Promise<boolean> => {
-    if (!eventId) return false;
-    return Events.updateTicketOrderStatus(eventId, orderId, 'cancelled')
-      .then(() => true)
-      .catch(() => false);
-  }, [eventId]);
-
   const purchaseMutation = useMutation<PurchaseResult>({
     mutationFn: async () => {
       if (!eventId) throw new Error('No encontramos este evento.');
@@ -245,6 +223,19 @@ export default function TicketCheckoutScreen() {
       if (!isValidTicketEmail(buyerEmail)) throw new Error('Ingresa un correo válido.');
       if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > maxQuantity) {
         throw new Error('La cantidad seleccionada ya no está disponible.');
+      }
+
+      if (selectedTier.priceCents > 0) {
+        const checkoutUrl = buildProviderNeutralTicketCheckoutUrl(
+          eventId,
+          selectedTier.id,
+          quantity,
+        );
+        if (!(await Linking.canOpenURL(checkoutUrl))) {
+          throw new Error('No pudimos abrir el checkout seguro de TDF Records.');
+        }
+        await Linking.openURL(checkoutUrl);
+        return { kind: 'provider-neutral-opened', checkoutUrl };
       }
 
       const input = {
@@ -272,19 +263,8 @@ export default function TicketCheckoutScreen() {
       activeCheckoutFingerprint.current = checkoutFingerprint;
       input.checkoutKey = checkoutKey;
 
-      const stripeApiVersion = selectedTier.priceCents === 0
-        ? undefined
-        : await getStripeCoreApiVersion();
-      if (selectedTier.priceCents > 0 && !stripeApiVersion) {
-        throw new Error(
-          Platform.OS === 'web'
-            ? 'Completa el pago desde la app instalada de TDF Records.'
-            : 'Actualiza o instala la app oficial de TDF Records para pagar con tarjeta.',
-        );
-      }
-
-      const createCheckout = () => Events.createTicketPaymentSheet(input, stripeApiVersion);
-      let paymentIntent: EventTicketPaymentIntent;
+      const createCheckout = () => Events.createTicketPaymentSheet(input, undefined);
+      let paymentIntent;
       try {
         paymentIntent = await createCheckout();
       } catch (error) {
@@ -296,133 +276,29 @@ export default function TicketCheckoutScreen() {
         paymentIntent = await createCheckout();
       }
 
-      if (paymentIntent.amountCents === 0 && !paymentIntent.paymentSheet) {
-        await forgetCheckoutFingerprint(checkoutFingerprint);
-        return {
-          kind: 'zero-total-confirmed',
-          orderId: paymentIntent.orderId,
-          quantity,
-        };
+      if (paymentIntent.amountCents !== 0 || paymentIntent.paymentSheet) {
+        throw new Error('El cobro pagado debe continuar por el checkout canónico de TDF Records.');
       }
-
-      checkoutFingerprintsByOrderId.current.set(paymentIntent.orderId, checkoutFingerprint);
-
-      if (!paymentIntent.paymentSheet) {
-        const released = await releasePendingOrder(paymentIntent.orderId);
-        if (released) {
-          await forgetCheckoutFingerprint(checkoutFingerprint);
-        }
-        throw new Error(
-          released
-            ? 'No recibimos los datos necesarios para abrir el pago. La reserva fue liberada.'
-            : 'No recibimos los datos necesarios para abrir el pago. Revisa Mis entradas antes de volver a intentarlo.',
-        );
-      }
-      const paymentSheet = paymentIntent.paymentSheet;
-
-      try {
-        await initNativeStripe({
-          publishableKey: paymentSheet.publishableKey,
-          merchantIdentifier: STRIPE_MERCHANT_IDENTIFIER,
-          urlScheme: 'tdf',
-          setReturnUrlSchemeOnAndroid: true,
-        });
-
-        const initResult = await initNativePaymentSheet({
-          merchantDisplayName: STRIPE_MERCHANT_DISPLAY_NAME,
-          customerId: paymentSheet.customerId,
-          customerEphemeralKeySecret: paymentSheet.ephemeralKeySecret,
-          paymentIntentClientSecret: paymentSheet.paymentIntentClientSecret,
-          returnURL: STRIPE_RETURN_URL,
-          allowsDelayedPaymentMethods: false,
-          primaryButtonLabel: `Pagar ${formatTicketMoney(paymentIntent.amountCents, paymentIntent.currency)}`,
-          defaultBillingDetails: {
-            name: normalizePurchaseName(buyerName) ?? undefined,
-            email: buyerEmail.trim().toLowerCase(),
-          },
-        });
-        if (initResult.error) {
-          throw new Error(
-            initResult.error.localizedMessage ?? initResult.error.message ?? 'No pudimos abrir el pago.',
-          );
-        }
-
-        analytics.capture('ticket_payment_sheet_opened', {
-          event_id: eventId,
-          tier_id: selectedTier.id,
-          quantity,
-          amount_cents: paymentIntent.amountCents,
-        });
-      } catch (error) {
-        const released = await releasePendingOrder(paymentIntent.orderId);
-        if (released) {
-          await forgetCheckoutFingerprint(checkoutFingerprint);
-        }
-        const message = errorMessage(error, 'No pudimos abrir el pago.');
-        throw new Error(
-          released
-            ? `${message} No se realizó el cobro y liberamos la reserva.`
-            : `${message} Revisa Mis entradas antes de volver a intentarlo.`,
-        );
-      }
-
-      try {
-        const presentResult = await presentNativePaymentSheet();
-        if (presentResult.error?.code === 'Canceled') {
-          const releasedReservation = await releasePendingOrder(paymentIntent.orderId);
-          if (releasedReservation) {
-            await forgetCheckoutFingerprint(checkoutFingerprint);
-          }
-          return {
-            kind: 'cancelled',
-            orderId: paymentIntent.orderId,
-            releasedReservation,
-          };
-        }
-        if (presentResult.error) {
-          return { kind: 'verification-needed', orderId: paymentIntent.orderId };
-        }
-      } catch {
-        // Once PaymentSheet has been presented, a bridge/network error is not
-        // proof that the charge failed. Keep the order pending for webhook reconciliation.
-        return { kind: 'verification-needed', orderId: paymentIntent.orderId };
-      }
-
-      return {
-        kind: 'payment-received',
-        orderId: paymentIntent.orderId,
-        quantity,
-      };
+      await forgetCheckoutFingerprint(checkoutFingerprint);
+      return { kind: 'zero-total-confirmed', orderId: paymentIntent.orderId, quantity };
     },
     onSuccess: (result) => {
+      if (result.kind === 'provider-neutral-opened') {
+        analytics.capture('ticket_provider_neutral_checkout_opened', {
+          event_id: eventId,
+          checkout_origin: new URL(result.checkoutUrl).origin,
+        });
+        setFeedback({
+          tone: 'success',
+          title: 'Checkout seguro abierto',
+          message: 'Completa la orden y elige uno de los métodos disponibles. Regresa a la app para revisar tus entradas.',
+        });
+        return;
+      }
       void queryClient.invalidateQueries({ queryKey: ['event-ticket-tiers', eventId] });
       void queryClient.invalidateQueries({ queryKey: ['event-ticket-orders'] });
       void queryClient.invalidateQueries({ queryKey: ['my-ticket-orders'] });
       void ordersQuery.refetch();
-
-      if (result.kind === 'cancelled') {
-        analytics.capture('ticket_checkout_cancelled', { event_id: eventId });
-        setFeedback({
-          tone: 'warning',
-          title: 'Pago cancelado',
-          message: result.releasedReservation
-            ? 'No se realizó el cobro y la reserva fue liberada.'
-            : 'No se realizó el cobro. Revisa Mis entradas antes de intentarlo otra vez.',
-        });
-        return;
-      }
-
-      if (result.kind === 'verification-needed') {
-        setSubmittedOrderId(result.orderId);
-        analytics.capture('ticket_payment_verification_needed', { event_id: eventId });
-        setShowOrders(true);
-        setFeedback({
-          tone: 'warning',
-          title: 'Estamos verificando el pago',
-          message: 'No vuelvas a pagar todavía. Revisa Mis entradas; actualizaremos la orden cuando Stripe confirme el resultado.',
-        });
-        return;
-      }
 
       analytics.capture('ticket_purchase_succeeded', {
         event_id: eventId,
@@ -431,19 +307,11 @@ export default function TicketCheckoutScreen() {
       });
       void notificationSuccess();
       setShowOrders(true);
-      if (result.kind === 'payment-received') {
-        setSubmittedOrderId(result.orderId);
-      }
       setQuantity(1);
       setFeedback({
         tone: 'success',
-        title: result.kind === 'zero-total-confirmed'
-          ? '¡Entradas confirmadas!'
-          : '¡Pago recibido!',
-        message:
-          result.kind === 'zero-total-confirmed'
-            ? 'Tus códigos ya están listos en Mis entradas.'
-            : 'Estamos emitiendo tus entradas. Los códigos aparecerán aquí en unos segundos.',
+        title: '¡Entradas confirmadas!',
+        message: 'Tus códigos ya están listos en Mis entradas.',
       });
     },
     onError: (error) => {
@@ -890,7 +758,7 @@ export default function TicketCheckoutScreen() {
 
                 <View style={styles.trustRow}>
                   <MaterialCommunityIcons name="lock-outline" size={19} color="#15803d" />
-                  <Text style={styles.trustText}>Pago cifrado por Stripe. TDF Records no guarda los datos de tu tarjeta.</Text>
+                  <Text style={styles.trustText}>Pago en el checkout seguro de TDF Records. TDF no guarda los datos de tu tarjeta.</Text>
                 </View>
               </>
             )}

@@ -17493,7 +17493,7 @@ export interface operations {
         };
         responses: {
             /** @description Request processed without revealing whether the account exists or email delivery succeeded. */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

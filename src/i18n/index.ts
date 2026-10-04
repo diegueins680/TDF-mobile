@@ -7,6 +7,7 @@ const translations: Record<Locale, Record<string, string>> = {
   es: {
     // Common
     'common.loading': 'Cargando...',
+    'common.loadingSession': 'Cargando sesión',
     'common.error': 'Error',
     'common.retry': 'Reintentar',
     'common.cancel': 'Cancelar',
@@ -31,6 +32,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'auth.resetPasswordSent': 'Te enviamos un enlace para restablecer tu contraseña.',
 
     // Tabs
+    'tabs.accessibilityPosition': '{title}, pestaña {position} de {count}',
     'tabs.directory': 'Directorio',
     'tabs.events': 'Eventos',
     'tabs.social': 'Seguir',
@@ -58,6 +60,7 @@ const translations: Record<Locale, Record<string, string>> = {
   en: {
     // Common
     'common.loading': 'Loading...',
+    'common.loadingSession': 'Loading session',
     'common.error': 'Error',
     'common.retry': 'Retry',
     'common.cancel': 'Cancel',
@@ -82,6 +85,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'auth.resetPasswordSent': 'We sent you a password reset link.',
 
     // Tabs
+    'tabs.accessibilityPosition': '{title}, tab {position} of {count}',
     'tabs.directory': 'Directory',
     'tabs.events': 'Events',
     'tabs.social': 'Follow',
@@ -118,8 +122,8 @@ export function getLocale(): Locale {
   return currentLocale;
 }
 
-export function t(key: string, params?: Record<string, string | number>): string {
-  let text = translations[currentLocale]?.[key] ?? translations.es[key] ?? key;
+export function t(key: string, params?: Record<string, string | number>, locale: Locale = currentLocale): string {
+  let text = translations[locale]?.[key] ?? translations.es[key] ?? key;
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
       text = text.replace(`{${k}}`, String(v));

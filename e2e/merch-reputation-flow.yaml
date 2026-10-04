@@ -1,0 +1,28 @@
+# Native synthetic verified-purchase review flow.
+# Requires the isolated fixture in scripts/fixtures/merch-reputation-mobile.mjs
+# and a development build configured for that localhost API.
+
+appId: com.tdfrecords.app
+---
+- launchApp:
+    clearState: true
+- openLink: "tdf:///merch/review?orderId=10000000-0000-4000-8000-000000000001"
+- assertVisible: "Review your purchase"
+- assertVisible: "Store experience, Service and logistics, Review available"
+- assertVisible: "Synthetic tour shirt, Product rating · Review available"
+- tapOn: "Store experience, Service and logistics, Review available"
+- assertVisible: "Commercial experience"
+- assertVisible: "Preparation and dispatch"
+- assertVisible: "Communication"
+- assertVisible: "Packaging"
+- tapOn: "Overall rating: 5 of 5"
+- tapOn: "Preparation and dispatch: 5 of 5"
+- tapOn: "Communication: 5 of 5"
+- tapOn: "Packaging: 5 of 5"
+- scrollUntilVisible:
+    element:
+      text: "Submit review"
+    direction: DOWN
+- tapOn: "Submit review"
+- assertVisible: "Store experience, Service and logistics, Review submitted · Editing available"
+- takeScreenshot: merch-reputation-verified-review

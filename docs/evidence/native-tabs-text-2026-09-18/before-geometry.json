@@ -1,0 +1,341 @@
+{
+  "original": "1.0",
+  "restored": "1.0",
+  "rows": [
+    {
+      "fontScale": "1.0",
+      "visibleLabels": [
+        {
+          "text": "Seguir",
+          "bounds": "[87,87][993,164]",
+          "clickable": "false"
+        },
+        {
+          "text": "Consulta a qui\u00e9n sigues y qui\u00e9n te sigue. Para seguir artistas, entra a un evento o perfil de artista y toca Seguir.",
+          "bounds": "[87,192][993,363]",
+          "clickable": "false"
+        },
+        {
+          "text": "Cuenta vinculada",
+          "bounds": "[87,391][453,480]",
+          "clickable": "false"
+        },
+        {
+          "text": "Nombre: Auditoria Android",
+          "bounds": "[87,501][630,590]",
+          "clickable": "false"
+        },
+        {
+          "text": "Empieza siguiendo a un artista",
+          "bounds": "[87,674][993,739]",
+          "clickable": "false"
+        },
+        {
+          "text": "Elige uno ahora o guarda un pr\u00f3ximo evento.",
+          "bounds": "[87,767][993,824]",
+          "clickable": "false"
+        },
+        {
+          "text": "Claim target fresh fixture",
+          "bounds": "[117,915][678,973]",
+          "clickable": "false"
+        },
+        {
+          "text": "Siguiendo a Claim target fresh fixture",
+          "bounds": "[712,883][962,1007]",
+          "clickable": "true"
+        },
+        {
+          "text": "Siguiendo",
+          "bounds": "[745,917][927,971]",
+          "clickable": "false"
+        },
+        {
+          "text": "Claim target draft fixture",
+          "bounds": "[117,1129][742,1187]",
+          "clickable": "false"
+        },
+        {
+          "text": "Seguir a Claim target draft fixture",
+          "bounds": "[776,1097][962,1221]",
+          "clickable": "true"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[809,1131][927,1185]",
+          "clickable": "false"
+        },
+        {
+          "text": "Claim target blocked fixture",
+          "bounds": "[117,1343][742,1401]",
+          "clickable": "false"
+        },
+        {
+          "text": "Seguir a Claim target blocked fixture",
+          "bounds": "[776,1311][962,1434]",
+          "clickable": "true"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[809,1345][927,1399]",
+          "clickable": "false"
+        },
+        {
+          "text": "Ver pr\u00f3ximos eventos",
+          "bounds": "[87,1494][993,1618]",
+          "clickable": "true"
+        },
+        {
+          "text": "Ver pr\u00f3ximos eventos",
+          "bounds": "[376,1532][703,1578]",
+          "clickable": "false"
+        },
+        {
+          "text": "Tu red de personas",
+          "bounds": "[87,1701][993,1766]",
+          "clickable": "false"
+        },
+        {
+          "text": "Siguiendo, 0 conexiones",
+          "bounds": "[90,1797][540,1905]",
+          "clickable": "true"
+        },
+        {
+          "text": "Siguiendo (0)",
+          "bounds": "[90,1825][540,1876]",
+          "clickable": "false"
+        },
+        {
+          "text": "Seguidores, 0 conexiones",
+          "bounds": "[540,1797][990,1905]",
+          "clickable": "true"
+        },
+        {
+          "text": "Seguidores (0)",
+          "bounds": "[540,1825][990,1876]",
+          "clickable": "false"
+        },
+        {
+          "text": "No sigues a nadie todav\u00eda.",
+          "bounds": "[87,1935][993,1986]",
+          "clickable": "false"
+        },
+        {
+          "text": "Directorio",
+          "bounds": "[0,2068][216,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udf49",
+          "bounds": "[73,2086][141,2156]",
+          "clickable": "false"
+        },
+        {
+          "text": "Directorio",
+          "bounds": "[33,2160][182,2205]",
+          "clickable": "false"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[216,2068][432,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[275,2160][373,2205]",
+          "clickable": "false"
+        },
+        {
+          "text": "\udb82\udc99",
+          "bounds": "[289,2086][357,2156]",
+          "clickable": "false"
+        },
+        {
+          "text": "Explorar",
+          "bounds": "[432,2068][648,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udd8c",
+          "bounds": "[505,2086][573,2156]",
+          "clickable": "false"
+        },
+        {
+          "text": "Explorar",
+          "bounds": "[477,2160][602,2205]",
+          "clickable": "false"
+        },
+        {
+          "text": "Crear",
+          "bounds": "[648,2068][864,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb81\udc19",
+          "bounds": "[721,2086][789,2156]",
+          "clickable": "false"
+        },
+        {
+          "text": "Crear",
+          "bounds": "[715,2160][797,2205]",
+          "clickable": "false"
+        },
+        {
+          "text": "Perfil",
+          "bounds": "[864,2068][1080,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udc09",
+          "bounds": "[937,2086][1005,2156]",
+          "clickable": "false"
+        },
+        {
+          "text": "Perfil",
+          "bounds": "[931,2160][1012,2205]",
+          "clickable": "false"
+        }
+      ]
+    },
+    {
+      "fontScale": "2.0",
+      "visibleLabels": [
+        {
+          "text": "Seguir",
+          "bounds": "[87,87][993,201]",
+          "clickable": "false"
+        },
+        {
+          "text": "Consulta a qui\u00e9n sigues y qui\u00e9n te sigue. Para seguir artistas, entra a un evento o perfil de artista y toca Seguir.",
+          "bounds": "[87,229][993,613]",
+          "clickable": "false"
+        },
+        {
+          "text": "Cuenta vinculada",
+          "bounds": "[87,641][609,757]",
+          "clickable": "false"
+        },
+        {
+          "text": "Nombre: Auditoria Android",
+          "bounds": "[87,778][866,894]",
+          "clickable": "false"
+        },
+        {
+          "text": "Empieza siguiendo a un artista",
+          "bounds": "[87,978][993,1160]",
+          "clickable": "false"
+        },
+        {
+          "text": "Elige uno ahora o guarda un pr\u00f3ximo evento.",
+          "bounds": "[87,1188][993,1380]",
+          "clickable": "false"
+        },
+        {
+          "text": "Claim target fresh fixture",
+          "bounds": "[117,1438][526,1720]",
+          "clickable": "false"
+        },
+        {
+          "text": "Siguiendo a Claim target fresh fixture",
+          "bounds": "[560,1496][962,1664]",
+          "clickable": "true"
+        },
+        {
+          "text": "Siguiendo",
+          "bounds": "[593,1529][927,1629]",
+          "clickable": "false"
+        },
+        {
+          "text": "Claim target draft fixture",
+          "bounds": "[117,1810][644,2002]",
+          "clickable": "false"
+        },
+        {
+          "text": "Seguir a Claim target draft fixture",
+          "bounds": "[678,1823][962,1991]",
+          "clickable": "true"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[711,1856][927,1956]",
+          "clickable": "false"
+        },
+        {
+          "text": "Directorio",
+          "bounds": "[0,2068][216,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udf49",
+          "bounds": "[73,2086][141,2156]",
+          "clickable": "false"
+        },
+        {
+          "text": "Directorio",
+          "bounds": "[14,2160][201,2205]",
+          "clickable": "false"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[216,2068][432,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[230,2160][417,2205]",
+          "clickable": "false"
+        },
+        {
+          "text": "\udb82\udc99",
+          "bounds": "[289,2086][357,2156]",
+          "clickable": "false"
+        },
+        {
+          "text": "Explorar",
+          "bounds": "[432,2068][648,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udd8c",
+          "bounds": "[505,2086][573,2156]",
+          "clickable": "false"
+        },
+        {
+          "text": "Explorar",
+          "bounds": "[446,2160][633,2205]",
+          "clickable": "false"
+        },
+        {
+          "text": "Crear",
+          "bounds": "[648,2068][864,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb81\udc19",
+          "bounds": "[721,2086][789,2156]",
+          "clickable": "false"
+        },
+        {
+          "text": "Crear",
+          "bounds": "[673,2160][838,2205]",
+          "clickable": "false"
+        },
+        {
+          "text": "Perfil",
+          "bounds": "[864,2068][1080,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udc09",
+          "bounds": "[937,2086][1005,2156]",
+          "clickable": "false"
+        },
+        {
+          "text": "Perfil",
+          "bounds": "[892,2160][1052,2205]",
+          "clickable": "false"
+        }
+      ]
+    }
+  ]
+}

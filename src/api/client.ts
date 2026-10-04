@@ -42,6 +42,11 @@ export function getAuthToken(): string | undefined {
   return currentToken;
 }
 
+export function isCurrentAuthToken(token: string | null | undefined): boolean {
+  const normalized = normalizeAuthToken(token);
+  return Boolean(normalized) && normalized === currentToken;
+}
+
 const readResponseMessage = (value: unknown): string | null => {
   if (typeof value === 'string' && value.trim()) return value.trim();
   if (value && typeof value === 'object' && 'message' in value) {
@@ -127,8 +132,8 @@ const requestData = async <T>(request: Promise<{ data: T }>): Promise<T> => {
   }
 };
 
-export async function get<T>(path: string): Promise<T> {
-  return requestData(http.get<T>(path));
+export async function get<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
+  return requestData(http.get<T>(path, config));
 }
 
 export async function post<T>(path: string, body: unknown, config?: AxiosRequestConfig): Promise<T> {
@@ -139,8 +144,8 @@ export async function put<T>(path: string, body: unknown, config?: AxiosRequestC
   return requestData(http.put<T>(path, body, config));
 }
 
-export async function del<T>(path: string): Promise<T> {
-  return requestData(http.delete<T>(path));
+export async function del<T>(path: string, config?: AxiosRequestConfig): Promise<T> {
+  return requestData(http.delete<T>(path, config));
 }
 
 export async function patch<T>(path: string, body: unknown): Promise<T> {

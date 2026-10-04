@@ -6,6 +6,8 @@ import type {
   SocialEventUpdate,
   EventRSVP,
   EventRSVPCreate,
+  EventRSVPSummary,
+  EventRSVPFeedPage,
   EventInvitation,
   EventInvitationCreate,
   EventMoment,
@@ -30,6 +32,7 @@ import { assertNever } from '../lib/assertNever';
 import { normalizePartyId as normalizeIdentityPartyId } from '../lib/identity';
 import { normalizeOptionalTimestamp } from '../lib/isoDate';
 import { normalizeRsvpStatus } from '../lib/rsvp';
+import { PUBLIC_EVENT_ORIGIN } from '../lib/eventSharing';
 import { mapBackendArtistToFrontend } from './artists';
 import { Venues } from './venues';
 
@@ -63,12 +66,32 @@ type BackendEventDTO = {
   eventWorkflowStateNameEs?: string | null;
   eventWorkflowStateNameEn?: string | null;
   eventPublicListable?: boolean | null;
+  eventRsvpEligible?: boolean | null;
   eventTicketPurchaseEnabled?: boolean | null;
   eventCreatedAt?: string | null;
   eventUpdatedAt?: string | null;
   eventArtists?: BackendArtistDTO[];
   eventRsvps?: BackendRsvpDTO[];
   eventSources?: BackendEventSourceDTO[] | null;
+};
+
+type BackendPublicEventDTO = {
+  id: ID;
+  title: string;
+  description?: string | null;
+  startTime: string;
+  endTime?: string | null;
+  timezone?: string | null;
+  priceCents?: number | null;
+  capacity?: number | null;
+  imageUrl?: string | null;
+  isPublic?: boolean;
+  workflowStateCode?: string;
+  rsvpEligible?: boolean;
+  publicShareEligible?: boolean;
+  venue?: { id?: ID; name?: string | null } | null;
+  location?: { city?: string | null; countryCode?: string | null; latitude?: number | null; longitude?: number | null } | null;
+  rsvpSummary?: { acceptedCount?: number; maybeCount?: number } | null;
 };
 
 type BackendEventSourceDTO = {
@@ -89,12 +112,36 @@ type BackendEventCityDTO = {
 };
 
 type BackendRsvpDTO = {
-  rsvpId?: ID;
   rsvpEventId?: ID;
-  rsvpPartyId?: ID;
   rsvpStatus?: string;
+  rsvpShowOnProfile?: boolean;
   rsvpCreatedAt?: string;
   rsvpUpdatedAt?: string;
+};
+
+type BackendRsvpSummaryDTO = {
+  rsvpAcceptedCount?: number;
+  rsvpMaybeCount?: number;
+};
+
+type BackendRsvpFeedPageDTO = {
+  feedItems?: Array<{
+    feedItemType?: string;
+    feedEventId?: ID;
+    feedStatus?: string;
+    feedEventTitle?: string;
+    feedEventStart?: string;
+    feedEventTimezone?: string | null;
+    feedEventImageUrl?: string | null;
+    feedVenueName?: string | null;
+    feedCity?: string | null;
+    feedWorkflowStateCode?: string;
+    feedActionAt?: string;
+    feedCanonicalUrl?: string;
+    feedCanEdit?: boolean;
+    feedCanShare?: boolean;
+  }>;
+  feedNextCursor?: string | null;
 };
 
 type BackendInvitationDTO = {
@@ -305,6 +352,17 @@ const normalizeOptionalText = (value: string | null | undefined): string | null 
   return trimmed ? trimmed : null;
 };
 
+const normalizeSafeFeedImage = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed, PUBLIC_EVENT_ORIGIN);
+    return url.protocol === 'https:' && !url.username && !url.password ? url.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
 const CATALOG_UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -424,9 +482,56 @@ export const Events = {
   },
 
   getById: async (eventId: ID): Promise<SocialEvent> => {
-    const event = await get<BackendEventDTO>(`/social-events/events/${eventId}`);
+    const normalizedEventId = normalizePositiveIntegerIdParam(eventId);
+    if (!normalizedEventId) throw new Error('Invalid event identifier.');
+    const event = await get<BackendEventDTO>(`/social-events/events/${normalizedEventId}`);
     const venueMap = await loadVenueMapByIds([event.eventVenueId]);
     return mapBackendEventToFrontend(event, venueMap.get(String(normalizeVenueId(event.eventVenueId))));
+  },
+
+  getPublicById: async (eventId: ID): Promise<SocialEvent> => {
+    const normalizedEventId = normalizePositiveIntegerIdParam(eventId);
+    if (!normalizedEventId) throw new Error('Invalid public event identifier.');
+    const event = await get<BackendPublicEventDTO>(`/directory/events/${normalizedEventId}`);
+    const nowIso = new Date().toISOString();
+    const venue = event.venue?.id && event.venue.name ? {
+      id: event.venue.id,
+      name: event.venue.name,
+      address: '',
+      city: event.location?.city ?? '',
+      country: event.location?.countryCode ?? null,
+      latitude: event.location?.latitude ?? 0,
+      longitude: event.location?.longitude ?? 0,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    } : undefined;
+    return {
+      id: event.id,
+      eventTypeId: '',
+      title: event.title,
+      description: event.description ?? null,
+      startTime: event.startTime,
+      endTime: event.endTime ?? null,
+      venueId: event.venue?.id ?? 0,
+      venue,
+      artistIds: [],
+      artists: [],
+      createdBy: 0,
+      ticketPrice: typeof event.priceCents === 'number' ? event.priceCents / 100 : null,
+      imageUrl: event.imageUrl ?? null,
+      isPublic: event.isPublic === true,
+      workflowStateId: '',
+      workflowStateCode: event.workflowStateCode ?? '',
+      workflowStateNameEs: event.workflowStateCode === 'cancelled' ? 'Cancelado' : 'Publicado',
+      workflowStateNameEn: event.workflowStateCode === 'cancelled' ? 'Cancelled' : 'Published',
+      publicListable: event.publicShareEligible === true,
+      rsvpEligible: event.rsvpEligible === true,
+      ticketPurchaseEnabled: false,
+      rsvpCount: Math.max(0, event.rsvpSummary?.acceptedCount ?? 0),
+      rsvpInterestedCount: Math.max(0, event.rsvpSummary?.maybeCount ?? 0),
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
   },
 
   listCities: async (filters?: { q?: string; country?: string }): Promise<EventCity[]> => {
@@ -581,33 +686,86 @@ export const Events = {
   },
 
   // RSVP management
+  getMyRSVP: async (eventId: ID): Promise<EventRSVP | null> => {
+    const normalizedEventId = normalizePositiveIntegerIdParam(eventId);
+    if (!normalizedEventId) throw new Error('A positive event id is required for RSVP.');
+    const rsvp = await get<BackendRsvpDTO | null>(`/social-events/events/${normalizedEventId}/rsvp`);
+    return rsvp ? mapRsvpDto(rsvp, normalizedEventId) : null;
+  },
+
+  // Transitional component compatibility without exposing the organizer list.
   getRSVPs: async (eventId: ID): Promise<EventRSVP[]> => {
-    const rsvps = await get<BackendRsvpDTO[]>(`/social-events/events/${eventId}/rsvps`);
-    return rsvps.map((dto) => mapRsvpDto(dto, eventId));
+    const mine = await Events.getMyRSVP(eventId);
+    return mine ? [mine] : [];
+  },
+
+  getRSVPSummary: async (eventId: ID): Promise<EventRSVPSummary> => {
+    const normalizedEventId = normalizePositiveIntegerIdParam(eventId);
+    if (!normalizedEventId) throw new Error('A positive event id is required for RSVP.');
+    const summary = await get<BackendRsvpSummaryDTO>(`/social-events/events/${normalizedEventId}/rsvp-summary`);
+    return {
+      goingCount: Math.max(0, summary.rsvpAcceptedCount ?? 0),
+      interestedCount: Math.max(0, summary.rsvpMaybeCount ?? 0),
+    };
   },
 
   rsvp: async (body: EventRSVPCreate): Promise<EventRSVP> => {
+    const normalizedEventId = normalizePositiveIntegerIdParam(body.eventId);
+    if (!normalizedEventId) throw new Error('A positive event id is required for RSVP.');
     const backendStatus = mapFrontendRsvpStatus(body.status);
     if (!backendStatus) {
       throw new Error('RSVP status NONE cannot be submitted.');
     }
-    const normalizedPartyId = normalizeIdentityPartyId(body.userId);
-    if (!normalizedPartyId) {
-      throw new Error('Party ID inválido para RSVP.');
-    }
-
     const payload = {
-      rsvpEventId: String(body.eventId),
-      rsvpPartyId: normalizedPartyId,
-      rsvpStatus: backendStatus
+      rsvpStatus: backendStatus,
+      rsvpShowOnProfile: body.status === 'NOT_GOING' ? false : body.showOnProfile,
     };
-    const result = await post<BackendRsvpDTO>(`/social-events/events/${body.eventId}/rsvps`, payload);
-    return mapRsvpDto(result, body.eventId, normalizedPartyId);
+    const result = await put<BackendRsvpDTO>(`/social-events/events/${normalizedEventId}/rsvp`, payload);
+    return mapRsvpDto(result, normalizedEventId);
   },
 
   updateRSVP: async (body: EventRSVPCreate): Promise<EventRSVP> => {
-    // Backend upserts RSVPs on POST, so reuse the same endpoint.
+    // Backend atomically upserts by authenticated session identity.
     return Events.rsvp(body);
+  },
+
+  deleteRSVP: async (eventId: ID): Promise<void> => {
+    const normalizedEventId = normalizePositiveIntegerIdParam(eventId);
+    if (!normalizedEventId) throw new Error('A positive event id is required for RSVP.');
+    await del(`/social-events/events/${normalizedEventId}/rsvp`);
+  },
+
+  listRSVPFeed: async (partyId: ID, cursor?: string, limit = 20): Promise<EventRSVPFeedPage> => {
+    const normalizedPartyId = normalizePositiveIntegerIdParam(partyId);
+    if (!normalizedPartyId) throw new Error('A positive Party id is required to load RSVP activity.');
+    const query = new URLSearchParams({ limit: String(Math.min(50, Math.max(1, limit))) });
+    if (cursor?.trim()) query.set('cursor', cursor.trim());
+    const page = await get<BackendRsvpFeedPageDTO>(`/social-events/profiles/${normalizedPartyId}/rsvp-feed?${query.toString()}`);
+    return {
+      items: (page.feedItems ?? []).flatMap((item) => {
+        const status = normalizeRsvpStatus(item.feedStatus);
+        const normalizedEventId = normalizePositiveIntegerIdParam(item.feedEventId);
+        if (status !== 'GOING' && status !== 'INTERESTED') return [];
+        if (!normalizedEventId || !item.feedEventTitle || !item.feedEventStart || !item.feedActionAt) return [];
+        return [{
+          type: 'event_rsvp' as const,
+          eventId: normalizedEventId,
+          status,
+          title: item.feedEventTitle,
+          startTime: item.feedEventStart,
+          timezone: item.feedEventTimezone ?? null,
+          imageUrl: normalizeSafeFeedImage(item.feedEventImageUrl),
+          venueName: item.feedVenueName ?? null,
+          city: item.feedCity ?? null,
+          workflowStateCode: item.feedWorkflowStateCode ?? '',
+          actionAt: item.feedActionAt,
+          canonicalUrl: `/eventos/${normalizedEventId}`,
+          canEdit: item.feedCanEdit === true,
+          canShare: item.feedCanShare === true,
+        }];
+      }),
+      nextCursor: page.feedNextCursor ?? null,
+    };
   },
 
   // Invitations
@@ -856,9 +1014,13 @@ function mapBackendEventToFrontend(
     workflowStateNameEs: requireNonBlankText(e.eventWorkflowStateNameEs, 'eventWorkflowStateNameEs'),
     workflowStateNameEn: requireNonBlankText(e.eventWorkflowStateNameEn, 'eventWorkflowStateNameEn'),
     publicListable: e.eventPublicListable === true,
+    rsvpEligible: e.eventRsvpEligible === true,
     ticketPurchaseEnabled: e.eventTicketPurchaseEnabled === true,
     rsvpCount: Array.isArray(e.eventRsvps)
       ? e.eventRsvps.filter((rsvp) => normalizeRsvpStatus(rsvp.rsvpStatus) === 'GOING').length
+      : 0,
+    rsvpInterestedCount: Array.isArray(e.eventRsvps)
+      ? e.eventRsvps.filter((rsvp) => normalizeRsvpStatus(rsvp.rsvpStatus) === 'INTERESTED').length
       : 0,
     createdAt,
     updatedAt
@@ -996,17 +1158,17 @@ function mergeEventUpdate(existing: SocialEvent, patch: SocialEventUpdate): Soci
   };
 }
 
-function mapRsvpDto(dto: BackendRsvpDTO, fallbackEventId: ID, fallbackPartyId?: ID): EventRSVP {
+function mapRsvpDto(dto: BackendRsvpDTO, fallbackEventId: ID): EventRSVP {
   const createdAt = normalizeOptionalTimestamp(dto.rsvpCreatedAt) ?? new Date().toISOString();
   const updatedAt =
     normalizeOptionalTimestamp(dto.rsvpUpdatedAt) ??
     normalizeOptionalTimestamp(dto.rsvpCreatedAt) ??
     createdAt;
   return {
-    id: dto.rsvpId ?? `${dto.rsvpPartyId}-${dto.rsvpEventId ?? fallbackEventId}`,
+    id: `self-${dto.rsvpEventId ?? fallbackEventId}`,
     eventId: dto.rsvpEventId ?? fallbackEventId,
-    userId: dto.rsvpPartyId ?? fallbackPartyId ?? '',
     status: normalizeRsvpStatus(dto.rsvpStatus),
+    showOnProfile: dto.rsvpShowOnProfile === true,
     createdAt,
     updatedAt
   };
@@ -1015,11 +1177,11 @@ function mapRsvpDto(dto: BackendRsvpDTO, fallbackEventId: ID, fallbackPartyId?: 
 function mapFrontendRsvpStatus(status: RSVPStatus): string | null {
   switch (status) {
     case 'GOING':
-      return 'Accepted';
+      return 'accepted';
     case 'INTERESTED':
-      return 'Maybe';
+      return 'maybe';
     case 'NOT_GOING':
-      return 'Declined';
+      return 'declined';
     case 'NONE':
       return null;
   }

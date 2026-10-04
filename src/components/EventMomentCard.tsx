@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 
+import { InteractionBar } from '../features/interactions/InteractionBar';
 import { countMomentReactions } from '../lib/eventMoments';
 import type { EventMoment, EventMomentMedia, EventMomentReactionOption } from '../types';
 
@@ -29,8 +30,12 @@ type EventMomentCardProps = {
   commentDraft: string;
   onChangeComment: (momentId: string, value: string) => void;
   onSubmitComment: (momentId: string) => void;
-  onToggleReaction: (momentId: string, reaction: EventMomentReactionOption) => void;
+  onToggleReaction: (
+    momentId: string,
+    reaction: EventMomentReactionOption,
+  ) => boolean | void | Promise<boolean | void>;
   onReactionPosted?: () => void;
+  onCanonicalReactionPosted?: () => void;
   onConnectAuthor?: (partyId: string) => void;
   onOpenMedia?: (media: EventMomentMedia) => void;
 };
@@ -52,6 +57,7 @@ export function EventMomentCard({
   onSubmitComment,
   onToggleReaction,
   onReactionPosted,
+  onCanonicalReactionPosted,
   onConnectAuthor,
   onOpenMedia,
 }: EventMomentCardProps) {
@@ -156,6 +162,8 @@ export function EventMomentCard({
 
       {moment.caption ? <Text style={styles.caption}>{moment.caption}</Text> : null}
 
+      {/^[1-9][0-9]*$/.test(moment.id) ? <InteractionBar kind="event_moment" entityKey={moment.id} onReactionAdded={onCanonicalReactionPosted} /> : <>
+        {!pending && <Text style={styles.metaText}>Borrador privado en este dispositivo</Text>}
       <View style={styles.reactionRow}>
         {reactionOptions.map((reaction) => {
           const actors = moment.reactions[reaction.id] ?? [];
@@ -171,8 +179,8 @@ export function EventMomentCard({
               ]}
               onPress={async () => {
                 try {
-                  await onToggleReaction(moment.id, reaction);
-                  onReactionPosted?.();
+                  const countsAsPosted = await onToggleReaction(moment.id, reaction);
+                  if (countsAsPosted !== false) onReactionPosted?.();
                 } catch {
                   // Swallow — the parent owns error surfacing for the toggle
                   // mutation; we only fire the conversion callback on success.
@@ -230,6 +238,7 @@ export function EventMomentCard({
           <Text style={styles.commentButtonText}>Enviar</Text>
         </TouchableOpacity>
       </View>
+      </>}
     </View>
   );
 }

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 
 import { loginRequest, googleLoginRequest, signupRequest, requestPasswordReset } from '../src/api/auth';
+import { isCurrentAuthToken } from '../src/api/client';
 import { API_BASE } from '../src/lib/api';
 import {
   GOOGLE_IOS_CLIENT_ID,
@@ -22,29 +23,31 @@ import {
   GOOGLE_WEB_CLIENT_ID
 } from '../src/lib/authConfig';
 import { loadNativeGoogleSignin, type NativeGoogleSigninModule } from '../src/lib/nativeGoogleSignin';
-import { MOBILE_LANDING_ROUTE } from '../src/navigation/mobileSurface';
 import FormField from '../src/components/FormField';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
-import { markSignupCompleted } from '../src/lib/firstRunFlags';
 import {
-  attachPendingIntentToParty,
+  clearPendingOnboardingIntent,
   DEFAULT_ONBOARDING_INTENT,
   ONBOARDING_INTENT_OPTIONS,
   parseOnboardingIntent,
   persistOnboardingIntent,
-  resolveMobileIntentDestination,
+  persistOnboardingIntentForPartyWithRetry,
+  readPendingOnboardingIntent,
+  resolveMobileIntentNavigation,
+  type MobileIntentNavigation,
   type OnboardingIntent,
 } from '../src/lib/onboardingIntent';
 import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
 import { authCopy, onboardingLanguage } from '../src/localization/onboardingCopy';
 import { isValidSignupPassword } from '../src/lib/passwordPolicy';
+import { readEventRsvpIntent } from '../src/lib/eventRsvpIntent';
+import { safeInternalRoute } from '../src/navigation/deepLinks';
 
+const PUBLIC_EVENT_RETURN_ROUTE = /^\/eventos\/[1-9]\d{0,18}$/;
 const ACCOUNT_TERMS_VERSION = 'tdf-account-terms-v1';
-const TERMS_URL = 'https://tdf-app.pages.dev/mobile-app/terms.html';
-const PRIVACY_URL = 'https://tdf-app.pages.dev/mobile-app/privacy.html';
 
 const readErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
@@ -61,6 +64,8 @@ const resolveAuthorizedReturnTo = (
 ): Href | null => {
   if (!candidate) return null;
   const path = typeof candidate === 'string' ? candidate : candidate.pathname;
+  const normalizedPath = path.split(/[?#]/, 1)[0];
+  if (PUBLIC_EVENT_RETURN_ROUTE.test(normalizedPath)) return normalizedPath as Href;
   const features = getFeaturesByMobilePath(path);
   if (features.length === 0) return null;
   return features.some((feature) => evaluateFeatureAccess(
@@ -89,25 +94,31 @@ export default function AuthScreen() {
   const requestedMode = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const rawIntent = Array.isArray(params.intent) ? params.intent[0] : params.intent;
   const legacyRoles = Array.isArray(params.roles) ? params.roles[0] : params.roles;
-  const initialIntent = parseOnboardingIntent(rawIntent) ?? parseOnboardingIntent(legacyRoles) ?? DEFAULT_ONBOARDING_INTENT;
+  const requestedIntent = parseOnboardingIntent(rawIntent) ?? parseOnboardingIntent(legacyRoles);
+  const initialIntent = requestedIntent ?? DEFAULT_ONBOARDING_INTENT;
   const rawReturnTo = Array.isArray(params.returnTo) ? params.returnTo[0] : params.returnTo;
-  const safeReturnTo = rawReturnTo?.startsWith('/') && !rawReturnTo.startsWith('//') && rawReturnTo.length <= 500
-    ? rawReturnTo as Href
-    : null;
+  const safeReturnTo = safeInternalRoute(rawReturnTo) as Href | null;
   const [mode, setMode] = useState<'login' | 'signup' | 'forgotPassword'>(requestedMode === 'signup' ? 'signup' : 'login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [googleConnectionRequired, setGoogleConnectionRequired] = useState(false);
+  useEffect(() => { setGoogleConnectionRequired(false); }, [mode]);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [selectedIntent, setSelectedIntent] = useState<OnboardingIntent>(initialIntent);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [policyError, setPolicyError] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const lastNameInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const forgotPasswordEmailInputRef = useRef<TextInput>(null);
+  const requestedIntentPersistenceRef = useRef<{
+    intent: OnboardingIntent;
+    promise: Promise<void>;
+  } | null>(null);
 
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
   const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
@@ -120,6 +131,17 @@ export default function AuthScreen() {
   const [isForgotPasswordSubmitting, setIsForgotPasswordSubmitting] = useState(false);
   const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
   const [forgotPasswordError, setForgotPasswordError] = useState<string | null>(null);
+
+  const finishAuthNavigation = (destination: MobileIntentNavigation) => {
+    if (destination.kind === 'web') {
+      // Leave a useful authenticated app surface behind the browser. If the
+      // OS cannot open the public web task, the user still exits auth safely.
+      router.replace('/(tabs)/directory');
+      void Linking.openURL(destination.value).catch(() => undefined);
+      return;
+    }
+    router.replace(destination.value);
+  };
 
   const hasToken = Boolean(token?.trim());
   const canSubmitPassword = username.trim().length > 0 && password.length > 0 && !isPasswordSubmitting;
@@ -151,19 +173,51 @@ export default function AuthScreen() {
     if (option) setRegionalPreferences({ localeId: option.id });
   };
 
-  useEffect(() => {
-    analytics.capture('auth_mode_viewed', {
-      platform: 'mobile',
-      mode: requestedMode === 'signup' ? 'signup' : 'login',
-      intent: initialIntent,
-    });
-    if (requestedMode === 'signup') {
-      analytics.capture('signup_started', { platform: 'mobile', entry: 'deeplink', intent: initialIntent });
+  const persistRequestedIntentOnce = (intent: OnboardingIntent): Promise<void> => {
+    if (requestedIntentPersistenceRef.current?.intent === intent) {
+      return requestedIntentPersistenceRef.current.promise;
     }
-    void persistOnboardingIntent(initialIntent);
+    const promise = persistOnboardingIntent(intent);
+    requestedIntentPersistenceRef.current = { intent, promise };
+    return promise;
+  };
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const restoredIntent = requestedIntent ?? await readPendingOnboardingIntent();
+      const entryIntent = restoredIntent ?? DEFAULT_ONBOARDING_INTENT;
+      if (!active) return;
+      setSelectedIntent(entryIntent);
+      analytics.capture('auth_mode_viewed', {
+        platform: 'mobile',
+        mode: requestedMode === 'signup' ? 'signup' : 'login',
+        intent: entryIntent,
+      });
+      if (requestedMode === 'signup') {
+        analytics.capture('signup_started', { platform: 'mobile', entry: 'deeplink', intent: entryIntent });
+      }
+      if (requestedIntent) await persistRequestedIntentOnce(requestedIntent);
+    })();
+    return () => {
+      active = false;
+    };
     // Screen-entry instrumentation must fire once for this route instance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const persistIntentForExistingAccount = async (
+    pendingIntent: OnboardingIntent | null,
+    ownerToken: string,
+    ownerPartyId: number,
+  ) => {
+    if (!pendingIntent) return;
+    await persistOnboardingIntentForPartyWithRetry(
+      ownerPartyId,
+      pendingIntent,
+      () => isCurrentAuthToken(ownerToken),
+    );
+  };
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -196,21 +250,36 @@ export default function AuthScreen() {
     setErrorMessage(null);
     setFeedbackMessage(null);
     setIsPasswordSubmitting(true);
+    const pendingIntentPromise = requestedIntent
+      ? persistRequestedIntentOnce(requestedIntent).then(() => requestedIntent)
+      : readPendingOnboardingIntent();
 
     try {
-      const session = await loginRequest({
-        username: username.trim(),
-        password
-      });
+      const [session, pendingIntent] = await Promise.all([
+        loginRequest({
+          username: username.trim(),
+          password
+        }),
+        pendingIntentPromise,
+      ]);
+      const postLoginIntent = pendingIntent ?? selectedIntent;
 
       setToken(session.token, session.partyId ?? null, {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
+      void persistIntentForExistingAccount(pendingIntent, session.token, session.partyId);
       setPassword('');
       analytics.capture('login_completed', { platform: 'mobile', method: 'password' });
       setFeedbackMessage(copy.loginSuccess);
-      router.replace(resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []) ?? MOBILE_LANDING_ROUTE);
+      const authorizedReturnTo = resolveAuthorizedReturnTo(
+        safeReturnTo,
+        session.roles ?? [],
+        session.modules ?? [],
+      );
+      finishAuthNavigation(authorizedReturnTo
+        ? { kind: 'native', value: authorizedReturnTo }
+        : resolveMobileIntentNavigation(postLoginIntent, session.roles ?? [], session.modules ?? []));
     } catch (error) {
       analytics.capture('login_failed', { platform: 'mobile', method: 'password' });
       setErrorMessage(readErrorMessage(error, copy.loginFailure));
@@ -241,20 +310,15 @@ export default function AuthScreen() {
         marketingOptIn,
         termsAccepted: true,
         termsVersion: ACCOUNT_TERMS_VERSION,
+        onboardingIntent: selectedIntent,
       });
-      const sessionPartyId = session.partyId ? String(session.partyId) : '';
-      if (sessionPartyId) {
-        await Promise.all([
-          markSignupCompleted(sessionPartyId),
-          attachPendingIntentToParty(sessionPartyId, selectedIntent),
-        ]);
-      }
       setToken(session.token, session.partyId ?? null, {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
+      await clearPendingOnboardingIntent();
       setPassword('');
-      const intentDestination = resolveMobileIntentDestination(
+      const intentDestination = resolveMobileIntentNavigation(
         selectedIntent,
         session.roles ?? [],
         session.modules ?? [],
@@ -262,15 +326,27 @@ export default function AuthScreen() {
       const authorizedReturnTo = resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []);
       const destination = (selectedIntent === 'artist_profile' || selectedIntent === 'internships')
         ? intentDestination
-        : authorizedReturnTo ?? intentDestination;
+        : authorizedReturnTo
+          ? { kind: 'native' as const, value: authorizedReturnTo }
+          : intentDestination;
       analytics.capture('signup_completed', {
         platform: 'mobile',
         method: 'password',
         intent: selectedIntent,
-        destination_kind: typeof destination === 'string' ? destination : destination.pathname,
+        destination_kind: destination.kind === 'web'
+          ? 'external_web'
+          : typeof destination.value === 'string'
+            ? destination.value
+            : destination.value.pathname,
       });
+      const pendingRsvpIntent = await readEventRsvpIntent();
+      if (pendingRsvpIntent?.sharedAttribution) {
+        analytics.capture('event_shared_visit_to_signup', {
+          platform: 'mobile', event_id: pendingRsvpIntent.eventId, method: 'password',
+        });
+      }
       setFeedbackMessage(copy.signupSuccess);
-      router.replace(destination);
+      finishAuthNavigation(destination);
     } catch (error) {
       analytics.capture('signup_failed', { platform: 'mobile', method: 'password', intent: selectedIntent });
       setErrorMessage(readErrorMessage(error, copy.signupFailure));
@@ -288,7 +364,16 @@ export default function AuthScreen() {
       return;
     }
 
+    if (mode === 'login' && googleConnectionRequired && (!username.trim() || !password)) {
+      setErrorMessage(copy.googleConnectExplanation);
+      return;
+    }
     setIsGoogleSubmitting(true);
+    const pendingIntentPromise = mode === 'signup'
+      ? Promise.resolve(selectedIntent)
+      : requestedIntent
+        ? persistRequestedIntentOnce(requestedIntent).then(() => requestedIntent)
+        : readPendingOnboardingIntent();
 
     try {
       if (Platform.OS === 'android') {
@@ -308,35 +393,50 @@ export default function AuthScreen() {
 
       const session = await googleLoginRequest({
         idToken: response.data.idToken,
+        ...(mode === 'login' && googleConnectionRequired ? {
+          linkAccount: { username: username.trim(), password },
+        } : {}),
         ...(mode === 'signup' ? {
+          createNewAccount: true,
           marketingOptIn,
           termsAccepted: true,
           termsVersion: ACCOUNT_TERMS_VERSION,
+          onboardingIntent: selectedIntent,
         } : {}),
       });
-      const googlePartyId = session.partyId ? String(session.partyId) : '';
-      if (mode === 'signup' && googlePartyId) {
-        await attachPendingIntentToParty(googlePartyId, selectedIntent);
-        if (session.accountCreated === true) await markSignupCompleted(googlePartyId);
-      }
       setToken(session.token, session.partyId ?? null, {
         roles: session.roles ?? [],
         modules: session.modules ?? [],
       });
       setPassword('');
       const googleCreatedAccount = session.accountCreated === true;
+      const pendingIntent = await pendingIntentPromise;
+      const postLoginIntent = pendingIntent ?? selectedIntent;
+      if (googleCreatedAccount) {
+        await clearPendingOnboardingIntent();
+      } else {
+        void persistIntentForExistingAccount(pendingIntent, session.token, session.partyId);
+      }
       analytics.capture(googleCreatedAccount ? 'signup_completed' : 'login_completed', {
         platform: 'mobile',
         method: 'google',
         ...(googleCreatedAccount ? { intent: selectedIntent } : {}),
       });
+      const pendingRsvpIntent = googleCreatedAccount ? await readEventRsvpIntent() : null;
+      if (pendingRsvpIntent?.sharedAttribution) {
+        analytics.capture('event_shared_visit_to_signup', {
+          platform: 'mobile', event_id: pendingRsvpIntent.eventId, method: 'google',
+        });
+      }
       setFeedbackMessage(copy.googleSuccess);
       const authorizedReturnTo = resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []);
-      router.replace(
-        mode === 'signup' && (!authorizedReturnTo || selectedIntent === 'artist_profile' || selectedIntent === 'internships')
-          ? resolveMobileIntentDestination(selectedIntent, session.roles ?? [], session.modules ?? [])
-          : authorizedReturnTo ?? MOBILE_LANDING_ROUTE,
-      );
+      const destination = mode === 'signup'
+        && (!authorizedReturnTo || selectedIntent === 'artist_profile' || selectedIntent === 'internships')
+        ? resolveMobileIntentNavigation(selectedIntent, session.roles ?? [], session.modules ?? [])
+        : authorizedReturnTo
+          ? { kind: 'native' as const, value: authorizedReturnTo }
+          : resolveMobileIntentNavigation(postLoginIntent, session.roles ?? [], session.modules ?? []);
+      finishAuthNavigation(destination);
     } catch (error) {
       if (googleSigninModule.isErrorWithCode(error)) {
         if (error.code === googleSigninModule.statusCodes.SIGN_IN_CANCELLED) {
@@ -360,6 +460,11 @@ export default function AuthScreen() {
         method: 'google',
         ...(mode === 'signup' ? { intent: selectedIntent } : {}),
       });
+      if (mode === 'login' && readErrorMessage(error, '') === 'Accept the terms and privacy policy through the signup flow before creating a Google account') {
+        setGoogleConnectionRequired(true);
+        setFeedbackMessage(copy.googleConnectExplanation);
+        return;
+      }
       setErrorMessage(readErrorMessage(error, copy.googleFailure));
     } finally {
       setIsGoogleSubmitting(false);
@@ -390,7 +495,7 @@ export default function AuthScreen() {
     setIsForgotPasswordSubmitting(true);
 
     try {
-      await requestPasswordReset(forgotPasswordEmail.trim().toLowerCase());
+      await requestPasswordReset(forgotPasswordEmail.trim().toLowerCase(), language);
       setForgotPasswordSuccess(true);
     } catch (error) {
       setForgotPasswordError(readErrorMessage(error, copy.resetFailure));
@@ -630,13 +735,24 @@ export default function AuthScreen() {
                     <Text style={styles.checkboxText}>{copy.accept}</Text>
                   </TouchableOpacity>
                   <View style={styles.legalLinks}>
-                    <TouchableOpacity accessibilityRole="link" onPress={() => void Linking.openURL(TERMS_URL)}>
+                    <TouchableOpacity accessibilityRole="link" onPress={() => {
+                      setPolicyError(false);
+                      void Linking.openURL(`https://tdf-app.pages.dev/account/terms${language === 'en' ? '' : '-es'}.html`).catch(() => setPolicyError(true));
+                    }}>
                       <Text style={styles.legalLink}>{copy.terms}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity accessibilityRole="link" onPress={() => void Linking.openURL(PRIVACY_URL)}>
+                    <TouchableOpacity accessibilityRole="link" onPress={() => {
+                      setPolicyError(false);
+                      void Linking.openURL(`https://tdf-app.pages.dev/account/privacy${language === 'en' ? '' : '-es'}.html`).catch(() => setPolicyError(true));
+                    }}>
                       <Text style={styles.legalLink}>{copy.privacy}</Text>
                     </TouchableOpacity>
                   </View>
+                  {policyError && (
+                    <Text style={styles.errorText} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                      {copy.policyOpenFailure}
+                    </Text>
+                  )}
                   <TouchableOpacity
                     style={styles.checkboxRow}
                     onPress={() => setMarketingOptIn((current) => !current)}
@@ -717,7 +833,7 @@ export default function AuthScreen() {
                       <ActivityIndicator color={colors.textPrimary} />
                     ) : (
                       <Text style={styles.secondaryButtonText}>
-                        {mode === 'signup' ? copy.googleCreate : copy.googleLogin}
+                        {mode === 'signup' ? copy.googleCreate : googleConnectionRequired ? copy.googleConnect : copy.googleLogin}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -971,6 +1087,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   checkboxChecked: { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary },
   checkboxMark: { color: colors.actionPrimaryContrast, fontWeight: '900' },
   checkboxText: { flex: 1, color: colors.textPrimary, fontSize: 13, lineHeight: 18 },
-  legalLinks: { flexDirection: 'row', gap: 20, paddingLeft: 34 },
+  legalLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, paddingLeft: 34 },
   legalLink: { color: colors.actionPrimary, minHeight: 44, textAlignVertical: 'center', fontWeight: '600', fontSize: 13 },
 });

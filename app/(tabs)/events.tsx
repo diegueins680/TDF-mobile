@@ -27,8 +27,8 @@ import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
 import { impactLight } from '../../src/utils/haptics';
-import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
-import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
+import { recordFirstValueCompletion } from '../../src/lib/firstValueCompletion';
+import { usePartyOwnership } from '../../src/hooks/usePartyOwnership';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -51,6 +51,7 @@ export default function EventsScreen() {
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
   const { partyId } = useAuth();
+  const ownsParty = usePartyOwnership(partyId);
   const { locale, timezone, countryCode } = useUserSettings();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
@@ -75,14 +76,18 @@ export default function EventsScreen() {
   });
 
   const savedEventIdsQuery = useQuery({
-    queryKey: ['saved-event-ids'],
-    queryFn: listSavedEventIds
+    queryKey: ['saved-event-ids', partyId],
+    queryFn: () => listSavedEventIds(
+      partyId as string,
+      () => ownsParty(partyId),
+    ),
+    enabled: Boolean(partyId),
   });
 
   const savedEventIds = useMemo(() => savedEventIdsQuery.data ?? [], [savedEventIdsQuery.data]);
 
   const savedEventsQuery = useQuery({
-    queryKey: ['saved-events', 'browse', savedEventIds],
+    queryKey: ['saved-events', partyId, 'browse', savedEventIds],
     enabled: savedEventIds.length > 0,
     queryFn: async () => {
       const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
@@ -105,23 +110,43 @@ export default function EventsScreen() {
   }, [eventScope, refetch, savedEventsQuery]);
 
   const saveToggleMutation = useMutation({
-    mutationFn: (eventId: string) => toggleSavedEvent(eventId),
-    onSuccess: async (_data, eventId) => {
-      const wasSaved = savedEventIds.includes(eventId);
+    mutationFn: ({ eventId, ownerPartyId }: { eventId: string; ownerPartyId: string }) =>
+      toggleSavedEvent(
+        ownerPartyId,
+        eventId,
+        () => ownsParty(ownerPartyId),
+      ),
+    onSuccess: async ({ saved, serverAcknowledged }, { eventId, ownerPartyId }) => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
+      if (!ownsParty(ownerPartyId)) return;
       void impactLight();
+      if (!serverAcknowledged) {
+        Alert.alert(
+          'Cambio pendiente de sincronización',
+          'Lo guardamos en este dispositivo y lo sincronizaremos con tu cuenta cuando vuelva la conexión.',
+        );
+        return;
+      }
       analytics.capture('feature_favorite_changed', {
         platform: 'mobile',
         event_id: eventId,
-        action: wasSaved ? 'unsaved' : 'saved',
+        action: saved ? 'saved' : 'unsaved',
       });
-      if (!wasSaved && await markFirstValueCompleted(partyId, 'event_saved')) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'event_saved' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'event_saved' });
-        if (partyId) await markNewUserOnboardingCompleted(partyId);
-      }
-      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
-      qc.invalidateQueries({ queryKey: ['saved-events'] });
-    }
+      if (saved) void recordFirstValueCompletion(
+        ownerPartyId,
+        'event_saved',
+        () => ownsParty(ownerPartyId),
+        analytics,
+      );
+    },
+    onError: (_error, { ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
+      Alert.alert(
+        'No pudimos actualizar tus guardados',
+        'El cambio no se pudo guardar ni poner en cola. Comprueba la sesión y el almacenamiento e inténtalo nuevamente.',
+      );
+    },
   });
 
   const citySubscriptionsMutation = useMutation({
@@ -250,7 +275,21 @@ export default function EventsScreen() {
     return marked;
   }, [colors.actionPrimary, eventsByDate, selectedDate]);
 
-  const handleToggleSaved = useCallback((eventId: string) => {
+  const handleToggleSaved = useCallback(async (eventId: string) => {
+    if (!partyId) {
+      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para guardar eventos.');
+      return;
+    }
+    if (savedEventIdsQuery.isError) {
+      const result = await savedEventIdsQuery.refetch();
+      if (result.isError) {
+        Alert.alert(
+          'No pudimos cargar tus guardados',
+          'Comprueba tu conexión, sesión y almacenamiento e inténtalo nuevamente.',
+        );
+      }
+      return;
+    }
     const isCurrentlySaved = savedEventIds.includes(eventId);
     if (isCurrentlySaved) {
       Alert.alert(
@@ -258,26 +297,26 @@ export default function EventsScreen() {
         '¿Quieres quitar este evento de tus guardados?',
         [
           { text: 'Cancelar', style: 'cancel' },
-          { text: 'Quitar', style: 'destructive', onPress: () => saveToggleMutation.mutate(eventId) },
+          { text: 'Quitar', style: 'destructive', onPress: () => saveToggleMutation.mutate({ eventId, ownerPartyId: partyId }) },
         ],
       );
     } else {
-      saveToggleMutation.mutate(eventId);
+      saveToggleMutation.mutate({ eventId, ownerPartyId: partyId });
     }
-  }, [saveToggleMutation, savedEventIds]);
+  }, [partyId, saveToggleMutation, savedEventIds, savedEventIdsQuery]);
 
   const isCardUpdating = useCallback((eventId: string) => (
-    saveToggleMutation.isPending && String(saveToggleMutation.variables) === eventId
+    saveToggleMutation.isPending && saveToggleMutation.variables?.eventId === eventId
   ), [saveToggleMutation.isPending, saveToggleMutation.variables]);
 
   const renderEventItem = useCallback(({ item }: { item: SocialEvent }) => (
     <EventCard
       event={item}
       saved={savedEventIds.includes(String(item.id))}
-      onToggleSaved={() => handleToggleSaved(String(item.id))}
-      saveDisabled={isCardUpdating(String(item.id))}
+      onToggleSaved={() => void handleToggleSaved(String(item.id))}
+      saveDisabled={!partyId || isCardUpdating(String(item.id))}
     />
-  ), [handleToggleSaved, isCardUpdating, savedEventIds]);
+  ), [handleToggleSaved, isCardUpdating, partyId, savedEventIds]);
 
   const keyExtractor = useCallback((item: SocialEvent) => String(item.id), []);
 
@@ -285,7 +324,9 @@ export default function EventsScreen() {
     ? (savedEventIdsQuery.isLoading || (savedEventIds.length > 0 && savedEventsQuery.isLoading))
     : isLoading;
 
-  const listError = eventScope === 'saved' ? savedEventsQuery.isError : isError;
+  const listError = eventScope === 'saved'
+    ? (savedEventIdsQuery.isError || savedEventsQuery.isError)
+    : isError;
 
   const hasListData = eventScope === 'saved' ? !!savedEventsQuery.data : !!events;
   if (listLoading && !hasListData) {
@@ -305,7 +346,11 @@ export default function EventsScreen() {
           style={[styles.retryButton, { backgroundColor: colors.actionPrimary }]}
           onPress={() => {
             if (eventScope === 'saved') {
-              void savedEventsQuery.refetch();
+              if (savedEventIdsQuery.isError) {
+                void savedEventIdsQuery.refetch();
+              } else {
+                void savedEventsQuery.refetch();
+              }
             } else {
               void refetch();
             }

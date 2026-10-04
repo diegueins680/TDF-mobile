@@ -4,7 +4,7 @@ jest.mock('../src/api/client', () => ({
   put: jest.fn(),
 }));
 
-import { getParty } from '../src/api/parties';
+import { createParty, getParty } from '../src/api/parties';
 
 const { get } = jest.requireMock('../src/api/client') as {
   get: jest.Mock;
@@ -27,4 +27,13 @@ describe('parties API', () => {
     await expect(getParty('7/roles')).rejects.toThrow('Party ID inválido.');
     expect(get).not.toHaveBeenCalled();
   });
+});
+
+it('carries the same request identity on contact retries including field edits', async () => {
+  const { post } = jest.requireMock('../src/api/client') as { post: jest.Mock };
+  post.mockRejectedValueOnce(new Error('response lost')).mockResolvedValue({ partyId: 7, displayName: 'Corrected' });
+  await expect(createParty({ name: 'New' }, 'synthetic-contact-request')).rejects.toThrow('response lost');
+  await createParty({ name: 'Corrected' }, 'synthetic-contact-request');
+  expect(post.mock.calls[0][2]).toEqual({ headers: { 'Idempotency-Key': 'synthetic-contact-request' } });
+  expect(post.mock.calls[1][2]).toEqual(post.mock.calls[0][2]);
 });

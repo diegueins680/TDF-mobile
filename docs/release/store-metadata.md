@@ -1,3 +1,25 @@
+# Estado verificado del paquete de tienda — 18 septiembre 2026 UTC
+
+La identidad vigente es iOS `com.tdfrecords.app`, App Store Connect `6779786470`,
+y Android `com.tdf.records`. El código de release es `efa2555c5400dfa736bc95a12414a790b82adda5`.
+iOS1.0.1(18) fue subido en EAS `d3c2977f-c136-4c03-81c8-51ecbc8c110f`;
+Apple confirmó build `f72c49ae-2da2-4beb-b0eb-a26bdef674b2` con processingState VALID.
+Esto no acredita revisión, TestFlight disponible ni publicación.
+
+La ficha iOS verificada por API está PREPARE_FOR_SUBMISSION, versión1.0.1.
+La localización es-MX tiene descripción, palabras clave y URL de soporte guardadas
+y leídas nuevamente, y el build18 está asociado. Falta App Store Review Detail. Antes de revisión se requieren capturas actuales,
+acceso de demostración operativo, declaraciones de privacidad verificadas y
+cuestionario de edad/distribución. Free Apps Agreement se observó Active;
+Paid Apps Agreement New no impide por sí solo subir una app gratuita.
+
+El cliente SÍ permite registro público. No reutilizar las afirmaciones históricas
+“no public signup” ni el identificador antiguo de App Store Connect.
+Los enlaces de soporte, privacidad y borrado respondieron200 tras su redirección
+canónica; se verificaron sus títulos y contenido, no sólo el código HTTP.
+
+## Plantilla histórica — revisar contra la implementación antes de reutilizar
+
 # Store Metadata Template
 
 ## Shared Positioning

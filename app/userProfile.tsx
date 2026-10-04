@@ -1,24 +1,35 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, FlatList, TextInput, Alert
+  View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, FlatList, TextInput, Alert, Image, Share
 } from 'react-native';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Clipboard from 'expo-clipboard';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { Artists } from '../src/api/artists';
 import { Events } from '../src/api/events';
-import type { ID, SocialEvent } from '../src/types';
+import type { EventRSVPFeedItem, ID, SocialEvent } from '../src/types';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
-import { listSavedEventIds, unsaveEvent } from '../src/lib/savedEvents';
+import {
+  getLegacySavedEventCandidate,
+  importLegacySavedEvents,
+  listSavedEventIds,
+  unsaveEvent,
+} from '../src/lib/savedEvents';
 import { formatTicketMoney } from '../src/lib/tickets';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useAuth } from '../src/providers/AuthProvider';
+import { canonicalEventUrl, eventShareMessage } from '../src/lib/eventSharing';
+import { useAnalytics } from '../src/analytics/AnalyticsProvider';
+import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
 
 export default function UserProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const { token, partyId, session } = useAuth();
+  const analytics = useAnalytics();
+  const ownsParty = usePartyOwnership(partyId);
   const {
     colors,
     preferenceId: themePreferenceId,
@@ -35,7 +46,7 @@ export default function UserProfileScreen() {
   const countries = useMemo(() => getCatalogItems('countries'), [getCatalogItems]);
   const localeOptions = useMemo(() => getCatalogItems('locales'), [getCatalogItems]);
   const currencyOptions = useMemo(() => getCatalogItems('currencies'), [getCatalogItems]);
-  const [activeTab, setActiveTab] = useState<'artist' | 'events' | 'saved'>('artist');
+  const [activeTab, setActiveTab] = useState<'artist' | 'events' | 'saved' | 'activity'>('artist');
   const displayName = session?.displayName ?? null;
   const [draftTimezone, setDraftTimezone] = useState(timezone);
   const [draftCountryId, setDraftCountryId] = useState(countryId ?? '');
@@ -73,20 +84,43 @@ export default function UserProfileScreen() {
   });
 
   const savedEventIdsQuery = useQuery({
-    queryKey: ['saved-event-ids'],
-    queryFn: listSavedEventIds
+    queryKey: ['saved-event-ids', partyId],
+    queryFn: () => listSavedEventIds(
+      partyId as string,
+      () => ownsParty(partyId),
+    ),
+    enabled: Boolean(partyId),
+  });
+
+  const legacySavedEventsQuery = useQuery({
+    queryKey: ['legacy-saved-event-candidate', partyId],
+    queryFn: getLegacySavedEventCandidate,
+    enabled: Boolean(partyId),
   });
 
   const savedEventIds = useMemo(() => savedEventIdsQuery.data ?? [], [savedEventIdsQuery.data]);
 
   const savedEventsQuery = useQuery({
-    queryKey: ['saved-events', savedEventIds],
+    queryKey: ['saved-events', partyId, savedEventIds],
     enabled: savedEventIds.length > 0,
     queryFn: async () => {
       const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
       return settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
     }
   });
+
+  const activityQuery = useInfiniteQuery({
+    queryKey: ['event-rsvp-feed', partyId],
+    queryFn: ({ pageParam }) => Events.listRSVPFeed(partyId as string, pageParam ?? undefined, 10),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: Boolean(token && partyId && activeTab === 'activity'),
+  });
+
+  const rsvpFeedItems = useMemo(
+    () => activityQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [activityQuery.data],
+  );
 
   const upcomingEvents = useMemo(() => {
     if (!eventsQuery.data) return [];
@@ -107,15 +141,103 @@ export default function UserProfileScreen() {
   }, [savedEventIds, savedEventsQuery.data]);
 
   const unsaveMutation = useMutation({
-    mutationFn: (eventId: ID) => unsaveEvent(eventId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['saved-event-ids'] });
-      qc.invalidateQueries({ queryKey: ['saved-events'] });
+    mutationFn: ({ eventId, ownerPartyId }: { eventId: ID; ownerPartyId: string }) =>
+      unsaveEvent(
+        ownerPartyId,
+        eventId,
+        () => ownsParty(ownerPartyId),
+      ),
+    onSuccess: (_ids, { ownerPartyId }) => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
     },
-    onError: () => {
+    onError: (_error, { ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
       Alert.alert('Error', 'No pudimos remover el evento guardado.');
     }
   });
+
+  const deleteRsvpMutation = useMutation({
+    mutationFn: (eventId: ID) => Events.deleteRSVP(eventId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['event-rsvp-feed', partyId] });
+      Alert.alert(locale.startsWith('en') ? 'Done' : 'Listo', locale.startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
+    },
+    onError: () => Alert.alert('Error', locale.startsWith('en') ? 'Could not remove your RSVP.' : 'No pudimos eliminar tu RSVP.'),
+  });
+
+  const shareRsvpEvent = useCallback(async (item: EventRSVPFeedItem, copyOnly = false) => {
+    const url = canonicalEventUrl(String(item.eventId), {
+      utm_source: 'tdf_mobile',
+      utm_medium: copyOnly ? 'copy' : 'share',
+      utm_campaign: 'event_rsvp',
+    });
+    const method = copyOnly ? 'copy' : 'native';
+    analytics.capture('event_share_started', { platform: 'mobile', event_id: String(item.eventId), method, origin: 'profile_feed' });
+    try {
+      if (copyOnly) {
+        await Clipboard.setStringAsync(url);
+        analytics.capture('event_link_copied', { platform: 'mobile', event_id: String(item.eventId), method, origin: 'profile_feed' });
+        Alert.alert(locale.startsWith('en') ? 'Link copied' : 'Enlace copiado');
+        return;
+      }
+      const result = await Share.share({
+        title: item.title,
+        message: `${eventShareMessage({
+          title: item.title,
+          status: item.status,
+          start: item.startTime,
+          timezone: item.timezone,
+          venue: item.venueName ?? item.city,
+          locale,
+        })}\n${url}`,
+      });
+      analytics.capture(result.action === Share.dismissedAction ? 'event_share_cancelled' : 'event_share_completed', {
+        platform: 'mobile', event_id: String(item.eventId), method, origin: 'profile_feed',
+      });
+    } catch {
+      analytics.capture('event_share_failed', { platform: 'mobile', event_id: String(item.eventId), method, origin: 'profile_feed' });
+      Alert.alert(locale.startsWith('en') ? 'Could not share' : 'No pudimos compartir');
+    }
+  }, [analytics, locale]);
+  const legacyImportMutation = useMutation({
+    mutationFn: ({ ownerPartyId }: { ownerPartyId: string }) =>
+      importLegacySavedEvents(
+        ownerPartyId,
+        () => ownsParty(ownerPartyId),
+      ),
+    onSuccess: (result, { ownerPartyId }) => {
+      qc.invalidateQueries({ queryKey: ['legacy-saved-event-candidate'] });
+      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
+      if (!ownsParty(ownerPartyId)) return;
+      Alert.alert(
+        'Importación lista',
+        result.pendingCount > 0
+          ? `Vinculamos ${result.importedCount} eventos a esta cuenta; ${result.pendingCount} se sincronizarán cuando vuelva la conexión.`
+          : `Vinculamos ${result.acknowledgedCount} eventos guardados a esta cuenta.`,
+      );
+    },
+    onError: (_error, { ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
+      Alert.alert('No pudimos importar', 'Los datos anteriores se conservaron. Revisa la sesión y vuelve a intentarlo.');
+    },
+  });
+
+  const handleLegacyImport = useCallback(() => {
+    if (!partyId || !legacySavedEventsQuery.data) return;
+    Alert.alert(
+      'Vincular guardados anteriores',
+      `Este dispositivo tiene ${legacySavedEventsQuery.data.count} evento(s) guardado(s) sin una cuenta identificable. Continúa solo si te pertenecen; se vincularán a la cuenta actual.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Vincular a mi cuenta',
+          onPress: () => legacyImportMutation.mutate({ ownerPartyId: partyId }),
+        },
+      ],
+    );
+  }, [legacyImportMutation, legacySavedEventsQuery.data, partyId]);
 
   const handleCreateArtistProfile = useCallback(() => {
     if (!partyId) {
@@ -140,8 +262,12 @@ export default function UserProfileScreen() {
   }, [router]);
 
   const handleUnsaveEvent = useCallback((eventId: ID) => {
-    unsaveMutation.mutate(eventId);
-  }, [unsaveMutation]);
+    if (!partyId) {
+      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para cambiar tus eventos guardados.');
+      return;
+    }
+    unsaveMutation.mutate({ eventId, ownerPartyId: partyId });
+  }, [partyId, unsaveMutation]);
 
   const handleSaveRegion = useCallback(() => {
     if (countrySearch.trim() && !draftCountryId) {
@@ -376,7 +502,112 @@ export default function UserProfileScreen() {
               Guardados
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'activity' && styles.tabActive]}
+            onPress={() => setActiveTab('activity')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'activity' }}
+          >
+            <Text style={[styles.tabLabel, activeTab === 'activity' && styles.tabLabelActive]}>
+              {locale.startsWith('en') ? 'Activity' : 'Actividad'}
+            </Text>
+          </TouchableOpacity>
         </View>
+
+        {activeTab === 'activity' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              {locale.startsWith('en') ? 'RSVP activity' : 'Actividad de RSVP'}
+            </Text>
+            {!token ? (
+              <Text style={styles.noDataText}>
+                {locale.startsWith('en') ? 'Sign in to see your RSVP activity.' : 'Inicia sesión para ver tu actividad de RSVP.'}
+              </Text>
+            ) : activityQuery.isLoading ? (
+              <ActivityIndicator color={colors.actionPrimary} />
+            ) : activityQuery.isError ? (
+              <View>
+                <Text style={styles.noDataText}>
+                  {locale.startsWith('en') ? 'Could not load your activity.' : 'No pudimos cargar tu actividad.'}
+                </Text>
+                <TouchableOpacity style={styles.activityAction} onPress={() => void activityQuery.refetch()}>
+                  <Text style={styles.activityActionText}>{locale.startsWith('en') ? 'Retry' : 'Reintentar'}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : rsvpFeedItems.length === 0 ? (
+              <Text style={styles.noDataText}>
+                {locale.startsWith('en') ? 'Your visible event RSVPs will appear here.' : 'Tus RSVPs visibles de eventos aparecerán aquí.'}
+              </Text>
+            ) : (
+              <>
+                {rsvpFeedItems.map((item) => (
+                  <View key={String(item.eventId)} style={styles.activityCard}>
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.activityImage} accessibilityLabel={item.title} />
+                    ) : null}
+                    <View style={styles.activityBody}>
+                      <Text style={styles.activityKicker}>
+                        {item.status === 'GOING'
+                          ? Date.parse(item.startTime) < Date.now()
+                            ? (locale.startsWith('en') ? 'Marked that they planned to attend' : 'Marcó que asistiría a')
+                            : (locale.startsWith('en') ? 'Is going to' : 'Va a')
+                          : (locale.startsWith('en') ? 'Interested in' : 'Le interesa')}
+                      </Text>
+                      <Text style={styles.eventTitle}>{item.title}</Text>
+                      <Text style={styles.eventDateTime}>
+                        {new Date(item.startTime).toLocaleString(locale, { timeZone: item.timezone ?? timezone })}
+                      </Text>
+                      {item.venueName || item.city ? <Text style={styles.eventVenue}>{item.venueName ?? item.city}</Text> : null}
+                      {item.workflowStateCode === 'cancelled' ? (
+                        <Text style={styles.cancelledBadge}>{locale.startsWith('en') ? 'Cancelled' : 'Cancelado'}</Text>
+                      ) : null}
+                      <Text style={styles.activityDate}>
+                        {locale.startsWith('en') ? 'Updated' : 'Actualizado'} {new Date(item.actionAt).toLocaleDateString(locale)}
+                      </Text>
+                      <View style={styles.activityActions}>
+                        <TouchableOpacity style={styles.activityAction} onPress={() => handleEventPress(item.eventId)}>
+                          <Text style={styles.activityActionText}>{locale.startsWith('en') ? 'Open event' : 'Abrir evento'}</Text>
+                        </TouchableOpacity>
+                        {item.canShare ? (
+                          <TouchableOpacity style={styles.activityAction} onPress={() => void shareRsvpEvent(item)}>
+                            <Text style={styles.activityActionText}>{locale.startsWith('en') ? 'Share' : 'Compartir'}</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        {item.canShare ? (
+                          <TouchableOpacity style={styles.activityAction} onPress={() => void shareRsvpEvent(item, true)}>
+                            <Text style={styles.activityActionText}>{locale.startsWith('en') ? 'Copy' : 'Copiar'}</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        {item.canEdit ? (
+                          <TouchableOpacity
+                            style={styles.activityAction}
+                            disabled={deleteRsvpMutation.isPending}
+                            onPress={() => deleteRsvpMutation.mutate(item.eventId)}
+                          >
+                            <Text style={styles.deleteActionText}>{locale.startsWith('en') ? 'Remove RSVP' : 'Eliminar RSVP'}</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    </View>
+                  </View>
+                ))}
+                {activityQuery.hasNextPage ? (
+                  <TouchableOpacity
+                    style={styles.activityAction}
+                    disabled={activityQuery.isFetchingNextPage}
+                    onPress={() => void activityQuery.fetchNextPage()}
+                  >
+                    <Text style={styles.activityActionText}>
+                      {activityQuery.isFetchingNextPage
+                        ? (locale.startsWith('en') ? 'Loading…' : 'Cargando…')
+                        : (locale.startsWith('en') ? 'Load more' : 'Cargar más')}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
+            )}
+          </View>
+        )}
 
         {activeTab === 'artist' && (
           <View style={styles.section}>
@@ -438,8 +669,41 @@ export default function UserProfileScreen() {
 
         {activeTab === 'saved' && (
           <View style={styles.section}>
+            {legacySavedEventsQuery.data && (
+              <View style={styles.legacyImportCard}>
+                <Text style={styles.legacyImportTitle}>Guardados anteriores detectados</Text>
+                <Text style={styles.legacyImportText}>
+                  No sabemos qué cuenta creó esos datos. Puedes vincularlos explícitamente a esta cuenta si son tuyos.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.actionButton, legacyImportMutation.isPending && styles.buttonDisabled]}
+                  onPress={handleLegacyImport}
+                  disabled={legacyImportMutation.isPending}
+                  accessibilityRole="button"
+                  accessibilityLabel="Vincular eventos guardados anteriores a esta cuenta"
+                >
+                  <Text style={styles.actionButtonText}>
+                    {legacyImportMutation.isPending ? 'Vinculando…' : 'Revisar y vincular'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {savedEventIdsQuery.isLoading ? (
               <ActivityIndicator size="large" color="#2563eb" />
+            ) : savedEventIdsQuery.isError ? (
+              <>
+                <Text style={styles.noDataText} accessibilityLiveRegion="polite">
+                  No pudimos cargar tus eventos guardados.
+                </Text>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => void savedEventIdsQuery.refetch()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reintentar cargar eventos guardados"
+                >
+                  <Text style={styles.actionButtonText}>Reintentar</Text>
+                </TouchableOpacity>
+              </>
             ) : savedEventIds.length === 0 ? (
               <Text style={styles.noDataText}>Aún no hay eventos guardados. Toca Guardar evento dentro de cualquier evento.</Text>
             ) : savedEventsQuery.isLoading ? (
@@ -502,7 +766,20 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomColor: '#2563eb' },
   tabLabel: { fontSize: 13, fontWeight: '600', color: '#999', textAlign: 'center' },
   tabLabelActive: { color: '#2563eb' },
+  activityCard: { overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, backgroundColor: '#fff', marginBottom: 12 },
+  activityImage: { width: '100%', height: 150, backgroundColor: '#e5e7eb' },
+  activityBody: { padding: 14, gap: 5 },
+  activityKicker: { color: '#1d4ed8', fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  activityDate: { color: '#64748b', fontSize: 12 },
+  cancelledBadge: { alignSelf: 'flex-start', color: '#991b1b', backgroundColor: '#fee2e2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, fontWeight: '800' },
+  activityActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  activityAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8 },
+  activityActionText: { color: '#1d4ed8', fontWeight: '700' },
+  deleteActionText: { color: '#991b1b', fontWeight: '700' },
   section: { backgroundColor: '#fff', borderRadius: 8, padding: 16, borderWidth: 1, borderColor: '#f0f0f0' },
+  legacyImportCard: { backgroundColor: '#fffbeb', borderColor: '#fde68a', borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 16 },
+  legacyImportTitle: { color: '#92400e', fontSize: 14, fontWeight: '700', marginBottom: 6 },
+  legacyImportText: { color: '#78350f', fontSize: 12, lineHeight: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 12 },
   sectionContent: { fontSize: 13, lineHeight: 20, color: '#666', marginBottom: 12 },
   genresContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },

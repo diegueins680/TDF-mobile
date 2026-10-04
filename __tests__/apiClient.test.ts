@@ -1,4 +1,10 @@
-import { http, setAuthToken, getAuthToken, normalizeApiError } from '../src/api/client';
+import {
+  getAuthToken,
+  http,
+  isCurrentAuthToken,
+  normalizeApiError,
+  setAuthToken,
+} from '../src/api/client';
 import axios from 'axios';
 
 describe('API client auth header', () => {
@@ -15,6 +21,16 @@ describe('API client auth header', () => {
   it('keeps Bearer prefix if already provided', () => {
     setAuthToken('Bearer demo-token');
     expect(getAuthToken()).toBe('Bearer demo-token');
+  });
+
+  it('recognizes only the currently installed authenticated token', () => {
+    setAuthToken('first-token');
+
+    expect(isCurrentAuthToken('Bearer first-token')).toBe(true);
+    expect(isCurrentAuthToken('second-token')).toBe(false);
+
+    setAuthToken(null);
+    expect(isCurrentAuthToken(null)).toBe(false);
   });
 
   it('normalizes bearer casing and strips extra spacing', () => {

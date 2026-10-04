@@ -1,59 +1,129 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const SIGNUP_COMPLETED_PREFIX = 'tdf-signup-completed-at:';
-export const ONBOARDING_COMPLETED_PREFIX = 'tdf-new-user-onboarding-completed-at:';
-export const EXPERIMENT_EXPOSURE_PREFIX = 'tdf-experiment-exposed:';
-export const NEW_USER_WINDOW_MS = 24 * 60 * 60 * 1000;
+import {
+  recordExperimentExposure,
+  type ExperimentExposureResult,
+} from '../api/experiments';
+import type { OnboardingFirstValue } from '../api/onboarding';
 
-const signupKey = (partyId: string) => `${SIGNUP_COMPLETED_PREFIX}${partyId}`;
-const completedKey = (partyId: string) => `${ONBOARDING_COMPLETED_PREFIX}${partyId}`;
-const exposureKey = (partyId: string, experimentId: string) =>
-  `${EXPERIMENT_EXPOSURE_PREFIX}${partyId}:${experimentId}`;
+export const PENDING_EXPERIMENT_CONVERSION_PREFIX =
+  'tdf-onboarding-experiment-conversion:party:';
 
-export async function markSignupCompleted(partyId: string, now = Date.now()): Promise<void> {
-  if (!partyId) return;
+export type PendingExperimentConversion = {
+  experimentId: string;
+  experimentVersion: number;
+  variant: string;
+  firstValue: OnboardingFirstValue;
+};
+
+const FIRST_VALUES = new Set<OnboardingFirstValue>([
+  'artist_followed',
+  'access_requested',
+  'event_saved',
+  'moment_reaction',
+]);
+
+const pendingExperimentConversionKey = (
+  partyId: string,
+  experimentId: string,
+): string => `${PENDING_EXPERIMENT_CONVERSION_PREFIX}${encodeURIComponent(partyId)}:${encodeURIComponent(experimentId)}`;
+
+const parsePendingExperimentConversion = (
+  raw: string | null,
+  experimentId: string,
+): PendingExperimentConversion | null => {
+  if (!raw) return null;
   try {
-    await AsyncStorage.setItem(signupKey(partyId), String(now));
+    const candidate = JSON.parse(raw) as Partial<PendingExperimentConversion>;
+    if (
+      candidate.experimentId !== experimentId
+      || typeof candidate.experimentVersion !== 'number'
+      || !Number.isInteger(candidate.experimentVersion)
+      || candidate.experimentVersion < 1
+      || typeof candidate.variant !== 'string'
+      || !candidate.variant.trim()
+      || typeof candidate.firstValue !== 'string'
+      || !FIRST_VALUES.has(candidate.firstValue as OnboardingFirstValue)
+    ) return null;
+    return {
+      experimentId: candidate.experimentId,
+      experimentVersion: candidate.experimentVersion,
+      variant: candidate.variant,
+      firstValue: candidate.firstValue as OnboardingFirstValue,
+    };
   } catch {
-    // Account creation must succeed even when local storage is unavailable.
+    return null;
   }
-}
+};
 
-export async function markNewUserOnboardingCompleted(partyId: string, now = Date.now()): Promise<void> {
-  if (!partyId) return;
+export async function persistPendingExperimentConversion(
+  rawPartyId: string | null | undefined,
+  conversion: PendingExperimentConversion,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<boolean> {
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return false;
   try {
-    await AsyncStorage.setItem(completedKey(partyId), String(now));
+    await AsyncStorage.setItem(
+      pendingExperimentConversionKey(partyId, conversion.experimentId),
+      JSON.stringify(conversion),
+    );
+    return stillOwnsParty();
   } catch {
-    // Best effort. A failed write may show the experience once more.
-  }
-}
-
-export async function resolveNewUserCohort(partyId: string, now = Date.now()): Promise<boolean> {
-  if (!partyId) return false;
-  try {
-    const [signupAtRaw, completedAtRaw] = await AsyncStorage.multiGet([
-      signupKey(partyId),
-      completedKey(partyId),
-    ]);
-    if (completedAtRaw?.[1]) return false;
-    const signupAtValue = signupAtRaw?.[1];
-    if (!signupAtValue) return false;
-    const signupAt = Number(signupAtValue);
-    return Number.isFinite(signupAt) && signupAt <= now && now - signupAt <= NEW_USER_WINDOW_MS;
-  } catch {
-    // Fail closed: existing users must never be misclassified as new.
     return false;
   }
 }
 
-export async function markExperimentExposedOnce(partyId: string, experimentId: string): Promise<boolean> {
-  if (!partyId || !experimentId) return false;
+export async function readPendingExperimentConversion(
+  rawPartyId: string | null | undefined,
+  experimentId: string,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<PendingExperimentConversion | null> {
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !experimentId || !stillOwnsParty()) return null;
+  const key = pendingExperimentConversionKey(partyId, experimentId);
   try {
-    const key = exposureKey(partyId, experimentId);
-    if (await AsyncStorage.getItem(key)) return false;
-    await AsyncStorage.setItem(key, String(Date.now()));
-    return true;
+    const raw = await AsyncStorage.getItem(key);
+    if (!stillOwnsParty()) return null;
+    const conversion = parsePendingExperimentConversion(raw, experimentId);
+    if (raw && !conversion && stillOwnsParty()) {
+      await AsyncStorage.removeItem(key);
+    }
+    return stillOwnsParty() ? conversion : null;
   } catch {
-    return false;
+    return null;
+  }
+}
+
+export async function clearPendingExperimentConversionIfCurrent(
+  rawPartyId: string | null | undefined,
+  conversion: PendingExperimentConversion,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<void> {
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return;
+  const key = pendingExperimentConversionKey(partyId, conversion.experimentId);
+  try {
+    if (
+      stillOwnsParty()
+      && await AsyncStorage.getItem(key) === JSON.stringify(conversion)
+      && stillOwnsParty()
+    ) {
+      await AsyncStorage.removeItem(key);
+    }
+  } catch {
+    // A later lifecycle pass can safely retry the idempotent reconciliation.
+  }
+}
+
+export async function markExperimentExposedOnce(
+  partyId: string,
+  experimentId: string,
+): Promise<ExperimentExposureResult | null> {
+  if (!partyId || !experimentId) return null;
+  try {
+    return await recordExperimentExposure(experimentId);
+  } catch {
+    return null;
   }
 }

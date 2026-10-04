@@ -22,7 +22,7 @@ export async function listParties(q?: string): Promise<Party[]> {
   return res.map(toParty);
 }
 
-export async function createParty(body: Partial<Party>): Promise<Party> {
+export async function createParty(body: Partial<Party>, requestKey: string): Promise<Party> {
   const payload: PartyCreate = {
     cDisplayName: body.name ?? 'Cliente TDF',
     cIsOrg: false,
@@ -30,7 +30,7 @@ export async function createParty(body: Partial<Party>): Promise<Party> {
     cPrimaryPhone: body.phone ?? null,
     cInstagram: body.instagram ?? null,
   };
-  const res = await post<PartyDTO>('/parties', payload);
+  const res = await post<PartyDTO>('/parties', payload, { headers: { 'Idempotency-Key': requestKey } });
   return toParty(res);
 }
 
@@ -61,7 +61,7 @@ export async function getParty(id: ID): Promise<Party> {
 
 export const Parties = {
   list: (q?: string) => get<PartyDTO[]>(buildListPath(q)),
-  create: (body: PartyCreate) => post<PartyDTO>('/parties', body),
+  create: (body: PartyCreate, requestKey: string) => post<PartyDTO>('/parties', body, { headers: { 'Idempotency-Key': requestKey } }),
   getOne: (id: number) => get<PartyDTO>(`/parties/${id}`),
   update: (id: number, body: PartyUpdate) => put<PartyDTO>(`/parties/${id}`, body),
   addRole: (id: number, role: RoleKey) => post<void>(`/parties/${id}/roles`, { roleKey: role }),

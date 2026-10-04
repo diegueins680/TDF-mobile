@@ -3,6 +3,8 @@ import {
   MOBILE_LANDING_ROUTE,
   NEW_USER_ALLOWED_FEATURES,
   NEW_USER_VISIBLE_TABS,
+  getVisibleMobileTabs,
+  mobileTabAccessibilityLabel,
 } from '../src/navigation/mobileSurface';
 
 describe('mobile new-user surface', () => {
@@ -44,4 +46,22 @@ describe('mobile new-user surface', () => {
       'Creación rápida autorizada',
     ]);
   });
+});
+
+
+describe('visible mobile tab label contracts', () => {
+  for (const language of ['es', 'en'] as const) {
+    for (const authenticated of [false, true]) {
+      it(`uses only visible positions for ${language}, authenticated=${authenticated}`, () => {
+        const tabs = getVisibleMobileTabs(language, authenticated);
+        expect(tabs).toHaveLength(authenticated ? 5 : 1);
+        tabs.forEach((tab, index) => {
+          const label = mobileTabAccessibilityLabel(tab.title, index, tabs.length, language, 'ios');
+          expect(label).toContain(language === 'es'
+            ? `pestaña ${index + 1} de ${tabs.length}` : `tab ${index + 1} of ${tabs.length}`);
+          expect(mobileTabAccessibilityLabel(tab.title, index, tabs.length, language, 'android')).toBe(tab.title);
+        });
+      });
+    }
+  }
 });

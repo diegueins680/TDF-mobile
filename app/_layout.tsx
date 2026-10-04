@@ -1,7 +1,16 @@
+import { useNotificationResponses } from '../src/navigation/useNotificationResponses';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { Redirect, Stack, type Href, usePathname, useSegments, useRouter } from 'expo-router';
+import {
+  Redirect,
+  Stack,
+  type Href,
+  usePathname,
+  useSegments,
+  useRouter,
+  useUnstableGlobalHref,
+} from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import * as Linking from 'expo-linking';
 
 import { AppProviders } from '../src/providers/AppProviders';
@@ -13,9 +22,11 @@ import { FeatureAccessNotice } from '../src/components/FeatureAccessNotice';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { NetworkBanner } from '../src/providers/NetworkProvider';
 import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/featureRegistry';
-import { directoryDeepLinkTarget } from '../src/navigation/deepLinks';
+import { currentRouteReturnTo, mobileDeepLinkTarget } from '../src/navigation/deepLinks';
 
 function RootNavigator() {
+  useNotificationResponses();
+  useLegacyDeepLinks();
   const { colorScheme } = useAppTheme();
   const analytics = useAnalytics();
   const pathname = usePathname();
@@ -29,9 +40,9 @@ function RootNavigator() {
   }, []);
 
   return (
-    <MobileRouteGuard>
+    <>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, title: 'TDF Mobile' }}>
+      <Stack screenLayout={GuardedScreen} screenOptions={{ headerShown: false, title: 'TDF Mobile' }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="auth" />
         <Stack.Screen name="onboarding" />
@@ -40,56 +51,37 @@ function RootNavigator() {
         <Stack.Screen name="catalogs" />
         <Stack.Screen name="catalogEditor" />
         <Stack.Screen name="input-list/[id]" />
+        <Stack.Screen name="merch" />
+        <Stack.Screen name="merchSeller" />
       </Stack>
-    </MobileRouteGuard>
+    </>
   );
 }
 
 function handleDeepLink(url: string, router: ReturnType<typeof useRouter>, currentPathname: string) {
   try {
-    const { path } = Linking.parse(url);
-    if (!path) return;
-
-    if (path.startsWith('event/')) {
-      const eventId = path.replace('event/', '');
-      router.push(`/eventDetail?eventId=${eventId}`);
-    } else if (path.startsWith('artist/')) {
-      const artistId = path.replace('artist/', '');
-      router.push(`/artistDetail?artistId=${artistId}`);
-    } else if (path === 'stripe-redirect') {
-      router.push('/tickets');
-    } else {
-      const target = directoryDeepLinkTarget(path, currentPathname);
-      if (target) router.push(target as Href);
-    }
-    // Add more routes as needed
+    const target = mobileDeepLinkTarget(url, currentPathname);
+    // Expo Router owns these native links through +native-intent. Replaying the
+    // initial URL here can repeatedly undo the authentication redirect.
+    if (Platform.OS !== 'web' && (target?.startsWith('/notifications?') || target?.startsWith('/access-requests?'))) return;
+    if (target) router.push(target as Href);
   } catch (e) {
     console.warn('Failed to handle deep link:', url, e);
   }
 }
 
-function MobileRouteGuard({ children }: { children: ReactNode }) {
-  const segments = useSegments();
+// Keep the navigator mounted while session restoration or authorization blocks
+// a screen. Removing the navigator itself can make Expo's root state oscillate
+// when a protected URL is the first route on a fresh native launch.
+function GuardedScreen({ children }: { children: ReactNode }) {
+  return <MobileRouteGuard>{children}</MobileRouteGuard>;
+}
+
+function useLegacyDeepLinks() {
   const router = useRouter();
-  const analytics = useAnalytics();
-  const { token, roles, modules, featureFlags, loading } = useAuth();
-  const { locale } = useUserSettings();
-  const { colors } = useAppTheme();
+  const segments = useSegments();
   const routePath = segments.length > 0 ? `/${segments.join('/')}` : '/';
   const routePathRef = useRef(routePath);
-  const features = useMemo(() => getFeaturesByMobilePath(routePath), [routePath]);
-  const decisions = useMemo(() => features.map((feature) => evaluateFeatureAccess(feature, {
-    authenticated: Boolean(token?.trim()), roles, modules, featureFlags,
-  }, feature.routeAction)), [featureFlags, features, modules, roles, token]);
-  const technical = features.some((feature) => feature.technical);
-  const allowed = decisions.some((decision) => decision.state === 'allowed');
-  const locked = decisions.find((decision) => decision.state === 'locked');
-  const concealed = decisions.find((decision) => decision.state === 'concealed');
-  const requiresAuthentication = features.length > 0
-    && features.every((feature) => feature.requiredAuth === 'authenticated');
-  const unresolved = features.length === 0;
-  const forbidden = !loading && !technical && !unresolved && Boolean(token?.trim()) && !allowed;
-
   useEffect(() => {
     routePathRef.current = routePath;
   }, [routePath]);
@@ -110,6 +102,29 @@ function MobileRouteGuard({ children }: { children: ReactNode }) {
 
     return () => subscription.remove();
   }, [router]);
+}
+
+function MobileRouteGuard({ children }: { children: ReactNode }) {
+  const segments = useSegments();
+  const globalHref = useUnstableGlobalHref();
+  const analytics = useAnalytics();
+  const { token, roles, modules, featureFlags, loading } = useAuth();
+  const { locale } = useUserSettings();
+  const { colors } = useAppTheme();
+  const routePath = segments.length > 0 ? `/${segments.join('/')}` : '/';
+  const returnTo = useMemo(() => currentRouteReturnTo(routePath, globalHref), [globalHref, routePath]);
+  const features = useMemo(() => getFeaturesByMobilePath(routePath), [routePath]);
+  const decisions = useMemo(() => features.map((feature) => evaluateFeatureAccess(feature, {
+    authenticated: Boolean(token?.trim()), roles, modules, featureFlags,
+  }, feature.routeAction)), [featureFlags, features, modules, roles, token]);
+  const technical = features.some((feature) => feature.technical);
+  const allowed = decisions.some((decision) => decision.state === 'allowed');
+  const locked = decisions.find((decision) => decision.state === 'locked');
+  const concealed = decisions.find((decision) => decision.state === 'concealed');
+  const requiresAuthentication = features.length > 0
+    && features.every((feature) => feature.requiredAuth === 'authenticated');
+  const unresolved = features.length === 0;
+  const forbidden = !loading && !technical && !unresolved && Boolean(token?.trim()) && !allowed;
 
   useEffect(() => {
     if (unresolved) {
@@ -138,7 +153,7 @@ function MobileRouteGuard({ children }: { children: ReactNode }) {
     );
   }
   if (requiresAuthentication && !token?.trim()) {
-    return <Redirect href={{ pathname: '/auth', params: { returnTo: routePath } } as Href} />;
+    return <Redirect href={{ pathname: '/auth', params: { returnTo: returnTo ?? routePath } } as Href} />;
   }
   if (allowed) return children;
   if (locked || concealed) {

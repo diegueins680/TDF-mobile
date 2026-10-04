@@ -2,6 +2,8 @@ import { get, put } from './client';
 import type { components } from './generated/types';
 
 export type PublicReputation = components['schemas']['PublicReputation'];
+export type ReputationConsent = components['schemas']['ReputationConsent'];
+export type ReputationConsentUpdate = components['schemas']['ReputationConsentUpdate'];
 
 export type ReputationCategory = {
   id: string;
@@ -46,4 +48,7 @@ export const Reputation = {
     put<ReputationPreference>('/reputation/preferences', input, {
       headers: { 'Idempotency-Key': idempotencyKey },
     }),
+  getMyConsents: () => get<ReputationConsent[]>('/reputation/consents'),
+  updateMyConsents: (updates: ReputationConsentUpdate[]) =>
+    put<ReputationConsent[]>('/reputation/consents', updates),
 };

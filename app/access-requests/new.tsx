@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type Href, Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { type Href, Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { submitAccessRequest } from '../../src/api/accessRequests';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
@@ -16,8 +16,8 @@ import { mobileFeatureRegistry } from '../../src/features/generatedFeatureRegist
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
-import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
-import { markNewUserOnboardingCompleted } from '../../src/lib/firstRunFlags';
+import { recordFirstValueCompletion } from '../../src/lib/firstValueCompletion';
+import { usePartyOwnership } from '../../src/hooks/usePartyOwnership';
 
 const ACTIONS = new Set<FeatureAction>(['discover', 'view', 'create', 'edit', 'delete', 'archive', 'deactivate', 'import', 'export', 'submit', 'validate', 'approve', 'reject', 'assign', 'publish', 'report', 'administer']);
 
@@ -27,6 +27,7 @@ export default function NewAccessRequestScreen() {
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ feature?: string; action?: string }>();
   const { token, partyId, roles, modules } = useAuth();
+  const ownsParty = usePartyOwnership(partyId);
   const { locale } = useUserSettings();
   const { colors } = useAppTheme();
   const english = locale.startsWith('en');
@@ -47,18 +48,25 @@ export default function NewAccessRequestScreen() {
     return candidateDecision.state === 'locked' ? [{ feature: candidate, decision: candidateDecision }] : [];
   }).slice(0, 40), [modules, roles, token]);
   const submit = useMutation({
-    mutationFn: () => submitAccessRequest({ featureId: feature?.id ?? '', action: selection?.action ?? 'view', justification: justification.trim() || null }),
-    onSuccess: async (request) => {
+    mutationFn: ({ ownerPartyId: _ownerPartyId }: { ownerPartyId: string }) => submitAccessRequest({ featureId: feature?.id ?? '', action: selection?.action ?? 'view', justification: justification.trim() || null }),
+    onSuccess: async (request, { ownerPartyId }) => {
+      if (!ownsParty(ownerPartyId)) return;
       analytics.capture('feature_access_request_submitted', { feature_id: request.featureId, feature_action: request.action, platform: 'mobile' });
-      if (await markFirstValueCompleted(partyId, 'access_requested')) {
-        analytics.capture('first_value_completed', { platform: 'mobile', value: 'access_requested' });
-        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'access_requested' });
-        if (partyId) await markNewUserOnboardingCompleted(partyId);
-      }
+      await recordFirstValueCompletion(
+        ownerPartyId,
+        'access_requested',
+        () => ownsParty(ownerPartyId),
+        analytics,
+      );
       await queryClient.invalidateQueries({ queryKey: ['access-requests'] });
+      if (!ownsParty(ownerPartyId)) return;
       router.replace('/access-requests' as Href);
     },
   });
+
+  if (selection?.featureId === 'artist.onboarding' && selection.action === 'create') {
+    return <Redirect href="/createArtistProfile" />;
+  }
 
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.canvas }]} keyboardShouldPersistTaps="handled">
@@ -109,7 +117,7 @@ export default function NewAccessRequestScreen() {
           />
           <Text style={[styles.counter, { color: colors.textSecondary }]}>{justification.length}/2000</Text>
           {submit.isError ? <Text accessibilityRole="alert" style={[styles.alert, { color: colors.danger }]}>{english ? 'The request could not be submitted.' : 'No se pudo enviar la solicitud.'}</Text> : null}
-          <TouchableOpacity accessibilityRole="button" disabled={submit.isPending} onPress={() => submit.mutate()} style={[styles.primary, { backgroundColor: colors.actionPrimary }]}>
+          <TouchableOpacity accessibilityRole="button" disabled={submit.isPending} onPress={() => partyId && submit.mutate({ ownerPartyId: partyId })} style={[styles.primary, { backgroundColor: colors.actionPrimary }]}>
             <Text style={[styles.primaryText, { color: colors.actionPrimaryContrast }]}>{submit.isPending ? (english ? 'Sending…' : 'Enviando…') : (english ? 'Send request' : 'Enviar solicitud')}</Text>
           </TouchableOpacity>
         </View>

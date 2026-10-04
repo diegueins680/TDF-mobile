@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Alert, Linking, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Application from 'expo-application';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -58,8 +58,12 @@ export function FeedbackEntry({ surface = 'profile' }: { surface?: 'profile' | '
     form.append('categoryId', categoryId!); form.append('severityId', severityId!); form.append('consent', 'true');
     if (attachment) form.append('attachment', { uri: attachment.uri, name: 'feedback.' + (attachment.mimeType === 'image/png' ? 'png' : 'jpg'), type: attachment.mimeType } as unknown as Blob);
     const token = getAuthToken();
-    const response = await fetch(`${API_BASE}/feedback`, { method: 'POST', headers: token ? { Authorization: token } : {}, body: form });
-    if (!response.ok) throw new Error('feedback_failed');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const response = await fetch(`${API_BASE}/feedback`, { method: 'POST', headers: token ? { Authorization: token } : {}, body: form, signal: controller.signal });
+      if (!response.ok) throw new Error('feedback_failed');
+    } finally { clearTimeout(timeout); }
   }, onSuccess: () => {
     analytics.capture('mobile_feedback_submitted', { surface, platform: Platform.OS, locale, feedback_kind: kind, app_version: Application.nativeApplicationVersion });
     setDescription(''); setAttachment(null); setConsent(false); void dismiss();
@@ -68,6 +72,7 @@ export function FeedbackEntry({ surface = 'profile' }: { surface?: 'profile' | '
   return <View style={{ padding: 12 }}>
     {prompt && <><Text style={{ fontWeight: '700' }}>{text('prompt')}</Text><Text>{text('copy')}</Text></>}
     {button(text('title'), () => { setOpen(true); mutation.reset(); analytics.capture('mobile_feedback_opened', { surface, platform: Platform.OS, locale, app_version: Application.nativeApplicationVersion }); })}
+    {button(text('program'), () => { void Linking.openURL('https://www.tdfrecords.net/app?utm_source=tdf_mobile&utm_medium=app').catch(() => Alert.alert(text('program'), text('error'))); })}
     {prompt && <>{button(text('later'), () => void dismiss())}{button(text('never'), () => void dismiss(true))}</>}
     <Modal visible={open} animationType="none" onRequestClose={() => setOpen(false)}>
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 56, gap: 12, backgroundColor: '#fff', flexGrow: 1 }} keyboardShouldPersistTaps="handled" accessibilityViewIsModal>

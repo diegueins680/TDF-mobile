@@ -27,6 +27,6 @@ describe('provider-neutral mobile checkout', () => {
   });
 
   it('defaults to the published TDF web application', () => {
-    expect(providerNeutralCheckoutDefaults.webBase).toBe('https://tdf-app.pages.dev');
+    expect(providerNeutralCheckoutDefaults.webBase).toBe('https://www.tdfrecords.net');
   });
 });

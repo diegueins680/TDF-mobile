@@ -1,9 +1,12 @@
 import React from 'react';
+import { setAuthToken } from '../src/api/client';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockMutate = jest.fn();
 const mockPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockSetQueryData = jest.fn();
+let mockFollows: Array<{ ffArtistId: number; ffArtistName: string }> = [];
 const mockCapture = jest.fn();
 type FirstValueCompletionArgs = [
   string | null | undefined,
@@ -13,6 +16,7 @@ type FirstValueCompletionArgs = [
 ];
 const mockRecordFirstValueCompletion = jest.fn<Promise<boolean>, FirstValueCompletionArgs>(async () => false);
 const mockMutationOptions: Array<{
+  mutationFn?: (variables: unknown) => Promise<unknown>;
   onSuccess?: (result: unknown, variables: unknown) => void;
 }> = [];
 const mockUseQuery = jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
@@ -46,9 +50,11 @@ const mockUseQuery = jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
     };
   }
 
+  if (queryKey[0] === 'fan-artist-follows') return { data: mockFollows, isLoading: false, isError: false };
+
   if (queryKey[0] === 'onboarding') {
     return {
-      data: [{ id: 'artist-1', partyId: '71', name: 'Artista Uno' }],
+      data: [{ apArtistId: 71, apDisplayName: 'Artista Uno' }],
       isLoading: false,
       isError: false,
     };
@@ -67,7 +73,7 @@ jest.mock('@tanstack/react-query', () => ({
     };
   }),
   useQuery: (options: { queryKey: unknown[] }) => mockUseQuery(options),
-  useQueryClient: jest.fn(() => ({ invalidateQueries: mockInvalidateQueries })),
+  useQueryClient: jest.fn(() => ({ invalidateQueries: mockInvalidateQueries, setQueryData: mockSetQueryData })),
 }));
 
 jest.mock('expo-router', () => ({
@@ -95,12 +101,17 @@ jest.mock('../src/lib/firstValueCompletion', () => ({
   recordFirstValueCompletion: (...args: FirstValueCompletionArgs) => mockRecordFirstValueCompletion(...args),
 }));
 
+jest.mock('../src/api/fanArtists', () => ({ FanArtists: { list: jest.fn(), listFollows: jest.fn(), follow: jest.fn() } }));
+
 const SocialScreen = require('../app/(tabs)/social').default;
 
 describe('Social screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockMutationOptions.length = 0;
+    mockFollows = [];
+    setAuthToken('Bearer demo');
+    jest.requireMock('../src/providers/AuthProvider').useAuth.mockReturnValue({ token: 'Bearer demo', partyId: '42', session: { displayName: 'Demo Fan' }, loading: false });
   });
 
   it('keeps the visible social surface focused on following', () => {
@@ -110,6 +121,7 @@ describe('Social screen', () => {
     expect(screen.getByText(/Siguiendo \(1\)/i)).toBeTruthy();
     expect(screen.getByText(/Seguidores \(1\)/i)).toBeTruthy();
     expect(screen.getByText('Fan Uno')).toBeTruthy();
+    expect(screen.getByRole('header', { name: 'Tu red de personas' })).toBeTruthy();
     expect(mockUseQuery).not.toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: ['parties'] }),
     );
@@ -128,16 +140,16 @@ describe('Social screen', () => {
 
     fireEvent.press(screen.getByRole('button', { name: 'Seguir a Artista Uno' }));
     const variables = {
-      artist: expect.objectContaining({ id: 'artist-1', name: 'Artista Uno' }),
+      artist: expect.objectContaining({ apArtistId: 71, apDisplayName: 'Artista Uno' }),
       ownerPartyId: '42',
     };
     expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining(variables));
 
     const artistFollowOptions = mockMutationOptions[1];
     await act(async () => {
-      artistFollowOptions.onSuccess?.(undefined, {
-        artist: { id: 'artist-1', partyId: '71', name: 'Artista Uno' },
-        ownerPartyId: '42',
+      artistFollowOptions.onSuccess?.({ ffArtistId: 71, ffArtistName: 'Artista Uno' }, {
+        artist: { apArtistId: 71, apDisplayName: 'Artista Uno' },
+        ownerPartyId: '42', stillOwnsSession: () => true,
       });
     });
     await waitFor(() => expect(mockRecordFirstValueCompletion).toHaveBeenCalledWith(
@@ -152,4 +164,57 @@ describe('Social screen', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Ver próximos eventos' }));
     expect(mockPush).toHaveBeenCalledWith('/(tabs)/events');
   });
+
+  it('renders the server follow after reopening and scopes the query to the current account', () => {
+    mockFollows = [{ ffArtistId: 71, ffArtistName: 'Artista Uno' }];
+    render(<SocialScreen />);
+    expect(screen.getByRole('button', { name: 'Siguiendo a Artista Uno' }).props.accessibilityState.disabled).toBe(true);
+    expect(mockUseQuery).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['fan-artist-follows', '42'] }));
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('uses the canonical artist Party ID and ignores a previous account response', async () => {
+    const { FanArtists } = jest.requireMock('../src/api/fanArtists');
+    render(<SocialScreen />);
+    const options = mockMutationOptions[1];
+    const artist = { apArtistId: 71, apDisplayName: 'Artista Uno' };
+    await options.mutationFn?.({ artist, ownerPartyId: '42', stillOwnsSession: () => true });
+    expect(FanArtists.follow).toHaveBeenCalledWith(71);
+    await expect(options.mutationFn?.({ artist, ownerPartyId: '99', stillOwnsSession: () => true })).rejects.toThrow('sesión');
+    options.onSuccess?.({ ffArtistId: 71, ffArtistName: 'Artista Uno' }, { artist, ownerPartyId: '99', stillOwnsSession: () => true });
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+    expect(mockRecordFirstValueCompletion).not.toHaveBeenCalled();
+  });
+
+  it('rejects a pending follow after leaving and returning to the same account', async () => {
+    const { useAuth } = jest.requireMock('../src/providers/AuthProvider');
+    const view = render(<SocialScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Seguir a Artista Uno' }));
+    const variables = mockMutate.mock.calls[0][0];
+    const oldOptions = mockMutationOptions[1];
+    useAuth.mockReturnValue({ token: 'Bearer other', partyId: '99', session: {}, loading: false });
+    view.rerender(<SocialScreen />);
+    useAuth.mockReturnValue({ token: 'Bearer renewed', partyId: '42', session: {}, loading: false });
+    view.rerender(<SocialScreen />);
+    const currentOptions = mockMutationOptions[mockMutationOptions.length - 2];
+    await act(async () => {
+      oldOptions.onSuccess?.({ ffArtistId: 71, ffArtistName: 'Artista Uno' }, variables);
+      currentOptions.onSuccess?.({ ffArtistId: 71, ffArtistName: 'Artista Uno' }, variables);
+    });
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+    expect(mockRecordFirstValueCompletion).not.toHaveBeenCalled();
+  });
+
+  it('rejects dispatch and receipt after credentials are revoked before React rerenders', async () => {
+    render(<SocialScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Seguir a Artista Uno' }));
+    const variables = mockMutate.mock.calls[0][0];
+    const options = mockMutationOptions[1];
+    setAuthToken(null);
+    await expect(options.mutationFn?.(variables)).rejects.toThrow('sesión');
+    options.onSuccess?.({ ffArtistId: 71, ffArtistName: 'Artista Uno' }, variables);
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+    expect(mockRecordFirstValueCompletion).not.toHaveBeenCalled();
+  });
+
 });

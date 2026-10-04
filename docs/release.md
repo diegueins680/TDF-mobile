@@ -1,6 +1,6 @@
 # TDF Mobile Release Setup
 
-Last updated: 2026-05-13
+Last updated: 2026-09-29
 
 ## App Identity
 
@@ -9,7 +9,7 @@ Last updated: 2026-05-13
 - iOS bundle identifier: `com.tdfrecords.app`
 - Android package: `com.tdf.records`
 - Marketing version: `1.0.1`
-- Build numbers: managed by EAS remote versioning with `autoIncrement` in `eas.json`
+- Build numbers: choose unused numbers in App Store Connect / Play Console before dispatching GitHub; after success synchronize EAS remote versioning to prevent reuse. Do not run competing build lanes.
 
 ## Public Store URLs
 
@@ -31,9 +31,9 @@ export EXPO_PUBLIC_TZ=America/Guayaquil
 EAS `preview` and `production` profiles set the release backend automatically via `eas.json`:
 
 ```bash
-EXPO_PUBLIC_API_BASE=https://tdf-hq.fly.dev
-EXPO_PUBLIC_UPLOAD_URL=https://tdf-hq.fly.dev/drive/upload
-EXPO_PUBLIC_TZ=America/Guayaquil
+EXPO_PUBLIC_API_BASE=https://api.tdfrecords.net
+EXPO_PUBLIC_UPLOAD_URL=https://api.tdfrecords.net/drive/upload
+EXPO_PUBLIC_TZ=UTC
 ```
 
 `app.config.ts` also falls back to these same release URLs whenever `EAS_BUILD_PROFILE` is `preview` or `production`. That keeps cloud builds from failing or defaulting to `localhost` if Expo evaluates the config before profile env injection completes.
@@ -51,11 +51,15 @@ npm run release:assets
 npm run release:assets:check
 npm run release:check
 npm run doctor
-npx eas-cli@latest build --platform ios --profile production
-npx eas-cli@latest build --platform android --profile production
-npx eas-cli@latest submit --platform ios --profile production --latest
-npx eas-cli@latest submit --platform android --profile production --latest
+npm run build:ios:production -- -f build_number=UNUSED_IOS_NUMBER
+npm run build:android:production -- -f version_code=UNUSED_ANDROID_NUMBER
 ```
+
+Replace each placeholder with an unused store-verified number. These commands use
+GitHub CLI authentication and dispatch `main`, not the local working tree. Download
+the exact qualified artifact from the resulting run. Validate/upload that file via
+the existing Apple/Play process; never use EAS `--latest` to select a GitHub artifact.
+The explicit `eas:build:*` aliases retain the legacy cloud lane for deliberate use.
 
 ## Testing Version Baselines
 
@@ -78,6 +82,102 @@ npx eas-cli@latest submit --platform android --profile production --latest
 - `.github/workflows/mobile-validate.yml` runs the release gate, Jest, and official Expo Doctor for pull requests and `main`. The separately dispatched readiness workflow starts EAS builds only when an operator explicitly opts in and `EXPO_TOKEN` is configured.
 - `eas.json` defines `development`, `preview`, and `production` profiles.
 - `preview` and `production` profiles pin the release API and upload endpoints so cloud builds never fall back to `localhost`.
-- EAS remote versioning owns iOS build numbers and Android version codes for release builds.
+- Keep the GitHub source/run/artifact receipt with the store build number; synchronize legacy EAS remote numbers only after the qualified build succeeds.
 - Permission copy is configured for camera, photo library, and foreground location because those capabilities already exist in the app.
 - If the Expo project has not been initialized yet, run `npx eas-cli@latest project:init` or `npx eas-cli@latest build:configure` once while authenticated, then persist the resulting project ID.
+
+## iOS archive on GitHub Actions (2026-09-18)
+
+The `iOS Release Build` workflow uses the standard `macos-15` runner with Xcode
+26.2, without an EAS cloud build or an Expo subscription. Standard hosted runners
+are free for this public repository. This does not remove Apple's membership,
+physical-device testing or review requirements.
+
+Run the workflow manually from `main`, supplying an unused App Store Connect build
+number. Builds through iOS25 have already been used; recheck current store state,
+not this dated example, before reserving the next number. Do not run a competing
+EAS iOS build with that number. Concurrent workflow executions are serialized.
+The `ios-release` environment permits `main` only and stores the existing
+`TDF_IOS_DISTRIBUTION_P12`, `TDF_IOS_P12_PASSWORD` and
+`TDF_IOS_PROVISIONING_PROFILE` as encrypted secrets. The workflow validates the
+profile's app, team, distribution type, expiration and certificate match. Signing
+uses an ephemeral keychain and removes the credentials even after failure.
+
+Dependencies use `npm ci --include=dev`, CocoaPods1.16.2 and Ruby JSON2.18.0
+(matching the committed podspec serialization), with `pod install --deployment`; source
+release checks and tests must pass. Xcode archives the existing native project and
+exports an App Store IPA. The artifact gate checks its signature, SDK, app/build
+versions, Google/deep-link schemes and embedded production API. The one-day
+artifact includes the IPA and a SHA256/source/run receipt, not signing secrets.
+Download it promptly for the existing Apple validation/upload process.
+
+A successful archive is **not** a TestFlight upload, App Review submission or
+publication. Execute `docs/google-oauth-manual-test.md` on a physical iPhone before
+production; preserve the manual release setting in App Store Connect. The first signed run [35370877715](https://github.com/diegueins680/TDF-mobile/actions/runs/35370877715)
+passed on source751d261fd162fd6a0e9c8b0ea9969c4c1a5e2572: IPA1.0.1(23),
+SDK26.2, SHA2566d5b3c3a2b658314b7c04db1719a522f5e54d964d0029444471ff4754fad9cbe.
+That original23 was not uploaded. The corrected25, source9f4d0e89c430e25fcd572b4c87736cad15e12012,
+passed run35376470123, Apple validation/upload and processing: VALID/internal
+IN_BETA_TESTING. App Review submissionc59f5706-f10e-4caf-ad00-3fff47911f3b is
+WAITING_FOR_REVIEW as of2026-09-18T18:16Z; release remains MANUAL and physical
+iPhone Google OAuth remains required before production.
+
+Sources checked 2026-09-18: [GitHub billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions),
+[Apple signing on GitHub](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications),
+[macOS runner image](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md),
+[Apple SDK requirement](https://developer.apple.com/news/upcoming-requirements/?id=04282026a).
+
+## Android bundle on GitHub Actions (2026-09-18)
+
+The manual Android Release Build workflow uses standard ubuntu-24.04, Java17
+and the existing Gradle8.14.3 wrapper (distribution SHA256 pinned). Both EAS Free
+platform quotas were15/15 when checked2026-09-18; no paid plan is required here.
+Dispatch from main with an unused Play version code (through17 used as of
+2026-09-18;16 was consumed by a cancelled build). Do not start a competing EAS
+build with that number.
+
+The main-only android-release environment holds the existing upload keystore and
+passwords as encrypted secrets. The certificate fingerprint is checked against
+Android15's existing upload certificate before and after signing. The helper
+modifies only the ephemeral native release build's signing/version configuration;
+the checked-in debug setup is retained. It fails if the expected native structure
+changes. No credential is embedded in source, Gradle text or the artifact receipt.
+The private key is removed in an always-run step.
+
+Source release checks, Jest and signing-configuration negative controls run before
+the build. Bundletool1.18.3 is checksum-pinned; the actual AAB is checked for app,
+version, nondebuggable manifest, signature/certificate, ZIP integrity and embedded
+production API before upload as a one-day GitHub artifact. Store upload, review,
+closed-testing availability and production are separate steps through the existing
+Play account. This workflow has no Play submission key and does not publish.
+
+Run35376997735 passed510tests and produced signed Android17 fromc2a4cb289dbc9bc52de98c6eac8a6ca81c0cfeae.
+The artifact passed independent verification and was uploaded/validated/committed
+to existing Alpha at2026-09-18T18:18Z; this is not store-review approval. Preserve the
+12-real-testers/14-days production gate and the existing invitations.
+Primary sources checked2026-09-18:
+https://developer.android.com/build/building-cmdline and
+https://github.com/google/bundletool/releases/tag/1.18.3.
+
+Android first native run35375029184 failed at dependency lint with JVM Metaspace
+exhaustion (512MiB default), after746 tasks; it did not produce a qualified bundle.
+The standard runner invocation now allocates4GiB heap/2GiB Metaspace with two
+workers. Release lint and all four native architectures remain enabled. This is
+a build-environment repair; the corrected retry35376997735 passed in18m46s. The previous dispatch-context failure35374641857 executed no build.
+
+## Signed entitlement inspection
+
+Artifact verification requests XML explicitly with `codesign -d --entitlements -
+--xml`. Current macOS otherwise returns a human-readable dictionary that cannot
+be parsed as a plist. Run 36493156554 archived and exported successfully but was
+correctly withheld when this parser failed; it was not uploaded. The regression
+creates an isolated ad-hoc signed executable and reads its actual entitlements
+on macOS, in addition to rejecting missing/mismatched release capabilities.
+See [Apple’s entitlement inspection guidance](https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles).
+
+The 2026-09-28 web-first cutover retired the Fly API. Preview/production API
+and upload URLs, and the Android/iOS embedded-API verification gates, now target
+`https://api.tdfrecords.net`. Development still defaults to localhost and explicit
+environment overrides remain available. This source update does not publish a
+native release or repair already installed binaries; those need a separately
+reviewed build/release and physical login/upload validation against the new host.

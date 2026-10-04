@@ -6,6 +6,7 @@ import { Linking } from 'react-native';
 const mockSetToken = jest.fn();
 const mockClearToken = jest.fn();
 const mockLoginRequest = jest.fn();
+const mockRequestPasswordReset = jest.fn();
 const mockGoogleLoginRequest = jest.fn();
 const mockSignupRequest = jest.fn();
 const mockGoogleHasPlayServices = jest.fn();
@@ -24,6 +25,7 @@ let mockAuthConfig = {
   GOOGLE_IOS_CLIENT_ID: 'ios-client-id.apps.googleusercontent.com',
   GOOGLE_IOS_URL_SCHEME: 'com.googleusercontent.apps.123456',
 };
+let mockLocale = 'es';
 let mockSearchParams: Record<string, string> = {};
 let mockStoredValues = new Map<string, string>();
 
@@ -39,7 +41,7 @@ jest.mock('../src/providers/AuthProvider', () => ({
 
 jest.mock('../src/providers/UserSettingsProvider', () => ({
   useUserSettings: () => ({
-    locale: 'es',
+    locale: mockLocale,
     getCatalogItems: () => [
       { id: 'locale-es', code: 'es' },
       { id: 'locale-en', code: 'en' },
@@ -76,6 +78,7 @@ jest.mock('../src/theme/ThemeProvider', () => {
 });
 
 jest.mock('../src/api/auth', () => ({
+  requestPasswordReset: (...args: unknown[]) => mockRequestPasswordReset(...args),
   loginRequest: (...args: unknown[]) => mockLoginRequest(...args),
   googleLoginRequest: (...args: unknown[]) => mockGoogleLoginRequest(...args),
   signupRequest: (...args: unknown[]) => mockSignupRequest(...args),
@@ -125,6 +128,7 @@ const AuthScreen = require('../app/auth').default;
 
 describe('Auth screen', () => {
   beforeEach(() => {
+  mockLocale = 'es';
     jest.clearAllMocks();
     mockStoredValues = new Map();
     jest.mocked(AsyncStorage.getItem).mockReset().mockImplementation(async (key) =>
@@ -164,6 +168,16 @@ describe('Auth screen', () => {
         PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
       },
     });
+  });
+
+  it.each(['es', 'en', 'fr'])('requests recovery in the supported UI language for %s', async (locale) => {
+    mockLocale = locale;
+    mockRequestPasswordReset.mockResolvedValue(undefined);
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByText(locale !== 'en' ? '¿Olvidaste tu contraseña?' : 'Forgot your password?'));
+    fireEvent.changeText(screen.getByLabelText(locale !== 'en' ? 'Correo electrónico' : 'Email'), 'Recovery@Example.test');
+    fireEvent.press(screen.getByText(locale !== 'en' ? 'Enviar enlace' : 'Send link'));
+    await waitFor(() => expect(mockRequestPasswordReset).toHaveBeenCalledWith('recovery@example.test', locale !== 'en' ? 'es' : 'en'));
   });
 
   it('submits username/password login and stores the returned token', async () => {
@@ -325,12 +339,40 @@ describe('Auth screen', () => {
 
     expect(mockOpenURL).toHaveBeenNthCalledWith(
       1,
-      'https://tdf-app.pages.dev/account/terms.html',
+      'https://tdf-app.pages.dev/account/terms-es.html',
     );
     expect(mockOpenURL).toHaveBeenNthCalledWith(
       2,
-      'https://tdf-app.pages.dev/account/privacy.html',
+      'https://tdf-app.pages.dev/account/privacy-es.html',
     );
+  });
+
+  it('keeps the original policy URLs for English signup', async () => {
+    mockLocale = 'en';
+    mockSearchParams = { mode: 'signup' };
+    render(<AuthScreen />);
+    fireEvent.press(await screen.findByRole('link', { name: 'View terms' }));
+    fireEvent.press(screen.getByRole('link', { name: 'View privacy' }));
+    expect(mockOpenURL).toHaveBeenNthCalledWith(1, 'https://tdf-app.pages.dev/account/terms.html');
+    expect(mockOpenURL).toHaveBeenNthCalledWith(2, 'https://tdf-app.pages.dev/account/privacy.html');
+  });
+
+  it('preserves signup input and offers a retry when a policy document cannot open', async () => {
+    mockSearchParams = { mode: 'signup' };
+    mockOpenURL.mockRejectedValueOnce(new Error('browser unavailable'));
+    render(<AuthScreen />);
+    const email = await screen.findByPlaceholderText('tu@correo.com');
+    fireEvent.changeText(email, 'synthetic@example.test');
+    fireEvent.press(screen.getByRole('link', { name: 'Ver términos' }));
+    const failureCopy = 'No pudimos abrir el documento. Toca el enlace para volver a intentarlo; tus datos siguen aquí.';
+    const message = await screen.findByText(failureCopy);
+    expect(message.props.accessibilityRole).toBe('alert');
+    expect(screen.getByDisplayValue('synthetic@example.test')).toBeTruthy();
+    expect(mockSignupRequest).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole('link', { name: 'Ver términos' }));
+    await waitFor(() => expect(screen.queryByText(failureCopy)).toBeNull());
+    expect(mockOpenURL).toHaveBeenCalledTimes(2);
+    expect(mockOpenURL).toHaveBeenLastCalledWith('https://tdf-app.pages.dev/account/terms-es.html');
   });
 
   it('creates an account without caller-selected roles and stores the returned session', async () => {
@@ -443,6 +485,23 @@ describe('Auth screen', () => {
     expect(screen.getByText('Sesión con Google iniciada.')).toBeTruthy();
   });
 
+  it('connects Google only after an explicit existing-account password confirmation', async () => {
+    mockGoogleSignIn.mockResolvedValue({ type: 'success', data: { idToken: 'verified-google-token' } });
+    mockGoogleLoginRequest.mockRejectedValueOnce(new Error('Accept the terms and privacy policy through the signup flow before creating a Google account'))
+      .mockResolvedValueOnce({ token: 'linked-token', partyId: 88, roles: [], modules: [], accountCreated: false });
+    render(<AuthScreen />);
+    fireEvent.press(await screen.findByText('Continuar con Google'));
+    await screen.findByText('Conectar Google a mi cuenta TDF');
+    expect(mockSetToken).not.toHaveBeenCalled();
+    fireEvent.changeText(screen.getByPlaceholderText('usuario o correo'), 'existing-user');
+    fireEvent.changeText(screen.getByPlaceholderText('Tu contraseña'), 'existing-password');
+    fireEvent.press(screen.getByText('Conectar Google a mi cuenta TDF'));
+    await waitFor(() => expect(mockGoogleLoginRequest).toHaveBeenLastCalledWith({
+      idToken: 'verified-google-token', linkAccount: { username: 'existing-user', password: 'existing-password' },
+    }));
+    await waitFor(() => expect(mockSetToken).toHaveBeenCalled());
+  });
+
   it('uses and retains a restored intent when Google persistence fails', async () => {
     mockReadPendingOnboardingIntent.mockResolvedValue('internships');
     mockUpdateOnboardingIntent.mockRejectedValueOnce(new Error('offline'));
@@ -500,6 +559,7 @@ describe('Auth screen', () => {
       marketingOptIn: false,
       termsAccepted: true,
       termsVersion: 'tdf-account-terms-v1',
+      createNewAccount: true,
       onboardingIntent: 'follow_artists',
     }));
     await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));

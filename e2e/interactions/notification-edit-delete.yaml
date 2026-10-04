@@ -1,0 +1,95 @@
+appId: ${APP_ID || "com.tdfrecords.app"}
+---
+- stopApp
+- openLink:
+    link: "tdf://notification/${TDF_NOTIFICATION_ID}"
+    autoVerify: true
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible: "Abrir conversación|Open discussion"
+    timeout: 30000
+- tapOn: "Abrir conversación|Open discussion"
+- extendedWaitUntil:
+    visible: ${TDF_REPLY_BODY}
+    timeout: 30000
+- assertVisible: ${TDF_COMMENT_BODY}
+- tapOn:
+    text: "Opciones del comentario"
+    index: 0
+- tapOn: "^Editar$"
+- tapOn:
+    text: "Escribe un comentario"
+    index: 1
+- runFlow:
+    when:
+      visible: "Speed up your typing.*"
+    commands:
+      - tapOn: "^Continue$"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - longPressOn:
+          text: "Escribe un comentario"
+          index: 1
+      - runFlow:
+          when:
+            notVisible: "Select all|Select All|Seleccionar todo"
+          commands:
+            - tapOn: "More options|Más opciones"
+      - tapOn: "Select all|Select All|Seleccionar todo"
+      - eraseText: 1
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - eraseText
+- assertVisible: "0/4096"
+- inputText: "${TDF_COMMENT_BODY} edited"
+- tapOn: "API publication"
+- scrollUntilVisible:
+    centerElement: true
+    element: "^Publicar$"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "^Publicar$"
+- extendedWaitUntil:
+    visible: "${TDF_COMMENT_BODY} edited"
+    timeout: 30000
+- tapOn:
+    text: "Opciones del comentario"
+    index: 0
+- tapOn: "Eliminar mi comentario"
+- tapOn: "^Confirmar$"
+- extendedWaitUntil:
+    visible: "Comentario eliminado"
+    timeout: 30000
+- scrollUntilVisible:
+    centerElement: true
+    element: ${TDF_REPLY_BODY}
+    direction: DOWN
+    timeout: 30000
+- assertVisible: ${TDF_REPLY_BODY}
+- scrollUntilVisible:
+    centerElement: true
+    element: "Ocultar respuestas.*"
+    direction: UP
+    timeout: 30000
+- tapOn: "Ocultar respuestas.*"
+- scrollUntilVisible:
+    centerElement: true
+    element: "Ver 1 respuestas"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Ver 1 respuestas"
+- scrollUntilVisible:
+    centerElement: true
+    element: ${TDF_REPLY_BODY}
+    direction: DOWN
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ${TDF_REPLY_BODY}
+    timeout: 30000
+- takeScreenshot: /tmp/tdf-interaction-native-tombstone-thread

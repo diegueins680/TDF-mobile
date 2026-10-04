@@ -80,6 +80,8 @@ const logicalPathForUrl = (parsed: URL): string | null => {
   if (scheme === APP_SCHEME) {
     return [parsed.hostname, ...parsed.pathname.split('/')].filter(Boolean).join('/');
   }
+  if (scheme === 'https' && ['www.tdfrecords.net', 'tdfrecords.net', 'tdf-app.pages.dev'].includes(parsed.hostname)
+    && parsed.pathname.startsWith('/conversacion/')) return parsed.pathname.slice(1);
   if (DEVELOPMENT_SCHEMES.has(scheme)) {
     const segments = parsed.pathname.split('/').filter(Boolean);
     const routeMarker = segments.indexOf('--');
@@ -135,6 +137,19 @@ export function mobileDeepLinkTarget(url: string, currentPathname: string): stri
     if (segments.some((segment) => segment === null)) return null;
     const safeSegments = segments as string[];
 
+    if (safeSegments[0] === 'conversacion' && safeSegments.length === 3 && ['comment', 'target'].includes(safeSegments[1])
+      && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(safeSegments[2])) {
+      return safeInternalRoute(`/conversacion/${safeSegments[1]}/${safeSegments[2]}`);
+    }
+    if ((safeSegments[0] === 'notification' || safeSegments[0] === 'notifications' || safeSegments[0] === 'notificaciones')
+      && safeSegments.length === 2 && /^[1-9]\d*$/.test(safeSegments[1])
+      && Number.isSafeInteger(Number(safeSegments[1]))) {
+      return safeInternalRoute(`/notifications?notificationId=${safeSegments[1]}`);
+    }
+    if (safeSegments[0] === 'access-requests' && safeSegments.length === 2
+      && /^[1-9]\d*$/.test(safeSegments[1]) && Number.isSafeInteger(Number(safeSegments[1]))) {
+      return safeInternalRoute(`/access-requests?request=${safeSegments[1]}`);
+    }
     if (safeSegments[0] === 'event' && safeSegments.length === 2) {
       return appendQuery(
         `/eventDetail?eventId=${encodeURIComponent(safeSegments[1])}`,

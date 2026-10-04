@@ -1,4 +1,4 @@
-const DEFAULT_WEB_CHECKOUT_BASE = 'https://tdf-app.pages.dev';
+const DEFAULT_WEB_CHECKOUT_BASE = 'https://www.tdfrecords.net';
 
 const safePositiveInteger = (value: string | number, field: string): string => {
   const normalized = typeof value === 'number' ? value : Number(value);

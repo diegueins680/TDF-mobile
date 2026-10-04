@@ -311,7 +311,7 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
 
     await waitFor(() => expect(Linking.openURL).toHaveBeenCalledTimes(1));
     const checkoutUrl = jest.mocked(Linking.openURL).mock.calls[0][0];
-    expect(checkoutUrl).toBe('https://tdf-app.pages.dev/eventos/42/entradas?tierId=3&quantity=2&source=mobile');
+    expect(checkoutUrl).toBe('https://www.tdfrecords.net/eventos/42/entradas?tierId=3&quantity=2&source=mobile');
     expect(checkoutUrl).not.toMatch(/Ana|ana%40example\.com|promo/i);
     expect(mockCreatePaymentSheet).not.toHaveBeenCalled();
     expect(mockBuyTickets).not.toHaveBeenCalled();

@@ -1,0 +1,291 @@
+{
+  "original": "1.0",
+  "restored": "1.0",
+  "rows": [
+    {
+      "fontScale": "1.0",
+      "visibleLabels": [
+        {
+          "text": "Seguir",
+          "bounds": "[87,87][993,164]",
+          "clickable": "false"
+        },
+        {
+          "text": "Consulta a qui\u00e9n sigues y qui\u00e9n te sigue. Para seguir artistas, entra a un evento o perfil de artista y toca Seguir.",
+          "bounds": "[87,192][993,363]",
+          "clickable": "false"
+        },
+        {
+          "text": "Inicia sesi\u00f3n",
+          "bounds": "[87,391][372,480]",
+          "clickable": "false"
+        },
+        {
+          "text": "Empieza siguiendo a un artista",
+          "bounds": "[87,563][993,628]",
+          "clickable": "false"
+        },
+        {
+          "text": "Elige uno ahora o guarda un pr\u00f3ximo evento.",
+          "bounds": "[87,656][993,713]",
+          "clickable": "false"
+        },
+        {
+          "text": "Los artistas no est\u00e1n disponibles ahora. A\u00fan puedes guardar un evento.",
+          "bounds": "[87,741][993,835]",
+          "clickable": "false"
+        },
+        {
+          "text": "Ver pr\u00f3ximos eventos",
+          "bounds": "[87,864][993,988]",
+          "clickable": "true"
+        },
+        {
+          "text": "Ver pr\u00f3ximos eventos",
+          "bounds": "[376,902][703,948]",
+          "clickable": "false"
+        },
+        {
+          "text": "Tu red de personas",
+          "bounds": "[87,1072][993,1137]",
+          "clickable": "false"
+        },
+        {
+          "text": "Siguiendo, 0 conexiones",
+          "bounds": "[90,1168][540,1275]",
+          "clickable": "true"
+        },
+        {
+          "text": "Siguiendo (0)",
+          "bounds": "[90,1196][540,1247]",
+          "clickable": "false"
+        },
+        {
+          "text": "Seguidores, 0 conexiones",
+          "bounds": "[540,1168][990,1275]",
+          "clickable": "true"
+        },
+        {
+          "text": "Seguidores (0)",
+          "bounds": "[540,1196][990,1247]",
+          "clickable": "false"
+        },
+        {
+          "text": "No sigues a nadie todav\u00eda.",
+          "bounds": "[87,1306][993,1357]",
+          "clickable": "false"
+        },
+        {
+          "text": "Directorio",
+          "bounds": "[0,2051][216,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udf49",
+          "bounds": "[73,2069][141,2139]",
+          "clickable": "false"
+        },
+        {
+          "text": "Directorio",
+          "bounds": "[14,2143][202,2183]",
+          "clickable": "false"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[216,2051][432,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[230,2143][418,2183]",
+          "clickable": "false"
+        },
+        {
+          "text": "\udb82\udc99",
+          "bounds": "[289,2069][357,2139]",
+          "clickable": "false"
+        },
+        {
+          "text": "Explorar",
+          "bounds": "[432,2051][648,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udd8c",
+          "bounds": "[505,2069][573,2139]",
+          "clickable": "false"
+        },
+        {
+          "text": "Explorar",
+          "bounds": "[446,2143][634,2183]",
+          "clickable": "false"
+        },
+        {
+          "text": "Crear",
+          "bounds": "[648,2051][864,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb81\udc19",
+          "bounds": "[721,2069][789,2139]",
+          "clickable": "false"
+        },
+        {
+          "text": "Crear",
+          "bounds": "[662,2143][850,2183]",
+          "clickable": "false"
+        },
+        {
+          "text": "Perfil",
+          "bounds": "[864,2051][1080,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udc09",
+          "bounds": "[937,2069][1005,2139]",
+          "clickable": "false"
+        },
+        {
+          "text": "Perfil",
+          "bounds": "[878,2143][1066,2183]",
+          "clickable": "false"
+        }
+      ]
+    },
+    {
+      "fontScale": "2.0",
+      "visibleLabels": [
+        {
+          "text": "Seguir",
+          "bounds": "[87,87][993,201]",
+          "clickable": "false"
+        },
+        {
+          "text": "Consulta a qui\u00e9n sigues y qui\u00e9n te sigue. Para seguir artistas, entra a un evento o perfil de artista y toca Seguir.",
+          "bounds": "[87,229][993,613]",
+          "clickable": "false"
+        },
+        {
+          "text": "Inicia sesi\u00f3n",
+          "bounds": "[87,641][484,757]",
+          "clickable": "false"
+        },
+        {
+          "text": "Empieza siguiendo a un artista",
+          "bounds": "[87,840][993,1022]",
+          "clickable": "false"
+        },
+        {
+          "text": "Elige uno ahora o guarda un pr\u00f3ximo evento.",
+          "bounds": "[87,1050][993,1242]",
+          "clickable": "false"
+        },
+        {
+          "text": "Los artistas no est\u00e1n disponibles ahora. A\u00fan puedes guardar un evento.",
+          "bounds": "[87,1270][993,1531]",
+          "clickable": "false"
+        },
+        {
+          "text": "Ver pr\u00f3ximos eventos",
+          "bounds": "[87,1560][993,1696]",
+          "clickable": "true"
+        },
+        {
+          "text": "Ver pr\u00f3ximos eventos",
+          "bounds": "[207,1582][871,1673]",
+          "clickable": "false"
+        },
+        {
+          "text": "Tu red de personas",
+          "bounds": "[87,1780][993,1890]",
+          "clickable": "false"
+        },
+        {
+          "text": "Siguiendo, 0 conexiones",
+          "bounds": "[90,1921][540,1943]",
+          "clickable": "true"
+        },
+        {
+          "text": "Seguidores, 0 conexiones",
+          "bounds": "[540,1921][990,1943]",
+          "clickable": "true"
+        },
+        {
+          "text": "Directorio",
+          "bounds": "[0,1944][216,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udf49",
+          "bounds": "[73,1962][141,2032]",
+          "clickable": "false"
+        },
+        {
+          "text": "Directorio",
+          "bounds": "[14,2036][202,2184]",
+          "clickable": "false"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[216,1944][432,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb82\udc99",
+          "bounds": "[289,1962][357,2032]",
+          "clickable": "false"
+        },
+        {
+          "text": "Seguir",
+          "bounds": "[230,2036][418,2184]",
+          "clickable": "false"
+        },
+        {
+          "text": "Explorar",
+          "bounds": "[432,1944][648,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udd8c",
+          "bounds": "[505,1962][573,2032]",
+          "clickable": "false"
+        },
+        {
+          "text": "Explorar",
+          "bounds": "[446,2036][634,2184]",
+          "clickable": "false"
+        },
+        {
+          "text": "Crear",
+          "bounds": "[648,1944][864,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb81\udc19",
+          "bounds": "[721,1962][789,2032]",
+          "clickable": "false"
+        },
+        {
+          "text": "Crear",
+          "bounds": "[662,2036][850,2110]",
+          "clickable": "false"
+        },
+        {
+          "text": "Perfil",
+          "bounds": "[864,1944][1080,2205]",
+          "clickable": "true"
+        },
+        {
+          "text": "\udb80\udc09",
+          "bounds": "[937,1962][1005,2032]",
+          "clickable": "false"
+        },
+        {
+          "text": "Perfil",
+          "bounds": "[878,2036][1066,2110]",
+          "clickable": "false"
+        }
+      ]
+    }
+  ]
+}

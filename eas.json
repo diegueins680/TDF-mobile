@@ -11,7 +11,6 @@
       "env": {
         "EXPO_PUBLIC_API_BASE": "http://localhost:8080",
         "EXPO_PUBLIC_UPLOAD_URL": "http://localhost:8080/drive/upload",
-        "EXPO_PUBLIC_WEB_CHECKOUT_BASE_URL": "http://localhost:5173",
         "EXPO_PUBLIC_TZ": "UTC"
       }
     },
@@ -19,13 +18,13 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_API_BASE": "https://tdf-hq.fly.dev",
-        "EXPO_PUBLIC_UPLOAD_URL": "https://tdf-hq.fly.dev/drive/upload",
-        "EXPO_PUBLIC_WEB_CHECKOUT_BASE_URL": "https://tdf-app.pages.dev",
+        "EXPO_PUBLIC_API_BASE": "https://api.tdfrecords.net",
+        "EXPO_PUBLIC_UPLOAD_URL": "https://api.tdfrecords.net/drive/upload",
         "EXPO_PUBLIC_TZ": "UTC",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1016946267087-mvr22vuc8dql37fem7aa1msdnatjvhh4.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "1016946267087-p40em8ihkugloistpfnjt7es94mguhgv.apps.googleusercontent.com",
-        "GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.1016946267087-p40em8ihkugloistpfnjt7es94mguhgv"
+        "GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.1016946267087-p40em8ihkugloistpfnjt7es94mguhgv",
+        "EXPO_PUBLIC_WEB_CHECKOUT_BASE_URL": "https://www.tdfrecords.net"
       },
       "android": {
         "buildType": "apk"
@@ -35,19 +34,27 @@
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_API_BASE": "https://tdf-hq.fly.dev",
-        "EXPO_PUBLIC_UPLOAD_URL": "https://tdf-hq.fly.dev/drive/upload",
-        "EXPO_PUBLIC_WEB_CHECKOUT_BASE_URL": "https://tdf-app.pages.dev",
+        "EXPO_PUBLIC_API_BASE": "https://api.tdfrecords.net",
+        "EXPO_PUBLIC_UPLOAD_URL": "https://api.tdfrecords.net/drive/upload",
         "EXPO_PUBLIC_TZ": "UTC",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1016946267087-mvr22vuc8dql37fem7aa1msdnatjvhh4.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "1016946267087-p40em8ihkugloistpfnjt7es94mguhgv.apps.googleusercontent.com",
-        "GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.1016946267087-p40em8ihkugloistpfnjt7es94mguhgv"
+        "GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.1016946267087-p40em8ihkugloistpfnjt7es94mguhgv",
+        "EXPO_PUBLIC_WEB_CHECKOUT_BASE_URL": "https://www.tdfrecords.net"
       }
     },
     "ios-simulator": {
       "extends": "preview",
       "ios": {
         "simulator": true
+      }
+    },
+    "interaction-e2e": {
+      "extends": "ios-simulator",
+      "channel": "interaction-e2e",
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "http://127.0.0.1:18128",
+        "EXPO_PUBLIC_UPLOAD_URL": "http://127.0.0.1:18128/drive/upload"
       }
     }
   },

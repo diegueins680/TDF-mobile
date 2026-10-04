@@ -552,3 +552,14 @@ export type SuggestedFriend = {
   sfPartyId: number;
   sfMutualCount: number;
 };
+
+/** FanHub artist identity: the Party ID used by the canonical fan APIs. */
+export type FanArtist = {
+  apArtistId: number;
+  apDisplayName: string;
+  apHeroImageUrl?: string | null;
+};
+export type FanArtistFollow = {
+  ffArtistId: number;
+  ffArtistName: string;
+};

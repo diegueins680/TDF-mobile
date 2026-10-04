@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import appManifest from './app.json';
 import fs from 'fs';
 import path from 'path';
 import { withDangerousMod, type ConfigPlugin } from '@expo/config-plugins';
@@ -13,7 +14,8 @@ const IOS_BUNDLE_ID = 'com.tdfrecords.app';
 const ANDROID_PACKAGE = 'com.tdf.records';
 const DEFAULT_TIME_ZONE = 'America/Guayaquil';
 const PUBLIC_SITE_URL = 'https://tdf-app.pages.dev/mobile-app';
-const PUBLIC_UNIVERSAL_LINK_HOST = 'tdf-app.pages.dev';
+// The apex redirects; verified hosts must serve association files directly.
+const PUBLIC_UNIVERSAL_LINK_HOSTS = ['www.tdfrecords.net', 'tdf-app.pages.dev'];
 const PUBLIC_SUPPORT_URL = `${PUBLIC_SITE_URL}/support.html`;
 const PUBLIC_PRIVACY_POLICY_URL = `${PUBLIC_SITE_URL}/privacy.html`;
 const PUBLIC_TERMS_OF_SERVICE_URL = `${PUBLIC_SITE_URL}/terms.html`;
@@ -22,7 +24,7 @@ const SUPPORT_EMAIL = 'soporte@tdfrecords.com';
 const BRAND_BACKGROUND = '#0f172a';
 const LOCAL_API_BASE = 'http://localhost:8080';
 const LOCAL_UPLOAD_URL = `${LOCAL_API_BASE}/drive/upload`;
-const RELEASE_API_BASE = 'https://tdf-hq.fly.dev';
+const RELEASE_API_BASE = 'https://api.tdfrecords.net';
 const RELEASE_UPLOAD_URL = `${RELEASE_API_BASE}/drive/upload`;
 const RELEASE_BUILD_PROFILES = new Set(['preview', 'production']);
 const DEFAULT_EAS_PROJECT_ID = '218aca4d-c096-4892-a353-c1dd7df23448';
@@ -139,7 +141,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   version: APP_VERSION,
   description: 'TDF Records mobile app for bookings, events, venues, inventory, pipelines, and social tools.',
   icon: './assets/icon.png',
-  runtimeVersion: APP_VERSION,
+  runtimeVersion: appManifest.expo.runtimeVersion,
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',
@@ -148,7 +150,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: IOS_BUNDLE_ID,
     supportsTablet: false,
-    associatedDomains: [`applinks:${PUBLIC_UNIVERSAL_LINK_HOST}`],
+    associatedDomains: PUBLIC_UNIVERSAL_LINK_HOSTS.map((host) => `applinks:${host}`),
     config: {
       usesNonExemptEncryption: false
     }
@@ -160,13 +162,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         action: 'VIEW',
         autoVerify: true,
-        data: [
-          {
-            scheme: 'https',
-            host: PUBLIC_UNIVERSAL_LINK_HOST,
-            pathPrefix: '/eventos/',
-          },
-        ],
+        data: PUBLIC_UNIVERSAL_LINK_HOSTS.flatMap((host) => ['/eventos/', '/conversacion/'].map((pathPrefix) => ({ scheme: 'https', host, pathPrefix }))),
         category: ['BROWSABLE', 'DEFAULT'],
       },
     ],

@@ -48,8 +48,6 @@ import { safeInternalRoute } from '../src/navigation/deepLinks';
 
 const PUBLIC_EVENT_RETURN_ROUTE = /^\/eventos\/[1-9]\d{0,18}$/;
 const ACCOUNT_TERMS_VERSION = 'tdf-account-terms-v1';
-const TERMS_URL = 'https://tdf-app.pages.dev/account/terms.html';
-const PRIVACY_URL = 'https://tdf-app.pages.dev/account/privacy.html';
 
 const readErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message.trim()) {
@@ -103,11 +101,14 @@ export default function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgotPassword'>(requestedMode === 'signup' ? 'signup' : 'login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [googleConnectionRequired, setGoogleConnectionRequired] = useState(false);
+  useEffect(() => { setGoogleConnectionRequired(false); }, [mode]);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [selectedIntent, setSelectedIntent] = useState<OnboardingIntent>(initialIntent);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [policyError, setPolicyError] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const lastNameInputRef = useRef<TextInput>(null);
@@ -363,6 +364,10 @@ export default function AuthScreen() {
       return;
     }
 
+    if (mode === 'login' && googleConnectionRequired && (!username.trim() || !password)) {
+      setErrorMessage(copy.googleConnectExplanation);
+      return;
+    }
     setIsGoogleSubmitting(true);
     const pendingIntentPromise = mode === 'signup'
       ? Promise.resolve(selectedIntent)
@@ -388,7 +393,11 @@ export default function AuthScreen() {
 
       const session = await googleLoginRequest({
         idToken: response.data.idToken,
+        ...(mode === 'login' && googleConnectionRequired ? {
+          linkAccount: { username: username.trim(), password },
+        } : {}),
         ...(mode === 'signup' ? {
+          createNewAccount: true,
           marketingOptIn,
           termsAccepted: true,
           termsVersion: ACCOUNT_TERMS_VERSION,
@@ -451,6 +460,11 @@ export default function AuthScreen() {
         method: 'google',
         ...(mode === 'signup' ? { intent: selectedIntent } : {}),
       });
+      if (mode === 'login' && readErrorMessage(error, '') === 'Accept the terms and privacy policy through the signup flow before creating a Google account') {
+        setGoogleConnectionRequired(true);
+        setFeedbackMessage(copy.googleConnectExplanation);
+        return;
+      }
       setErrorMessage(readErrorMessage(error, copy.googleFailure));
     } finally {
       setIsGoogleSubmitting(false);
@@ -481,7 +495,7 @@ export default function AuthScreen() {
     setIsForgotPasswordSubmitting(true);
 
     try {
-      await requestPasswordReset(forgotPasswordEmail.trim().toLowerCase());
+      await requestPasswordReset(forgotPasswordEmail.trim().toLowerCase(), language);
       setForgotPasswordSuccess(true);
     } catch (error) {
       setForgotPasswordError(readErrorMessage(error, copy.resetFailure));
@@ -721,13 +735,24 @@ export default function AuthScreen() {
                     <Text style={styles.checkboxText}>{copy.accept}</Text>
                   </TouchableOpacity>
                   <View style={styles.legalLinks}>
-                    <TouchableOpacity accessibilityRole="link" onPress={() => void Linking.openURL(TERMS_URL)}>
+                    <TouchableOpacity accessibilityRole="link" onPress={() => {
+                      setPolicyError(false);
+                      void Linking.openURL(`https://tdf-app.pages.dev/account/terms${language === 'en' ? '' : '-es'}.html`).catch(() => setPolicyError(true));
+                    }}>
                       <Text style={styles.legalLink}>{copy.terms}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity accessibilityRole="link" onPress={() => void Linking.openURL(PRIVACY_URL)}>
+                    <TouchableOpacity accessibilityRole="link" onPress={() => {
+                      setPolicyError(false);
+                      void Linking.openURL(`https://tdf-app.pages.dev/account/privacy${language === 'en' ? '' : '-es'}.html`).catch(() => setPolicyError(true));
+                    }}>
                       <Text style={styles.legalLink}>{copy.privacy}</Text>
                     </TouchableOpacity>
                   </View>
+                  {policyError && (
+                    <Text style={styles.errorText} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                      {copy.policyOpenFailure}
+                    </Text>
+                  )}
                   <TouchableOpacity
                     style={styles.checkboxRow}
                     onPress={() => setMarketingOptIn((current) => !current)}
@@ -808,7 +833,7 @@ export default function AuthScreen() {
                       <ActivityIndicator color={colors.textPrimary} />
                     ) : (
                       <Text style={styles.secondaryButtonText}>
-                        {mode === 'signup' ? copy.googleCreate : copy.googleLogin}
+                        {mode === 'signup' ? copy.googleCreate : googleConnectionRequired ? copy.googleConnect : copy.googleLogin}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -1062,6 +1087,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   checkboxChecked: { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary },
   checkboxMark: { color: colors.actionPrimaryContrast, fontWeight: '900' },
   checkboxText: { flex: 1, color: colors.textPrimary, fontSize: 13, lineHeight: 18 },
-  legalLinks: { flexDirection: 'row', gap: 20, paddingLeft: 34 },
+  legalLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, paddingLeft: 34 },
   legalLink: { color: colors.actionPrimary, minHeight: 44, textAlignVertical: 'center', fontWeight: '600', fontSize: 13 },
 });

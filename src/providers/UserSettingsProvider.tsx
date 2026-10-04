@@ -34,6 +34,7 @@ type UserSettings = {
   timezone: string;
   countryId: string | null;
   countryCode: string | null;
+  showEventRsvpsOnProfile: boolean;
 };
 
 type UserSettingsUpdate = UserSettings | ((current: UserSettings) => UserSettings);
@@ -48,6 +49,7 @@ type UserSettingsContextValue = {
   timezone: string;
   countryId: string | null;
   countryCode: string | null;
+  showEventRsvpsOnProfile: boolean;
   supportedLocales: readonly string[];
   supportedCurrencies: readonly string[];
   catalogRevision: number;
@@ -86,6 +88,7 @@ const EMPTY_SETTINGS: UserSettings = {
   timezone: process.env.EXPO_PUBLIC_TZ?.trim() || resolvedIntl.timeZone || 'UTC',
   countryId: null,
   countryCode: detectedLocaleParts[1]?.toUpperCase() ?? null,
+  showEventRsvpsOnProfile: true,
 };
 
 const UserSettingsContext = createContext<UserSettingsContextValue | undefined>(undefined);
@@ -128,6 +131,9 @@ export const parseUserSettings = (
       timezone: normalizeStoredString(value.timezone) ?? EMPTY_SETTINGS.timezone,
       countryId: normalizeStoredString(value.countryId),
       countryCode: normalizeStoredString(value.countryCode)?.toUpperCase() ?? EMPTY_SETTINGS.countryCode,
+      showEventRsvpsOnProfile: typeof value.showEventRsvpsOnProfile === 'boolean'
+        ? value.showEventRsvpsOnProfile
+        : EMPTY_SETTINGS.showEventRsvpsOnProfile,
     };
   } catch {
     return null;
@@ -330,6 +336,7 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
           timezone: remote.timezone,
           countryId: remote.countryId ?? null,
           countryCode: remote.countryCode ?? null,
+          showEventRsvpsOnProfile: remote.showEventRsvpsOnProfile,
         }));
       })
       .catch(() => undefined);
@@ -380,6 +387,7 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
         currencyId: next.currencyId,
         timezone: next.timezone,
         countryId: next.countryId,
+        showEventRsvpsOnProfile: next.showEventRsvpsOnProfile,
       }).catch(() => undefined);
     }
   }, [auth?.token, persist]);
@@ -394,6 +402,7 @@ export function UserSettingsProvider({ children }: PropsWithChildren) {
     timezone: settings.timezone,
     countryId: settings.countryId,
     countryCode: settings.countryCode,
+    showEventRsvpsOnProfile: settings.showEventRsvpsOnProfile,
     supportedLocales,
     supportedCurrencies,
     catalogRevision: catalogSnapshot.revision,

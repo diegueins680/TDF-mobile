@@ -12,6 +12,7 @@ import { ArtistDetailSkeleton } from '../src/components/skeletons/ArtistCardSkel
 import { normalizeRouteParam } from '../src/lib/routeParams';
 import { Reviews } from '../src/api/reviews';
 import { DirectoryProfileReviews } from '../src/components/reviews/DirectoryProfileReviews';
+import { ArtistMerchStores } from '../src/components/merch/MerchStoreReputation';
 
 export default function ArtistDetailScreen() {
   const { colors } = useAppTheme();
@@ -222,6 +223,8 @@ export default function ArtistDetailScreen() {
         {upcomingEvents.length === 0 && !eventsQuery.isLoading && (
           <Text style={[styles.noEventsText, { color: colors.textSecondary }]}>No hay próximos eventos</Text>
         )}
+
+        {artist.partyId != null ? <ArtistMerchStores artistPartyId={artist.partyId} /> : null}
 
         {directoryProfileQuery.data ? (
           <DirectoryProfileReviews

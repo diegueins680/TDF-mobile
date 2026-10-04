@@ -15,7 +15,7 @@ import { useUserSettings } from '../src/providers/UserSettingsProvider';
 export default function CreateArtistProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { partyId: effectivePartyId } = useAuth();
+  const { partyId: effectivePartyId, refreshSession } = useAuth();
   const analytics = useAnalytics();
   const { getCatalogItems, catalogSyncing } = useUserSettings();
   const genreOptions = getCatalogItems('genres');
@@ -48,8 +48,9 @@ export default function CreateArtistProfileScreen() {
 
   const createMutation = useMutation({
     mutationFn: (body: Parameters<typeof Artists.create>[0]) => Artists.create(body),
-    onSuccess: () => {
+    onSuccess: async () => {
       setIsDirty(false);
+      await refreshSession();
       qc.invalidateQueries({ queryKey: ['artists'] });
       if (effectivePartyId) {
         qc.invalidateQueries({ queryKey: ['user-artist-profile', effectivePartyId] });

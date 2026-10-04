@@ -13,7 +13,7 @@ const reaction = {
 };
 
 const moment = {
-  id: '77',
+  id: 'moment-local-77',
   eventId: '42',
   authorName: 'Andrea',
   media: {
@@ -54,7 +54,7 @@ describe('EventMomentCard reaction activation', () => {
 
     fireEvent.press(screen.getByRole('button', { name: 'Fuego' }));
 
-    await waitFor(() => expect(onToggleReaction).toHaveBeenCalledWith('77', reaction, true));
+    await waitFor(() => expect(onToggleReaction).toHaveBeenCalledWith('moment-local-77', reaction, true));
     await waitFor(() => expect(onReactionPosted).toHaveBeenCalledTimes(1));
   });
 

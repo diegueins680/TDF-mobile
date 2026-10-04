@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listParties, createParty } from '../../src/api/parties';
 import type { Party } from '../../src/types';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, TextInput, View, Text, Button, StyleSheet, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
@@ -15,6 +15,7 @@ export default function Parties() {
   const router = useRouter();
   const { token, loading } = useAuth();
   const [q, setQ] = useState('');
+  const creationKey = useRef<string | null>(null);
   const [newName, setNewName] = useState('');
   const hasToken = Boolean(token?.trim());
   const canUseParties = !loading && hasToken;
@@ -39,8 +40,13 @@ export default function Parties() {
   };
 
   const mCreate = useMutation({
-    mutationFn: (body: Partial<Party>) => createParty(body),
+    mutationFn: (body: Partial<Party>) => {
+      creationKey.current ??= globalThis.crypto?.randomUUID?.()
+        ?? `mobile-contact-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      return createParty(body, creationKey.current);
+    },
     onSuccess: () => {
+      creationKey.current = null;
       setNewName('');
       setCreateError(null);
       qc.invalidateQueries({ queryKey: ['parties'] });

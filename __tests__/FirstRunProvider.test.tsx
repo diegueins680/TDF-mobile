@@ -1,59 +1,58 @@
 import React from 'react';
+import { setAuthToken } from '../src/api/client';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { AppState, Text, TouchableOpacity } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, type AppStateStatus, Text, TouchableOpacity } from 'react-native';
 
-const mockCompleteOnboardingProgress = jest.fn();
-const mockReconcileOnboardingProgress = jest.fn();
-const mockCompleteFirstValueWithRecovery = jest.fn();
-const mockClearPendingFirstValueCompletion = jest.fn();
-const mockAssertAuthSession = jest.fn();
+const mockGetOnboardingProgress = jest.fn();
 const mockCapture = jest.fn();
 const mockAnalytics = { capture: mockCapture };
-let mockBinding = { authorization: 'Bearer token', signal: {}, version: 1 };
-const mockRequestConfig = { headers: { Authorization: 'Bearer token' } };
+const mockReconcileOnboardingProgress = jest.fn();
+jest.mock('../src/analytics/AnalyticsProvider', () => ({ useAnalytics: () => mockAnalytics }));
+const mockCompleteOnboardingProgress = jest.fn();
+const mockUpdateOnboardingIntent = jest.fn();
 let mockPartyId: string | null = '42';
-let mockToken: string | null = 'Bearer token';
-let mockConnected = true;
+let mockIsConnected = true;
+let appStateChangeListener: ((state: AppStateStatus) => void) | null = null;
+const mockRemoveAppStateListener = jest.fn();
+const mockAddAppStateListener = jest.spyOn(AppState, 'addEventListener');
 
 jest.mock('../src/api/onboarding', () => ({
-  completeOnboardingProgress: (...args: unknown[]) => mockCompleteOnboardingProgress(...args),
   reconcileOnboardingProgress: (...args: unknown[]) => mockReconcileOnboardingProgress(...args),
-}));
-
-jest.mock('../src/api/client', () => ({
-  assertAuthSession: (...args: unknown[]) => mockAssertAuthSession(...args),
-  authSessionRequestConfig: () => mockRequestConfig,
-  captureAuthSession: () => mockBinding,
-}));
-
-jest.mock('../src/analytics/AnalyticsProvider', () => ({
-  useAnalytics: () => mockAnalytics,
-}));
-
-jest.mock('../src/lib/onboardingIntent', () => ({
-  clearPendingFirstValueCompletion: (...args: unknown[]) => mockClearPendingFirstValueCompletion(...args),
-  completeFirstValueWithRecovery: (...args: unknown[]) => mockCompleteFirstValueWithRecovery(...args),
-}));
-
-jest.mock('../src/providers/NetworkProvider', () => ({
-  useNetwork: () => ({ isConnected: mockConnected }),
+  completeOnboardingProgress: (...args: unknown[]) => mockCompleteOnboardingProgress(...args),
+  updateOnboardingIntent: (...args: unknown[]) => mockUpdateOnboardingIntent(...args),
 }));
 
 jest.mock('../src/providers/AuthProvider', () => ({
-  useAuth: () => ({ partyId: mockPartyId, token: mockToken }),
+  useAuth: () => ({ partyId: mockPartyId }),
+}));
+
+jest.mock('../src/providers/NetworkProvider', () => ({
+  useNetwork: () => ({ isConnected: mockIsConnected, connectionType: 'internet' }),
 }));
 
 import { FirstRunProvider, useFirstRun } from '../src/providers/FirstRunProvider';
 
 function Probe() {
-  const { cohortReady, isNewUser, completeOnboarding } = useFirstRun();
+  const {
+    cohortReady,
+    isNewUser,
+    completeOnboarding,
+    replayedFirstValueCompletion,
+  } = useFirstRun();
   return (
     <>
       <Text>{`${cohortReady}:${isNewUser}`}</Text>
+      <Text>{replayedFirstValueCompletion?.value ?? 'no-replay'}</Text>
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel="Complete first value"
         onPress={() => void completeOnboarding('artist_followed')}
+      />
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Exit onboarding"
+        onPress={() => void completeOnboarding()}
       />
     </>
   );
@@ -65,41 +64,64 @@ const renderProvider = () => render(
   </FirstRunProvider>,
 );
 
+const emitAppStateChange = (state: AppStateStatus) => {
+  if (!appStateChangeListener) throw new Error('AppState listener was not registered');
+  appStateChangeListener(state);
+};
+
 describe('FirstRunProvider', () => {
+  it('attributes a different server-evidenced winner without claiming the requested action', async () => {
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, completedAt: '2026-10-04T00:00:00Z', firstValue: 'event_saved' },
+    });
+    renderProvider();
+    await screen.findByText('true:false');
+    fireEvent.press(screen.getByLabelText('Complete first value'));
+    await waitFor(() => expect(mockCapture).toHaveBeenCalledWith(
+      'first_value_completed', { platform: 'mobile', value: 'event_saved' },
+    ));
+    expect(mockCapture).not.toHaveBeenCalledWith(
+      'first_value_completed', { platform: 'mobile', value: 'artist_followed' },
+    );
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAssertAuthSession.mockReset();
-    mockPartyId = '42';
-    mockToken = 'Bearer token';
-    mockBinding = { authorization: 'Bearer token', signal: {}, version: 1 };
-    mockConnected = true;
-    mockReconcileOnboardingProgress.mockReset();
-    mockReconcileOnboardingProgress.mockResolvedValue({
+    setAuthToken("test-session");
+    mockGetOnboardingProgress.mockReset().mockResolvedValue({ eligible: false });
+    mockReconcileOnboardingProgress.mockReset().mockImplementation(async (...args: unknown[]) => ({
+      progress: await mockGetOnboardingProgress(...args), newlyCompleted: false,
+    }));
+    mockCompleteOnboardingProgress.mockReset().mockResolvedValue({
       newlyCompleted: false,
-      progress: { eligible: true, completedAt: null, firstValue: null },
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
     });
-    mockClearPendingFirstValueCompletion.mockResolvedValue(undefined);
+    jest.mocked(AsyncStorage.getItem).mockReset().mockResolvedValue(null);
+    jest.mocked(AsyncStorage.setItem).mockReset().mockResolvedValue(undefined);
+    jest.mocked(AsyncStorage.removeItem).mockReset().mockResolvedValue(undefined);
+    mockUpdateOnboardingIntent.mockReset().mockResolvedValue({ eligible: false });
+    appStateChangeListener = null;
+    mockRemoveAppStateListener.mockReset();
+    mockAddAppStateListener.mockReset().mockImplementation((_event, listener) => {
+      appStateChangeListener = listener;
+      return { remove: mockRemoveAppStateListener };
+    });
+    mockPartyId = '42';
+    mockIsConnected = true;
   });
 
   it('uses authoritative server eligibility for the authenticated party', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
+
     renderProvider();
 
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
-    expect(mockReconcileOnboardingProgress).toHaveBeenCalledWith(mockRequestConfig);
+    expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1);
   }, 10_000);
 
   it('fails closed when durable eligibility cannot be loaded', async () => {
-    mockReconcileOnboardingProgress.mockRejectedValueOnce(new Error('offline'));
-
-    renderProvider();
-
-    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
-  });
-
-  it('does not apply eligibility returned for a replaced auth session', async () => {
-    mockAssertAuthSession.mockImplementationOnce(() => {
-      throw new Error('session changed');
-    });
+    mockGetOnboardingProgress.mockRejectedValueOnce(new Error('offline'));
 
     renderProvider();
 
@@ -107,301 +129,453 @@ describe('FirstRunProvider', () => {
   });
 
   it('passes first value to the idempotent completion endpoint and exits locally', async () => {
-    mockCompleteFirstValueWithRecovery.mockResolvedValueOnce({
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
       newlyCompleted: true,
-      progress: { eligible: false },
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
     });
     renderProvider();
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
 
     fireEvent.press(screen.getByRole('button', { name: 'Complete first value' }));
 
-    await waitFor(() => expect(mockCompleteFirstValueWithRecovery).toHaveBeenCalledWith(
-      '42',
-      'artist_followed',
-      'Bearer token',
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledWith('artist_followed'));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+  });
+
+  it('replays a durable first-value handshake for the active Party before exposing the cohort', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
+    jest.mocked(AsyncStorage.getItem).mockResolvedValue('moment_reaction');
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
+    });
+
+    renderProvider();
+
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(screen.getByText('moment_reaction')).toBeTruthy();
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledWith('moment_reaction');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-first-value:party:42');
+  });
+
+  it('retries retained intent persistence when an authenticated Party starts', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: false });
+    const values = new Map([['tdf-onboarding-intent:pending', 'professional_tools']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => values.get(key) ?? null);
+    jest.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+      values.set(key, value);
+    });
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (key) => {
+      values.delete(key);
+    });
+
+    renderProvider();
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('professional_tools'));
+    await waitFor(() => expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
+      'tdf-onboarding-intent:pending',
     ));
-    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    await waitFor(() => expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
+      'tdf-onboarding-intent:party:42',
+    ));
+    expect(values.size).toBe(0);
   });
 
-  it('retains first-run eligibility when server evidence is still pending', async () => {
-    mockCompleteFirstValueWithRecovery.mockResolvedValueOnce({
-      newlyCompleted: false,
-      progress: { eligible: true },
-    });
+  it('does not hold cohort readiness while intent recovery is pending', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'tdf-onboarding-intent:pending' ? 'learning' : null);
+    mockUpdateOnboardingIntent.mockReturnValueOnce(new Promise(() => undefined));
+
     renderProvider();
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('learning'));
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
-
-    fireEvent.press(screen.getByRole('button', { name: 'Complete first value' }));
-
-    await waitFor(() => expect(mockCompleteFirstValueWithRecovery).toHaveBeenCalledTimes(1));
-    expect(screen.getByText('true:true')).toBeTruthy();
   });
 
-  it('does not apply an old completion after the auth session changes', async () => {
-    mockCompleteFirstValueWithRecovery.mockResolvedValueOnce({
-      newlyCompleted: true,
-      progress: { eligible: false },
+  it('retries a retained Party intent when the app returns to the foreground', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: false });
+    const key = 'tdf-onboarding-intent:party:42';
+    const values = new Map([[key, 'learning']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
     });
-    mockAssertAuthSession
-      .mockImplementationOnce(() => undefined)
-      .mockImplementationOnce(() => {
-        throw new Error('session changed');
-      });
-    renderProvider();
-    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
-
-    fireEvent.press(screen.getByRole('button', { name: 'Complete first value' }));
-
-    await waitFor(() => expect(mockCompleteFirstValueWithRecovery).toHaveBeenCalledTimes(1));
-    expect(screen.getByText('true:true')).toBeTruthy();
-  });
-
-  it('reconciles device-independent evidence and emits completion analytics once', async () => {
-    mockReconcileOnboardingProgress.mockResolvedValueOnce({
-      newlyCompleted: true,
-      progress: {
-        eligible: false,
-        completedAt: '2026-09-09T12:00:00Z',
-        firstValue: 'event_saved',
-      },
-    });
-
-    renderProvider();
-
-    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
-    expect(mockReconcileOnboardingProgress).toHaveBeenCalledWith(mockRequestConfig);
-    expect(mockClearPendingFirstValueCompletion).toHaveBeenCalledWith('42', 'Bearer token');
-    expect(mockCapture).toHaveBeenNthCalledWith(1, 'first_value_completed', {
-      platform: 'mobile',
-      value: 'event_saved',
-    });
-    expect(mockCapture).toHaveBeenNthCalledWith(2, 'onboarding_completed', {
-      platform: 'mobile',
-      reason: 'first_value',
-      value: 'event_saved',
-    });
-  });
-
-  it('does not invent analytics when another request already completed the pending value', async () => {
-    mockReconcileOnboardingProgress.mockResolvedValueOnce({
-      newlyCompleted: false,
-      progress: {
-        eligible: false,
-        completedAt: '2026-09-09T12:00:00Z',
-        firstValue: 'event_saved',
-      },
-    });
-
-    renderProvider();
-
-    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
-    expect(mockCapture).not.toHaveBeenCalled();
-  });
-
-  it('serializes a direct completion behind pending same-session reconciliation', async () => {
-    let resolveProgress: ((value: {
-      newlyCompleted: false;
-      progress: { eligible: boolean; completedAt: null; firstValue: null };
-    }) => void) | undefined;
-    mockReconcileOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
-      resolveProgress = resolve;
-    }));
-    mockCompleteFirstValueWithRecovery.mockResolvedValueOnce({
-      newlyCompleted: true,
-      progress: { eligible: false, completedAt: '2026-09-08T12:00:00Z' },
-    });
-    renderProvider();
-
-    fireEvent.press(screen.getByRole('button', { name: 'Complete first value' }));
-    expect(mockCompleteFirstValueWithRecovery).not.toHaveBeenCalled();
-
-    await act(async () => {
-      resolveProgress?.({
-        newlyCompleted: false,
-        progress: { eligible: true, completedAt: null, firstValue: null },
-      });
-    });
-
-    await waitFor(() => expect(mockCompleteFirstValueWithRecovery).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
-    expect(screen.getByText('true:false')).toBeTruthy();
-  });
-
-  it('lets one in-flight reconciliation own a winning receipt and its analytics', async () => {
-    let resolveProgress: ((value: {
-      newlyCompleted: true;
-      progress: { eligible: false; completedAt: string; firstValue: 'event_saved' };
-    }) => void) | undefined;
-    mockReconcileOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
-      resolveProgress = resolve;
-    }));
-    renderProvider();
-
-    fireEvent.press(screen.getByRole('button', { name: 'Complete first value' }));
-    expect(mockCompleteFirstValueWithRecovery).not.toHaveBeenCalled();
-
-    await act(async () => {
-      resolveProgress?.({
-        newlyCompleted: true,
-        progress: {
-          eligible: false,
-          completedAt: '2026-09-09T12:00:00Z',
-          firstValue: 'event_saved',
-        },
-      });
-    });
-
-    await waitFor(() => expect(mockCapture).toHaveBeenCalledTimes(2));
-    expect(mockCompleteFirstValueWithRecovery).not.toHaveBeenCalled();
-    expect(screen.getByText('true:false')).toBeTruthy();
-  });
-
-  it('clears stale metadata without replay when the server already reports completion', async () => {
-    mockReconcileOnboardingProgress.mockResolvedValueOnce({
-      newlyCompleted: false,
-      progress: {
-        eligible: false,
-        completedAt: '2026-09-09T12:00:00Z',
-        firstValue: 'artist_followed',
-      },
-    });
-
-    renderProvider();
-
-    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
-    expect(mockClearPendingFirstValueCompletion).toHaveBeenCalledWith('42', 'Bearer token');
-    expect(mockCapture).not.toHaveBeenCalled();
-  });
-
-  it('retries when connectivity returns without classifying an offline account as new', async () => {
-    mockConnected = false;
-    const view = renderProvider();
-    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
-    expect(mockReconcileOnboardingProgress).not.toHaveBeenCalled();
-
-    mockConnected = true;
-    view.rerender(
-      <FirstRunProvider>
-        <Probe />
-      </FirstRunProvider>,
-    );
-
-    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
-    expect(mockReconcileOnboardingProgress).toHaveBeenCalledWith(mockRequestConfig);
-  });
-
-  it('retries pending completion when the app returns to the foreground', async () => {
-    let onAppStateChange: ((state: 'active') => void) | null = null;
-    const remove = jest.fn();
-    jest.spyOn(AppState, 'addEventListener').mockImplementation((
-      _event,
-      listener,
-    ) => {
-      onAppStateChange = listener as (state: 'active') => void;
-      return { remove };
-    });
-    const view = renderProvider();
-    await waitFor(() => expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(1));
-
-    act(() => onAppStateChange?.('active'));
-
-    await waitFor(() => expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(2));
-    view.unmount();
-    expect(remove).toHaveBeenCalledTimes(1);
-  });
-
-  it('coalesces overlapping same-session triggers so the winning receipt is observed once', async () => {
-    let onAppStateChange: ((state: 'active') => void) | null = null;
-    jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
-      onAppStateChange = listener as (state: 'active') => void;
-      return { remove: jest.fn() };
-    });
-    let resolveReconciliation: ((value: {
-      newlyCompleted: true;
-      progress: { eligible: false; completedAt: string; firstValue: 'event_saved' };
-    }) => void) | undefined;
-    mockReconcileOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
-      resolveReconciliation = resolve;
+    let rejectStartupAttempt!: (reason: Error) => void;
+    mockUpdateOnboardingIntent.mockReturnValueOnce(new Promise((_resolve, reject) => {
+      rejectStartupAttempt = reject;
     }));
 
     renderProvider();
-    await waitFor(() => expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(1));
-    act(() => onAppStateChange?.('active'));
-    expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(1);
-
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(1));
     await act(async () => {
-      resolveReconciliation?.({
-        newlyCompleted: true,
-        progress: {
-          eligible: false,
-          completedAt: '2026-09-09T12:00:00Z',
-          firstValue: 'event_saved',
-        },
-      });
+      rejectStartupAttempt(new Error('offline'));
+      await Promise.resolve();
     });
 
-    await waitFor(() => expect(mockCapture).toHaveBeenCalledTimes(2));
-    expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(1);
+    act(() => emitAppStateChange('active'));
+
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(values.has(key)).toBe(false));
   });
 
-  it('does not apply or attribute Party A reconciliation after switching to Party B', async () => {
-    let resolvePartyA: ((value: {
-      newlyCompleted: true;
-      progress: { eligible: false; completedAt: string; firstValue: 'artist_followed' };
-    }) => void) | undefined;
-    mockReconcileOnboardingProgress
-      .mockReturnValueOnce(new Promise((resolve) => {
-        resolvePartyA = resolve;
-      }))
+  it('coalesces foreground intent recovery while the active Party request is pending', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: false });
+    const key = 'tdf-onboarding-intent:party:42';
+    const values = new Map([[key, 'professional_tools']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    let resolveUpdate!: (result: { eligible: boolean }) => void;
+    mockUpdateOnboardingIntent.mockReturnValueOnce(new Promise((resolve) => {
+      resolveUpdate = resolve;
+    }));
+
+    renderProvider();
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      emitAppStateChange('active');
+      emitAppStateChange('active');
+    });
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveUpdate({ eligible: false });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(values.has(key)).toBe(false));
+  });
+
+  it('retries a retained first-value completion when the app returns to the foreground', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
+    const key = 'tdf-onboarding-first-value:party:42';
+    const values = new Map([[key, 'moment_reaction']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    mockCompleteOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({
-        newlyCompleted: false,
-        progress: { eligible: true, completedAt: null, firstValue: null },
+        newlyCompleted: true,
+        progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
       });
-    const view = renderProvider();
-    await waitFor(() => expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(1));
 
-    mockPartyId = '84';
-    mockToken = 'Bearer token-b';
-    mockBinding = { authorization: 'Bearer token-b', signal: {}, version: 2 };
+    renderProvider();
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    act(() => emitAppStateChange('active'));
+
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(screen.getByText('moment_reaction')).toBeTruthy();
+    expect(values.has(key)).toBe(false);
+  });
+
+  it('coalesces foreground first-value recovery while the Party request is pending', async () => {
+    mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
+    const key = 'tdf-onboarding-first-value:party:42';
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      storageKey === key ? 'event_saved' : null);
+    let resolveCompletion!: (result: {
+      newlyCompleted: boolean;
+      progress: { eligible: boolean; completedAt?: string };
+    }) => void;
+    mockCompleteOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveCompletion = resolve;
+    }));
+
+    renderProvider();
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      emitAppStateChange('active');
+      emitAppStateChange('active');
+    });
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveCompletion({ newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(screen.getByText('event_saved')).toBeTruthy();
+  });
+
+  it('does not let late eligibility reopen onboarding after a foreground replay', async () => {
+    let resolveProgress!: (progress: { eligible: boolean; completedAt?: string }) => void;
+    mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProgress = resolve;
+    }));
+    const key = 'tdf-onboarding-first-value:party:42';
+    const values = new Map([[key, 'moment_reaction']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
+    });
+
+    renderProvider();
+    act(() => emitAppStateChange('active'));
+    await waitFor(() => expect(screen.getByText('moment_reaction')).toBeTruthy());
+
+    await act(async () => {
+      resolveProgress({ eligible: true });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(screen.getByText('moment_reaction')).toBeTruthy();
+  });
+
+  it('reloads authoritative eligibility after an offline startup returns to the foreground', async () => {
+    mockGetOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ eligible: true });
+
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+
+    act(() => emitAppStateChange('active'));
+
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+  });
+
+  it('coalesces repeated foreground eligibility loads for the active Party', async () => {
+    let resolveProgress!: (progress: { eligible: boolean; completedAt?: string }) => void;
+    mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProgress = resolve;
+    }));
+
+    renderProvider();
+    act(() => {
+      emitAppStateChange('active');
+      emitAppStateChange('active');
+    });
+
+    expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveProgress({ eligible: true });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+  });
+
+  it('does not let an older foreground eligibility response reopen an exited Party', async () => {
+    let resolveForegroundProgress!: (progress: { eligible: boolean; completedAt?: string }) => void;
+    mockGetOnboardingProgress
+      .mockResolvedValueOnce({ eligible: true })
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveForegroundProgress = resolve;
+      }));
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
+    });
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    act(() => emitAppStateChange('active'));
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
+    fireEvent.press(screen.getByRole('button', { name: 'Exit onboarding' }));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+
+    await act(async () => {
+      resolveForegroundProgress({ eligible: true });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('true:false')).toBeTruthy();
+  });
+
+  it('keeps onboarding exited for the Party session when durable completion fails', async () => {
+    mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
+    mockCompleteOnboardingProgress.mockRejectedValueOnce(new Error('offline'));
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    fireEvent.press(screen.getByRole('button', { name: 'Exit onboarding' }));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'tdf-onboarding-exit:party:42',
+      'pending',
+    );
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(
+      'tdf-onboarding-exit:party:42',
+    );
+    act(() => emitAppStateChange('active'));
+
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('true:false')).toBeTruthy();
+  });
+
+  it('keeps a retained offline exit closed across relaunch and clears it on reconnect', async () => {
+    mockIsConnected = false;
+    const key = 'tdf-onboarding-exit:party:42';
+    const values = new Map([[key, 'pending']]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.setItem).mockImplementation(async (storageKey, value) => {
+      values.set(storageKey, value);
+    });
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
+    mockCompleteOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        newlyCompleted: true,
+        progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
+      });
+
+    const view = renderProvider();
+
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(values.get(key)).toBe('pending');
+
+    mockIsConnected = true;
     view.rerender(
       <FirstRunProvider>
         <Probe />
       </FirstRunProvider>,
     );
-    await waitFor(() => expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
 
-    await act(async () => {
-      resolvePartyA?.({
-        newlyCompleted: true,
-        progress: {
-          eligible: false,
-          completedAt: '2026-09-09T12:00:00Z',
-          firstValue: 'artist_followed',
-        },
-      });
-    });
-
-    expect(screen.getByText('true:true')).toBeTruthy();
-    expect(mockCapture).not.toHaveBeenCalled();
-    expect(mockClearPendingFirstValueCompletion).not.toHaveBeenCalledWith('84', 'Bearer token-b');
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(values.has(key)).toBe(false));
+    expect(screen.getByText('true:false')).toBeTruthy();
   });
 
-  it('applies authoritative state but emits no analytics for a malformed completion value', async () => {
-    mockReconcileOnboardingProgress.mockResolvedValueOnce({
-      newlyCompleted: true,
-      progress: {
-        eligible: false,
-        completedAt: '2026-09-09T12:00:00Z',
-        firstValue: null,
-      },
+  it('coalesces retained exit recovery across reconnect and foreground triggers', async () => {
+    mockIsConnected = false;
+    const key = 'tdf-onboarding-exit:party:42';
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      storageKey === key ? 'pending' : null);
+    let resolveCompletion!: (result: {
+      newlyCompleted: boolean;
+      progress: { eligible: boolean; completedAt?: string };
+    }) => void;
+    mockCompleteOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveCompletion = resolve;
+    }));
+
+    const view = renderProvider();
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1));
+
+    mockIsConnected = true;
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+    act(() => emitAppStateChange('active'));
+
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveCompletion({ newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } });
+      await Promise.resolve();
     });
-
-    renderProvider();
-
     await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
-    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('loads eligibility normally for a new Party after the prior Party exits', async () => {
+    mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
+    const view = renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    fireEvent.press(screen.getByRole('button', { name: 'Exit onboarding' }));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    mockPartyId = '77';
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+  });
+
+  it('recovers retained Party work when connectivity returns without an app-state change', async () => {
+    mockIsConnected = false;
+    const intentKey = 'tdf-onboarding-intent:party:42';
+    const firstValueKey = 'tdf-onboarding-first-value:party:42';
+    const values = new Map([
+      [intentKey, 'learning'],
+      [firstValueKey, 'event_saved'],
+    ]);
+    jest.mocked(AsyncStorage.getItem).mockImplementation(async (storageKey) =>
+      values.get(storageKey) ?? null);
+    jest.mocked(AsyncStorage.removeItem).mockImplementation(async (storageKey) => {
+      values.delete(storageKey);
+    });
+    mockGetOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ eligible: true });
+    mockUpdateOnboardingIntent
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ eligible: false });
+    mockCompleteOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        newlyCompleted: true,
+        progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
+      });
+    const view = renderProvider();
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(1);
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+
+    mockIsConnected = true;
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockUpdateOnboardingIntent).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('event_saved')).toBeTruthy());
+    expect(screen.getByText('true:false')).toBeTruthy();
+    expect(values.size).toBe(0);
+  });
+
+  it('coalesces reconnect and foreground recovery for the active Party', async () => {
+    mockIsConnected = false;
+    let resolveProgress!: (progress: { eligible: boolean; completedAt?: string }) => void;
+    mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProgress = resolve;
+    }));
+    const view = renderProvider();
+    expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1);
+
+    mockIsConnected = true;
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+    act(() => emitAppStateChange('active'));
+
+    expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveProgress({ eligible: true });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
   });
 
   it('does not load or complete progress without an authenticated party', async () => {
@@ -410,8 +584,103 @@ describe('FirstRunProvider', () => {
 
     await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
     fireEvent.press(screen.getByRole('button', { name: 'Complete first value' }));
-    expect(mockReconcileOnboardingProgress).not.toHaveBeenCalled();
+    expect(mockGetOnboardingProgress).not.toHaveBeenCalled();
     expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
-    expect(mockCompleteFirstValueWithRecovery).not.toHaveBeenCalled();
   });
+
+  it('fails closed immediately while eligibility for a new Party is unresolved', async () => {
+    mockGetOnboardingProgress
+      .mockResolvedValueOnce({ eligible: true })
+      .mockReturnValueOnce(new Promise(() => undefined));
+    const view = renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    mockPartyId = '77';
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+
+    expect(screen.getByText('false:false')).toBeTruthy();
+    expect(screen.getByText('no-replay')).toBeTruthy();
+  });
+
+  it('ignores a late exit completion after the active Party changes', async () => {
+    let resolveCompletion!: (value: {
+      newlyCompleted: boolean;
+      progress: { eligible: boolean; completedAt?: string };
+    }) => void;
+    mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
+    mockCompleteOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveCompletion = resolve;
+    }));
+    const view = renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    fireEvent.press(screen.getByRole('button', { name: 'Exit onboarding' }));
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalledWith());
+    mockPartyId = '77';
+    view.rerender(
+      <FirstRunProvider>
+        <Probe />
+      </FirstRunProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+
+    resolveCompletion({ newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } });
+
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+  });
+  it('reconciles cross-device evidence and attributes the winning result once', async () => {
+    mockReconcileOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, completedAt: '2026-10-04T00:00:00Z', firstValue: 'event_saved' },
+    });
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(mockCapture).toHaveBeenCalledWith('first_value_completed', { platform: 'mobile', value: 'event_saved' });
+    expect(mockCapture).toHaveBeenCalledTimes(2);
+    act(() => emitAppStateChange('active'));
+    await waitFor(() => expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(2));
+    expect(mockCapture).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps eligibility when the first-value handshake has no durable evidence yet', async () => {
+    mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: false, progress: { eligible: true, completedAt: null, firstValue: null },
+    });
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: 'Complete first value' }));
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalled());
+    expect(screen.getByText('true:true')).toBeTruthy();
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith('tdf-onboarding-first-value:party:42');
+  });
+
+  it('rejects a replaced session result and creates a fresh same-Party request', async () => {
+    let finishOld!: (result: unknown) => void;
+    mockReconcileOnboardingProgress.mockReturnValueOnce(new Promise(resolve => { finishOld = resolve; }));
+    const view = renderProvider();
+    const config = mockReconcileOnboardingProgress.mock.calls[0][0];
+    expect(config.headers.Authorization).toBe('Bearer test-session');
+    setAuthToken('replacement-session');
+    view.rerender(<FirstRunProvider><Probe /></FirstRunProvider>);
+    await waitFor(() => expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(2));
+    expect(config.signal.aborted).toBe(true);
+    await act(async () => finishOld({ newlyCompleted: true, progress: { eligible: true, firstValue: 'event_saved' } }));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('does not invent analytics for malformed reconciliation evidence', async () => {
+    mockReconcileOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true, progress: { eligible: false, firstValue: 'invented' },
+    });
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
 });

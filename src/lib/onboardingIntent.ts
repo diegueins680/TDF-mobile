@@ -1,3 +1,4 @@
+import { bindSessionOwnership } from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Href } from 'expo-router';
 
@@ -6,36 +7,24 @@ import {
   type OnboardingCompletionResult,
   type OnboardingFirstValue,
   type OnboardingIntent,
+  updateOnboardingIntent,
 } from '../api/onboarding';
 import {
-  assertAuthSession,
-  authSessionRequestConfig,
-  captureAuthSession,
-} from '../api/client';
+  evaluateFeatureAccess,
+  getFeatureById,
+  resolveMobileDestination,
+} from '../features/featureRegistry';
 import { MOBILE_LANDING_ROUTE } from '../navigation/mobileSurface';
 
 export type { OnboardingIntent } from '../api/onboarding';
 
 export const DEFAULT_ONBOARDING_INTENT: OnboardingIntent = 'events';
 export const PENDING_INTENT_KEY = 'tdf-onboarding-intent:pending';
-export const PENDING_FIRST_VALUE_KEY_PREFIX = 'tdf-onboarding-first-value:pending:';
+export const PENDING_PARTY_INTENT_PREFIX = 'tdf-onboarding-intent:party:';
+export const PENDING_FIRST_VALUE_PREFIX = 'tdf-onboarding-first-value:party:';
+export const PENDING_ONBOARDING_EXIT_PREFIX = 'tdf-onboarding-exit:party:';
 
-const FIRST_VALUES = new Set<OnboardingFirstValue>([
-  'artist_followed',
-  'access_requested',
-  'event_saved',
-  'moment_reaction',
-]);
-
-type PendingFirstValueRecord = {
-  version: 1;
-  value: OnboardingFirstValue;
-};
-
-export type PendingFirstValueCompletionResult = {
-  value: OnboardingFirstValue;
-  result: OnboardingCompletionResult;
-};
+const PENDING_ONBOARDING_EXIT_VALUE = 'pending';
 
 const INTENTS = new Set<OnboardingIntent>([
   'events',
@@ -45,6 +34,17 @@ const INTENTS = new Set<OnboardingIntent>([
   'learning',
   'professional_tools',
 ]);
+
+const FIRST_VALUES = new Set<OnboardingFirstValue>([
+  'artist_followed',
+  'access_requested',
+  'event_saved',
+  'moment_reaction',
+]);
+
+export function isOnboardingFirstValue(value: unknown): value is OnboardingFirstValue {
+  return typeof value === 'string' && FIRST_VALUES.has(value as OnboardingFirstValue);
+}
 
 const LEGACY_INTENTS: Record<string, OnboardingIntent> = {
   fan: 'follow_artists',
@@ -116,160 +116,284 @@ export async function clearPendingOnboardingIntent(): Promise<void> {
   }
 }
 
-const normalizePartyId = (partyId: string | null | undefined): string | null => {
-  const normalized = partyId?.trim() ?? '';
-  return /^[1-9]\d*$/.test(normalized) ? normalized : null;
-};
-
-const pendingFirstValueKey = (partyId: string): string =>
-  `${PENDING_FIRST_VALUE_KEY_PREFIX}${partyId}`;
-
-const parsePendingFirstValue = (raw: string | null): OnboardingFirstValue | null => {
-  if (!raw) return null;
+export async function clearPendingOnboardingIntentIfCurrent(
+  intent: OnboardingIntent,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<void> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   try {
-    const parsed = JSON.parse(raw) as Partial<PendingFirstValueRecord> | null;
     if (
-      !parsed
-      || parsed.version !== 1
-      || typeof parsed.value !== 'string'
-      || !FIRST_VALUES.has(parsed.value as OnboardingFirstValue)
-    ) return null;
-    return parsed.value as OnboardingFirstValue;
-  } catch {
-    return null;
-  }
-};
-
-async function readPendingFirstValue(partyId: string): Promise<OnboardingFirstValue | null> {
-  const key = pendingFirstValueKey(partyId);
-  const raw = await AsyncStorage.getItem(key);
-  const value = parsePendingFirstValue(raw);
-  if (raw && !value) await AsyncStorage.removeItem(key);
-  return value;
-}
-
-async function persistPendingFirstValue(
-  partyId: string,
-  value: OnboardingFirstValue,
-): Promise<void> {
-  const record: PendingFirstValueRecord = { version: 1, value };
-  await AsyncStorage.setItem(pendingFirstValueKey(partyId), JSON.stringify(record));
-}
-
-export async function clearPendingFirstValueCompletion(
-  partyId: string | null | undefined,
-  authToken: string | null | undefined,
-): Promise<void> {
-  const normalizedPartyId = normalizePartyId(partyId);
-  if (!normalizedPartyId || !authToken) return;
-  let binding;
-  try {
-    binding = captureAuthSession(authToken);
-    await AsyncStorage.removeItem(pendingFirstValueKey(normalizedPartyId));
-    assertAuthSession(binding);
-  } catch {
-    // Keep a marker on storage failure. A later idempotent replay can clear it.
-  }
-}
-
-async function requestPendingFirstValueCompletion(
-  partyId: string,
-  value: OnboardingFirstValue,
-  authToken: string,
-): Promise<OnboardingCompletionResult | null> {
-  let binding;
-  try {
-    binding = captureAuthSession(authToken);
-  } catch {
-    return null;
-  }
-
-  try {
-    const result = await completeOnboardingProgress(
-      value,
-      authSessionRequestConfig(binding),
-    );
-    assertAuthSession(binding);
-    if (result.progress.completedAt) {
-      try {
-        await AsyncStorage.removeItem(pendingFirstValueKey(partyId));
-      } catch {
-        // Completion is authoritative even if best-effort marker cleanup fails.
-      }
+      stillOwnsParty()
+      && await AsyncStorage.getItem(PENDING_INTENT_KEY) === intent
+      && stillOwnsParty()
+    ) {
+      await AsyncStorage.removeItem(PENDING_INTENT_KEY);
     }
-    assertAuthSession(binding);
+  } catch {
+    // A retained intent is safe to retry; never clear a newer auth attempt.
+  }
+}
+
+const partyIntentKey = (partyId: string): string =>
+  `${PENDING_PARTY_INTENT_PREFIX}${encodeURIComponent(partyId)}`;
+
+async function readPendingPartyIntent(partyId: string): Promise<OnboardingIntent | null> {
+  try {
+    const key = partyIntentKey(partyId);
+    const stored = await AsyncStorage.getItem(key);
+    const intent = parseOnboardingIntent(stored);
+    if (stored && !intent) {
+      await AsyncStorage.removeItem(key);
+    }
+    return intent;
+  } catch {
+    return null;
+  }
+}
+
+async function storePendingPartyIntent(
+  partyId: string,
+  intent: OnboardingIntent,
+): Promise<boolean> {
+  try {
+    await AsyncStorage.setItem(partyIntentKey(partyId), intent);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function clearPendingPartyIntentIfCurrent(
+  partyId: string,
+  intent: OnboardingIntent,
+  stillOwnsParty: () => boolean,
+): Promise<void> {
+  try {
+    const key = partyIntentKey(partyId);
+    if (
+      stillOwnsParty()
+      && await AsyncStorage.getItem(key) === intent
+      && stillOwnsParty()
+    ) {
+      await AsyncStorage.removeItem(key);
+    }
+  } catch {
+    // A later retry is safe because the server upserts intent for the authenticated Party.
+  }
+}
+
+export async function persistOnboardingIntentForPartyWithRetry(
+  rawPartyId: string | number | null | undefined,
+  intent: OnboardingIntent,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<boolean> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
+  const partyId = String(rawPartyId ?? '').trim();
+  if (!partyId || !stillOwnsParty()) return false;
+  const storedForParty = await storePendingPartyIntent(partyId, intent);
+  if (!stillOwnsParty()) return false;
+  if (storedForParty) {
+    await clearPendingOnboardingIntentIfCurrent(intent, stillOwnsParty);
+    if (!stillOwnsParty()) return false;
+  }
+  try {
+    await updateOnboardingIntent(intent);
+  } catch {
+    return false;
+  }
+  if (!stillOwnsParty()) return false;
+  await clearPendingPartyIntentIfCurrent(partyId, intent, stillOwnsParty);
+  if (!stillOwnsParty()) return false;
+  await clearPendingOnboardingIntentIfCurrent(intent, stillOwnsParty);
+  return true;
+}
+
+export async function retryPendingOnboardingIntent(
+  rawPartyId: string | null | undefined,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<boolean> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return false;
+  const intent = await readPendingPartyIntent(partyId)
+    ?? await readPendingOnboardingIntent();
+  if (!intent || !stillOwnsParty()) return false;
+  return persistOnboardingIntentForPartyWithRetry(partyId, intent, stillOwnsParty);
+}
+
+export async function markFirstValueCompleted(
+  partyId: string | null | undefined,
+  value: OnboardingFirstValue,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<OnboardingFirstValue | false> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
+  const result = await completeFirstValueWithRetry(partyId, value, stillOwnsParty);
+  const authoritativeValue = result?.progress?.firstValue;
+  return result?.newlyCompleted === true && isOnboardingFirstValue(authoritativeValue)
+    ? authoritativeValue : false;
+}
+
+const firstValueKey = (partyId: string): string =>
+  `${PENDING_FIRST_VALUE_PREFIX}${encodeURIComponent(partyId)}`;
+
+async function clearPendingFirstValueIfCurrent(
+  partyId: string,
+  value: OnboardingFirstValue,
+): Promise<void> {
+  try {
+    const key = firstValueKey(partyId);
+    if (await AsyncStorage.getItem(key) === value) {
+      await AsyncStorage.removeItem(key);
+    }
+  } catch {
+    // A later retry is harmless because the completion endpoint is idempotent.
+  }
+}
+
+export async function completeFirstValueWithRetry(
+  rawPartyId: string | null | undefined,
+  value: OnboardingFirstValue,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<OnboardingCompletionResult | null> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return null;
+  try {
+    await AsyncStorage.setItem(firstValueKey(partyId), value);
+  } catch {
+    // Still attempt the authoritative handshake when local persistence is unavailable.
+  }
+  if (!stillOwnsParty()) return null;
+  try {
+    const result = await completeOnboardingProgress(value);
+    if (!stillOwnsParty()) return null;
+    if (result.progress?.completedAt) await clearPendingFirstValueIfCurrent(partyId, value);
     return result;
   } catch {
     return null;
   }
 }
 
-export async function completeFirstValueWithRecovery(
-  partyId: string | null | undefined,
-  value: OnboardingFirstValue,
-  authToken: string | null | undefined,
-): Promise<OnboardingCompletionResult | null> {
-  const normalizedPartyId = normalizePartyId(partyId);
-  if (!normalizedPartyId || !authToken) return null;
-
-  let binding;
-  try {
-    binding = captureAuthSession(authToken);
-  } catch {
-    return null;
-  }
-
-  try {
-    await persistPendingFirstValue(normalizedPartyId, value);
-  } catch {
-    // Storage can be unavailable. Still attempt the authoritative handshake;
-    // only relaunch recovery is degraded, not the already-completed action.
-  }
-  try {
-    assertAuthSession(binding);
-  } catch {
-    return null;
-  }
-
-  return requestPendingFirstValueCompletion(normalizedPartyId, value, authToken);
-}
+export type RetriedFirstValueCompletion = {
+  value: OnboardingFirstValue;
+  result: OnboardingCompletionResult;
+};
 
 export async function retryPendingFirstValueCompletion(
-  partyId: string | null | undefined,
-  authToken: string | null | undefined,
-): Promise<PendingFirstValueCompletionResult | null> {
-  const normalizedPartyId = normalizePartyId(partyId);
-  if (!normalizedPartyId || !authToken) return null;
-
-  let binding;
+  rawPartyId: string | null | undefined,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<RetriedFirstValueCompletion | null> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return null;
+  const key = firstValueKey(partyId);
+  let stored: string | null;
   try {
-    binding = captureAuthSession(authToken);
-    const value = await readPendingFirstValue(normalizedPartyId);
-    assertAuthSession(binding);
-    if (!value) return null;
-    const result = await requestPendingFirstValueCompletion(
-      normalizedPartyId,
-      value,
-      authToken,
-    );
-    return result ? { value, result } : null;
+    stored = await AsyncStorage.getItem(key);
+  } catch {
+    return null;
+  }
+  if (!stored) return null;
+  if (!FIRST_VALUES.has(stored as OnboardingFirstValue)) {
+    try {
+      await AsyncStorage.removeItem(key);
+    } catch {
+      // Best-effort cleanup of invalid local state.
+    }
+    return null;
+  }
+  const value = stored as OnboardingFirstValue;
+  if (!stillOwnsParty()) return null;
+  try {
+    const result = await completeOnboardingProgress(value);
+    if (!stillOwnsParty()) return null;
+    if (result.progress?.completedAt) await clearPendingFirstValueIfCurrent(partyId, value);
+    return {
+      value: isOnboardingFirstValue(result.progress?.firstValue) ? result.progress.firstValue : value,
+      result,
+    };
   } catch {
     return null;
   }
 }
 
-export async function markFirstValueCompleted(
-  partyId: string | null | undefined,
-  value: OnboardingFirstValue,
-  authToken: string | null | undefined,
-): Promise<OnboardingFirstValue | null> {
-  const result = await completeFirstValueWithRecovery(partyId, value, authToken);
-  const authoritativeValue = result?.progress.firstValue;
-  return result?.newlyCompleted === true
-    && authoritativeValue
-    && FIRST_VALUES.has(authoritativeValue)
-    ? authoritativeValue
-    : null;
+const onboardingExitKey = (partyId: string): string =>
+  `${PENDING_ONBOARDING_EXIT_PREFIX}${encodeURIComponent(partyId)}`;
+
+async function clearPendingOnboardingExit(
+  partyId: string,
+  stillOwnsParty: () => boolean,
+): Promise<void> {
+  try {
+    const key = onboardingExitKey(partyId);
+    if (
+      stillOwnsParty()
+      && await AsyncStorage.getItem(key) === PENDING_ONBOARDING_EXIT_VALUE
+      && stillOwnsParty()
+    ) {
+      await AsyncStorage.removeItem(key);
+    }
+  } catch {
+    // A later retry is harmless because the completion endpoint is idempotent.
+  }
+}
+
+export async function completeOnboardingExitWithRetry(
+  rawPartyId: string | null | undefined,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<OnboardingCompletionResult | null> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return null;
+  try {
+    await AsyncStorage.setItem(
+      onboardingExitKey(partyId),
+      PENDING_ONBOARDING_EXIT_VALUE,
+    );
+  } catch {
+    // Still attempt the authoritative handshake when local persistence is unavailable.
+  }
+  if (!stillOwnsParty()) return null;
+  try {
+    const result = await completeOnboardingProgress();
+    if (!stillOwnsParty()) return null;
+    await clearPendingOnboardingExit(partyId, stillOwnsParty);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+export type RetriedOnboardingExit = {
+  result: OnboardingCompletionResult | null;
+};
+
+export async function retryPendingOnboardingExit(
+  rawPartyId: string | null | undefined,
+  stillOwnsParty: () => boolean = () => true,
+): Promise<RetriedOnboardingExit | null> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
+  const partyId = rawPartyId?.trim();
+  if (!partyId || !stillOwnsParty()) return null;
+  const key = onboardingExitKey(partyId);
+  let stored: string | null;
+  try {
+    stored = await AsyncStorage.getItem(key);
+  } catch {
+    return null;
+  }
+  if (!stored || !stillOwnsParty()) return null;
+  if (stored !== PENDING_ONBOARDING_EXIT_VALUE) {
+    try {
+      if (stillOwnsParty()) await AsyncStorage.removeItem(key);
+    } catch {
+      // Best-effort cleanup of invalid local state.
+    }
+    return null;
+  }
+  return {
+    result: await completeOnboardingExitWithRetry(partyId, stillOwnsParty),
+  };
 }
 
 const hasAny = (values: readonly string[], candidates: readonly string[]) => {
@@ -286,18 +410,51 @@ export function resolveMobileIntentDestination(
     case 'follow_artists':
       return '/(tabs)/social';
     case 'artist_profile':
-      return hasAny(roles, ['artist', 'artista', 'admin'])
-        ? '/createArtistProfile'
-        : ({ pathname: '/access-requests/new', params: { feature: 'artist.onboarding', action: 'create' } } as unknown as Href);
+      return '/createArtistProfile';
     case 'internships':
       return hasAny(roles, ['intern', 'admin']) && hasAny(modules, ['internships', 'admin'])
         ? '/(tabs)/more' as unknown as Href
         : ({ pathname: '/access-requests/new', params: { feature: 'internships', action: 'view' } } as unknown as Href);
+    case 'events':
     case 'learning':
     case 'professional_tools':
-      return '/(tabs)/more' as unknown as Href;
-    case 'events':
     default:
       return MOBILE_LANDING_ROUTE;
   }
+}
+
+export type MobileIntentNavigation =
+  | { kind: 'native'; value: Href }
+  | { kind: 'web'; value: string };
+
+const resolvePublicWebFeature = (
+  featureId: string,
+  roles: readonly string[],
+  modules: readonly string[],
+): MobileIntentNavigation | null => {
+  const feature = getFeatureById(featureId);
+  if (!feature) return null;
+  if (evaluateFeatureAccess(
+    feature,
+    { authenticated: true, roles, modules },
+    'view',
+  ).state !== 'allowed') return null;
+  const destination = resolveMobileDestination(feature);
+  return destination?.kind === 'web' ? { kind: 'web', value: destination.value } : null;
+};
+
+export function resolveMobileIntentNavigation(
+  intent: OnboardingIntent,
+  roles: readonly string[] = [],
+  modules: readonly string[] = [],
+): MobileIntentNavigation {
+  const publicFirstAction = intent === 'learning'
+    ? resolvePublicWebFeature('public.trials', roles, modules)
+    : intent === 'professional_tools'
+      ? resolvePublicWebFeature('tools.music-maker', roles, modules)
+      : null;
+  return publicFirstAction ?? {
+    kind: 'native',
+    value: resolveMobileIntentDestination(intent, roles, modules),
+  };
 }

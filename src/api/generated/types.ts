@@ -4,6 +4,577 @@
  */
 
 export interface paths {
+    "/commerce/payment-capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List payment routes actually available for a transaction
+         * @description Returns only routes with verified environment, merchant, credential, contract, method and completion gates. An empty route list is authoritative. No secrets or merchant configuration are returned. Fallback requires authoritative confirmation that no charge was or will be created; ambiguous outcomes remain held for reconciliation.
+         */
+        get: operations["listPaymentCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listInteractionReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/blocked-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listInteractionBlockedAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/targets/{kind}/{entityKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getInteractionSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/targets/{kind}/{entityKey}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getInteractionComments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/targets/{kind}/{entityKey}/comments/{commentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getInteractionComment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/targets/{kind}/{entityKey}/reactors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getInteractionReactors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/resolve/{destinationKind}/{destinationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["resolveInteractionDestination"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/interactions/targets/{kind}/{entityKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPublicInteractionSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/interactions/targets/{kind}/{entityKey}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPublicInteractionComments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/interactions/targets/{kind}/{entityKey}/comments/{commentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPublicInteractionComment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/interactions/targets/{kind}/{entityKey}/reactors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPublicInteractionReactors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/interactions/resolve/{destinationKind}/{destinationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["resolvePublicInteractionDestination"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/targets/{targetId}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["executeInteractionCommand"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/blocks/{partyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getInteractionBlock"];
+        put: operations["setInteractionBlock"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getInteractionPreferences"];
+        put: operations["setInteractionPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/interactions/moderation/{targetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getInteractionModeration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trials/v1/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates an unverified enquiry contact. A request key identifies one submission; email never establishes account ownership. Unsupported credential fields are rejected. */
+        post: operations["createTrialSignupEnquiry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trials/v1/trial-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates an enquiry and unverified contact atomically, without login credentials or access grants. Identical retries return the saved request even if availability changes. */
+        post: operations["createPublicTrialRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/trials/v1/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Requires school authorization. Creates a new student contact and applies the existing student policy. Retries are scoped to the authenticated actor; shared email cannot adopt another person. */
+        post: operations["createSchoolStudent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/v2/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * getSocialV2Me
+         * @description Experimental account-only API. Process and database gates default off. Not qualified for production cutover.
+         */
+        get: operations["getSocialV2Me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/v2/relationships/{partyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * getSocialV2Relationship
+         * @description Experimental account-only API. Process and database gates default off. Not qualified for production cutover.
+         */
+        get: operations["getSocialV2Relationship"];
+        put?: never;
+        /**
+         * mutateSocialV2Relationship
+         * @description Experimental account-only API. Process and database gates default off. Not qualified for production cutover.
+         */
+        post: operations["mutateSocialV2Relationship"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/v2/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * updateSocialV2Preferences
+         * @description Experimental account-only API. Process and database gates default off. Not qualified for production cutover.
+         */
+        put: operations["updateSocialV2Preferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/v2/following": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * getSocialV2Following
+         * @description Experimental account-only API. Process and database gates default off. Not qualified for production cutover.
+         */
+        get: operations["getSocialV2Following"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social/v2/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * getSocialV2Discover
+         * @description Experimental account-only API. Process and database gates default off. Not qualified for production cutover.
+         */
+        get: operations["getSocialV2Discover"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-operations/events/{eventId}/tasks/{activityId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete an opted-in preparation task with current RACI and completed dependencies
+         * @description Only draft/planning events and planned/confirmed tasks with both policy guards. Requires current owner or scoped task.manage authority; exact historical replay requires current read authority. Revalidates the bound session and SQL receipt inside the transaction before commit. Result aggregateRevision is exactly the original expectedRevision plus one, also on replay. No actor, time, hash or override can be supplied. No approver/evidence, live-event or notification flow is implied. No automatic rebase or retry with a new key after network ambiguity. Requires separately reviewed SQL/feature activation; disabled by default.
+         */
+        post: operations["completeEventOperationTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-operations/events/{eventId}/tasks/{activityId}/raci/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read current scoped RACI editing options without granting authority
+         * @description Current task readers may read the context. Only current managers receive options, and only during supported lifecycle states with current required accountability. Uses the same session/auth/task revision fences and one post-wait clock/snapshot. Returns minimal Party IDs, not contacts or names. Each keyset page is independently authorized; pages are not a consistent roster snapshot. All options are advisory; the command still revalidates authority, source, recipient and expected revision.
+         */
+        get: operations["getEventRaciEditorContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-operations/events/{eventId}/tasks/{activityId}/raci/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reassign one current unbounded RACI assignment atomically
+         * @description Planning-stage command on the canonical task. Requires current owner or applicable task.manage authority; read-only current access permits exact historical replay only. Revalidates the bound authenticated session and validates the SQL receipt before commit. Preserves the revoked assignment, immutable audit and task-scoped idempotency receipt. Result aggregateRevision equals expectedRevision plus two, including on exact replay. No recipient consent, availability, booking or notification is implied. Requires separately reviewed SQL/feature activation. Never automatically rebase or retry with a new key after an ambiguous network failure. No actor/time/hash may be supplied.
+         */
+        post: operations["reassignEventOperationTaskRaci"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-operations/events/{eventId}/tasks/{activityId}/revisioned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the canonical task with its coherent aggregate storage revision
+         * @description Opt-in envelope; the existing task representation is unchanged. Requires the same current authenticated session and exact task.read/task.manage scope as the task route. Metadata is share-locked through the canonical projection and authorization is checked after waiting. The decimal-string revision is not an authorization or readiness certificate; RACI time windows can expire without a storage write. Query parameters cannot select an actor.
+         */
+        get: operations["getEventOperationTaskWithRevision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-operations/events/{eventId}/tasks/{activityId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the currently authorized task state and RACI projection
+         * @description Uses canonical logistics activity IDs. Requires current ownership or task.read/task.manage scoped to this event or exact task; event.read, finance, coproduction and assignment alone do not grant access. Session validity is rechecked in the same database transaction. The response excludes notes, titles, dates, contacts, dependencies, documents and history. Activity and policy versions are not an aggregate ETag or offline write token. Numeric identifiers and versions are restricted to exact JavaScript-safe integers. Query parameters cannot select the acting party or authorization time.
+         */
+        get: operations["getEventOperationTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-operations/events/{eventId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the authorized canonical lifecycle projection for an event
+         * @description Returns only capabilities currently held by the authenticated party and transitions whose policy, authority, and implementation-effect gate all permit execution. A disabled feature, an unknown event, and an event the caller cannot read all produce 404 so object identifiers do not disclose event existence.
+         */
+        get: operations["getEventOperationSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-operations/events/{eventId}/transitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply an idempotent, version-guarded canonical lifecycle transition
+         * @description Uses optimistic concurrency and database row locking; it never silently applies last-write-wins. Reusing a command UUID with the same canonical request returns the stored result, while reuse with different content is rejected. Only early planning and independent-approval transitions are implementation-enabled in this phase. Publishing and every transition with ticket, booking, contract, notification, or financial effects remain closed until those effects are transactional or outboxed and verified. Current read authority is required before any receipt or conflict is disclosed. Absent and unreadable events return the identical 404 not_found error, including retries and changed-content keys. A readable event can still return 403 when the caller lacks transition authority.
+         */
+        post: operations["applyEventOperationTransition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/social/followers": {
         parameters: {
             query?: never;
@@ -59,6 +630,95 @@ export interface paths {
         put?: never;
         /** Create a social event using a canonical event type identifier */
         post: operations["createSocialEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/rsvp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        /** Get the authenticated user's RSVP for an event */
+        get: operations["getMyEventRsvp"];
+        /** Atomically create or update the authenticated user's RSVP */
+        put: operations["upsertMyEventRsvp"];
+        post?: never;
+        /** Delete the authenticated user's RSVP */
+        delete: operations["deleteMyEventRsvp"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/rsvp-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get privacy-safe aggregate RSVP counts */
+        get: operations["getEventRsvpSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/rsvps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List RSVPs for an authorized organizer */
+        get: operations["listEventRsvpsForOrganizer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/profiles/{partyId}/rsvp-feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the privacy-filtered event RSVP profile feed */
+        get: operations["getEventRsvpProfileFeed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/directory-profiles/{slug}/rsvp-feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get RSVP activity for an unambiguously person-linked public directory profile */
+        get: operations["getDirectoryProfileEventRsvpFeed"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -246,6 +906,23 @@ export interface paths {
         get: operations["getHealth"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an account recovery email */
+        post: operations["requestPasswordReset"];
         delete?: never;
         options?: never;
         head?: never;
@@ -461,6 +1138,50 @@ export interface paths {
          * @description Completes an incomplete signup onboarding record by inferring the earliest Party-bound first useful action created during the signup eligibility window. This supports recovery on another device without accepting a client-supplied action, role, module, or permission. Exact-timestamp ties use the stable order artist_followed, access_requested, event_saved, then moment_reaction. The mutation is idempotent; completed accounts, accounts without a signup marker, and accounts without in-window evidence return newlyCompleted=false.
          */
         post: operations["reconcileOnboarding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/session/experiments/{experimentId}/assignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experimentId: "single-feature-onboarding-v1";
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the current account experiment assignment
+         * @description Uses authenticated Party authority and persisted signup/completion eligibility. Disabled by default; paused responses do not assign or record exposure. No roles or permissions are granted. Assignment is versioned and exposure is idempotent.
+         */
+        get: operations["getExperimentAssignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/session/experiments/{experimentId}/exposure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experimentId: "single-feature-onboarding-v1";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record the current account experiment exposure
+         * @description Uses authenticated Party authority and persisted signup/completion eligibility. Disabled by default; paused responses do not assign or record exposure. No roles or permissions are granted. Assignment is versioned and exposure is idempotent.
+         */
+        post: operations["recordExperimentExposure"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1184,6 +1905,26 @@ export interface paths {
         get: operations["listFanArtists"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/artists/me/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate my artist profile immediately
+         * @description Creates the authenticated account's artist profile and grants only the Artist role through an audited automatic policy in one transaction. No manual approval or invitation is required. Repeated calls preserve existing profile content and create no duplicate grant. Revoked roles and inactive accounts cannot be reactivated this way. No target party or role is accepted.
+         */
+        post: operations["activateMyArtistProfile"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2683,7 +3424,7 @@ export interface paths {
         put?: never;
         /**
          * Submit a Live Session intake
-         * @description Creates a Live Session intake using canonical persisted genre and instrument UUIDs. Musicians and setlist are JSON-encoded strings inside the multipart form. Copied genre, instrument, role, label, code, and slug fields are rejected.
+         * @description Atomically creates an intake and its contacts, using canonical persisted genre and instrument UUIDs. Email never selects an existing person. Explicit contact IDs require existing access. Intake does not create login credentials or grant roles. Musicians and setlist are JSON-encoded strings inside the multipart form. Copied genre, instrument, role, label, code, and slug fields are rejected.
          */
         post: operations["createLiveSessionIntake"];
         delete?: never;
@@ -4157,6 +4898,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/services/storefront/refunds/{refundId}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refundId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read local held-refund status and query readiness
+         * @description Strict Admin only. Does not contact the provider. Supports known PayPal refund IDs for the mixing/mastering storefront only. Missing configuration or qualification never enables the action.
+         */
+        get: operations["adminGetServiceRefundRecovery"];
+        put?: never;
+        /**
+         * Query a held refund without issuing another refund
+         * @description Requires the exact environment flag, process switch, qualified merchant account, and verified capabilities. Uses only GET for the known refund resource (OAuth token acquisition is separate). Validates original capture, refund ID, amount and currency. Exact completion may atomically update local financial records. All other outcomes remain held. Concurrent operators share a query quota. A timeout or HTTP error is never proof of no refund. Do not retry by submitting a new refund.
+         */
+        post: operations["adminReconcileServiceRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/services/storefront/orders/{orderId}/reconcile": {
         parameters: {
             query?: never;
@@ -4171,6 +4938,170 @@ export interface paths {
         put?: never;
         /** Compare an order binding with the provider without changing payment state */
         post: operations["adminReconcileServiceStorefrontOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commerce/checkouts/{checkoutId}/payment-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                checkoutId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create or recover a hosted provider payment session
+         * @description New provider contacts require an exact enabled provider/method/capability combination and a payable, unexpired checkout. An exact request replay with the original lookup token and idempotency key recovers a previously contacted operation even after checkout expiry or payment, account suspension, or provider credential unavailability. Recovery validates immutable request fields and still requires the operation encryption key. A merely prepared operation remains subject to all new-contact gates. An ambiguous outcome stays locked for reconciliation and cannot be retried through another provider.
+         */
+        post: operations["createProviderPaymentSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commerce/checkouts/{checkoutId}/payment-sessions/{attemptId}": {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Checkout-Lookup-Token": string;
+            };
+            path: {
+                checkoutId: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        /** Read a durable hosted payment-session state */
+        get: operations["getProviderPaymentSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commerce/provider-notifications/placetopay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive a signed PlaceToPay session notification
+         * @description Verifies the embedded SHA-256 signature, persists the exact encrypted body, and queues an authenticated session query. The notification alone never marks an order paid.
+         */
+        post: operations["receivePlaceToPayNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/commerce/provider-notifications/payphone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive an unsigned PayPhone external notification
+         * @description Persists the exact body as an untrusted query trigger. Payment and fulfillment advance only after the authenticated PayPhone status API matches transaction ID, client reference, amount, and USD currency.
+         */
+        post: operations["receivePayPhoneNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/NotificacionPago": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive a PayPhone external notification on its required method name
+         * @description Compatibility alias required by PayPhone's notification contract. It uses the same untrusted-callback persistence and authenticated-query reconciliation as the canonical endpoint.
+         */
+        post: operations["receivePayPhoneNotificationCompatibility"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/commerce/reconciliation-exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect redacted individual payment reconciliation exceptions
+         * @description Additive read-only contract (2026-09-15). Requires strict Admin access. Defaults to sandbox and echoes the applied filters. Amounts are exact decimal strings of signed 64-bit minor units, never floating-point JSON numbers. Exception labels, including resolved or ignored, do not authorize payment, refund, payout, hold release or fulfillment. No provider contact, free-text notes, merchant aliases or external references are returned. Internal links are present only for a uniquely matched stored binding; an absent link is not proof that no payment occurred. Missing schema is explicit, and reads have a three-second per-statement database timeout. Live offset pages may shift and are not an immutable accounting export.
+         */
+        get: operations["adminListCommerceReconciliationExceptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/commerce/provider-queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect redacted provider status-query recovery jobs
+         * @description Additive read-only contract (2026-09-15). Requires strict Admin access. Defaults to sandbox and returns only one environment. This does not claim jobs, reserve query budgets, contact providers or authorize payment retries. Completed jobs are not proof of paid orders. A disabled database flag is reported explicitly; an enabled flag is not evidence of a running worker, qualified account or valid credentials. Missing recovery schema is reported as cpqsSchemaReady=false, never as a verified empty queue. Reads have a three-second per-statement database timeout. Offset pagination is a live operational view, not an immutable export; refresh after concurrent changes.
+         */
+        get: operations["adminListCommerceProviderQueries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/commerce/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the redacted canonical payment operations overview
+         * @description Strict-admin view of provider activation gates and aggregate financial states. Merchant account references, credentials, secrets, and raw provider payloads are never returned.
+         */
+        get: operations["adminGetCommercePaymentOverview"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4210,7 +5141,7 @@ export interface paths {
         put?: never;
         /**
          * Requeue one dead-letter provider event with immutable operator evidence
-         * @description Requeueing does not mark an order paid. The bounded worker reprocesses only the original signature-verified encrypted payload.
+         * @description Requeueing does not mark an order paid. The bounded worker reprocesses only the original encrypted payload; untrusted callbacks still require an authenticated provider query.
          */
         post: operations["adminReplayCommerceProviderEvent"];
         delete?: never;
@@ -4858,6 +5789,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/directory/artist-claim-targets/{partyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Prepare a core artist for a reviewed management claim
+         * @description Authenticated, idempotent preparation. Reuses an existing canonical directory target or creates a private draft under a per-artist lock. Returns only an opaque target ID and the core artist public name. Does not publish, grant permissions, or transfer identity. Archived, suspended and blocked targets are denied.
+         */
+        put: operations["prepareArtistManagementClaim"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/directory/claims": {
         parameters: {
             query?: never;
@@ -5086,6 +6037,27 @@ export interface paths {
          * @description Idempotent, optimistic-concurrency save. Personal priorities never alter public reputation.
          */
         put: operations["saveMyReputationPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reputation/consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the authenticated viewer's independent reputation consents */
+        get: operations["getMyReputationConsents"];
+        /**
+         * Grant or withdraw independent reputation consents
+         * @description Withdrawals take effect immediately and remain available while contextual reputation is disabled.
+         */
+        put: operations["updateMyReputationConsents"];
         post?: never;
         delete?: never;
         options?: never;
@@ -5409,6 +6381,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fans/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List up to 50 recent notifications owned by the current account */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fans/me/notifications/{notificationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one recipient-owned notification without marking it as read */
+        get: operations["getNotification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fans/me/notifications/{notificationId}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark only an activated recipient-owned notification as read */
+        post: operations["markNotificationRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/access-requests/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the specific request in its current lifecycle state
+         * @description Visible only to its requester or a currently authorized reviewer. Navigation does not approve, reject, cancel or provision access.
+         */
+        get: operations["getFeatureAccessRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/directory/notification-context/{kind}/{targetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a specific notification target with current resource authorization */
+        get: operations["getDirectoryNotificationContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/access-requests": {
         parameters: {
             query?: never;
@@ -5493,10 +6553,2682 @@ export interface paths {
         patch: operations["cancelFeatureAccessRequest"];
         trace?: never;
     };
+    "/merch/artists/{artistPartyId}/stores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List an artist's stores with separately labelled commercial reputation */
+        get: operations["listArtistMerchStores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/stores/{storeId}/reputation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMerchStoreReputation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/stores/{storeId}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMerchStoreReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/products/{productId}/reputation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMerchProductReputation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/products/{productId}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMerchProductReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/reputation/formula": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMerchReputationFormula"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/orders/{orderId}/reviews/eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMerchOrderReviewEligibility"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/orders/{orderId}/review-buyer-claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Links the authenticated buyer to a guest checkout after validating its private tracking capability. The token is neither persisted nor returned; unknown, mismatched, and already-claimed orders have the same response. */
+        put: operations["claimMerchOrderReviewBuyer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/orders/{orderId}/store-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putMerchStoreReview"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/orders/{orderId}/lines/{lineId}/product-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putMerchProductReview"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/reviews/{reviewId}/response": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putMerchSellerResponse"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/reputation/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reportMerchReputationContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/reputation/decisions/{decisionId}/appeal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["appealMerchModerationDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/reputation/preferences/{subjectKind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the authenticated user's discovery priorities
+         * @description The order personalizes discovery explanations only and never changes a public store or product score.
+         */
+        get: operations["getMerchReputationPriorities"];
+        /** Save an auditable priority ordering without changing public scores */
+        put: operations["putMerchReputationPriorities"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/reputation/notification-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read opt-in notification choices without returning message content */
+        get: operations["getMerchReputationNotificationPreferences"];
+        /** Replace the authenticated user's notification choices */
+        put: operations["putMerchReputationNotificationPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/reputation/category-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suggest a commercial category without changing any public score */
+        post: operations["submitMerchReputationCategorySuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/reputation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSellerMerchReputation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/reputation/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMerchModerationCases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/reputation/category-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List category suggestions for bias and utility review */
+        get: operations["listMerchReputationCategorySuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/reputation/category-suggestions/{suggestionId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a decision; approval requires sample, bias and utility evidence */
+        post: operations["decideMerchReputationCategorySuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/reputation/cases/{caseId}/workflow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Triage, request evidence, or control a provisional visibility measure
+         * @description A provisional hide preserves the original content and visibility for later restoration or appeal.
+         */
+        post: operations["transitionMerchModerationCase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/reputation/cases/{caseId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decideMerchModerationCase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/reputation/appeals/{appealId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve an appeal with a reviewer independent from the first decision */
+        post: operations["decideMerchModerationAppeal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report the server-verified merch rollout and provider capabilities */
+        get: operations["getMerchCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/storefronts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Discover published artist merch storefronts */
+        get: operations["listMerchStorefronts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/storefronts/{storeSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one public storefront integrated with its artist profile */
+        get: operations["getMerchStorefront"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/storefronts/{storeSlug}/products/{productSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a public merch product and its available variants */
+        get: operations["getMerchProduct"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/carts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a single-seller guest cart */
+        post: operations["createMerchCart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/carts/{cartId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resume an unexpired guest cart */
+        get: operations["getMerchCart"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/carts/{cartId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set a variant quantity in a single-seller cart */
+        put: operations["putMerchCartItem"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/carts/{cartId}/items/{variantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a variant from a guest cart */
+        delete: operations["deleteMerchCartItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/carts/{cartId}/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Atomically reserve stock and create one idempotent single-seller order
+         * @description The server recalculates every amount. This operation creates a pending order; a browser return can never confirm payment.
+         */
+        post: operations["checkoutMerchCart"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/orders/{orderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Track a guest merch order without exposing enumerable customer data */
+        get: operations["getMerchOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/orders/{orderId}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report a delivery, return, cancellation, refund, or product problem */
+        post: operations["createMerchOrderIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/orders/{orderId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel an unpaid order before payment processing or fulfillment starts
+         * @description This idempotent operation releases active inventory reservations and records an immutable issue, fulfillment timeline, and audit entry. Paid or processing orders must use the independently reviewed issue and refund workflow.
+         */
+        post: operations["cancelUnpaidMerchOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/favorites/{productId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["addMerchFavorite"];
+        post?: never;
+        delete: operations["deleteMerchFavorite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSellerMerchStores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply using a claimed or verified artist or band profile managed by the caller */
+        post: operations["createMerchStoreApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateSellerMerchStore"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMerchStoreMembers"];
+        put?: never;
+        /** @description Clients select the party through name, artist name, or username search; the user never types a Party ID. */
+        post: operations["inviteMerchStoreMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/members/{memberId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateMerchStoreMember"];
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createMerchStorePolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/shipping-zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createMerchShippingZone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSellerMerchProducts"];
+        put?: never;
+        post: operations["createMerchProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/products/{productId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateMerchProduct"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/products/{productId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateSellerMerchProductStatus"];
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/products/{productId}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["uploadMerchProductImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/variants/{variantId}/stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update stock with optimistic concurrency and no access to catalog, order, or finance fields */
+        patch: operations["updateMerchVariantStock"];
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSellerMerchOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the store's support cases without exposing another seller's orders */
+        get: operations["listSellerMerchIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/issues/{issueId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Triage an operational case or escalate a financial case to staff
+         * @description Sellers cannot resolve or reject cancellation, refund, dispute, or fraud cases. This operation never changes payment, refund, dispute, fulfillment, or settlement state.
+         */
+        patch: operations["updateSellerMerchIssue"];
+        trace?: never;
+    };
+    "/merch/seller/stores/{storeId}/orders/{orderId}/fulfillment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Advance fulfillment without implicitly changing payment or refund status */
+        patch: operations["updateMerchOrderFulfillment"];
+        trace?: never;
+    };
+    "/merch/admin/stores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminMerchStores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/stores/{storeId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reviewMerchStore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAdminMerchProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/products/{productId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reviewMerchProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support cases across the closed pilot */
+        get: operations["listAdminMerchIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/issues/{issueId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Progress or close an independently reviewed support case
+         * @description Closing a case records a public resolution and audit evidence but never executes or implies a provider refund, chargeback result, or settlement adjustment.
+         */
+        patch: operations["updateAdminMerchIssue"];
+        trace?: never;
+    };
+    "/merch/admin/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List canonical merch refund requests without buyer personal data */
+        get: operations["listAdminMerchRefunds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/orders/{orderId}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prepare a canonical full or partial merch refund
+         * @description Requires an eligible support case in staff review and a verified successful payment. Amounts are assigned server-side across immutable checkout lines. This endpoint never calls a payment provider.
+         */
+        post: operations["createAdminMerchRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/refunds/{refundId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Independently approve or cancel a merch refund request
+         * @description Approval requires a different authenticated administrator from the requester. Approved means operationally authorized only; provider execution remains disabled until a merch adapter is verified in sandbox.
+         */
+        patch: operations["reviewAdminMerchRefund"];
+        trace?: never;
+    };
+    "/merch/admin/disputes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Monitor canonical provider dispute records for merch
+         * @description Read-only projection. There is intentionally no API to fabricate a provider dispute or chargeback outcome.
+         */
+        get: operations["listAdminMerchDisputes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/settlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List manual seller settlements for strict administrators */
+        get: operations["listMerchSettlements"];
+        put?: never;
+        /** Prepare an auditable manual seller settlement */
+        post: operations["createMerchSettlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/stores/{storeId}/settlement-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List delivered paid orders eligible for a manual settlement
+         * @description Returns financial and operational identifiers to strict administrators without buyer personal data.
+         */
+        get: operations["listMerchSettlementEligibleOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/merch/admin/settlements/{settlementId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description Approval requires an administrator other than the preparer. A held settlement may be independently reviewed and approved later. This endpoint never records payment or triggers an automatic payout. */
+        patch: operations["updateMerchSettlementStatus"];
+        trace?: never;
+    };
+    "/merch/admin/settlements/{settlementId}/payment-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record private evidence for an already executed manual seller payment
+         * @description Decodes and re-encodes a JPEG/PNG receipt into private storage, records immutable evidence, and marks the approved settlement paid. It never initiates or executes a transfer. The preparer cannot confirm payment.
+         */
+        post: operations["recordMerchSettlementPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/records-ingestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read approved video sources, health, checkpoints, and recent runs */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Strict-administrator ingestion overview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Strict administrator required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/records-ingestion/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Verify and approve a YouTube channel, or disable an existing source */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        channelId: string;
+                        enabled: boolean;
+                        /** Format: uuid */
+                        collectionId: string;
+                        approvalReference?: string | null;
+                        partyId?: number | null;
+                        artistProfileId?: number | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Audited source configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Invalid source configuration */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Strict administrator required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Provider verification failed */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Provider credential unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/records-ingestion/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change the ingestion emergency stop and interval */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        running: boolean;
+                        intervalSeconds: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Audited control state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Strict administrator required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/records-ingestion/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run or resume bounded ingestion using a stable execution key */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        sourceAccountId: number;
+                        executionKey: string;
+                        reconciliation: boolean;
+                        dryRun: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Durable run identity and explicit completed, partial, failed, busy, disabled or rate-limited status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Strict administrator required */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        PaymentCapabilityName: "one_time" | "recurring" | "tokenization" | "three_ds" | "installments" | "authorize" | "capture" | "void" | "full_refund" | "partial_refund" | "disputes" | "chargebacks" | "payment_link" | "signed_webhook" | "server_verification" | "connected_accounts" | "split_settlement" | "seller_payouts";
+        PaymentRoute: {
+            /** @enum {string} */
+            provider: "datafast" | "paypal" | "placetopay" | "payphone" | "bank_transfer";
+            /** @enum {string} */
+            paymentMethod: "card" | "paypal_wallet" | "bank_redirect" | "deuna_qr" | "payphone_wallet" | "payment_link" | "manual_bank_transfer";
+            capabilities: components["schemas"]["PaymentCapabilityName"][];
+            priority: number;
+        };
+        PaymentCapabilityResponse: {
+            /** @enum {string} */
+            environment: "sandbox" | "production";
+            buyerCountry: string;
+            currency: string;
+            /** Format: int64 */
+            amountMinor: number;
+            /** @enum {string} */
+            paymentMethod: "card" | "paypal_wallet" | "bank_redirect" | "deuna_qr" | "payphone_wallet" | "payment_link" | "manual_bank_transfer";
+            /** @enum {string} */
+            productFlow: "merchandise" | "booking" | "professional_service" | "course" | "event_ticket" | "digital_product" | "subscription" | "marketplace";
+            routes: components["schemas"]["PaymentRoute"][];
+            fallbackPolicy: string;
+        };
+        /** @enum {string} */
+        InteractionKind: "club_post" | "club_memory" | "event" | "event_moment" | "recording" | "recording_session" | "record_release" | "artist_release" | "classified" | "directory_profile" | "artist_update";
+        InteractionMention: {
+            partyId: number;
+            start: number;
+            end: number;
+        };
+        InteractionAuthor: {
+            id: number;
+            displayName: string;
+            avatarUrl: string | null;
+        };
+        InteractionComment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            targetId: string;
+            /** Format: uuid */
+            parentId: string | null;
+            /** Format: uuid */
+            rootId: string;
+            depth: number;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            editedAt: string | null;
+            /** @enum {string} */
+            state: "visible" | "deleted" | "hidden" | "removed" | "unavailable";
+            body: string;
+            author: components["schemas"]["InteractionAuthor"] | null;
+            canEdit: boolean | null;
+            canDelete: boolean | null;
+            mentions: components["schemas"]["InteractionMention"][];
+            replyCount?: number;
+            moderationBody?: string;
+            openReports?: number;
+            /** @description Latest 20 open report reasons, visible only to authorized moderators; reporter identities are omitted. */
+            reportReasons?: string[];
+            legacyPresentation?: {
+                title?: string | null;
+                mediaUrls?: string[];
+            } | null;
+        };
+        InteractionReaction: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            emoji: string;
+            label: string;
+            count: number;
+            selectable: boolean;
+        };
+        InteractionContext: {
+            kind: components["schemas"]["InteractionKind"];
+            key: string;
+            ownerId: number | null;
+            title: string;
+            route: string;
+            public: boolean;
+            canManage: boolean;
+            reactable: boolean;
+            commentable: boolean;
+            shareable: boolean;
+        };
+        InteractionSummary: components["schemas"]["InteractionContext"] & {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** @enum {string} */
+            commentPolicy: "everyone" | "followers" | "mentioned" | "off";
+            canReact: boolean;
+            canComment: boolean;
+            canModerate: boolean;
+            commentCount: number;
+            rootCount: number;
+            reactions: components["schemas"]["InteractionReaction"][];
+            /** Format: uuid */
+            myReactionTypeId: string | null;
+            /** @enum {string} */
+            subscription: "all" | "participating" | "muted";
+            /** @enum {string} */
+            defaultSort: "newest" | "oldest" | "relevant";
+            mentionedPeople?: components["schemas"]["InteractionAuthor"][];
+        };
+        InteractionPage: {
+            items: components["schemas"]["InteractionComment"][];
+            /** Format: uuid */
+            nextCursor: string | null;
+            /** @enum {string} */
+            sort?: "newest" | "oldest";
+        };
+        InteractionCommentContext: {
+            target: components["schemas"]["InteractionContext"];
+            root: components["schemas"]["InteractionComment"];
+            comment: components["schemas"]["InteractionComment"];
+            parent: components["schemas"]["InteractionComment"] | null;
+            surrounding: components["schemas"]["InteractionComment"][];
+        };
+        InteractionDestination: components["schemas"]["InteractionContext"] & {
+            /** Format: uuid */
+            targetId: string;
+            /** Format: uuid */
+            commentId: string | null;
+            context: components["schemas"]["InteractionCommentContext"] | null;
+        };
+        InteractionReactors: {
+            items: {
+                author: components["schemas"]["InteractionAuthor"];
+                /** Format: uuid */
+                reactionTypeId: string;
+            }[];
+            nextCursor: number | null;
+        };
+        InteractionBlockedAccounts: {
+            items: (components["schemas"]["InteractionBlock"] & {
+                displayName: string;
+            })[];
+            nextCursor: number | null;
+        };
+        InteractionBlock: {
+            partyId: number;
+            blocked: boolean;
+            version: number;
+            replay?: boolean;
+        };
+        InteractionBlockRequest: {
+            /** Format: uuid */
+            blockRequestKey: string;
+            blocked: boolean;
+            expectedVersion: number;
+        };
+        InteractionPreferences: {
+            reactions: boolean;
+            comments: boolean;
+            replies: boolean;
+            mentions: boolean;
+        };
+        InteractionCommand: {
+            /** @enum {string} */
+            operation: "reaction.set";
+            /** Format: uuid */
+            reactionTypeId: string | null;
+        } | {
+            /** @enum {string} */
+            operation: "comment.create";
+            body: string;
+            /** Format: uuid */
+            parentId?: string | null;
+            mentions?: components["schemas"]["InteractionMention"][];
+        } | {
+            /** @enum {string} */
+            operation: "comment.edit";
+            /** Format: uuid */
+            commentId: string;
+            body: string;
+            mentions: components["schemas"]["InteractionMention"][];
+            expectedVersion: number;
+        } | {
+            /** @enum {string} */
+            operation: "comment.delete";
+            /** Format: uuid */
+            commentId: string;
+            expectedVersion: number;
+        } | {
+            /** @enum {string} */
+            operation: "comment.hide";
+            /** Format: uuid */
+            commentId: string;
+            expectedVersion: number;
+            reason: string;
+        } | {
+            /** @enum {string} */
+            operation: "comment.remove";
+            /** Format: uuid */
+            commentId: string;
+            expectedVersion: number;
+            reason: string;
+        } | {
+            /** @enum {string} */
+            operation: "comment.restore";
+            /** Format: uuid */
+            commentId: string;
+            expectedVersion: number;
+            reason: string;
+        } | {
+            /** @enum {string} */
+            operation: "comment.report";
+            /** Format: uuid */
+            commentId: string;
+            reason: string;
+        } | {
+            /** @enum {string} */
+            operation: "subscription.set";
+            /** @enum {string} */
+            mode: "all" | "participating" | "muted";
+        } | {
+            /** @enum {string} */
+            operation: "settings.update";
+            /** @enum {string} */
+            commentPolicy: "everyone" | "followers" | "mentioned" | "off";
+            expectedVersion: number;
+            mentionedPartyIds: number[];
+        } | {
+            /** @enum {string} */
+            operation: "comment.report.resolve";
+            /** Format: uuid */
+            commentId: string;
+            expectedVersion: number;
+            reason: string;
+            /** @enum {string} */
+            decision: "reviewed" | "dismissed";
+        };
+        InteractionCommandRequest: {
+            /** Format: uuid */
+            requestKey: string;
+            command: components["schemas"]["InteractionCommand"];
+        };
+        InteractionCommandResult: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            reactionTypeId?: string | null;
+            version?: number;
+            replay?: boolean;
+            reported?: boolean;
+            mode?: string;
+            commentPolicy?: string;
+        };
+        Notification: {
+            /** Format: int64 */
+            nId: number;
+            nType: string;
+            nTitle: string;
+            nBody: string;
+            nTargetType?: string | null;
+            /** Format: int64 */
+            nTargetId?: number | null;
+            /** @description Stable UUID of the target or logistics activity; never a URL */
+            nTargetKey?: string | null;
+            nIsRead: boolean;
+            /** Format: date-time */
+            nCreatedAt: string;
+        };
+        /** @enum {string} */
+        EventTaskStatus: "planned" | "confirmed" | "in_progress" | "completed" | "cancelled";
+        EventRaciAssignment: {
+            /** Format: int64 */
+            partyId: number;
+            /** @enum {string} */
+            role: "responsible" | "accountable" | "consulted" | "informed";
+        };
+        EventTaskPolicy: {
+            requiresAccountability: boolean;
+            dependenciesGateCompletion: boolean;
+            /** Format: int64 */
+            version: number;
+        };
+        /** @description Canonical ASCII decimal string in 1..9223372036854775807 (signed BIGINT maximum). Runtime decoders enforce the exact upper bound in addition to the pattern. Never convert to a JavaScript number. Not an authorization or readiness certificate. */
+        EventTaskAggregateRevision: string;
+        EventTaskCompletionCommand: {
+            expectedRevision: components["schemas"]["EventTaskAggregateRevision"];
+            /** @description Nonblank; preserved without normalization. */
+            reason: string;
+            /** @description Nonblank; bound to the idempotent request. */
+            correlationId: string;
+        };
+        EventTaskCompletionOutcome: {
+            /** Format: int64 */
+            eventId: number;
+            /** Format: int64 */
+            activityId: number;
+            /** Format: uuid */
+            commandId: string;
+            /** @enum {string} */
+            status: "completed";
+            /** Format: int32 */
+            activityVersion: number;
+            aggregateRevision: components["schemas"]["EventTaskAggregateRevision"];
+            replayed: boolean;
+        };
+        EventRaciEditorContext: {
+            /** Format: int64 */
+            eventId: number;
+            /** Format: int64 */
+            activityId: number;
+            aggregateRevision: components["schemas"]["EventTaskAggregateRevision"];
+            /** @description Current scoped permission; never a command authorization token. */
+            canManage: boolean;
+            /** @description Current lifecycle/accountability gates; not event readiness or consent. */
+            operationReady: boolean;
+            /** @description Current unbounded source pairs; empty unless operationReady. */
+            replaceableAssignments: components["schemas"]["EventRaciAssignment"][];
+            /** @description Ascending current readers strictly after cursor; empty unless operationReady. */
+            eligiblePartyIds: number[];
+            /**
+             * Format: int64
+             * @description Omitted on final page; otherwise last of exactly 100 returned eligible IDs.
+             */
+            nextAfterPartyId?: number;
+        };
+        EventRaciReassignmentCommand: {
+            expectedRevision: components["schemas"]["EventTaskAggregateRevision"];
+            /** @enum {string} */
+            role: "responsible" | "accountable" | "consulted" | "informed";
+            /** Format: int64 */
+            fromPartyId: number;
+            /**
+             * Format: int64
+             * @description Must differ from fromPartyId and currently be eligible to read the exact task.
+             */
+            toPartyId: number;
+            /** @description Nonblank; preserved without normalization. */
+            reason: string;
+            /** @description Nonblank; bound to the idempotent request. */
+            correlationId: string;
+        };
+        EventRaciReassignmentOutcome: {
+            /** Format: int64 */
+            eventId: number;
+            /** Format: int64 */
+            activityId: number;
+            /** Format: uuid */
+            commandId: string;
+            /** @enum {string} */
+            role: "responsible" | "accountable" | "consulted" | "informed";
+            /** Format: int64 */
+            fromPartyId: number;
+            /** Format: int64 */
+            toPartyId: number;
+            aggregateRevision: components["schemas"]["EventTaskAggregateRevision"];
+            replayed: boolean;
+        };
+        EventOperationTaskWithRevision: {
+            task: components["schemas"]["EventOperationTask"];
+            aggregateRevision: components["schemas"]["EventTaskAggregateRevision"];
+        };
+        EventOperationTask: {
+            /** Format: int64 */
+            eventId: number;
+            /** Format: int64 */
+            activityId: number;
+            status: components["schemas"]["EventTaskStatus"];
+            /**
+             * Format: int64
+             * @description Activity version only, not an aggregate task/RACI concurrency token.
+             */
+            version: number;
+            policy?: components["schemas"]["EventTaskPolicy"];
+            /** @description Current non-revoked assignments at one server-selected authorization instant. */
+            raci: components["schemas"]["EventRaciAssignment"][];
+            /** @description True exactly when an existing policy requires accountability and the current RACI lacks exactly one Accountable or any Responsible. False with no policy does not certify readiness, membership validity or satisfied dependencies. */
+            accountabilityNeedsAttention: boolean;
+        };
+        /** @enum {string} */
+        EventLifecycleState: "draft" | "planning" | "pending_approval" | "approved" | "published" | "staffing" | "ready" | "in_progress" | "completed" | "settlement_pending" | "settled" | "archived" | "reprogrammed" | "cancelled";
+        EventOperationSnapshot: {
+            /** Format: int64 */
+            eventId: number;
+            canonicalState: components["schemas"]["EventLifecycleState"];
+            /** Format: int64 */
+            version: number;
+            /** @description Existing social-event state retained as migration evidence. */
+            legacyStateCode?: string;
+            capabilities: string[];
+            availableTransitions: components["schemas"]["EventLifecycleState"][];
+        };
+        EventTransitionCommand: {
+            /** Format: int64 */
+            expectedVersion: number;
+            targetState: components["schemas"]["EventLifecycleState"];
+            /** @description Omit when unnecessary; explicit null is rejected. */
+            reason?: string;
+            correlationId: string;
+        };
+        EventTransitionOutcome: {
+            /** Format: int64 */
+            eventId: number;
+            canonicalState: components["schemas"]["EventLifecycleState"];
+            /** Format: int64 */
+            version: number;
+            /** Format: uuid */
+            commandId: string;
+            /** @enum {string} */
+            authorityCode: "owner" | "event_approver" | "finance_approver" | "records_manager";
+            replayed: boolean;
+        };
+        EventOperationError: {
+            /** @enum {string} */
+            code: "feature_disabled" | "not_found" | "forbidden" | "invalid_request" | "reason_required" | "idempotency_conflict" | "version_conflict" | "transition_invalid" | "transition_effects_not_ready" | "operation_not_ready" | "assignment_not_replaceable" | "assignee_unavailable" | "assignment_conflict" | "accountability_not_ready" | "dependencies_not_ready" | "separation_of_duties" | "event_operations_unavailable" | "invalid_database_response";
+        };
+        MerchReputationSummary: {
+            /** @enum {string} */
+            subjectKind: "store" | "product";
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            storeId?: string;
+            /** Format: uuid */
+            productId?: string;
+            name?: string;
+            storeName?: string;
+            productName?: string;
+            slug?: string;
+            /** @description True only for store aggregates; never an artistic score */
+            commercialReputation?: boolean;
+            reputationLabel?: string;
+            /** @enum {string} */
+            state: "new_store" | "unrated" | "published";
+            rating?: number | null;
+            verifiedReviewCount?: number;
+            verifiedPurchaseReviewCount?: number;
+            historicalReviewCount?: number;
+            /** @enum {string} */
+            confidence?: "new" | "limited" | "moderate" | "strong";
+            formulaVersion?: string | null;
+            dimensions?: components["schemas"]["MerchDimensionAggregate"][];
+            objectiveSignals?: {
+                [key: string]: unknown;
+            };
+            badges?: {
+                [key: string]: unknown;
+            }[];
+        };
+        MerchDimensionAggregate: {
+            code: string;
+            average?: number | null;
+            count: number;
+            distribution?: {
+                [key: string]: number;
+            };
+        };
+        MerchReviewPublic: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "store" | "product";
+            rating: number;
+            comment?: string | null;
+            /** @enum {string} */
+            status: "published" | "limited";
+            /** @enum {boolean} */
+            verifiedPurchase: true;
+            /** @enum {string} */
+            badge: "Compra verificada";
+            /** @description Public name/avatar according to buyer privacy preferences */
+            author: {
+                [key: string]: unknown;
+            };
+            dimensions: {
+                [key: string]: number;
+            };
+            images: {
+                /** Format: uuid */
+                assetId: string;
+                url: string;
+                altText: string;
+                position: number;
+            }[];
+            sellerResponse?: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        MerchReviewPage: {
+            items: components["schemas"]["MerchReviewPublic"][];
+            /** Format: uuid */
+            nextCursor?: string | null;
+        };
+        MerchReviewImageInput: {
+            /** Format: uuid */
+            mediaAssetId: string;
+            altText: string;
+        };
+        MerchReviewSubmit: {
+            overallRating: number;
+            issueOccurred: boolean;
+            comment?: string;
+            dimensions: {
+                [key: string]: number;
+            };
+            images?: components["schemas"]["MerchReviewImageInput"][];
+            expectedRevision: number;
+        };
+        MerchReviewMutation: {
+            /** Format: uuid */
+            reviewId: string;
+            revision: number;
+            status: string;
+            /** @enum {boolean} */
+            verifiedPurchase: true;
+            /** Format: date-time */
+            editDeadline: string;
+        };
+        MerchReviewBuyerClaim: {
+            /** Format: uuid */
+            orderId: string;
+            /** @enum {boolean} */
+            buyerLinked: true;
+        };
+        MerchReviewEligibility: {
+            /** Format: uuid */
+            orderId: string;
+            /** Format: uuid */
+            storeId: string;
+            /** @enum {string} */
+            orderState: "created" | "confirmed" | "cancelled" | "completed";
+            /** @enum {string} */
+            fulfillmentState: "pending" | "preparing" | "partially_delivered" | "delivered" | "picked_up" | "cancelled";
+            storeReview: {
+                [key: string]: unknown;
+            };
+            productLines: {
+                [key: string]: unknown;
+            }[];
+        };
+        MerchSellerResponseSubmit: {
+            responseBody: string;
+            responseExpectedRevision: number;
+        };
+        MerchContentReport: {
+            /** @enum {string} */
+            reportTargetType: "review" | "seller_response";
+            /** Format: uuid */
+            reportTargetId: string;
+            /** @enum {string} */
+            reportReason: "offensive" | "personal_information" | "spam" | "extortion" | "conflict_of_interest" | "false_review" | "coordinated_manipulation" | "duplicate" | "irrelevant";
+            reportDetails?: string;
+            authorizedEvidence?: {
+                [key: string]: unknown;
+            }[];
+        };
+        MerchModerationDecision: {
+            /** @enum {string} */
+            moderationDecision: "approve" | "reject_report" | "hide" | "restore" | "limit";
+            /** @enum {string} */
+            moderationReasonCode: "legitimate_negative_opinion" | "offensive" | "personal_information" | "spam" | "extortion" | "conflict_of_interest" | "false_review" | "coordinated_manipulation" | "duplicate" | "irrelevant";
+            moderationRationale: string;
+            moderationEvidence: {
+                [key: string]: unknown;
+            };
+        };
+        MerchModerationWorkflow: {
+            /** @enum {string} */
+            moderationAction: "triage" | "request_evidence" | "provisionally_hide" | "resume_review";
+            workflowRationale: string;
+            workflowEvidence: {
+                [key: string]: unknown;
+            };
+        };
+        MerchAppeal: {
+            appealGrounds: string;
+        };
+        MerchAppealDecision: {
+            /** @enum {string} */
+            appealOutcome: "upheld" | "reversed";
+            appealRationale: string;
+            appealEvidence: {
+                [key: string]: unknown;
+            };
+        };
+        MerchCategorySuggestionSubmit: {
+            /** @enum {string} */
+            suggestionSubjectKind: "store" | "product";
+            suggestionLabel: string;
+            suggestionDefinition: string;
+        };
+        MerchCategorySuggestionDecision: {
+            /** @enum {string} */
+            suggestionStatus: "duplicate" | "testing" | "approved" | "rejected";
+            suggestionMinimumSample?: number;
+            suggestionBiasTest?: {
+                [key: string]: unknown;
+            };
+            suggestionUtilityTest?: {
+                [key: string]: unknown;
+            };
+            suggestionDecisionReason: string;
+        };
+        MerchReputationPrioritySubmit: {
+            orderedDimensionCodes: string[];
+            priorityExpectedRevision: number;
+        };
+        MerchReputationPriorities: {
+            /** @enum {string} */
+            subjectKind: "store" | "product";
+            revision: number;
+            /** @enum {boolean} */
+            affectsPublicScore: false;
+            orderedDimensions: {
+                code: string;
+                nameEs: string;
+                nameEn: string;
+                definitionEs: string;
+                definitionEn: string;
+            }[];
+        };
+        MerchNotificationPreferences: {
+            /** @default false */
+            reviewInvitation: boolean;
+            /** @default false */
+            reviewReminder: boolean;
+            /** @default false */
+            sellerResponseNotification: boolean;
+            /** @default false */
+            moderationChange: boolean;
+            /** @default false */
+            evidenceRequest: boolean;
+            /** @default false */
+            appealResult: boolean;
+            /** @default false */
+            badgeChange: boolean;
+        };
+        MerchCapabilities: {
+            /** @enum {string} */
+            environment: "sandbox" | "staging" | "production";
+            market: {
+                /** @enum {string} */
+                countryCode: "EC";
+                /** @enum {string} */
+                currency: "USD";
+            };
+            features: {
+                storefronts: boolean;
+                sellerApplications: boolean;
+                publicCatalog: boolean;
+                /** @description True only when at least one payment method is enabled and fully configured. */
+                checkout: boolean;
+                /** @description Enables preparation and dual-control approval only; provider execution has a separate adapter gate. */
+                refundOperations: boolean;
+                /** @description Enables the read-only canonical provider dispute queue. */
+                disputeMonitoring: boolean;
+                reviews: boolean;
+                notifications: boolean;
+                experimental: boolean;
+            };
+            paymentMethods: {
+                /** @description True only with an enabled flag and complete server credentials. */
+                datafast: boolean;
+                /** @description True only with an enabled flag and complete server credentials. */
+                paypal: boolean;
+                /** @description True only when independent receipt review is operational. */
+                bankTransfer: boolean;
+            };
+            /** @enum {boolean} */
+            automaticPayouts: false;
+            message: string;
+        };
+        /** @enum {string} */
+        MerchProductCategory: "apparel" | "vinyl" | "cd" | "cassette" | "poster" | "accessory" | "limited_edition" | "bundle" | "other";
+        /** @enum {string} */
+        MerchProductStatus: "draft" | "pending_review" | "published" | "sold_out" | "paused" | "rejected" | "archived";
+        /** @enum {string} */
+        MerchFulfillmentStatus: "pending" | "preparing" | "ready_for_pickup" | "shipped" | "delivered" | "return_requested" | "returned" | "problem" | "cancelled";
+        MerchPermissions: {
+            catalog: boolean;
+            stock: boolean;
+            orders: boolean;
+            fulfillment: boolean;
+            finance: boolean;
+            settings: boolean;
+        };
+        MerchStorefront: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            profileId?: string;
+            slug: string;
+            displayName: string;
+            description?: string | null;
+            coverImageUrl?: string | null;
+            logoImageUrl?: string | null;
+            /** @enum {string} */
+            countryCode?: "EC";
+            /** @enum {string} */
+            currency: "USD";
+            discovery?: {
+                /** @description True while no public numeric store score is eligible. */
+                newStore: boolean;
+                /** @description Neutral exploration signal; it is never inherited from an owner or artist. */
+                explorationEligible: boolean;
+            };
+            /** @enum {string} */
+            applicationStatus?: "requested" | "under_review" | "approved" | "rejected" | "withdrawn";
+            /** @enum {string} */
+            operationalStatus?: "inactive" | "active" | "suspended" | "closed";
+            permissions?: components["schemas"]["MerchPermissions"];
+            products?: components["schemas"]["MerchProduct"][];
+            policies?: {
+                [key: string]: unknown;
+            };
+            shippingZones?: components["schemas"]["MerchShippingZone"][];
+        } & {
+            [key: string]: unknown;
+        };
+        MerchStoreApplicationRequest: {
+            /** Format: uuid */
+            profileId: string;
+            slug: string;
+            displayName: string;
+            description?: string | null;
+            applicationNote: string;
+        };
+        MerchStoreUpdateRequest: {
+            displayName: string;
+            description?: string | null;
+            coverImageUrl?: string | null;
+            logoImageUrl?: string | null;
+        };
+        MerchStoreReviewRequest: {
+            /** @enum {string} */
+            decision: "approve" | "reject" | "suspend" | "reactivate";
+            reviewerNotes: string;
+            /** @description 1000 is 10%; 0 may be used for an audited pilot override. */
+            commissionBps?: number | null;
+            commissionReason?: string | null;
+        };
+        MerchStoreMember: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            partyId: number;
+            displayName: string;
+            username?: string | null;
+            avatarUrl?: string | null;
+            /** @enum {string} */
+            role: "owner" | "collaborator";
+            /** @enum {string} */
+            status: "pending" | "accepted" | "revoked" | "expired";
+            permissions: components["schemas"]["MerchPermissions"];
+            /** Format: date-time */
+            expiresAt?: string | null;
+        };
+        MerchMemberInviteRequest: {
+            /**
+             * Format: int64
+             * @description Selected by PartySelector search; never entered manually.
+             */
+            partyId: number;
+            permissions: components["schemas"]["MerchPermissions"];
+        };
+        MerchMemberUpdateRequest: {
+            /** @enum {string} */
+            status: "accepted" | "revoked";
+            permissions?: components["schemas"]["MerchPermissions"];
+            reason?: string | null;
+        };
+        MerchPolicyRequest: {
+            shippingPolicy: string;
+            returnPolicy: string;
+            preorderPolicy?: string | null;
+            /** Format: email */
+            supportEmail?: string | null;
+        };
+        MerchShippingZoneRequest: {
+            name: string;
+            /** @enum {string} */
+            countryCode: "EC";
+            subdivisionCodes: string[];
+            /** @enum {string} */
+            deliveryMethod: "national_shipping" | "coordinated_pickup";
+            /** Format: int64 */
+            rateMinor: number;
+            /** Format: int64 */
+            freeShippingMinMinor?: number | null;
+            estimatedMinDays?: number | null;
+            estimatedMaxDays?: number | null;
+            active: boolean;
+        };
+        MerchShippingZone: components["schemas"]["MerchShippingZoneRequest"] & {
+            /** Format: uuid */
+            id: string;
+        };
+        MerchVariantRequest: {
+            /** Format: uuid */
+            id?: string | null;
+            sku: string;
+            name: string;
+            optionValues: {
+                [key: string]: string;
+            };
+            /** Format: int64 */
+            priceMinor: number;
+            /** Format: int64 */
+            compareAtPriceMinor?: number | null;
+            /** @enum {string} */
+            currency: "USD";
+            weightGrams: number;
+            customsDescription?: string | null;
+            /** @enum {string} */
+            stockMode: "finite" | "made_to_order";
+            stockOnHand: number;
+            reorderThreshold: number;
+            active: boolean;
+        };
+        MerchStockRequest: {
+            stockOnHand: number;
+            reorderThreshold: number;
+            active: boolean;
+            /** Format: int64 */
+            version: number;
+        };
+        MerchProductRequest: {
+            slug: string;
+            name: string;
+            description: string;
+            category: components["schemas"]["MerchProductCategory"];
+            /** @enum {string} */
+            visibility: "public" | "unlisted" | "hidden";
+            /** @enum {string} */
+            availabilityMode: "in_stock" | "preorder" | "made_to_order";
+            /** Format: date-time */
+            preorderReleaseAt?: string | null;
+            /** Format: date-time */
+            publishAt?: string | null;
+            /** Format: date-time */
+            unpublishAt?: string | null;
+            buyerLimit?: number | null;
+            /** Format: uuid */
+            policyId?: string | null;
+            variants: components["schemas"]["MerchVariantRequest"][];
+        };
+        MerchProduct: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            storeId: string;
+            storeSlug?: string;
+            storeName?: string;
+            slug: string;
+            name: string;
+            description?: string;
+            category: components["schemas"]["MerchProductCategory"];
+            status: components["schemas"]["MerchProductStatus"];
+            /** @enum {string} */
+            visibility?: "public" | "unlisted" | "hidden";
+            /** @enum {string} */
+            availabilityMode: "in_stock" | "preorder" | "made_to_order";
+            /** Format: date-time */
+            preorderReleaseAt?: string | null;
+            /** Format: date-time */
+            publishAt?: string | null;
+            /** Format: date-time */
+            unpublishAt?: string | null;
+            buyerLimit?: number | null;
+            /** Format: uuid */
+            policyId?: string | null;
+            /** Format: int64 */
+            priceFromMinor?: number;
+            /** @enum {string} */
+            currency?: "USD";
+            available?: boolean;
+            imageUrl?: string | null;
+            canonicalUrl?: string;
+            rejectionReason?: string | null;
+            variants?: components["schemas"]["MerchVariant"][];
+            images?: components["schemas"]["MerchProductImage"][];
+            related?: {
+                [key: string]: unknown;
+            }[];
+            reviewsEnabled?: boolean;
+            reviews?: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        MerchVariant: {
+            /** Format: uuid */
+            id: string;
+            sku: string;
+            name: string;
+            optionValues: {
+                [key: string]: string;
+            };
+            /** Format: int64 */
+            priceMinor: number;
+            /** Format: int64 */
+            compareAtPriceMinor?: number | null;
+            /** @enum {string} */
+            currency: "USD";
+            weightGrams: number;
+            /** @enum {string} */
+            stockMode: "finite" | "made_to_order";
+            stockOnHand?: number;
+            stockReserved?: number;
+            stockSold?: number;
+            availableQuantity?: number | null;
+            available?: boolean;
+            /** Format: int64 */
+            version: number;
+            reorderThreshold?: number;
+            active: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        MerchProductImage: {
+            /** Format: uuid */
+            id: string;
+            url: string;
+            variants: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            altText: string;
+            sortOrder: number;
+            /** @enum {string} */
+            scanStatus?: "pending" | "clean" | "rejected";
+            /** @enum {string} */
+            moderationStatus?: "pending" | "allowed" | "blocked";
+            width?: number;
+            height?: number;
+        };
+        MerchCartCreateRequest: {
+            storeSlug: string;
+        };
+        MerchCartItemRequest: {
+            /** Format: uuid */
+            variantId: string;
+            quantity: number;
+        };
+        MerchCart: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            storeId: string;
+            /** @description Present only on creation. */
+            lookupToken?: string;
+            /** @enum {string} */
+            currency: "USD";
+            /** @enum {string} */
+            status: "active" | "checkout_started" | "converted" | "expired" | "abandoned";
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: int64 */
+            productSubtotalMinor: number;
+            /** Format: int64 */
+            totalMinor: number;
+            items: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        MerchRecipientRequest: {
+            name: string;
+            /** Format: email */
+            email: string;
+            phone?: string | null;
+            /** @enum {string} */
+            countryCode: "EC";
+            subdivision?: string | null;
+            city: string;
+            addressLine1: string;
+            addressLine2?: string | null;
+            postalCode?: string | null;
+            deliveryNote?: string | null;
+        };
+        MerchCheckoutRequest: {
+            recipient: components["schemas"]["MerchRecipientRequest"];
+            /** Format: uuid */
+            shippingZoneId: string;
+            createAccount?: boolean | null;
+            /** @enum {string|null} */
+            locale?: "es" | "en" | null;
+        };
+        MerchOrder: {
+            /** Format: uuid */
+            id: string;
+            orderNumber: string;
+            /** @description Present only on creation. */
+            lookupToken?: string;
+            /** @enum {string} */
+            currency: "USD";
+            /** Format: int64 */
+            productSubtotalMinor: number;
+            /** Format: int64 */
+            discountMinor?: number;
+            /** Format: int64 */
+            taxMinor: number;
+            /** Format: int64 */
+            shippingMinor: number;
+            /** Format: int64 */
+            processorFeeMinor?: number;
+            /** Format: int64 */
+            tdfCommissionMinor?: number;
+            /** Format: int64 */
+            sellerNetMinor?: number;
+            /** Format: int64 */
+            totalMinor: number;
+            commercialStatus: string;
+            paymentStatus: string;
+            fulfillmentStatus: components["schemas"]["MerchFulfillmentStatus"];
+            refundStatus: string;
+            disputeStatus: string;
+            settlementStatus?: string;
+            lines: {
+                [key: string]: unknown;
+            }[];
+            timeline?: {
+                [key: string]: unknown;
+            }[];
+            issues?: components["schemas"]["MerchOrderIssue"][];
+        } & {
+            [key: string]: unknown;
+        };
+        MerchIssueRequest: {
+            /** @enum {string} */
+            issueType: "general" | "address" | "stock" | "shipping" | "damaged" | "missing" | "cancellation" | "return" | "refund" | "dispute";
+            message: string;
+        };
+        MerchCancellationRequest: {
+            reason: string;
+        };
+        MerchOrderIssue: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            issueType: "general" | "address" | "stock" | "shipping" | "damaged" | "missing" | "cancellation" | "return" | "refund" | "dispute" | "fraud";
+            /** @enum {string} */
+            status: "open" | "seller_review" | "staff_review" | "awaiting_buyer" | "resolved" | "rejected" | "cancelled";
+            message: string;
+            resolution?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        MerchIssueStatus: "open" | "seller_review" | "staff_review" | "awaiting_buyer" | "resolved" | "rejected" | "cancelled";
+        MerchOperationalIssue: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            storeId: string;
+            /** Format: uuid */
+            orderId: string;
+            orderNumber: string;
+            storeName: string;
+            customerName: string;
+            /** Format: email */
+            customerEmail: string;
+            /** @enum {string} */
+            issueType: "general" | "address" | "stock" | "shipping" | "damaged" | "missing" | "cancellation" | "return" | "refund" | "dispute" | "fraud";
+            status: components["schemas"]["MerchIssueStatus"];
+            message: string;
+            resolution?: string | null;
+            /** @description Visible only to an authorized seller or strict administrator. */
+            internalNotes?: string | null;
+            /** @enum {string} */
+            currency?: "USD";
+            /** Format: int64 */
+            totalMinor?: number;
+            /** Format: int64 */
+            refundedMinor?: number;
+            paymentStatus?: string;
+            refundStatus?: string;
+            disputeStatus?: string;
+            settlementStatus?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            closedAt?: string | null;
+        };
+        /** @description For terminal statuses, publicResponse must contain at least 10 characters. Seller financial cases may only be escalated to staff review. */
+        MerchIssueTriageRequest: {
+            status: components["schemas"]["MerchIssueStatus"];
+            publicResponse?: string | null;
+            internalNotes?: string | null;
+        };
+        MerchRefundRequest: {
+            /**
+             * Format: uuid
+             * @description Eligible financial support case currently in staff review.
+             */
+            issueId: string;
+            /**
+             * Format: int64
+             * @description Omit for the remaining unreserved paid balance.
+             */
+            amountMinor?: number | null;
+            reasonCode: string;
+            note?: string | null;
+        };
+        MerchRefundReviewRequest: {
+            /** @enum {string} */
+            decision: "approve" | "cancel";
+            reviewNote: string;
+        };
+        /** @enum {string} */
+        MerchRefundStatus: "requested" | "approved" | "processing" | "succeeded" | "failed" | "cancelled";
+        MerchRefund: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            orderId: string;
+            orderNumber: string;
+            /** Format: uuid */
+            storeId: string;
+            storeName: string;
+            /** Format: uuid */
+            issueId: string;
+            status: components["schemas"]["MerchRefundStatus"];
+            /** Format: int64 */
+            amountMinor: number;
+            /** @enum {string} */
+            currency: "USD";
+            reasonCode: string;
+            requestNote?: string | null;
+            /** @enum {string} */
+            provider: "datafast" | "paypal" | "stripe" | "bank_transfer" | "cash" | "pos";
+            /** @description Present only after verified provider evidence is recorded through a future gated adapter. */
+            providerRefundId?: string | null;
+            /** Format: int64 */
+            requestedBy: number;
+            requestedByName: string;
+            /** Format: int64 */
+            approvedBy?: number | null;
+            approvedByName?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            completedAt?: string | null;
+            settlementStatus: string;
+            /** @enum {boolean} */
+            executionAvailable: false;
+            executionMessage: string;
+        };
+        MerchDispute: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            orderId: string;
+            orderNumber: string;
+            /** Format: uuid */
+            storeId: string;
+            storeName: string;
+            providerDisputeId: string;
+            /** @enum {string} */
+            kind: "inquiry" | "dispute" | "chargeback";
+            status: string;
+            /** Format: int64 */
+            amountMinor: number;
+            /** @enum {string} */
+            currency: "USD";
+            reasonCode?: string | null;
+            /** Format: date-time */
+            openedAt: string;
+            /** Format: date-time */
+            dueAt?: string | null;
+            /** Format: date-time */
+            closedAt?: string | null;
+            /** @enum {boolean} */
+            readOnly: true;
+        };
+        MerchStatusRequest: {
+            status: string;
+            reason?: string | null;
+        };
+        MerchFulfillmentRequest: {
+            status: components["schemas"]["MerchFulfillmentStatus"];
+            publicNote?: string | null;
+            privateNote?: string | null;
+            carrier?: string | null;
+            trackingNumber?: string | null;
+            /** Format: uri */
+            trackingUrl?: string | null;
+        };
+        MerchSettlementRequest: {
+            /** Format: uuid */
+            storeId: string;
+            /** Format: date */
+            periodStart: string;
+            /** Format: date */
+            periodEnd: string;
+            orderIds: string[];
+            reviewNotes?: string | null;
+        };
+        MerchSettlementPaymentEvidenceRequest: {
+            /**
+             * Format: binary
+             * @description JPEG or PNG receipt, at most 10 MB and 40 megapixels. It is re-encoded as a private JPEG.
+             */
+            file: string;
+            /**
+             * Format: date-time
+             * @description Timestamp from the independently verified transfer evidence.
+             */
+            paidAt: string;
+            /** @description Non-secret bank or accounting reference. */
+            externalReference: string;
+            notes?: string | null;
+        };
+        /** @enum {string} */
+        MerchSettlementStatus: "draft" | "under_review" | "approved" | "paid" | "held" | "reversed";
+        MerchSettlementEligibleOrder: {
+            /** Format: uuid */
+            id: string;
+            orderNumber: string;
+            /** @enum {string} */
+            currency: "USD";
+            /** Format: int64 */
+            productSubtotalMinor: number;
+            /** Format: int64 */
+            discountMinor: number;
+            /** Format: int64 */
+            taxMinor: number;
+            /** Format: int64 */
+            shippingMinor: number;
+            /** Format: int64 */
+            processorFeeMinor: number;
+            /** Format: int64 */
+            tdfCommissionMinor: number;
+            /** Format: int64 */
+            sellerNetMinor: number;
+            /** Format: int64 */
+            refundsMinor: number;
+            /** Format: int64 */
+            adjustmentsMinor: number;
+            /** @enum {string} */
+            paymentStatus: "paid" | "partially_refunded";
+            /** @enum {string} */
+            fulfillmentStatus: "delivered" | "returned";
+            /** @enum {string} */
+            settlementStatus: "not_ready" | "ready";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        MerchSettlement: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            storeId: string;
+            /** Format: date-time */
+            periodStart: string;
+            /** Format: date-time */
+            periodEnd: string;
+            /** @enum {string} */
+            currency: "USD";
+            status: components["schemas"]["MerchSettlementStatus"];
+            storeName: string;
+            /** Format: int64 */
+            grossProductMinor: number;
+            /** Format: int64 */
+            discountsMinor: number;
+            /** Format: int64 */
+            taxesMinor: number;
+            /** Format: int64 */
+            shippingMinor: number;
+            /** Format: int64 */
+            processorFeesMinor: number;
+            /** Format: int64 */
+            tdfCommissionMinor: number;
+            /** Format: int64 */
+            refundsMinor: number;
+            /** Format: int64 */
+            adjustmentsMinor: number;
+            /** Format: int64 */
+            sellerNetMinor: number;
+            /** Format: int64 */
+            preparedBy: number;
+            preparedByName: string;
+            /** Format: int64 */
+            approvedBy?: number | null;
+            approvedByName?: string | null;
+            /** Format: int64 */
+            paidBy?: number | null;
+            paidByName?: string | null;
+            /** Format: date-time */
+            approvedAt?: string | null;
+            /** Format: date-time */
+            paidAt?: string | null;
+            evidenceObjectKey?: string | null;
+            /** @enum {string|null} */
+            evidenceMimeType?: "image/jpeg" | null;
+            /** Format: int64 */
+            evidenceByteSize?: number | null;
+            evidenceChecksumSha256?: string | null;
+            externalReference?: string | null;
+            /** Format: int64 */
+            orderCount: number;
+        } & {
+            [key: string]: unknown;
+        };
         PublicDomoStorefront: {
             checkoutAvailable: boolean;
             unavailableReason?: string | null;
@@ -5579,7 +9311,7 @@ export interface components {
             termsAcceptedAt?: string | null;
             /** Format: date-time */
             depositPaidAt?: string | null;
-            paymentMethods: ("datafast" | "paypal")[];
+            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet")[];
         };
         PublicDomoPaypalCaptureRequest: {
             paypalOrderId: string;
@@ -5600,6 +9332,18 @@ export interface components {
             salesEnd?: string | null;
             transfersAllowed: boolean;
         };
+        PublicEventTicketPolicy: {
+            policyVersion: string;
+            currency: string;
+            buyerFeeBps: number;
+            organizerFeeBps: number;
+            taxBps: number;
+            holdMinutes: number;
+            termsVersion: string;
+            termsSummary: string;
+            refundPolicy: string;
+            transferAllowed: boolean;
+        };
         PublicEventTicketStorefront: {
             /** Format: int64 */
             eventId: number;
@@ -5613,6 +9357,7 @@ export interface components {
             venueName?: string | null;
             venueAddress?: string | null;
             tiers: components["schemas"]["PublicEventTicketTier"][];
+            policy: components["schemas"]["PublicEventTicketPolicy"] | null;
             checkoutAvailable: boolean;
             unavailableReason?: string | null;
         };
@@ -5676,7 +9421,7 @@ export interface components {
             /** Format: date-time */
             holdExpiresAt: string;
             quote: components["schemas"]["PublicEventTicketQuote"];
-            paymentMethods: ("datafast" | "paypal")[];
+            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet")[];
             /** @description Empty until fulfillment issues tickets after verified payment. */
             tickets: components["schemas"]["PublicEventTicket"][];
         };
@@ -5791,7 +9536,7 @@ export interface components {
             holdExpiresAt: string;
             quote: components["schemas"]["PublicBookingQuote"];
             /** @description Rails both configured and enabled for this immutable checkout. Empty means no online payment action may be shown. */
-            paymentMethods: ("datafast" | "paypal" | "bank_transfer")[];
+            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet" | "bank_transfer")[];
             manualPayment: components["schemas"]["PublicBookingManualPayment"] | null;
         };
         PublicBookingManualPaymentCreate: {
@@ -6280,6 +10025,11 @@ export interface components {
             ssoCurrency: string;
             ssoStatus: string;
             ssoPaymentProvider: string | null;
+            /**
+             * Format: uuid
+             * @description Canonical checkout identifier used by the provider-neutral payment session API.
+             */
+            ssoCheckoutId: string | null;
             ssoLookupToken: string | null;
             /** Format: date-time */
             ssoPaidAt: string | null;
@@ -6353,6 +10103,24 @@ export interface components {
             /** Format: date-time */
             ssrfCompletedAt: string | null;
         };
+        ServiceStorefrontRefundRecovery: {
+            /** Format: uuid */
+            ssrrRefundId: string;
+            /** @enum {string} */
+            ssrrEnvironment: "sandbox" | "production";
+            /** @enum {string} */
+            ssrrStatus: "requested" | "approved" | "processing" | "succeeded" | "failed" | "cancelled";
+            /** @description Positive exact Int64 minor units; never parse through floating point */
+            ssrrAmountMinor: string;
+            /** @enum {string} */
+            ssrrCurrency: "USD";
+            /** @description Query readiness */
+            ssrrCanQuery: boolean;
+            /** @enum {string} */
+            ssrrOutcome: "not_queried" | "held" | "completed" | "already_completed";
+            /** Format: date-time */
+            ssrrCheckedAt: string | null;
+        };
         ServiceStorefrontReconciliation: {
             /** Format: uuid */
             ssrecOrderId: string;
@@ -6365,15 +10133,281 @@ export interface components {
             /** Format: date-time */
             ssrecCheckedAt: string;
         };
+        CommerceProviderCapability: {
+            cpcPaymentMethod: string;
+            cpcCapability: string;
+            /** @enum {string} */
+            cpcVerificationStatus: "documented" | "contract_required" | "sandbox_verified" | "production_verified" | "disabled";
+            /** Format: date-time */
+            cpcVerifiedAt: string | null;
+        };
+        CommerceProviderAccount: {
+            /** @enum {string} */
+            cpaProvider: "datafast" | "paypal" | "placetopay" | "payphone" | "bank_transfer";
+            /** @enum {string} */
+            cpaEnvironment: "sandbox" | "production";
+            /** @enum {string} */
+            cpaStatus: "disabled" | "testing" | "ready" | "suspended" | "blocked";
+            /** @enum {string} */
+            cpaContractStatus: "unverified" | "pending" | "approved" | "blocked";
+            /** @enum {string} */
+            cpaCredentialStatus: "absent" | "configured" | "validated" | "invalid";
+            cpaSettlementCurrency: string;
+            cpaEnabled: boolean;
+            cpaFeatureEnabled: boolean;
+            /** Format: date-time */
+            cpaVerifiedAt: string | null;
+            cpaDisabledReason: string | null;
+            cpaCapabilities: components["schemas"]["CommerceProviderCapability"][];
+        };
+        CommercePaymentIntentSummary: {
+            /** @enum {string} */
+            cpiEnvironment: "sandbox" | "production";
+            cpiStatus: string;
+            cpiCurrency: string;
+            /** Format: int64 */
+            cpiCount: number;
+            /** Format: int64 */
+            cpiAmountMinor: number;
+            /** Format: int64 */
+            cpiAuthorizedMinor: number;
+            /** Format: int64 */
+            cpiCapturedMinor: number;
+            /** Format: int64 */
+            cpiRefundedMinor: number;
+        };
+        CommerceAmountComponentSummary: {
+            /** @enum {string} */
+            cacEnvironment: "sandbox" | "production";
+            /** @enum {string} */
+            cacComponentType: "subtotal" | "discount" | "tax" | "customer_fee" | "provider_fee" | "platform_commission" | "seller_payable" | "withholding" | "refund" | "chargeback" | "fx_adjustment";
+            /** @enum {string} */
+            cacSource: "quote" | "provider_estimate" | "provider_actual" | "tax_document" | "manual_adjustment";
+            cacCurrency: string;
+            /** Format: int64 */
+            cacCount: number;
+            /** Format: int64 */
+            cacAmountMinor: number;
+        };
+        CommerceCommissionSummary: {
+            ccmProvider: string;
+            /** @enum {string} */
+            ccmEnvironment: "sandbox" | "production";
+            ccmCurrency: string;
+            /** Format: int64 */
+            ccmCount: number;
+            /** Format: int64 */
+            ccmBasisAmountMinor: number;
+            /** Format: int64 */
+            ccmCommissionMinor: number;
+            /** Format: int64 */
+            ccmProviderFeeMinor: number;
+            /** Format: int64 */
+            ccmTaxMinor: number;
+            /** Format: int64 */
+            ccmSellerNetMinor: number;
+        };
+        CommerceRefundSummary: {
+            crfProvider: string;
+            /** @enum {string} */
+            crfEnvironment: "sandbox" | "production";
+            /** @enum {string} */
+            crfStatus: "requested" | "approved" | "processing" | "succeeded" | "failed" | "cancelled";
+            crfCurrency: string;
+            /** Format: int64 */
+            crfCount: number;
+            /** Format: int64 */
+            crfAmountMinor: number;
+        };
+        CommerceDisputeSummary: {
+            cdsProvider: string;
+            /** @enum {string} */
+            cdsEnvironment: "sandbox" | "production";
+            /** @enum {string} */
+            cdsKind: "inquiry" | "dispute" | "chargeback";
+            cdsStatus: string;
+            cdsCurrency: string;
+            /** Format: int64 */
+            cdsCount: number;
+            /** Format: int64 */
+            cdsAmountMinor: number;
+        };
+        CommerceReconciliationSummary: {
+            crsProvider: string;
+            crsEnvironment: string;
+            /** @enum {string} */
+            crsStatus: "open" | "assigned" | "resolved" | "ignored";
+            crsCurrency: string | null;
+            /** Format: int64 */
+            crsCount: number;
+            /** Format: int64 */
+            crsExpectedMinor: number;
+            /** Format: int64 */
+            crsActualMinor: number;
+        };
+        CommerceSettlementSummary: {
+            cssProvider: string;
+            cssEnvironment: string;
+            cssStatus: string;
+            cssCurrency: string;
+            /** Format: int64 */
+            cssCount: number;
+            /** Format: int64 */
+            cssGrossMinor: number;
+            /** Format: int64 */
+            cssFeeMinor: number;
+            /** Format: int64 */
+            cssWithholdingMinor: number;
+            /** Format: int64 */
+            cssRefundMinor: number;
+            /** Format: int64 */
+            cssChargebackMinor: number;
+            /** Format: int64 */
+            cssNetMinor: number;
+        };
+        CommerceSellerBalanceSummary: {
+            csbProvider: string;
+            csbEnvironment: string;
+            /** @enum {string} */
+            csbAvailability: "available" | "pending";
+            csbCurrency: string;
+            /** Format: int64 */
+            csbEntryCount: number;
+            /** Format: int64 */
+            csbNetAmountMinor: number;
+        };
+        CommercePayoutSummary: {
+            cpsProvider: string;
+            cpsEnvironment: string;
+            cpsStatus: string;
+            cpsCurrency: string;
+            /** Format: int64 */
+            cpsCount: number;
+            /** Format: int64 */
+            cpsAmountMinor: number;
+        };
+        CommercePaymentOverview: {
+            /** Format: date-time */
+            cpoGeneratedAt: string;
+            cpoProviderAccounts: components["schemas"]["CommerceProviderAccount"][];
+            cpoPaymentIntents: components["schemas"]["CommercePaymentIntentSummary"][];
+            cpoAmountComponents: components["schemas"]["CommerceAmountComponentSummary"][];
+            cpoCommissions: components["schemas"]["CommerceCommissionSummary"][];
+            cpoRefunds: components["schemas"]["CommerceRefundSummary"][];
+            cpoDisputes: components["schemas"]["CommerceDisputeSummary"][];
+            cpoReconciliationExceptions: components["schemas"]["CommerceReconciliationSummary"][];
+            cpoSettlements: components["schemas"]["CommerceSettlementSummary"][];
+            cpoSellerBalances: components["schemas"]["CommerceSellerBalanceSummary"][];
+            cpoPayouts: components["schemas"]["CommercePayoutSummary"][];
+        };
+        CommerceReconciliationEntry: {
+            /** Format: uuid */
+            creId: string;
+            /**
+             * @description A recognized stored provider, not current merchant eligibility or availability
+             * @enum {string}
+             */
+            creProvider: "datafast" | "paypal" | "placetopay" | "payphone" | "bank_transfer" | "stripe" | "unrecognized";
+            /** @enum {string} */
+            creStatus: "open" | "assigned" | "resolved" | "ignored" | "unrecognized";
+            /**
+             * @description Fixed safe classification, not raw stored exception text
+             * @enum {string}
+             */
+            creReason: "closed_checkout_approval" | "scheduled_query_review" | "binding_mismatch" | "unknown_provider_state" | "unrecognized";
+            /** Format: uuid */
+            creCheckoutId: string | null;
+            /** Format: uuid */
+            crePaymentAttemptId: string | null;
+            /** @description Exact signed 64-bit integer minor units; null means unknown, not zero */
+            creExpectedMinor: string | null;
+            /** @description Exact observed signed 64-bit minor units; not a booked capture or settlement */
+            creActualMinor: string | null;
+            creCurrency: string | null;
+            /** Format: date-time */
+            creDetectedAt: string;
+            /** Format: date-time */
+            creResolvedAt: string | null;
+        };
+        CommerceReconciliationReport: {
+            /** Format: date-time */
+            crrGeneratedAt: string;
+            /** @enum {string} */
+            crrEnvironment: "sandbox" | "production";
+            /** @enum {string|null} */
+            crrStatus: "open" | "assigned" | "resolved" | "ignored" | null;
+            /** Format: uuid */
+            crrCheckoutId: string | null;
+            crrSchemaReady: boolean;
+            crrEntries: components["schemas"]["CommerceReconciliationEntry"][];
+            crrLimit: number;
+            crrOffset: number;
+            crrHasMore: boolean;
+        };
+        CommerceProviderQuery: {
+            /** Format: uuid */
+            cpqOperationId: string;
+            /** Format: uuid */
+            cpqCheckoutId: string;
+            /** Format: uuid */
+            cpqPaymentAttemptId: string;
+            cpqProvider: string;
+            /** @enum {string} */
+            cpqStatus: "pending" | "processing" | "retry" | "completed" | "dead_letter";
+            cpqAttemptCount: number;
+            /** @description Original operation state; not a job state */
+            cpqOperationStatus: string;
+            /** @enum {string} */
+            cpqOutcomeCertainty: "not_sent" | "confirmed_no_charge" | "ambiguous" | "succeeded";
+            /** Format: date-time */
+            cpqCreatedAt: string;
+            /** Format: date-time */
+            cpqLastAttemptAt: string | null;
+            /** Format: date-time */
+            cpqNextAttemptAt: string;
+            /** Format: date-time */
+            cpqLeaseExpiresAt: string | null;
+            /** Format: date-time */
+            cpqCompletedAt: string | null;
+            /**
+             * @description Known server-authored diagnostic only; all other stored text becomes unrecognized
+             * @enum {string|null}
+             */
+            cpqLastOutcome: "retry_exhausted" | "process_switch_disabled" | "binding_changed" | "query_unavailable" | "query_unsupported" | "query_binding_mismatch" | "query_application_rejected" | "query_applied" | "provider_nonterminal" | "provider_requires_review" | "configuration_revoked" | "operation_already_terminal" | "immutable_binding_unavailable" | "unrecognized" | null;
+        };
+        CommerceProviderQueryBudget: {
+            cpqbProvider: string;
+            /**
+             * Format: date-time
+             * @description Earliest shared query slot
+             */
+            cpqbNextQueryAt: string;
+        };
+        CommerceProviderQueries: {
+            /** Format: date-time */
+            cpqsGeneratedAt: string;
+            /** @enum {string} */
+            cpqsEnvironment: "sandbox" | "production";
+            cpqsSchemaReady: boolean;
+            /** @description Database flag only; never worker liveness or complete activation authority */
+            cpqsRecoveryFlagEnabled: boolean;
+            cpqsJobs: components["schemas"]["CommerceProviderQuery"][];
+            cpqsBudgets: components["schemas"]["CommerceProviderQueryBudget"][];
+            cpqsLimit: number;
+            cpqsOffset: number;
+            cpqsHasMore: boolean;
+        };
         CommerceProviderEvent: {
             /** Format: uuid */
             cpeId: string;
             /** @enum {string} */
-            cpeProvider: "paypal" | "datafast" | "stripe" | "bank_transfer" | "cash" | "pos" | "cardano";
+            cpeProvider: "paypal" | "datafast" | "placetopay" | "payphone" | "stripe" | "bank_transfer" | "cash" | "pos" | "cardano";
             /** @enum {string} */
             cpeEnvironment: "sandbox" | "production";
             cpeProviderEventId: string;
             cpeEventType: string;
+            /** @enum {string} */
+            cpeEvidenceType: "signature_verified" | "untrusted_callback";
             cpeProviderResourceId: string | null;
             /** @enum {string} */
             cpeStatus: "pending" | "processing" | "processed" | "retry" | "dead_letter" | "ignored";
@@ -6400,6 +10434,40 @@ export interface components {
         };
         CommerceProviderEventReplayCreate: {
             cperReason: string;
+        };
+        PaymentSessionCreate: {
+            /** @enum {string} */
+            provider: "placetopay" | "payphone";
+            /** @enum {string} */
+            paymentMethod: "card" | "bank_redirect" | "deuna_qr" | "payphone_wallet";
+            buyerPhone?: string;
+            buyerCountryCode?: string;
+        };
+        PaymentSession: {
+            /** Format: uuid */
+            checkoutId: string;
+            /** Format: uuid */
+            attemptId: string;
+            /** Format: uuid */
+            operationId: string;
+            /** @enum {string} */
+            provider: "placetopay" | "payphone";
+            /** @enum {string} */
+            state: "prepared" | "in_flight" | "requires_customer_action" | "processing" | "succeeded" | "confirmed_no_charge" | "ambiguous" | "failed";
+            externalId: string | null;
+            /**
+             * Format: uri
+             * @description Hosted provider URL; treat as a bearer capability and do not log it.
+             */
+            redirectUrl: string | null;
+            /** @enum {string} */
+            outcomeCertainty: "not_contacted" | "rejected_before_creation" | "confirmed_no_charge" | "ambiguous" | "succeeded";
+            /** @description True only when the provider is known not to have created a charge. */
+            canRetryOrFallback: boolean;
+        };
+        PayPhoneNotificationAck: {
+            Response: boolean;
+            ErrorCode: string;
         };
         DatafastCheckout: {
             dcOrderId: string;
@@ -6980,6 +11048,70 @@ export interface components {
             /** Format: date-time */
             erChangeCreatedAt: string;
         };
+        /**
+         * @description Canonical persisted vocabulary. Clients localize these values at the presentation boundary.
+         * @enum {string}
+         */
+        EventRsvpStatus: "accepted" | "maybe" | "declined";
+        EventRsvp: {
+            readonly rsvpEventId: string;
+            rsvpStatus: components["schemas"]["EventRsvpStatus"];
+            rsvpShowOnProfile: boolean;
+            /** Format: date-time */
+            readonly rsvpCreatedAt?: string | null;
+            /** Format: date-time */
+            readonly rsvpUpdatedAt?: string | null;
+        };
+        EventRsvpWrite: {
+            rsvpStatus: components["schemas"]["EventRsvpStatus"];
+            /** @description Explicit decision for this RSVP. Declined RSVPs are never published regardless of this value. */
+            rsvpShowOnProfile: boolean;
+        };
+        EventRsvpSummary: {
+            rsvpAcceptedCount: number;
+            rsvpMaybeCount: number;
+        };
+        EventRsvpAdmin: {
+            adminRsvpId: string;
+            adminRsvpPartyId: string;
+            adminRsvpStatus: components["schemas"]["EventRsvpStatus"];
+            adminRsvpShowOnProfile: boolean;
+            /** Format: date-time */
+            adminRsvpCreatedAt: string;
+            /** Format: date-time */
+            adminRsvpUpdatedAt: string;
+        };
+        EventRsvpAdminPage: {
+            adminRsvpItems: components["schemas"]["EventRsvpAdmin"][];
+            adminRsvpNextCursor?: string | null;
+        };
+        EventRsvpFeedItem: {
+            /** @enum {string} */
+            feedItemType: "event_rsvp";
+            feedEventId: string;
+            /** @enum {string} */
+            feedStatus: "accepted" | "maybe";
+            /** @enum {boolean} */
+            feedShowOnProfile: true;
+            feedEventTitle: string;
+            /** Format: date-time */
+            feedEventStart: string;
+            feedEventTimezone?: string | null;
+            /** Format: uri */
+            feedEventImageUrl?: string | null;
+            feedVenueName?: string | null;
+            feedCity?: string | null;
+            feedWorkflowStateCode: string;
+            /** Format: date-time */
+            feedActionAt: string;
+            feedCanonicalUrl: string;
+            feedCanEdit: boolean;
+            feedCanShare: boolean;
+        };
+        EventRsvpFeedPage: {
+            feedItems: components["schemas"]["EventRsvpFeedItem"][];
+            feedNextCursor?: string | null;
+        };
         SocialEvent: {
             eventId?: string | null;
             eventOrganizerPartyId?: string | null;
@@ -7011,6 +11143,7 @@ export interface components {
             readonly eventWorkflowStateNameEs?: string | null;
             readonly eventWorkflowStateNameEn?: string | null;
             readonly eventPublicListable?: boolean | null;
+            readonly eventRsvpEligible?: boolean | null;
             readonly eventTicketPurchaseEnabled?: boolean | null;
             eventCurrency?: string | null;
             eventBudgetCents?: number | null;
@@ -7054,6 +11187,10 @@ export interface components {
         GoogleLoginRequest: {
             /** @description Google ID token returned by Google Identity Services */
             idToken: string;
+            /** @description Must be explicitly true, with current terms acceptance, to create a new account for an unbound Google subject. Omission never creates an account. */
+            createNewAccount?: boolean;
+            /** @description Explicitly connect the verified Google identity using the existing TDF account credentials. No account or permission is merged. */
+            linkAccount?: components["schemas"]["LoginRequest"];
             /** @description Optional consent to receive TDF product and marketing updates when creating an account. */
             marketingOptIn?: boolean;
             /** @description Account terms acceptance when Google is used from signup. */
@@ -7148,6 +11285,24 @@ export interface components {
             /** @description True only for the single request that changed an incomplete account to complete using an eligible explicit exit or in-window first-value evidence. */
             newlyCompleted: boolean;
         };
+        ExperimentAssignment: {
+            experimentId: string;
+            experimentVersion: number;
+            experimentEnabled: boolean;
+            experimentEligible: boolean;
+            variant: string;
+            /** Format: date-time */
+            assignedAt: string | null;
+            /** Format: date-time */
+            eligibleUntil: string | null;
+            /** Format: date-time */
+            exposedAt: string | null;
+            newlyAssigned: boolean;
+        };
+        ExperimentExposureResult: {
+            assignment: components["schemas"]["ExperimentAssignment"];
+            newlyExposed: boolean;
+        };
         SessionResponse: {
             username: string;
             displayName: string;
@@ -7189,6 +11344,8 @@ export interface components {
             countryId?: string | null;
             /** @description Presentation and external-wire code resolved from countryId; legacy rows may use preserved migration evidence until backfilled. */
             readonly countryCode?: string | null;
+            /** @description Default presented for new public-event RSVPs. Every RSVP still records an explicit per-action decision. */
+            showEventRsvpsOnProfile: boolean;
         };
         LocalePreferencesUpdate: {
             /**
@@ -7207,6 +11364,8 @@ export interface components {
              * @description Canonical active country identity. Null explicitly clears the preference.
              */
             countryId?: string | null;
+            /** @description Optional new default for subsequent RSVP decisions. */
+            showEventRsvpsOnProfile?: boolean;
         };
         CurrencyConversionAuditCreate: {
             sourceCurrency: string;
@@ -7675,6 +11834,19 @@ export interface components {
             durationMs?: number;
             /** Format: uri */
             thumbnailUrl?: string;
+            /**
+             * @description Absent when provider availability has not been verified.
+             * @enum {string}
+             */
+            availability?: "available" | "unavailable";
+            /** @description Verified provider reason, independent of image loading failures. */
+            availabilityReason?: string;
+            /** Format: date-time */
+            verifiedAt?: string;
+            /** @description Verified public provider metadata, including publication time, thumbnails, and embedding status. */
+            providerMetadata?: {
+                [key: string]: unknown;
+            };
             relationKind: string;
             primary: boolean;
             sortOrder: number;
@@ -8593,7 +12765,7 @@ export interface components {
             /** Format: date-time */
             holdExpiresAt: string | null;
             quote: components["schemas"]["CourseCheckoutQuote"] | null;
-            paymentMethods: ("datafast" | "paypal")[];
+            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet")[];
             checkoutAvailable: boolean;
         };
         CoursePaypalCaptureRequest: {
@@ -9297,6 +13469,8 @@ export interface components {
              * @description Internal subject identifier; clients must not expose it unnecessarily.
              */
             requesterPartyId: number;
+            /** @description Requester's display name, or null when unavailable. Visible only to the requester and authorized reviewers. */
+            requesterName: string | null;
             featureId: string;
             action: string;
             roleContext: string[];
@@ -9701,6 +13875,88 @@ export interface components {
             active: boolean;
             /** Format: date-time */
             updatedAt: string;
+        };
+        SocialV2Me: {
+            discoverable: boolean;
+            personalized: boolean;
+            /** Format: int64 */
+            revision: number;
+            relationships: {
+                /** Format: int64 */
+                partyId: number;
+                /** Format: int64 */
+                revision: number;
+                following: boolean;
+                requested: boolean;
+                incoming: boolean;
+                connected: boolean;
+                blocked: boolean;
+                muted: boolean;
+                dismissed: boolean;
+                displayName: string;
+            }[];
+        };
+        SocialV2State: {
+            /** Format: int64 */
+            partyId: number;
+            /** Format: int64 */
+            revision: number;
+            following: boolean;
+            requested: boolean;
+            incoming: boolean;
+            connected: boolean;
+            blocked: boolean;
+            muted: boolean;
+            dismissed: boolean;
+        };
+        SocialV2Command: {
+            /** @enum {string} */
+            operation: "request" | "accept" | "disconnect" | "follow" | "unfollow" | "block" | "unblock" | "mute" | "unmute" | "dismiss" | "undismiss";
+            /** Format: int64 */
+            expectedRevision: number;
+            requestKey: string;
+        };
+        SocialV2PreferenceUpdate: {
+            discoverable: boolean;
+            personalized: boolean;
+            /** Format: int64 */
+            expectedRevision: number;
+        };
+        SocialV2Preferences: {
+            discoverable: boolean;
+            personalized: boolean;
+            /** Format: int64 */
+            revision: number;
+        };
+        SocialV2Feed: {
+            nextCursor: string | null;
+            items: {
+                /** Format: int64 */
+                postId: number;
+                position: string;
+                /** Format: date-time */
+                publishedAt: string;
+                /** Format: date-time */
+                createdAt: string;
+                title: string | null;
+                content: string;
+                /** Format: int64 */
+                authorId: number;
+                authorName: string;
+                /** Format: int64 */
+                artistId: number;
+            }[];
+        };
+        SocialV2Discover: {
+            personalized: boolean;
+            items: {
+                /** Format: int64 */
+                partyId: number;
+                displayName: string;
+                /** @enum {string} */
+                reason: "shared_interests" | "public_profile";
+                relationship: components["schemas"]["SocialV2State"];
+            }[];
         };
         /** @enum {string} */
         DirectoryEntityType: "profile" | "classified" | "event" | "venue";
@@ -10472,6 +14728,26 @@ export interface components {
                 notApplicable: boolean;
             }[];
         };
+        ReputationConsent: {
+            /** @enum {string} */
+            consentKind: "pilot_participation" | "public_visibility" | "public_rankings" | "rating_reminders";
+            granted: boolean;
+            version: number;
+            /** Format: date-time */
+            updatedAt: string | null;
+        };
+        ReputationConsentUpdate: {
+            /** @enum {string} */
+            consentKind: "pilot_participation" | "public_visibility" | "public_rankings" | "rating_reminders";
+            granted: boolean;
+            /** @description Required for grants; identifies the disclosure accepted. */
+            consentCopyVersion?: string | null;
+            /**
+             * @description Required for grants; language of the disclosure accepted.
+             * @enum {string|null}
+             */
+            consentLocale?: "es" | "en" | null;
+        };
         ExperienceReviewEligibility: {
             targetKind: components["schemas"]["ExperienceReviewTargetKind"];
             targetId: string;
@@ -10512,6 +14788,14 @@ export interface components {
         };
     };
     parameters: {
+        MerchCartId: string;
+        /** @description Unguessable token returned once when a guest cart is created. */
+        MerchCartLookupToken: string;
+        MerchStoreId: string;
+        MerchProductId: string;
+        MerchOrderId: string;
+        MerchIssueId: string;
+        MerchSettlementId: string;
         PublicEventId: number;
         PublicEventTicketOrderId: number;
         /** @description Immutable canonical UUID of the Domo quote runtime. */
@@ -10564,6 +14848,2330 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listPaymentCapabilities: {
+        parameters: {
+            query: {
+                buyerCountry: string;
+                /** @description Currency is normalized to uppercase; only USD can yield available routes. */
+                currency: string;
+                amountMinor: number;
+                paymentMethod: "card" | "paypal_wallet" | "bank_redirect" | "deuna_qr" | "payphone_wallet" | "payment_link" | "manual_bank_transfer";
+                productFlow: "merchandise" | "booking" | "professional_service" | "course" | "event_ticket" | "digital_product" | "subscription" | "marketplace";
+                requires?: components["schemas"]["PaymentCapabilityName"][];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered transaction-specific routes; empty when no route is fully available. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentCapabilityResponse"];
+                };
+            };
+            /** @description Missing or invalid query parameter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Checkout environment configuration is invalid. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listInteractionReports: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionPage"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listInteractionBlockedAccounts: {
+        parameters: {
+            query?: {
+                cursor?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionBlockedAccounts"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getInteractionSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["InteractionKind"];
+                entityKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionSummary"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getInteractionComments: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                root?: string;
+                sort?: "relevant" | "newest" | "oldest";
+            };
+            header?: never;
+            path: {
+                kind: components["schemas"]["InteractionKind"];
+                entityKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionPage"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getInteractionComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["InteractionKind"];
+                entityKey: string;
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionCommentContext"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getInteractionReactors: {
+        parameters: {
+            query?: {
+                cursor?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                kind: components["schemas"]["InteractionKind"];
+                entityKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionReactors"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolveInteractionDestination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                destinationKind: "target" | "comment";
+                destinationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionDestination"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPublicInteractionSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["InteractionKind"];
+                entityKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionSummary"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPublicInteractionComments: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                root?: string;
+                sort?: "relevant" | "newest" | "oldest";
+            };
+            header?: never;
+            path: {
+                kind: components["schemas"]["InteractionKind"];
+                entityKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionPage"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPublicInteractionComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["InteractionKind"];
+                entityKey: string;
+                commentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionCommentContext"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPublicInteractionReactors: {
+        parameters: {
+            query?: {
+                cursor?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                kind: components["schemas"]["InteractionKind"];
+                entityKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionReactors"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolvePublicInteractionDestination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                destinationKind: "target" | "comment";
+                destinationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionDestination"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    executeInteractionCommand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InteractionCommandRequest"];
+            };
+        };
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionCommandResult"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getInteractionBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionBlock"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setInteractionBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InteractionBlockRequest"];
+            };
+        };
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionBlock"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getInteractionPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionPreferences"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setInteractionPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InteractionPreferences"];
+            };
+        };
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionPreferences"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getInteractionModeration: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                targetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state; Cache-Control no-store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InteractionPage"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision or request key conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry using the same request key */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createTrialSignupEnquiry: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    firstName: string;
+                    lastName: string;
+                    email: string;
+                    phone?: string;
+                    marketingOptIn: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted enquiry or identical retry. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: boolean;
+                    };
+                };
+            };
+            /** @description Invalid input or missing retry key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The accepted request has different details. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createPublicTrialRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    subjectId: number;
+                    preferred: {
+                        /** Format: date-time */
+                        startAt: string;
+                        /** Format: date-time */
+                        endAt: string;
+                    }[];
+                    fullName?: string;
+                    email: string;
+                    phone?: string;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted request or identical retry. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        requestId: number;
+                        status: string;
+                    };
+                };
+            };
+            /** @description Invalid input or missing retry key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The accepted request has different details. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No suitable teacher availability. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createSchoolStudent: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fullName: string;
+                    email: string;
+                    phone?: string;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted student or identical retry. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        studentId: number;
+                        displayName: string;
+                        email: string | null;
+                        phone: string | null;
+                    };
+                };
+            };
+            /** @description Invalid input or missing retry key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description School access required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The accepted request has different details. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getSocialV2Me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialV2Me"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision, request identity, or transition conflict; refresh current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mutation rate limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getSocialV2Relationship: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialV2State"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision, request identity, or transition conflict; refresh current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mutation rate limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mutateSocialV2Relationship: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialV2Command"];
+            };
+        };
+        responses: {
+            /** @description Current authorized state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialV2State"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision, request identity, or transition conflict; refresh current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mutation rate limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateSocialV2Preferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialV2PreferenceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Current authorized state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialV2Preferences"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision, request identity, or transition conflict; refresh current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mutation rate limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getSocialV2Following: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialV2Feed"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision, request identity, or transition conflict; refresh current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mutation rate limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getSocialV2Discover: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current authorized state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialV2Discover"];
+                };
+            };
+            /** @description Invalid input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled or unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Revision, request identity, or transition conflict; refresh current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mutation rate limit */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    completeEventOperationTask: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                eventId: number;
+                activityId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventTaskCompletionCommand"];
+            };
+        };
+        responses: {
+            /** @description Committed or exactly replayed original completion receipt */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventTaskCompletionOutcome"];
+                };
+            };
+            /** @description Invalid capture, UUID, strict fields or constraints */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or no-longer-current session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current reader lacks task mutation authority */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Feature disabled or opaque absent/foreign/unreadable task */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Version/key conflict, unsupported task/event/policy, current RACI or prerequisites not ready */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sanitized persistence, commit or receipt-validation failure; no success implied */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventRaciEditorContext: {
+        parameters: {
+            query?: {
+                afterPartyId?: number;
+            };
+            header?: never;
+            path: {
+                eventId: number;
+                activityId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized context; no identity/contact discovery or write authority implied */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRaciEditorContext"];
+                };
+            };
+            /** @description Invalid or unsafe target/cursor */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or no-longer-current session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Disabled feature or opaque absent/foreign/unreadable task */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sanitized persistence or strict projection validation failure */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reassignEventOperationTaskRaci: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                eventId: number;
+                activityId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventRaciReassignmentCommand"];
+            };
+        };
+        responses: {
+            /** @description Committed or exactly replayed original outcome */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRaciReassignmentOutcome"];
+                };
+            };
+            /** @description Invalid capture, UUID, strict command fields or constraints */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or no-longer-current session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current reader lacks task mutation authority */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Feature disabled or opaque absent/foreign/unreadable task */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Version/key conflict, unsupported lifecycle, timed source or ineligible/duplicate recipient */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sanitized persistence or receipt-validation failure; no success implied */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventOperationTaskWithRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+                activityId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized task and matching storage revision; not a readiness certificate */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationTaskWithRevision"];
+                };
+            };
+            /** @description Invalid or unsafe integer path capture */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or no-longer-current session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Feature disabled; otherwise absent, foreign-event and unreadable tasks share not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+            /** @description Persistence or strict envelope validation failed; no raw diagnostic is returned */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+        };
+    };
+    getEventOperationTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+                activityId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized minimal task projection; not a readiness certificate */
+            200: {
+                headers: {
+                    /** @description Do not persist this authorization-sensitive response in HTTP caches. */
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationTask"];
+                };
+            };
+            /** @description Invalid or unsafe integer path capture */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Feature disabled; otherwise absent, foreign-event and unreadable tasks share not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+            /** @description Persistence or strict projection validation failed; no raw diagnostic is returned */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+        };
+    };
+    getEventOperationSnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized event lifecycle projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationSnapshot"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Feature disabled, event absent, or event not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+            /** @description Event operations persistence is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+        };
+    };
+    applyEventOperationTransition: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-generated UUID identifying this exact event transition command. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventTransitionCommand"];
+            };
+        };
+        responses: {
+            /** @description Accepted transition or exact replay of its stored result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventTransitionOutcome"];
+                };
+            };
+            /** @description Invalid command or a required rollback reason is absent */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event is readable but current transition authority is insufficient, or an authorized historical rejection is replayed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+            /** @description Feature disabled, event absent, or event not visible; absent and unreadable targets share the not_found envelope */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+            /** @description Version or command-key conflict, invalid lifecycle edge, missing implementation effects, or separation-of-duties violation */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+            /** @description Event operations persistence is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventOperationError"];
+                };
+            };
+        };
+    };
     listSocialFollowers: {
         parameters: {
             query?: never;
@@ -10674,6 +17282,318 @@ export interface operations {
             };
             /** @description Event type is unknown, inactive, ineffective, deprecated, or unpublished */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMyEventRsvp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current RSVP or null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvp"] | null;
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event is missing or not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    upsertMyEventRsvp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventRsvpWrite"];
+            };
+        };
+        responses: {
+            /** @description Authoritative current RSVP */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvp"];
+                };
+            };
+            /** @description Unknown status or unknown request field */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event is missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event no longer accepts RSVPs */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mutation rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteMyEventRsvp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description RSVP absent after the idempotent operation */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mutation rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventRsvpSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Separate accepted and interested counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvpSummary"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event is missing or not visible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listEventRsvpsForOrganizer: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized administrative list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvpAdminPage"];
+                };
+            };
+            /** @description Cursor is malformed or limit is outside 1 through 50 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Organizer permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventRsvpProfileFeed: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                partyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stable cursor page with accepted and interested RSVPs only */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvpFeedPage"];
+                };
+            };
+            /** @description Cursor is malformed or limit is outside 1 through 50 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profile is missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getDirectoryProfileEventRsvpFeed: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Privacy-filtered cursor page; organization and ambiguous profiles fail closed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRsvpFeedPage"];
+                };
+            };
+            /** @description Cursor is malformed or limit is outside 1 through 50 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profile is missing */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11054,6 +17974,43 @@ export interface operations {
             };
         };
     };
+    requestPasswordReset: {
+        parameters: {
+            query?: {
+                /** @description Requested recovery language. Spanish locales use Spanish; other supplied locales use English fallback. Omitted values retain legacy Spanish email behavior. */
+                locale?: string;
+                /** @description Optional local destination, revalidated against the recovered account's permissions. Invalid destinations are ignored. */
+                redirect?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Request processed without revealing whether the account exists or email delivery succeeded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request email. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -11417,6 +18374,78 @@ export interface operations {
             };
             /** @description Authentication required */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getExperimentAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experimentId: "single-feature-onboarding-v1";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current experiment state, including a paused control response when disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentAssignment"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported experiment */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    recordExperimentExposure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experimentId: "single-feature-onboarding-v1";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current experiment state, including a paused control response when disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentExposureResult"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported experiment */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12523,6 +19552,40 @@ export interface operations {
             };
         };
     };
+    activateMyArtistProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Artist profile ready to edit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistProfile"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Account or automatic artist policy does not allow activation */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     searchPublicArtists: {
         parameters: {
             query?: {
@@ -12918,7 +19981,10 @@ export interface operations {
     createParty: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Stable request key scoped to the authenticated actor. Reuse on retries with the same body; a changed body returns 409. Contact attributes never establish identity. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -13006,7 +20072,7 @@ export interface operations {
             query: {
                 q: string;
                 /** @description Functional authorization context; public discovery contexts are forced to active person accounts and exclude the actor. */
-                context?: "crm_assignment" | "booking" | "booking_engineer" | "billing_contact" | "artist_link" | "campaign_enrollment" | "event_invitation" | "social_connection" | "operations" | "internal_feedback" | "live_session" | "event_logistics";
+                context?: "crm_assignment" | "booking" | "booking_engineer" | "billing_contact" | "artist_link" | "campaign_enrollment" | "event_invitation" | "social_connection" | "interaction_mention" | "operations" | "internal_feedback" | "live_session" | "event_logistics";
                 /** @description Required domain scope for contexts that authorize against a concrete resource. For event_logistics this is the event ID. */
                 scopeId?: string;
                 kind?: "any" | "person" | "organization";
@@ -15384,7 +22450,10 @@ export interface operations {
     createLiveSessionIntake: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Stable identity for one submission, scoped to the authenticated actor. Reuse unchanged requests after failures; changed accepted requests return 409. */
+                "Idempotency-Key": string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -15415,7 +22484,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description A supplied musician identity is ambiguous */
+            /** @description The actor cannot select a supplied contact */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The accepted submission changed or an archived contact requires review */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18687,6 +25763,152 @@ export interface operations {
             };
         };
     };
+    adminGetServiceRefundRecovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refundId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Local refund evidence and exact-environment readiness */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceStorefrontRefundRecovery"];
+                };
+            };
+            /** @description Invalid refund UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict Admin required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refund not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Known refund or original capture binding unavailable; manual review required */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Readiness could not be verified */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminReconcileServiceRefund: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refundId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Completed, already completed by a concurrent observation, or still held */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceStorefrontRefundRecovery"];
+                };
+            };
+            /** @description Invalid refund UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict Admin required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refund not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Binding */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Shared provider query limit reached */
+            429: {
+                headers: {
+                    /** @description Seconds before another query may be attempted */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider evidence could not be verified; funds remain reserved */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reconciliation unavailable or authority changed; no financial completion applied */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     adminReconcileServiceStorefrontOrder: {
         parameters: {
             query?: never;
@@ -18731,6 +25953,379 @@ export interface operations {
             };
             /** @description Provider status could not be read */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createProviderPaymentSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Checkout-Lookup-Token": string;
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                checkoutId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentSessionCreate"];
+            };
+        };
+        responses: {
+            /** @description Durable provider operation; may require customer action or reconciliation */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSession"];
+                };
+            };
+            /** @description Invalid provider */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Checkout or lookup token is invalid, or no contacted replay exists and checkout cannot accept payment. This is not no-charge evidence for an earlier transmitted request. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Idempotency conflict or another active canonical payment intent exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider/configuration is unavailable or an ambiguous result requires reconciliation */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getProviderPaymentSession: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Checkout-Lookup-Token": string;
+            };
+            path: {
+                checkoutId: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lookup-token-scoped state without provider payloads or credentials */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSession"];
+                };
+            };
+            /** @description Session absent or lookup token invalid */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Encrypted operation storage is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    receivePlaceToPayNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Verified notification durably accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid notification body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Signature verification failed */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider account */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    receivePayPhoneNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Notification durably accepted in PayPhone's required acknowledgment format */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayPhoneNotificationAck"];
+                };
+            };
+            /** @description Invalid notification or mismatched store identifier */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider event identifier conflicts with different immutable evidence */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider account */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    receivePayPhoneNotificationCompatibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Notification durably accepted in PayPhone's required acknowledgment format */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayPhoneNotificationAck"];
+                };
+            };
+            /** @description Invalid notification or mismatched store identifier */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider event identifier conflicts with different immutable evidence */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider account */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminListCommerceReconciliationExceptions: {
+        parameters: {
+            query?: {
+                environment?: "sandbox" | "production";
+                status?: "open" | "assigned" | "resolved" | "ignored";
+                /** @description Exact internal checkout reference; optional, never a customer token */
+                checkoutId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redacted review records, including explicit schema readiness and applied filters */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommerceReconciliationReport"];
+                };
+            };
+            /** @description Invalid filter or pagination */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Report temporarily unavailable; no database diagnostics exposed */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminListCommerceProviderQueries: {
+        parameters: {
+            query?: {
+                environment?: "sandbox" | "production";
+                status?: "pending" | "processing" | "retry" | "completed" | "dead_letter";
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redacted operational snapshot, with explicit schema availability */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommerceProviderQueries"];
+                };
+            };
+            /** @description Invalid filter or pagination */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict Admin access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Report temporarily unavailable; no database diagnostics exposed */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    adminGetCommercePaymentOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redacted provider readiness and canonical financial aggregates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommercePaymentOverview"];
+                };
+            };
+            /** @description Strict Admin role required */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20148,6 +27743,46 @@ export interface operations {
             };
         };
     };
+    prepareArtistManagementClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                partyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted claim target; no management access granted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        name: string;
+                    };
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Artist unavailable for claims */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     createDirectoryClaim: {
         parameters: {
             query?: never;
@@ -20546,6 +28181,85 @@ export interface operations {
             };
             /** @description Preference revision conflict or idempotency key conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMyReputationConsents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current consent state, including revoked consents, without evaluator data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReputationConsent"][];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateMyReputationConsents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReputationConsentUpdate"][];
+            };
+        };
+        responses: {
+            /** @description Updated current consent state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReputationConsent"][];
+                };
+            };
+            /** @description Invalid or duplicate consent kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Age assurance or currently approved */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description New grants unavailable while the feature is disabled */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21302,6 +29016,177 @@ export interface operations {
             };
         };
     };
+    listNotifications: {
+        parameters: {
+            query?: {
+                unreadOnly?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recipient-owned notification history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"][];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notificationId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Notification with stable target identity when retained */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Notification unavailable to this account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    markNotificationRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notificationId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read state persisted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getFeatureAccessRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requestId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current details and actor-specific capabilities; actions still reauthorize on the server */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        request: components["schemas"]["FeatureAccessRequest"];
+                        canReview: boolean;
+                        canCancel: boolean;
+                    };
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request unavailable to this account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getDirectoryNotificationContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "application" | "invitation" | "review" | "alert";
+                targetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scoped application, invitation, review or currently public saved-search result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Resource unavailable to this account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listMyFeatureAccessRequests: {
         parameters: {
             query?: never;
@@ -21526,6 +29411,2260 @@ export interface operations {
             };
             /** @description Only pending access requests can be cancelled */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listArtistMerchStores: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artistPartyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published stores; no artistic or professional score is combined into these values */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchReputationSummary"][];
+                };
+            };
+            /** @description Store reviews are disabled in this environment */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMerchStoreReputation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Commercial store aggregate with governed category breakdown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchReputationSummary"];
+                };
+            };
+            /** @description Store not found or feature disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listMerchStoreReviews: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                storeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public verified reviews without order, contact, payment or shipping data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchReviewPage"];
+                };
+            };
+        };
+    };
+    getMerchProductReputation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Product rating kept separate from store reputation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchReputationSummary"];
+                };
+            };
+            /** @description Product not found or feature disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listMerchProductReviews: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Public product reviews from verified order lines */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchReviewPage"];
+                };
+            };
+        };
+    };
+    getMerchReputationFormula: {
+        parameters: {
+            query?: {
+                locale?: "es" | "en";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accessible explanation and public governed parameters */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    getMerchOrderReviewEligibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eligibility for the authenticated order buyer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchReviewEligibility"];
+                };
+            };
+            /** @description Order not found in buyer scope */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    claimMerchOrderReviewBuyer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unguessable token returned once at guest order creation. Invalid values receive the same response as unknown orders. */
+                "X-Order-Lookup-Token": components["parameters"]["OrderLookupToken"];
+            };
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The order is idempotently linked to the authenticated buyer for review eligibility */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchReviewBuyerClaim"];
+                };
+            };
+            /** @description Order unavailable or private capability does not match */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    putMerchStoreReview: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchReviewSubmit"];
+            };
+        };
+        responses: {
+            /** @description Created or revised verified store review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchReviewMutation"];
+                };
+            };
+            /** @description Not the eligible buyer or known related account */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Existing review changed; reload before editing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    putMerchProductReview: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                orderId: string;
+                lineId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchReviewSubmit"];
+            };
+        };
+        responses: {
+            /** @description Created or revised verified product-line review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchReviewMutation"];
+                };
+            };
+            /** @description Line is not eligible or belongs to another buyer */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Existing review changed; reload before editing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    putMerchSellerResponse: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                reviewId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchSellerResponseSubmit"];
+            };
+        };
+        responses: {
+            /** @description Public seller response; the review itself is unchanged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Actor does not administer the review store */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Response changed elsewhere */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reportMerchReputationContent: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchContentReport"];
+            };
+        };
+        responses: {
+            /** @description Report and moderation case created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    appealMerchModerationDecision: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                decisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchAppeal"];
+            };
+        };
+        responses: {
+            /** @description Appeal opened for an affected party */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Actor is not affected by this decision */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMerchReputationPriorities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subjectKind: "store" | "product";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Governed dimensions in the user's preferred order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchReputationPriorities"];
+                };
+            };
+        };
+    };
+    putMerchReputationPriorities: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                subjectKind: "store" | "product";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchReputationPrioritySubmit"];
+            };
+        };
+        responses: {
+            /** @description New immutable preference revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Preferences changed elsewhere; reload before editing */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMerchReputationNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current choices */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchNotificationPreferences"];
+                };
+            };
+        };
+    };
+    putMerchReputationNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchNotificationPreferences"];
+            };
+        };
+        responses: {
+            /** @description Saved choices */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchNotificationPreferences"];
+                };
+            };
+        };
+    };
+    submitMerchReputationCategorySuggestion: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchCategorySuggestionSubmit"];
+            };
+        };
+        responses: {
+            /** @description Pending suggestion or reference to an existing normalized duplicate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Subject feature is disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getSellerMerchReputation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized panel including private order-to-review linkage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Store is outside actor scope */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listMerchModerationCases: {
+        parameters: {
+            query?: {
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Strict-admin moderation queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Strict Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listMerchReputationCategorySuggestions: {
+        parameters: {
+            query?: {
+                status?: "pending" | "duplicate" | "testing" | "approved" | "rejected";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Strict-admin category governance queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Strict Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    decideMerchReputationCategorySuggestion: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                suggestionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchCategorySuggestionDecision"];
+            };
+        };
+        responses: {
+            /** @description Audited status; the current formula remains unchanged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    transitionMerchModerationCase: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchModerationWorkflow"];
+            };
+        };
+        responses: {
+            /** @description Audited intermediate workflow state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Case cannot transition from its current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    decideMerchModerationCase: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchModerationDecision"];
+            };
+        };
+        responses: {
+            /** @description Audited visibility decision; original evidence is retained */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict Admin permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    decideMerchModerationAppeal: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                appealId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchAppealDecision"];
+            };
+        };
+        responses: {
+            /** @description Audited appeal result; a reversal restores the prior visibility */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict Admin or independent-review requirement not met */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMerchCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Capability matrix; a false value must not be presented as available by clients. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchCapabilities"];
+                };
+            };
+        };
+    };
+    listMerchStorefronts: {
+        parameters: {
+            query?: {
+                q?: string;
+                category?: components["schemas"]["MerchProductCategory"];
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published storefronts only */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchStorefront"][];
+                };
+            };
+        };
+    };
+    getMerchStorefront: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Storefront */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchStorefront"];
+                };
+            };
+            /** @description Storefront is not public or does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMerchProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeSlug: string;
+                productSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Published product */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchProduct"];
+                };
+            };
+            /** @description Product is not public or does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createMerchCart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchCartCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Cart with a lookup token returned only to the caller */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchCart"];
+                };
+            };
+            /** @description Storefront or merch checkout is unavailable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMerchCart: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unguessable token returned once when a guest cart is created. */
+                "X-Cart-Lookup-Token": components["parameters"]["MerchCartLookupToken"];
+            };
+            path: {
+                cartId: components["parameters"]["MerchCartId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current server-priced cart */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchCart"];
+                };
+            };
+            /** @description Cart or lookup token not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    putMerchCartItem: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unguessable token returned once when a guest cart is created. */
+                "X-Cart-Lookup-Token": components["parameters"]["MerchCartLookupToken"];
+            };
+            path: {
+                cartId: components["parameters"]["MerchCartId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchCartItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Repriced cart */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchCart"];
+                };
+            };
+            /** @description Variant */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteMerchCartItem: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unguessable token returned once when a guest cart is created. */
+                "X-Cart-Lookup-Token": components["parameters"]["MerchCartLookupToken"];
+            };
+            path: {
+                cartId: components["parameters"]["MerchCartId"];
+                variantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repriced cart */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchCart"];
+                };
+            };
+        };
+    };
+    checkoutMerchCart: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unguessable token returned once when a guest cart is created. */
+                "X-Cart-Lookup-Token": components["parameters"]["MerchCartLookupToken"];
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                cartId: components["parameters"]["MerchCartId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Existing idempotent order or newly created pending order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchOrder"];
+                };
+            };
+            /** @description Cart */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMerchOrder: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unguessable token returned once at guest order creation. Invalid values receive the same response as unknown orders. */
+                "X-Order-Lookup-Token": components["parameters"]["PublicOrderLookupToken"];
+            };
+            path: {
+                orderId: components["parameters"]["MerchOrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Privacy-minimized order timeline */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchOrder"];
+                };
+            };
+            /** @description Order or lookup token not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createMerchOrderIssue: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unguessable token returned once at guest order creation. Invalid values receive the same response as unknown orders. */
+                "X-Order-Lookup-Token": components["parameters"]["PublicOrderLookupToken"];
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                orderId: components["parameters"]["MerchOrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Issue received without changing payment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    cancelUnpaidMerchOrder: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unguessable token returned once at guest order creation. Invalid values receive the same response as unknown orders. */
+                "X-Order-Lookup-Token": components["parameters"]["PublicOrderLookupToken"];
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                orderId: components["parameters"]["MerchOrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchCancellationRequest"];
+            };
+        };
+        responses: {
+            /** @description Cancelled order with its independent commercial */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchOrder"];
+                };
+            };
+            /** @description Order or lookup token not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Payment processing or fulfillment already began */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    addMerchFavorite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                productId: components["parameters"]["MerchProductId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Favorite stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteMerchFavorite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                productId: components["parameters"]["MerchProductId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Favorite removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listSellerMerchStores: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stores scoped to accepted memberships */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchStorefront"][];
+                };
+            };
+        };
+    };
+    createMerchStoreApplication: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchStoreApplicationRequest"];
+            };
+        };
+        responses: {
+            /** @description Pending application; not an activated store */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchStorefront"];
+                };
+            };
+            /** @description Profile is ineligible */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateSellerMerchStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchStoreUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated store */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchStorefront"];
+                };
+            };
+            /** @description Settings permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listMerchStoreMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scoped members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchStoreMember"][];
+                };
+            };
+            /** @description Settings permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    inviteMerchStoreMember: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchMemberInviteRequest"];
+            };
+        };
+        responses: {
+            /** @description Pending scoped invitation */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchStoreMember"];
+                };
+            };
+            /** @description Settings permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateMerchStoreMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+                memberId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchMemberUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated member */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchStoreMember"];
+                };
+            };
+            /** @description Primary owner protections or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createMerchStorePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchPolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description New versioned policy; order snapshots do not change retroactively */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    createMerchShippingZone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchShippingZoneRequest"];
+            };
+        };
+        responses: {
+            /** @description Seller shipping rate */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchShippingZone"];
+                };
+            };
+        };
+    };
+    listSellerMerchProducts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All seller product states */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchProduct"][];
+                };
+            };
+        };
+    };
+    createMerchProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchProductRequest"];
+            };
+        };
+        responses: {
+            /** @description Draft product and variants */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchProduct"];
+                };
+            };
+        };
+    };
+    updateMerchProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+                productId: components["parameters"]["MerchProductId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchProductRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated draft */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchProduct"];
+                };
+            };
+            /** @description Product is locked by review or archived */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateSellerMerchProductStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+                productId: components["parameters"]["MerchProductId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Product in its new explicit state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchProduct"];
+                };
+            };
+            /** @description Invalid transition or missing policy */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    uploadMerchProductImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+                productId: components["parameters"]["MerchProductId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description JPEG or PNG; maximum 10 MiB and 40 megapixels
+                     */
+                    file: string;
+                    altText: string;
+                    sortOrder: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Durable responsive image reference pending moderation */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchProductImage"];
+                };
+            };
+            /** @description MIME */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateMerchVariantStock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+                variantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchStockRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated stock projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchVariant"];
+                };
+            };
+            /** @description Version changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listSellerMerchOrders: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["MerchFulfillmentStatus"];
+            };
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Orders scoped to this seller */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchOrder"][];
+                };
+            };
+            /** @description Unsupported fulfillment status filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listSellerMerchIssues: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["MerchIssueStatus"];
+            };
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Store-scoped operational issue queue; orders permission required */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchOperationalIssue"][];
+                };
+            };
+            /** @description Orders permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateSellerMerchIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+                issueId: components["parameters"]["MerchIssueId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchIssueTriageRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated issue with immutable audit evidence */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchOperationalIssue"];
+                };
+            };
+            /** @description Orders permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue does not belong to the selected store */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid role-specific transition or concurrent update */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateMerchOrderFulfillment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+                orderId: components["parameters"]["MerchOrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchFulfillmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated operational timeline */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchOrder"];
+                };
+            };
+            /** @description Invalid fulfillment transition or missing tracking fields */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAdminMerchStores: {
+        parameters: {
+            query?: {
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchStorefront"][];
+                };
+            };
+        };
+    };
+    reviewMerchStore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchStoreReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Approved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchStorefront"];
+                };
+            };
+        };
+    };
+    listAdminMerchProducts: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["MerchProductStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Product moderation queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchProduct"][];
+                };
+            };
+        };
+    };
+    reviewMerchProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                productId: components["parameters"]["MerchProductId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Reviewed product */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchProduct"];
+                };
+            };
+            /** @description Invalid moderation transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAdminMerchIssues: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["MerchIssueStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Strict-admin issue queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchOperationalIssue"][];
+                };
+            };
+            /** @description Strict administrator permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateAdminMerchIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issueId: components["parameters"]["MerchIssueId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchIssueTriageRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated issue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchOperationalIssue"];
+                };
+            };
+            /** @description Terminal case or concurrent update */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAdminMerchRefunds: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["MerchRefundStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Strict-admin refund queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchRefund"][];
+                };
+            };
+            /** @description Unsupported refund status filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict administrator permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Merch refund operations are feature-gated */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createAdminMerchRefund: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable caller-generated key. Reuse with a different request snapshot is rejected. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                orderId: components["parameters"]["MerchOrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description Requested canonical refund; no provider action occurred */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchRefund"];
+                };
+            };
+            /** @description Invalid reason */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Payment */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Merch refund operations are feature-gated */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reviewAdminMerchRefund: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refundId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchRefundReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated canonical refund without provider execution */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchRefund"];
+                };
+            };
+            /** @description Invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAdminMerchDisputes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Strict-admin canonical dispute queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchDispute"][];
+                };
+            };
+            /** @description Strict administrator permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Merch dispute monitoring is feature-gated */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listMerchSettlements: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["MerchSettlementStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Manual settlement queue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchSettlement"][];
+                };
+            };
+            /** @description Unsupported settlement status filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createMerchSettlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchSettlementRequest"];
+            };
+        };
+        responses: {
+            /** @description Prepared settlement; no payout was executed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchSettlement"];
+                };
+            };
+            /** @description Invalid period or request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Orders are outside the period, ineligible, or already assigned */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listMerchSettlementEligibleOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                storeId: components["parameters"]["MerchStoreId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eligible orders */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchSettlementEligibleOrder"][];
+                };
+            };
+        };
+    };
+    updateMerchSettlementStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                settlementId: components["parameters"]["MerchSettlementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MerchStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Approved or held manual settlement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchSettlement"];
+                };
+            };
+            /** @description Invalid transition, unchanged status, or dual-control violation */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    recordMerchSettlementPayment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                settlementId: components["parameters"]["MerchSettlementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["MerchSettlementPaymentEvidenceRequest"];
+            };
+        };
+        responses: {
+            /** @description Settlement marked paid from private immutable evidence; no transfer was initiated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MerchSettlement"];
+                };
+            };
+            /** @description Invalid timestamp, reference, image type, image bytes, dimensions, or idempotency key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Settlement is not approved, separation of duties failed, or evidence conflicts */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Durable private evidence storage is not configured in production */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

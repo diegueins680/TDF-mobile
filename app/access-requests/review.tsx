@@ -11,7 +11,7 @@ import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 
-function ReviewCard({ request, locale }: { request: AccessRequest; locale: string }) {
+export function ReviewCard({ request, locale }: { request: AccessRequest; locale: string }) {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const { colors } = useAppTheme();
@@ -22,7 +22,7 @@ function ReviewCard({ request, locale }: { request: AccessRequest; locale: strin
     mutationFn: (decision: 'approved' | 'rejected') => decideAccessRequest(request.id, decision, notes.trim() || null),
     onSuccess: async (updated) => {
       analytics.capture('feature_access_request_reviewed', { feature_id: updated.featureId, feature_action: updated.action, decision: updated.status, platform: 'mobile' });
-      await queryClient.invalidateQueries({ queryKey: ['access-requests', 'review'] });
+      await queryClient.invalidateQueries({ queryKey: ['access-requests'] });
     },
   });
   return (

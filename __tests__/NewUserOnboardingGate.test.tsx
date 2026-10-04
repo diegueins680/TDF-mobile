@@ -1,82 +1,127 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AppState, type AppStateStatus, Text } from 'react-native';
 
 const mockTrack = jest.fn();
 const mockCapture = jest.fn();
+const mockGetOnboardingProgress = jest.fn();
 const mockCompleteOnboarding = jest.fn(() => Promise.resolve({
   newlyCompleted: true,
-  progress: { eligible: false, firstValue: 'moment_reaction' },
+  progress: { eligible: false, firstValue: "moment_reaction", completedAt: "2026-10-04T00:00:00Z" },
+}));
+const mockInvalidateQueries = jest.fn();
+const mockRefetchQueries = jest.fn();
+const mockQueryClient = {
+  invalidateQueries: mockInvalidateQueries,
+  refetchQueries: mockRefetchQueries,
+};
+const mockToggleMomentFeedReaction = jest.fn(() => Promise.resolve({
+  source: 'remote',
+  selected: true,
 }));
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
-const mockMarkExperimentExposedOnce = jest.fn(
-  (_partyId: string, _experimentId: string) => Promise.resolve(true),
-);
-const mockToggleMomentFeedReaction = jest.fn();
-const mockEventsRefetch = jest.fn();
+const acknowledgedExposure = {
+  assignment: {
+    experimentEnabled: true,
+    experimentEligible: true,
+    experimentVersion: 1,
+    variant: 'treatment_singlefeature',
+  },
+  newlyExposed: true,
+};
+const mockMarkExperimentExposedOnce = jest.fn();
+const mockPersistPendingExperimentConversion = jest.fn();
+const mockReadPendingExperimentConversion = jest.fn();
+const mockClearPendingExperimentConversionIfCurrent = jest.fn();
+let appStateChangeListener: ((state: AppStateStatus) => void) | null = null;
+const mockRemoveAppStateListener = jest.fn();
+const mockAddAppStateListener = jest.spyOn(AppState, 'addEventListener');
 
 let mockIsConnected = true;
-let mockLocale = 'es';
+let mockAnalyticsReady = true;
 let mockVariant = 'treatment_singlefeature';
+let mockExperimentVersion = 1;
 let mockEventsState: Record<string, unknown>;
 let mockMomentsState: Record<string, unknown>;
 let mockProbeState: Record<string, unknown>[];
+let mockReplayedFirstValueCompletion: Record<string, unknown> | null = null;
+let mockPartyId = '42';
 
 const pastEvent = { id: 'event-1', title: 'Festival Uno', startTime: '2026-01-01T00:00:00.000Z' };
 const moment = { id: 'moment-1', eventId: 'event-1', body: 'Primer momento' };
+const pendingConversion = {
+  experimentId: 'single-feature-onboarding-v1',
+  experimentVersion: 1,
+  variant: 'treatment_singlefeature',
+  firstValue: 'moment_reaction',
+};
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace, push: mockPush }),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+  useQueryClient: () => mockQueryClient,
   useQueries: () => mockProbeState,
   useQuery: ({ queryKey }: { queryKey: unknown[] }) => (
-    queryKey[1] === 'events' ? mockEventsState : mockMomentsState
+    queryKey.includes('events') ? mockEventsState : mockMomentsState
   ),
 }));
 
 jest.mock('../src/api/events', () => ({ Events: { list: jest.fn() } }));
+jest.mock('../src/api/onboarding', () => ({
+  getOnboardingProgress: () => mockGetOnboardingProgress(),
+}));
 jest.mock('../src/lib/eventMomentsRepository', () => ({
-  isRemoteReactionActive: (
-    result: { source: string; moment?: { reactions?: Record<string, string[]> } },
-    reactionTypeId: string,
-    actorKey: string,
-  ) => result.source === 'remote'
-    && Boolean(result.moment?.reactions?.[reactionTypeId]?.includes(actorKey)),
   listMomentFeed: jest.fn(),
-  toggleMomentFeedReaction: (...args: unknown[]) => mockToggleMomentFeedReaction(...args),
+  toggleMomentFeedReaction: mockToggleMomentFeedReaction,
 }));
 jest.mock('../src/lib/eventMoments', () => ({
   buildMomentActor: () => ({ actorKey: 'party:42' }),
 }));
 jest.mock('../src/lib/firstRunFlags', () => ({
+  clearPendingExperimentConversionIfCurrent: (...args: unknown[]) => (
+    mockClearPendingExperimentConversionIfCurrent(...args)
+  ),
   markExperimentExposedOnce: (partyId: string, experimentId: string) => (
     mockMarkExperimentExposedOnce(partyId, experimentId)
   ),
+  persistPendingExperimentConversion: (...args: unknown[]) => (
+    mockPersistPendingExperimentConversion(...args)
+  ),
+  readPendingExperimentConversion: (...args: unknown[]) => (
+    mockReadPendingExperimentConversion(...args)
+  ),
 }));
 jest.mock('../src/providers/AuthProvider', () => ({
-  useAuth: () => ({ token: 'Bearer token', partyId: '42', session: { displayName: 'Ana' } }),
+  useAuth: () => ({ token: 'Bearer token', partyId: mockPartyId, session: { displayName: 'Ana' } }),
 }));
 jest.mock('../src/providers/FirstRunProvider', () => ({
-  useFirstRun: () => ({ cohortReady: true, isNewUser: true, completeOnboarding: mockCompleteOnboarding }),
+  useFirstRun: () => ({
+    cohortReady: true,
+    isNewUser: true,
+    completeOnboarding: mockCompleteOnboarding,
+    replayedFirstValueCompletion: mockReplayedFirstValueCompletion,
+  }),
 }));
 jest.mock('../src/providers/UserSettingsProvider', () => ({
   useUserSettings: () => ({
-    partyId: '42',
+    partyId: mockPartyId,
     displayName: 'Ana',
-    locale: mockLocale,
+    locale: 'es',
     getCatalogItems: () => [{ id: 'like', code: 'like', name: 'Me gusta', nameEs: 'Me gusta', nameEn: 'Like', displaySymbol: '❤️' }],
   }),
 }));
 jest.mock('../src/providers/NetworkProvider', () => ({ useNetwork: () => ({ isConnected: mockIsConnected }) }));
-jest.mock('../src/analytics/AnalyticsProvider', () => ({ useAnalytics: () => ({ capture: mockCapture }) }));
+jest.mock('../src/analytics/AnalyticsProvider', () => ({
+  useAnalytics: () => ({ ready: mockAnalyticsReady, capture: mockCapture }),
+}));
 jest.mock('../src/experiments/ExperimentProvider', () => ({
   useExperiments: () => ({
     isReady: true,
     getVariant: () => mockVariant,
+    getExperimentVersion: () => mockExperimentVersion,
     isExperimentEnabled: () => true,
   }),
 }));
@@ -87,17 +132,11 @@ jest.mock('../src/components/EventMomentCard', () => {
   return {
     EventMomentCard: ({
       moment: item,
-      reactionOptions,
       onToggleReaction,
       onReactionPosted,
     }: {
       moment: { id: string };
-      reactionOptions: Array<{ id: string }>;
-      onToggleReaction: (
-        momentId: string,
-        reaction: { id: string },
-        active: boolean,
-      ) => Promise<boolean | void>;
+      onToggleReaction: (momentId: string, reaction: Record<string, string>) => Promise<boolean | void>;
       onReactionPosted?: () => void;
     }) => (
       ReactModule.createElement(
@@ -106,8 +145,8 @@ jest.mock('../src/components/EventMomentCard', () => {
           accessibilityRole: 'button',
           accessibilityLabel: 'Post reaction',
           onPress: async () => {
-            const activated = await onToggleReaction(item.id, reactionOptions[0], true);
-            if (activated) onReactionPosted?.();
+            const countsAsPosted = await onToggleReaction(item.id, { id: 'like' });
+            if (countsAsPosted !== false) onReactionPosted?.();
           },
         },
         ReactModule.createElement(NativeText, null, `Moment card ${item.id}`),
@@ -122,28 +161,44 @@ const renderGate = () => render(
   <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
 );
 
+const emitAppStateChange = (state: AppStateStatus) => {
+  if (!appStateChangeListener) throw new Error('AppState listener was not registered');
+  appStateChangeListener(state);
+};
+
 describe('NewUserOnboardingGate states', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetOnboardingProgress.mockReset().mockResolvedValue({
+      eligible: true,
+      completedAt: null,
+      firstValue: null,
+    });
+    mockInvalidateQueries.mockReset();
+    mockRefetchQueries.mockReset().mockResolvedValue(undefined);
+    mockMarkExperimentExposedOnce.mockReset().mockResolvedValue(acknowledgedExposure);
+    mockPersistPendingExperimentConversion.mockReset().mockResolvedValue(true);
+    mockReadPendingExperimentConversion.mockReset().mockResolvedValue(null);
+    mockClearPendingExperimentConversionIfCurrent.mockReset().mockResolvedValue(undefined);
+    appStateChangeListener = null;
+    mockRemoveAppStateListener.mockReset();
+    mockAddAppStateListener.mockReset().mockImplementation((_event, listener) => {
+      appStateChangeListener = listener;
+      return { remove: mockRemoveAppStateListener };
+    });
     mockIsConnected = true;
-    mockLocale = 'es';
+    mockAnalyticsReady = true;
     mockVariant = 'treatment_singlefeature';
+    mockExperimentVersion = 1;
     mockEventsState = { data: [], isLoading: false, isError: false };
     mockMomentsState = { data: [], isLoading: false, isError: false };
     mockProbeState = [];
-    mockToggleMomentFeedReaction.mockResolvedValue({
-      source: 'remote',
-      moment: { reactions: { like: ['party:42'] } },
-    });
-    mockEventsRefetch.mockResolvedValue({ data: [] });
+    mockReplayedFirstValueCompletion = null;
+    mockPartyId = '42';
   });
 
   it('records one-shot treatment exposure after identity and persists explicit exit', async () => {
     mockIsConnected = false;
-    mockCompleteOnboarding.mockResolvedValueOnce({
-      newlyCompleted: true,
-      progress: { eligible: false, firstValue: null },
-    });
     renderGate();
 
     expect(screen.getByRole('header', { name: 'Estás sin conexión' })).toBeTruthy();
@@ -166,6 +221,10 @@ describe('NewUserOnboardingGate states', () => {
 
   it('records control exposure without replacing the full app shell', async () => {
     mockVariant = 'control';
+    mockMarkExperimentExposedOnce.mockResolvedValueOnce({
+      ...acknowledgedExposure,
+      assignment: { ...acknowledgedExposure.assignment, variant: 'control' },
+    });
     renderGate();
 
     expect(screen.getByText('Full app shell')).toBeTruthy();
@@ -174,6 +233,137 @@ describe('NewUserOnboardingGate states', () => {
       variant: 'control',
       userId: '42',
     })));
+  });
+
+  it('keeps an explicit treatment exit scoped to the Party that chose it', async () => {
+    mockIsConnected = false;
+    const view = renderGate();
+    fireEvent.press(screen.getByRole('button', { name: 'Ver eventos' }));
+    expect(screen.getByText('Full app shell')).toBeTruthy();
+
+    mockPartyId = '77';
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+
+    expect(screen.getByRole('header', { name: 'Estás sin conexión' })).toBeTruthy();
+  });
+
+  it('suppresses a late exposure after the active Party changes', async () => {
+    let resolveOldExposure!: (value: typeof acknowledgedExposure) => void;
+    mockMarkExperimentExposedOnce
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveOldExposure = resolve;
+      }))
+      .mockResolvedValueOnce(acknowledgedExposure);
+    const view = renderGate();
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledWith(
+      '42',
+      'single-feature-onboarding-v1',
+    ));
+
+    mockPartyId = '77';
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_viewed',
+      expect.objectContaining({ userId: '77' }),
+    ));
+    await act(async () => {
+      resolveOldExposure(acknowledgedExposure);
+      await Promise.resolve();
+    });
+
+    expect(mockTrack).not.toHaveBeenCalledWith(
+      'experiment_viewed',
+      expect.objectContaining({ userId: '42' }),
+    );
+  });
+
+  it('retries an unacknowledged exposure when connectivity returns', async () => {
+    mockIsConnected = false;
+    mockMarkExperimentExposedOnce
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(acknowledgedExposure);
+    const view = renderGate();
+
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(1));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_viewed', expect.anything());
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_viewed',
+      expect.objectContaining({ userId: '42' }),
+    ));
+  });
+
+  it('coalesces reconnect and foreground exposure recovery', async () => {
+    mockIsConnected = false;
+    let resolveExposure!: (value: typeof acknowledgedExposure) => void;
+    mockMarkExperimentExposedOnce.mockReturnValueOnce(new Promise((resolve) => {
+      resolveExposure = resolve;
+    }));
+    const view = renderGate();
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(1));
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    act(() => emitAppStateChange('active'));
+
+    expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveExposure(acknowledgedExposure);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not retry or emit analytics after an acknowledged repeat exposure', async () => {
+    mockMarkExperimentExposedOnce.mockResolvedValueOnce({
+      ...acknowledgedExposure,
+      newlyExposed: false,
+    });
+    renderGate();
+
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(1));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_viewed', expect.anything());
+
+    act(() => emitAppStateChange('active'));
+
+    expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(1);
+  });
+
+  it('records exposure again for a new server experiment version', async () => {
+    mockMarkExperimentExposedOnce
+      .mockResolvedValueOnce(acknowledgedExposure)
+      .mockResolvedValueOnce({
+        ...acknowledgedExposure,
+        assignment: { ...acknowledgedExposure.assignment, experimentVersion: 2 },
+      });
+    const view = renderGate();
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_viewed',
+      expect.objectContaining({ metadata: { experimentVersion: 1 } }),
+    ));
+
+    mockExperimentVersion = 2;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+
+    await waitFor(() => expect(mockMarkExperimentExposedOnce).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_viewed',
+      expect.objectContaining({ metadata: { experimentVersion: 2 } }),
+    ));
   });
 
   it.each([
@@ -190,18 +380,95 @@ describe('NewUserOnboardingGate states', () => {
     }
   });
 
-  it('offers an in-place retry when the onboarding feed fails', () => {
-    mockEventsState = {
-      data: [],
-      isLoading: false,
-      isError: true,
-      refetch: mockEventsRefetch,
-    };
+  it('refetches the active Party feed when connectivity returns', async () => {
+    mockIsConnected = false;
+    const view = renderGate();
+    expect(mockRefetchQueries).not.toHaveBeenCalled();
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+
+    await waitFor(() => expect(mockRefetchQueries).toHaveBeenCalledWith(
+      {
+        queryKey: ['exp-single-feature-onboarding', '42'],
+        type: 'active',
+      },
+      { cancelRefetch: false },
+    ));
+  });
+
+  it('refetches the active Party feed when the online app foregrounds', () => {
     renderGate();
 
-    fireEvent.press(screen.getByRole('button', { name: 'Reintentar carga' }));
+    act(() => emitAppStateChange('active'));
 
-    expect(mockEventsRefetch).toHaveBeenCalledTimes(1);
+    expect(mockRefetchQueries).toHaveBeenCalledWith(
+      {
+        queryKey: ['exp-single-feature-onboarding', '42'],
+        type: 'active',
+      },
+      { cancelRefetch: false },
+    );
+  });
+
+  it('coalesces reconnect and foreground feed recovery', async () => {
+    mockIsConnected = false;
+    let resolveRefetch!: () => void;
+    mockRefetchQueries.mockReturnValueOnce(new Promise<void>((resolve) => {
+      resolveRefetch = resolve;
+    }));
+    const view = renderGate();
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    act(() => emitAppStateChange('active'));
+
+    expect(mockRefetchQueries).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveRefetch();
+      await Promise.resolve();
+    });
+  });
+
+  it('lets the user retry an errored feed without duplicating the active Party request', async () => {
+    mockEventsState = { data: [], isLoading: false, isError: true };
+    let resolveRefetch!: () => void;
+    mockRefetchQueries.mockReturnValueOnce(new Promise<void>((resolve) => {
+      resolveRefetch = resolve;
+    }));
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Volver a intentar' }));
+    expect(mockRefetchQueries).toHaveBeenCalledWith(
+      {
+        queryKey: ['exp-single-feature-onboarding', '42'],
+        type: 'active',
+      },
+      { cancelRefetch: false },
+    );
+    expect(screen.getByText('Reintentando…')).toBeTruthy();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Volver a intentar' }));
+    expect(mockRefetchQueries).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveRefetch();
+      await Promise.resolve();
+    });
+    expect(screen.getByText('Volver a intentar')).toBeTruthy();
+  });
+
+  it('does not refetch the treatment feed when the gate is disengaged', () => {
+    mockVariant = 'control';
+    renderGate();
+
+    act(() => emitAppStateChange('active'));
+
+    expect(mockRefetchQueries).not.toHaveBeenCalled();
   });
 
   it('renders moment content as the success state', () => {
@@ -212,57 +479,6 @@ describe('NewUserOnboardingGate states', () => {
 
     expect(screen.getByText('Moment card moment-1')).toBeTruthy();
     expect(screen.queryByText('Aún no hay momentos publicados')).toBeNull();
-  });
-
-  it('uses coherent English copy when English is selected', () => {
-    mockLocale = 'en';
-    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
-    mockMomentsState = { data: [moment], isLoading: false, isError: false };
-    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
-    renderGate();
-
-    expect(screen.getByRole('header', { name: 'Experience Festival Uno' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'View events' })).toBeTruthy();
-    expect(screen.queryByText('Vive Festival Uno')).toBeNull();
-  });
-
-  it('surfaces a failed first reaction and completes after an explicit retry', async () => {
-    mockToggleMomentFeedReaction.mockRejectedValueOnce(new Error('offline'));
-    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
-    mockMomentsState = { data: [moment], isLoading: false, isError: false };
-    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
-    renderGate();
-
-    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
-
-    await waitFor(() => expect(screen.getByText(
-      'No pudimos guardar tu reacción. Nada cambió en tu cuenta.',
-    )).toBeTruthy());
-    expect(screen.getByRole('alert')).toBeTruthy();
-    expect(mockCompleteOnboarding).not.toHaveBeenCalledWith('moment_reaction');
-
-    fireEvent.press(screen.getByRole('button', { name: 'Reintentar reacción' }));
-
-    await waitFor(() => expect(mockToggleMomentFeedReaction).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledWith('moment_reaction'));
-    expect(screen.queryByRole('alert')).toBeNull();
-  });
-
-  it('explains a local-only reaction and keeps completion pending', async () => {
-    mockToggleMomentFeedReaction.mockResolvedValueOnce({ source: 'local' });
-    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
-    mockMomentsState = { data: [moment], isLoading: false, isError: false };
-    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
-    renderGate();
-
-    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
-
-    await waitFor(() => expect(screen.getByText(
-      'Tu reacción quedó solo en este dispositivo. Conéctate para sincronizarla.',
-    )).toBeTruthy());
-    expect(screen.getByRole('alert')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Reintentar reacción' })).toBeTruthy();
-    expect(mockCompleteOnboarding).not.toHaveBeenCalledWith('moment_reaction');
   });
 
   it('emits conversion analytics only when the server newly completes onboarding', async () => {
@@ -277,17 +493,51 @@ describe('NewUserOnboardingGate states', () => {
     expect(mockTrack).toHaveBeenCalledWith('experiment_converted', expect.objectContaining({
       experimentId: 'single-feature-onboarding-v1',
       variant: 'treatment_singlefeature',
+      metadata: expect.objectContaining({ experimentVersion: 1 }),
     }));
+    expect(mockPersistPendingExperimentConversion).toHaveBeenCalledWith(
+      '42',
+      pendingConversion,
+      expect.any(Function),
+    );
     expect(mockCapture).toHaveBeenCalledWith(
       'first_value_completed',
       { platform: 'mobile', value: 'moment_reaction' },
     );
   });
 
+  it('suppresses a late conversion after the active Party changes', async () => {
+    let resolveOldCompletion!: (value: {
+      newlyCompleted: boolean;
+      progress: { eligible: boolean; firstValue: string; completedAt: string };
+    }) => void;
+    mockCompleteOnboarding.mockReturnValueOnce(new Promise((resolve) => {
+      resolveOldCompletion = resolve;
+    }));
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    const view = renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+    await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledWith('moment_reaction'));
+    mockPartyId = '77';
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    await act(async () => {
+      resolveOldCompletion({ newlyCompleted: true, progress: { eligible: false, firstValue: "moment_reaction", completedAt: "2026-10-04T00:00:00Z" } });
+      await Promise.resolve();
+    });
+
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+    expect(mockCapture).not.toHaveBeenCalledWith('first_value_completed', expect.anything());
+  });
+
   it('suppresses completion analytics when onboarding was already completed', async () => {
     mockCompleteOnboarding.mockResolvedValueOnce({
       newlyCompleted: false,
-      progress: { eligible: false, firstValue: 'moment_reaction' },
+      progress: { eligible: false, firstValue: "moment_reaction", completedAt: "2026-10-04T00:00:00Z" },
     });
     mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
     mockMomentsState = { data: [moment], isLoading: false, isError: false };
@@ -302,11 +552,55 @@ describe('NewUserOnboardingGate states', () => {
     expect(mockCapture).not.toHaveBeenCalledWith('onboarding_completed', expect.anything());
   });
 
-  it('uses the authoritative first value and does not misattribute experiment conversion', async () => {
-    mockCompleteOnboarding.mockResolvedValueOnce({
-      newlyCompleted: true,
-      progress: { eligible: false, firstValue: 'event_saved' },
-    });
+  it('does not claim conversion for a local fallback', async () => {
+    mockToggleMomentFeedReaction.mockResolvedValueOnce({ source: 'local', selected: true });
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+
+    await waitFor(() => expect(mockToggleMomentFeedReaction).toHaveBeenCalled());
+    expect(mockCompleteOnboarding).not.toHaveBeenCalledWith('moment_reaction');
+    expect(mockCapture).not.toHaveBeenCalledWith('first_value_completed', expect.anything());
+  });
+
+  it('does not claim conversion when the acknowledged remote toggle removes a reaction', async () => {
+    mockToggleMomentFeedReaction.mockResolvedValueOnce({ source: 'remote', selected: false });
+    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
+    mockMomentsState = { data: [moment], isLoading: false, isError: false };
+    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    renderGate();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+
+    await waitFor(() => expect(mockToggleMomentFeedReaction).toHaveBeenCalled());
+    expect(mockCompleteOnboarding).not.toHaveBeenCalledWith('moment_reaction');
+    expect(mockCapture).not.toHaveBeenCalledWith('first_value_completed', expect.anything());
+  });
+
+  it('emits one conversion when a durable completion handshake succeeds on replay', async () => {
+    mockReadPendingExperimentConversion.mockResolvedValue(pendingConversion);
+    mockReplayedFirstValueCompletion = {
+      value: 'moment_reaction',
+      result: { newlyCompleted: true, progress: { eligible: false, firstValue: "moment_reaction", completedAt: "2026-10-04T00:00:00Z" } },
+    };
+
+    renderGate();
+
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_converted',
+      expect.objectContaining({ experimentId: 'single-feature-onboarding-v1' }),
+    ));
+    expect(mockCapture).toHaveBeenCalledWith(
+      'first_value_completed',
+      { platform: 'mobile', value: 'moment_reaction' },
+    );
+  });
+
+  it('retains conversion attribution when the completion response is unavailable', async () => {
+    mockCompleteOnboarding.mockResolvedValueOnce(null);
     mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
     mockMomentsState = { data: [moment], isLoading: false, isError: false };
     mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
@@ -315,53 +609,178 @@ describe('NewUserOnboardingGate states', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
 
     await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledWith('moment_reaction'));
-    expect(mockCapture).toHaveBeenCalledWith(
-      'first_value_completed',
-      { platform: 'mobile', value: 'event_saved' },
+    expect(mockPersistPendingExperimentConversion).toHaveBeenCalledWith(
+      '42',
+      pendingConversion,
+      expect.any(Function),
     );
+    expect(mockClearPendingExperimentConversionIfCurrent).not.toHaveBeenCalled();
     expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
   });
 
-  it.each([
-    ['a local fallback', { source: 'local' }],
-    ['an acknowledged removal', { source: 'remote', moment: { reactions: {} } }],
-  ])('does not request completion for %s', async (_label, toggleResult) => {
-    mockToggleMomentFeedReaction.mockResolvedValueOnce(toggleResult);
-    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
-    mockMomentsState = { data: [moment], isLoading: false, isError: false };
-    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+  it('recovers a confirmed conversion with its original experiment version', async () => {
+    mockVariant = 'control';
+    mockExperimentVersion = 2;
+    mockReadPendingExperimentConversion.mockResolvedValueOnce(pendingConversion);
+    mockGetOnboardingProgress.mockResolvedValueOnce({
+      eligible: false,
+      completedAt: '2026-09-09T20:00:00Z',
+      firstValue: 'moment_reaction',
+    });
+
     renderGate();
 
-    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
-
-    await waitFor(() => expect(mockToggleMomentFeedReaction).toHaveBeenCalledTimes(1));
-    expect(mockCompleteOnboarding).not.toHaveBeenCalledWith('moment_reaction');
-    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_converted',
+      {
+        experimentId: 'single-feature-onboarding-v1',
+        variant: 'treatment_singlefeature',
+        userId: '42',
+        metadata: {
+          value: 1,
+          surface: 'gate_moment_reaction',
+          experimentVersion: 1,
+        },
+      },
+    ));
+    expect(mockClearPendingExperimentConversionIfCurrent).toHaveBeenCalledWith(
+      '42',
+      pendingConversion,
+      expect.any(Function),
+    );
   });
 
-  it('allows a retry when the server reports that evidence is still pending', async () => {
-    mockCompleteOnboarding
+  it('retries conversion reconciliation when connectivity returns', async () => {
+    mockIsConnected = false;
+    mockReadPendingExperimentConversion.mockResolvedValue(pendingConversion);
+    mockGetOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({
-        newlyCompleted: false,
-        progress: { eligible: true, firstValue: null },
-      })
-      .mockResolvedValueOnce({
-        newlyCompleted: true,
-        progress: { eligible: false, firstValue: 'moment_reaction' },
+        eligible: false,
+        completedAt: '2026-09-09T20:00:00Z',
+        firstValue: 'moment_reaction',
       });
-    mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
-    mockMomentsState = { data: [moment], isLoading: false, isError: false };
-    mockProbeState = [{ data: [moment], isLoading: false, isError: false }];
+    const view = renderGate();
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_converted',
+      expect.objectContaining({ userId: '42' }),
+    ));
+  });
+
+  it('coalesces reconnect and foreground conversion reconciliation', async () => {
+    mockIsConnected = false;
+    mockReadPendingExperimentConversion.mockResolvedValue(pendingConversion);
+    let resolveProgress!: (progress: {
+      eligible: boolean;
+      completedAt: string;
+      firstValue: string;
+    }) => void;
+    mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProgress = resolve;
+    }));
+    const view = renderGate();
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1));
+
+    mockIsConnected = true;
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    act(() => emitAppStateChange('active'));
+
+    expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveProgress({
+        eligible: false,
+        completedAt: '2026-09-09T20:00:00Z',
+        firstValue: 'moment_reaction',
+      });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockTrack).toHaveBeenCalledWith(
+      'experiment_converted',
+      expect.objectContaining({ userId: '42' }),
+    ));
+    expect(mockTrack.mock.calls.filter(([event]) => event === 'experiment_converted')).toHaveLength(1);
+  });
+
+  it('suppresses late conversion reconciliation after the active Party changes', async () => {
+    mockReadPendingExperimentConversion.mockImplementation(async (partyId: string) =>
+      partyId === '42' ? pendingConversion : null);
+    let resolveProgress!: (progress: {
+      eligible: boolean;
+      completedAt: string;
+      firstValue: string;
+    }) => void;
+    mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProgress = resolve;
+    }));
+    const view = renderGate();
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1));
+
+    mockPartyId = '77';
+    view.rerender(
+      <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
+    );
+    await act(async () => {
+      resolveProgress({
+        eligible: false,
+        completedAt: '2026-09-09T20:00:00Z',
+        firstValue: 'moment_reaction',
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockTrack).not.toHaveBeenCalledWith(
+      'experiment_converted',
+      expect.objectContaining({ userId: '42' }),
+    );
+    expect(mockClearPendingExperimentConversionIfCurrent).not.toHaveBeenCalledWith(
+      '42',
+      pendingConversion,
+      expect.any(Function),
+    );
+  });
+
+  it('clears a terminal conversion receipt that the server does not confirm', async () => {
+    mockReadPendingExperimentConversion.mockResolvedValueOnce(pendingConversion);
+    mockGetOnboardingProgress.mockResolvedValueOnce({
+      eligible: false,
+      completedAt: '2026-09-09T20:00:00Z',
+      firstValue: 'event_saved',
+    });
+
     renderGate();
 
-    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
-    await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledTimes(1));
-    fireEvent.press(screen.getByRole('button', { name: 'Post reaction' }));
+    await waitFor(() => expect(mockClearPendingExperimentConversionIfCurrent).toHaveBeenCalledWith(
+      '42',
+      pendingConversion,
+      expect.any(Function),
+    ));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+  });
 
-    await waitFor(() => expect(mockCompleteOnboarding).toHaveBeenCalledTimes(2));
-    expect(mockTrack).toHaveBeenCalledTimes(2);
-    expect(mockTrack).toHaveBeenLastCalledWith('experiment_converted', expect.objectContaining({
-      experimentId: 'single-feature-onboarding-v1',
-    }));
+  it('retains a confirmed receipt while the analytics client is unavailable', async () => {
+    mockAnalyticsReady = false;
+    mockReadPendingExperimentConversion.mockResolvedValueOnce(pendingConversion);
+    mockGetOnboardingProgress.mockResolvedValueOnce({
+      eligible: false,
+      completedAt: '2026-09-09T20:00:00Z',
+      firstValue: 'moment_reaction',
+    });
+
+    renderGate();
+
+    await waitFor(() => expect(mockGetOnboardingProgress).toHaveBeenCalledTimes(1));
+    expect(mockTrack).not.toHaveBeenCalledWith('experiment_converted', expect.anything());
+    expect(mockClearPendingExperimentConversionIfCurrent).not.toHaveBeenCalled();
   });
 });

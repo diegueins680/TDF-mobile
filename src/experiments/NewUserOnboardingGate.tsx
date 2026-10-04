@@ -16,6 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,14 +28,24 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { Events } from '../api/events';
+import {
+  getOnboardingProgress,
+  type OnboardingProgress,
+} from '../api/onboarding';
 import { EventMomentCard } from '../components/EventMomentCard';
 import { buildMomentActor } from '../lib/eventMoments';
 import {
-  isRemoteReactionActive,
   listMomentFeed,
   toggleMomentFeedReaction,
 } from '../lib/eventMomentsRepository';
-import { markExperimentExposedOnce } from '../lib/firstRunFlags';
+import {
+  clearPendingExperimentConversionIfCurrent,
+  markExperimentExposedOnce,
+  persistPendingExperimentConversion,
+  readPendingExperimentConversion,
+  type PendingExperimentConversion,
+} from '../lib/firstRunFlags';
+import { usePartyOwnership } from '../hooks/usePartyOwnership';
 import { useAuth } from '../providers/AuthProvider';
 import { useFirstRun } from '../providers/FirstRunProvider';
 import { useUserSettings } from '../providers/UserSettingsProvider';
@@ -52,15 +63,13 @@ import { useNetwork } from '../providers/NetworkProvider';
 const EXPERIMENT_ID = 'single-feature-onboarding-v1';
 const TREATMENT = 'treatment_singlefeature';
 
+const experimentConversionKey = (
+  partyId: string,
+  conversion: PendingExperimentConversion,
+): string => `${encodeURIComponent(partyId)}:${conversion.experimentVersion}`;
+
 type Props = {
   children: React.ReactNode;
-};
-
-type ReactionRecovery = {
-  momentId: string;
-  reaction: EventMomentReactionOption;
-  active: boolean;
-  reason: 'failed' | 'local-only';
 };
 
 const pickAnchorEvent = (events: SocialEvent[] | undefined): SocialEvent | null => {
@@ -83,11 +92,24 @@ const pickAnchorEvent = (events: SocialEvent[] | undefined): SocialEvent | null 
 export function NewUserOnboardingGate({ children }: Props) {
   const router = useRouter();
   const analytics = useAnalytics();
+  const analyticsReady = analytics.ready;
+  const captureAnalytics = analytics.capture;
   const queryClient = useQueryClient();
-  const { isReady: experimentsReady, getVariant, isExperimentEnabled } = useExperiments();
+  const {
+    isReady: experimentsReady,
+    getVariant,
+    getExperimentVersion,
+    isExperimentEnabled,
+  } = useExperiments();
   const { isConnected } = useNetwork();
-  const { cohortReady, isNewUser, completeOnboarding } = useFirstRun();
+  const {
+    cohortReady,
+    isNewUser,
+    completeOnboarding,
+    replayedFirstValueCompletion,
+  } = useFirstRun();
   const { token, partyId: normalizedPartyId, session } = useAuth();
+  const ownsParty = usePartyOwnership(normalizedPartyId);
   const { locale, getCatalogItems } = useUserSettings();
   const displayName = session?.displayName ?? null;
   const copy = experimentCopy[onboardingLanguage(locale)];
@@ -115,36 +137,105 @@ export function NewUserOnboardingGate({ children }: Props) {
   // Local override — once the user explicitly leaves the treatment landing
   // (e.g. taps "Explore more"), don't trap them again for the rest of the
   // session.
-  const [treatmentExited, setTreatmentExited] = useState(false);
+  const [treatmentExitedPartyId, setTreatmentExitedPartyId] = useState<string | null>(null);
+  const treatmentExited = Boolean(normalizedPartyId)
+    && treatmentExitedPartyId === normalizedPartyId;
 
   const variant = experimentsReady ? getVariant(EXPERIMENT_ID) : null;
+  const experimentVersion = experimentsReady
+    ? getExperimentVersion(EXPERIMENT_ID)
+    : null;
   const experimentEnabled = isExperimentEnabled(EXPERIMENT_ID);
-  const eligibleForExperiment = experimentsReady && cohortReady && isNewUser && experimentEnabled;
+  const eligibleForExperiment = experimentsReady
+    && cohortReady
+    && isNewUser
+    && experimentEnabled
+    && experimentVersion !== null;
   const gateEngaged =
     eligibleForExperiment &&
     variant === TREATMENT &&
     !treatmentExited;
 
-  // Fire experiment_viewed exactly once when the gate first engages.
-  const viewedRef = useRef(false);
+  // Fire experiment_viewed only after the server acknowledges exposure.
+  const acknowledgedExposureKeyRef = useRef<string | null>(null);
+  const exposureTriggerRef = useRef<(() => void) | null>(null);
+  const previousConnectivityRef = useRef(isConnected);
+  const exposureRecoveryRef = useRef<{
+    key: string;
+    promise: Promise<void>;
+  } | null>(null);
   useEffect(() => {
-    if (!eligibleForExperiment || !variant || viewedRef.current) return;
-    viewedRef.current = true;
-    void (async () => {
-      if (!normalizedPartyId || !await markExperimentExposedOnce(normalizedPartyId, EXPERIMENT_ID)) return;
-      track('experiment_viewed', {
-        experimentId: EXPERIMENT_ID,
-        variant,
-        userId: normalizedPartyId,
+    if (
+      !eligibleForExperiment
+      || !normalizedPartyId
+      || !variant
+      || experimentVersion === null
+    ) {
+      exposureTriggerRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    const ownerPartyId = normalizedPartyId;
+    const ownerVariant = variant;
+    const ownerExperimentVersion = experimentVersion;
+    const exposureKey = `${encodeURIComponent(ownerPartyId)}:${ownerExperimentVersion}`;
+    const recordExposure = () => {
+      if (
+        cancelled
+        || !ownsParty(ownerPartyId)
+        || acknowledgedExposureKeyRef.current === exposureKey
+      ) return;
+      const activeRecovery = exposureRecoveryRef.current;
+      if (activeRecovery?.key === exposureKey) return;
+
+      const promise = (async () => {
+        const result = await markExperimentExposedOnce(ownerPartyId, EXPERIMENT_ID);
+        if (!result || cancelled || !ownsParty(ownerPartyId)) return;
+        acknowledgedExposureKeyRef.current = exposureKey;
+        if (
+          !result.newlyExposed
+          || !result.assignment.experimentEnabled
+          || !result.assignment.experimentEligible
+          || result.assignment.experimentVersion !== ownerExperimentVersion
+          || result.assignment.variant !== ownerVariant
+        ) return;
+        track('experiment_viewed', {
+          experimentId: EXPERIMENT_ID,
+          variant: ownerVariant,
+          userId: ownerPartyId,
+          metadata: { experimentVersion: ownerExperimentVersion },
+        });
+      })().finally(() => {
+        if (exposureRecoveryRef.current?.promise === promise) {
+          exposureRecoveryRef.current = null;
+        }
       });
-    })();
-  }, [eligibleForExperiment, normalizedPartyId, track, variant]);
+      exposureRecoveryRef.current = { key: exposureKey, promise };
+    };
+
+    exposureTriggerRef.current = recordExposure;
+    recordExposure();
+    return () => {
+      cancelled = true;
+      if (exposureTriggerRef.current === recordExposure) {
+        exposureTriggerRef.current = null;
+      }
+    };
+  }, [
+    eligibleForExperiment,
+    experimentVersion,
+    normalizedPartyId,
+    ownsParty,
+    track,
+    variant,
+  ]);
 
   // Pull a small window of recent events and anchor on the most recent past
   // one whose moments feed is non-empty. We fetch a slightly larger page
   // (without `upcomingOnly`) so the search has something to chew on.
   const eventsQuery = useQuery({
-    queryKey: ['exp-single-feature-onboarding', 'events'],
+    queryKey: ['exp-single-feature-onboarding', normalizedPartyId, 'events'],
     queryFn: () => Events.list({ limit: 20 }),
     enabled: gateEngaged,
   });
@@ -173,8 +264,8 @@ export function NewUserOnboardingGate({ children }: Props) {
     queries: candidateEvents.map((event) => ({
       queryKey: [
         'exp-single-feature-onboarding',
+        normalizedPartyId,
         'probe',
-        currentActor.actorKey,
         event.id,
         shouldPreferRemoteMoments ? 'remote' : 'local',
       ] as const,
@@ -208,66 +299,299 @@ export function NewUserOnboardingGate({ children }: Props) {
   const momentsQuery = useQuery({
     queryKey: [
       'exp-single-feature-onboarding',
+      normalizedPartyId,
       'moments',
-      currentActor.actorKey,
       featuredEvent?.id ?? null,
       shouldPreferRemoteMoments ? 'remote' : 'local',
     ],
     queryFn: () =>
       listMomentFeed(featuredEvent!.id as ID, {
         preferRemote: shouldPreferRemoteMoments,
-        storageScope: currentActor.actorKey,
+          storageScope: currentActor.actorKey,
       }),
     enabled: gateEngaged && Boolean(featuredEvent?.id),
     initialData: featuredProbe?.data,
   });
 
-  // Conversion detection: fire experiment_converted only after the server
-  // acknowledges that the authenticated Party now has the selected reaction.
-  const convertedRef = useRef(false);
-  const conversionInFlightRef = useRef(false);
-  const reactionInFlightRef = useRef(false);
+  const [feedRecoveryPartyId, setFeedRecoveryPartyId] = useState<string | null>(null);
+  const feedRecoveryTriggerRef = useRef<(
+    (showProgress?: boolean) => Promise<void> | undefined
+  ) | null>(null);
+  const feedRecoveryRef = useRef<{
+    partyId: string;
+    promise: Promise<void>;
+    showsProgress: boolean;
+  } | null>(null);
+  useEffect(() => {
+    if (!gateEngaged || !normalizedPartyId || !isConnected) {
+      feedRecoveryTriggerRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    const ownerPartyId = normalizedPartyId;
+    const recoverFeed = (showProgress = false) => {
+      if (cancelled || !ownsParty(ownerPartyId)) return undefined;
+      const activeRecovery = feedRecoveryRef.current;
+      if (activeRecovery?.partyId === ownerPartyId) {
+        if (showProgress && !activeRecovery.showsProgress) {
+          activeRecovery.showsProgress = true;
+          setFeedRecoveryPartyId(ownerPartyId);
+        }
+        return activeRecovery.promise;
+      }
+
+      if (showProgress) setFeedRecoveryPartyId(ownerPartyId);
+      const promise = queryClient.refetchQueries(
+        {
+          queryKey: ['exp-single-feature-onboarding', ownerPartyId],
+          type: 'active',
+        },
+        { cancelRefetch: false },
+      )
+        .then(() => undefined)
+        .catch(() => undefined)
+        .finally(() => {
+          const completedRecovery = feedRecoveryRef.current;
+          if (completedRecovery?.promise === promise) {
+            feedRecoveryRef.current = null;
+            if (
+              completedRecovery.showsProgress
+              && !cancelled
+              && ownsParty(ownerPartyId)
+            ) {
+              setFeedRecoveryPartyId((currentPartyId) => (
+                currentPartyId === ownerPartyId ? null : currentPartyId
+              ));
+            }
+          }
+        });
+      feedRecoveryRef.current = {
+        partyId: ownerPartyId,
+        promise,
+        showsProgress: showProgress,
+      };
+      return promise;
+    };
+
+    feedRecoveryTriggerRef.current = recoverFeed;
+    return () => {
+      cancelled = true;
+      if (feedRecoveryTriggerRef.current === recoverFeed) {
+        feedRecoveryTriggerRef.current = null;
+      }
+    };
+  }, [gateEngaged, isConnected, normalizedPartyId, ownsParty, queryClient]);
+
+  // Conversion detection: fire experiment_converted the first time the user
+  // successfully posts a reaction via the moment card.
+  const convertedConversionKeyRef = useRef<string | null>(null);
+  const conversionInFlightKeyRef = useRef<string | null>(null);
+  const conversionRecoveryTriggerRef = useRef<(() => void) | null>(null);
+  const conversionRecoveryRef = useRef<{
+    partyId: string;
+    promise: Promise<void>;
+  } | null>(null);
+  const recordMomentConversion = useCallback(async (
+    ownerPartyId: string | null,
+    conversion: PendingExperimentConversion,
+  ) => {
+    if (
+      !ownerPartyId
+      || !analyticsReady
+      || conversion.experimentId !== EXPERIMENT_ID
+      || conversion.variant !== TREATMENT
+      || conversion.firstValue !== 'moment_reaction'
+      || !ownsParty(ownerPartyId)
+    ) return;
+    const conversionKey = experimentConversionKey(ownerPartyId, conversion);
+    if (convertedConversionKeyRef.current === conversionKey) return;
+    convertedConversionKeyRef.current = conversionKey;
+    track('experiment_converted', {
+      experimentId: conversion.experimentId,
+      variant: conversion.variant,
+      userId: ownerPartyId,
+      metadata: {
+        value: 1,
+        surface: 'gate_moment_reaction',
+        experimentVersion: conversion.experimentVersion,
+      },
+    });
+    captureAnalytics('first_value_completed', { platform: 'mobile', value: 'moment_reaction' });
+    captureAnalytics('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: 'moment_reaction' });
+    await clearPendingExperimentConversionIfCurrent(
+      ownerPartyId,
+      conversion,
+      () => ownsParty(ownerPartyId),
+    );
+  }, [analyticsReady, captureAnalytics, ownsParty, track]);
+
+  useEffect(() => {
+    if (!normalizedPartyId) {
+      conversionRecoveryTriggerRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    const ownerPartyId = normalizedPartyId;
+    const recoverPendingConversion = () => {
+      if (cancelled || !ownsParty(ownerPartyId)) return;
+      const activeRecovery = conversionRecoveryRef.current;
+      if (activeRecovery?.partyId === ownerPartyId) return;
+
+      const promise = (async () => {
+        const conversion = await readPendingExperimentConversion(
+          ownerPartyId,
+          EXPERIMENT_ID,
+          () => !cancelled && ownsParty(ownerPartyId),
+        );
+        if (!conversion || cancelled || !ownsParty(ownerPartyId)) return;
+        let progress: OnboardingProgress;
+        try {
+          progress = await getOnboardingProgress();
+        } catch {
+          return;
+        }
+        if (cancelled || !ownsParty(ownerPartyId)) return;
+        if (
+          progress.completedAt
+          && progress.firstValue === conversion.firstValue
+        ) {
+          await recordMomentConversion(ownerPartyId, conversion);
+          return;
+        }
+        if (progress.completedAt || !progress.eligible) {
+          await clearPendingExperimentConversionIfCurrent(
+            ownerPartyId,
+            conversion,
+            () => !cancelled && ownsParty(ownerPartyId),
+          );
+        }
+      })().finally(() => {
+        if (conversionRecoveryRef.current?.promise === promise) {
+          conversionRecoveryRef.current = null;
+        }
+      });
+      conversionRecoveryRef.current = { partyId: ownerPartyId, promise };
+    };
+
+    conversionRecoveryTriggerRef.current = recoverPendingConversion;
+    recoverPendingConversion();
+    return () => {
+      cancelled = true;
+      if (conversionRecoveryTriggerRef.current === recoverPendingConversion) {
+        conversionRecoveryTriggerRef.current = null;
+      }
+    };
+  }, [normalizedPartyId, ownsParty, recordMomentConversion]);
+
+  useEffect(() => {
+    const replayed = replayedFirstValueCompletion;
+    if (
+      !normalizedPartyId
+      || replayed?.value !== 'moment_reaction'
+      || replayed.result.progress.firstValue !== 'moment_reaction'
+      || (
+        !replayed.result.newlyCompleted
+        && (
+          !replayed.result.progress.completedAt
+          || replayed.result.progress.firstValue !== 'moment_reaction'
+        )
+      )
+    ) return;
+    const ownerPartyId = normalizedPartyId;
+    void readPendingExperimentConversion(
+      ownerPartyId,
+      EXPERIMENT_ID,
+      () => ownsParty(ownerPartyId),
+    ).then((conversion) => {
+      if (conversion) void recordMomentConversion(ownerPartyId, conversion);
+    });
+  }, [normalizedPartyId, ownsParty, recordMomentConversion, replayedFirstValueCompletion]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      exposureTriggerRef.current?.();
+      feedRecoveryTriggerRef.current?.();
+      conversionRecoveryTriggerRef.current?.();
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    const wasConnected = previousConnectivityRef.current;
+    previousConnectivityRef.current = isConnected;
+    if (!wasConnected && isConnected) {
+      exposureTriggerRef.current?.();
+      feedRecoveryTriggerRef.current?.();
+      conversionRecoveryTriggerRef.current?.();
+    }
+  }, [isConnected]);
+
   const handleConversion = useCallback(() => {
-    if (convertedRef.current || conversionInFlightRef.current) return;
-    conversionInFlightRef.current = true;
+    const ownerPartyId = normalizedPartyId;
+    const ownerExperimentVersion = experimentVersion;
+    const ownerVariant = variant;
+    if (
+      !ownerPartyId
+      || ownerExperimentVersion === null
+      || ownerVariant !== TREATMENT
+      || !ownsParty(ownerPartyId)
+    ) return;
+    const conversion: PendingExperimentConversion = {
+      experimentId: EXPERIMENT_ID,
+      experimentVersion: ownerExperimentVersion,
+      variant: ownerVariant,
+      firstValue: 'moment_reaction',
+    };
+    const conversionKey = experimentConversionKey(ownerPartyId, conversion);
+    if (
+      convertedConversionKeyRef.current === conversionKey
+      || conversionInFlightKeyRef.current === conversionKey
+    ) return;
+    conversionInFlightKeyRef.current = conversionKey;
     void (async () => {
       try {
+        await persistPendingExperimentConversion(
+          ownerPartyId,
+          conversion,
+          () => ownsParty(ownerPartyId),
+        );
+        if (!ownsParty(ownerPartyId)) return;
         const result = await completeOnboarding('moment_reaction');
-        if (!result) return;
-        convertedRef.current = !result.progress.eligible;
-        if (!result.newlyCompleted) return;
-        const completedValue = result.progress.firstValue;
-        if (completedValue) {
-          analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
-          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
+        if (!ownsParty(ownerPartyId) || !result) return;
+        if (result.newlyCompleted && result.progress.firstValue === 'moment_reaction') {
+          await recordMomentConversion(ownerPartyId, conversion);
+          return;
         }
-        if (completedValue === 'moment_reaction') {
-          track('experiment_converted', {
-            experimentId: EXPERIMENT_ID,
-            variant: TREATMENT,
-            userId: normalizedPartyId ?? undefined,
-            metadata: { value: 1, surface: 'gate_moment_reaction' },
-          });
-        }
+        await clearPendingExperimentConversionIfCurrent(
+          ownerPartyId,
+          conversion,
+          () => ownsParty(ownerPartyId),
+        );
       } finally {
-        conversionInFlightRef.current = false;
+        if (conversionInFlightKeyRef.current === conversionKey) {
+          conversionInFlightKeyRef.current = null;
+        }
       }
     })();
-  }, [analytics, completeOnboarding, normalizedPartyId, track]);
+  }, [
+    completeOnboarding,
+    experimentVersion,
+    normalizedPartyId,
+    ownsParty,
+    recordMomentConversion,
+    variant,
+  ]);
 
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
-  const [reactionRecovery, setReactionRecovery] = useState<ReactionRecovery | null>(null);
-  const [reactionPending, setReactionPending] = useState(false);
   const handleChangeComment = useCallback((momentId: string, value: string) => {
     setCommentDrafts((prev) => ({ ...prev, [momentId]: value }));
   }, []);
 
   const handleToggleReaction = useCallback(
     async (momentId: string, reaction: EventMomentReactionOption, active: boolean) => {
-      if (!featuredEvent?.id || reactionInFlightRef.current) return false;
-      reactionInFlightRef.current = true;
-      setReactionPending(true);
-      setReactionRecovery(null);
+      const ownerPartyId = normalizedPartyId;
+      if (!featuredEvent?.id || !ownerPartyId || !ownsParty(ownerPartyId)) return false;
       try {
         const result = await toggleMomentFeedReaction(
           {
@@ -277,69 +601,36 @@ export function NewUserOnboardingGate({ children }: Props) {
             reaction,
             active,
           },
-          {
-            preferRemote: shouldPreferRemoteMoments,
-            storageScope: currentActor.actorKey,
-          },
+          { preferRemote: shouldPreferRemoteMoments, storageScope: currentActor.actorKey },
         );
-        if (result.source !== 'remote') {
-          setReactionRecovery({ momentId, reaction, active, reason: 'local-only' });
-          return false;
-        }
-        const remotelyActive = isRemoteReactionActive(result, reaction.id, currentActor.actorKey);
-        if (active && !remotelyActive) {
-          setReactionRecovery({ momentId, reaction, active, reason: 'failed' });
-          return false;
-        }
-        return remotelyActive;
-      } catch {
-        setReactionRecovery({ momentId, reaction, active, reason: 'failed' });
-        return false;
+        if (!ownsParty(ownerPartyId)) return false;
+        return result.source === 'remote' && result.selected === true;
       } finally {
-        reactionInFlightRef.current = false;
-        setReactionPending(false);
-        void queryClient.invalidateQueries({
+        queryClient.invalidateQueries({
           queryKey: [
             'exp-single-feature-onboarding',
+            ownerPartyId,
             'moments',
-            currentActor.actorKey,
             featuredEvent.id,
             shouldPreferRemoteMoments ? 'remote' : 'local',
           ],
         });
       }
     },
-    [currentActor, featuredEvent?.id, queryClient, shouldPreferRemoteMoments],
+    [currentActor, featuredEvent?.id, normalizedPartyId, ownsParty, queryClient, shouldPreferRemoteMoments],
   );
 
-  const handleRetryReaction = useCallback(() => {
-    if (!reactionRecovery || reactionInFlightRef.current) return;
-    const retry = reactionRecovery;
-    void handleToggleReaction(retry.momentId, retry.reaction, retry.active).then((activated) => {
-      if (activated) handleConversion();
-    });
-  }, [handleConversion, handleToggleReaction, reactionRecovery]);
-
-  const handleRetryFeed = useCallback(() => {
-    void eventsQuery.refetch();
-    if (featuredEvent?.id) void momentsQuery.refetch();
-  }, [eventsQuery, featuredEvent?.id, momentsQuery]);
-
   const handleExplore = useCallback(() => {
-    setTreatmentExited(true);
+    const ownerPartyId = normalizedPartyId;
+    if (!ownerPartyId || !ownsParty(ownerPartyId)) return;
+    setTreatmentExitedPartyId(ownerPartyId);
     router.replace('/(tabs)/events');
     void completeOnboarding().then((result) => {
-      if (result?.newlyCompleted) {
-        const completedValue = result.progress.firstValue;
-        if (completedValue) {
-          analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
-          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
-        } else {
-          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
-        }
+      if (ownsParty(ownerPartyId) && result?.newlyCompleted) {
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'explore_events' });
       }
     });
-  }, [analytics, completeOnboarding, router]);
+  }, [analytics, completeOnboarding, normalizedPartyId, ownsParty, router]);
 
   if (!gateEngaged) {
     return <>{children}</>;
@@ -347,6 +638,7 @@ export function NewUserOnboardingGate({ children }: Props) {
 
   const loadingFeed = eventsQuery.isLoading || momentsQuery.isLoading;
   const moments = momentsQuery.data ?? [];
+  const feedRetrying = feedRecoveryPartyId === normalizedPartyId;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -354,40 +646,13 @@ export function NewUserOnboardingGate({ children }: Props) {
         <Text style={styles.eyebrow}>{copy.eyebrow}</Text>
         <Text accessibilityRole="header" style={styles.title}>
           {featuredEvent
-            ? `${copy.experiencePrefix} ${featuredEvent.title ?? copy.eventFallback}`
+            ? `${locale.startsWith('en') ? 'Experience' : 'Vive'} ${featuredEvent.title ?? copy.eventFallback}`
             : copy.titleFallback}
         </Text>
         <Text style={styles.subtitle}>{copy.subtitle}</Text>
       </View>
 
       <ScrollView style={styles.feed} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {reactionRecovery ? (
-          <View
-            style={styles.recoveryCard}
-          >
-            <Text
-              style={styles.recoveryText}
-              accessibilityRole="alert"
-              accessibilityLiveRegion="assertive"
-            >
-              {reactionRecovery.reason === 'local-only'
-                ? copy.reactionLocalOnly
-                : copy.reactionFailure}
-            </Text>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={copy.retryReaction}
-              accessibilityState={{ busy: reactionPending, disabled: reactionPending }}
-              style={[styles.retryButton, reactionPending && styles.buttonDisabled]}
-              disabled={reactionPending}
-              onPress={handleRetryReaction}
-            >
-              <Text style={styles.retryButtonText}>
-                {reactionPending ? copy.retryingReaction : copy.retryReaction}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
         {!isConnected ? (
           <View style={styles.emptyCard}>
             <Text accessibilityRole="header" style={styles.emptyTitle}>{copy.offlineTitle}</Text>
@@ -399,11 +664,18 @@ export function NewUserOnboardingGate({ children }: Props) {
             <Text style={styles.emptyBody}>{copy.errorBody}</Text>
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel={copy.retryFeed}
-              style={styles.retryButton}
-              onPress={handleRetryFeed}
+              accessibilityLabel={copy.retry}
+              accessibilityState={{ busy: feedRetrying, disabled: feedRetrying }}
+              disabled={feedRetrying}
+              style={[styles.retryBtn, feedRetrying && styles.retryBtnDisabled]}
+              onPress={() => { void feedRecoveryTriggerRef.current?.(true); }}
             >
-              <Text style={styles.retryButtonText}>{copy.retryFeed}</Text>
+              {feedRetrying ? (
+                <ActivityIndicator size="small" color="#2563eb" />
+              ) : null}
+              <Text style={styles.retryBtnText}>
+                {feedRetrying ? copy.retrying : copy.retry}
+              </Text>
             </TouchableOpacity>
           </View>
         ) : loadingFeed ? (
@@ -413,15 +685,14 @@ export function NewUserOnboardingGate({ children }: Props) {
         ) : moments.length > 0 ? (
           moments.slice(0, 3).map((moment, idx) => (
             <EventMomentCard
+                locale={locale}
               key={moment.id}
               moment={moment}
-              locale={locale}
               currentActorKey={currentActor.actorKey}
               currentPartyId={normalizedPartyId ?? null}
               featured={idx === 0}
               reactionOptions={reactionOptions}
               reactionUnavailableLabel={copy.reactionsUnavailable}
-              reactionDisabled={reactionPending}
               commentDraft={commentDrafts[moment.id] ?? ''}
               onChangeComment={handleChangeComment}
               onSubmitComment={() => {
@@ -498,6 +769,21 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
   emptyBody: { fontSize: 14, color: '#475569', marginTop: 8, lineHeight: 20 },
+  retryBtn: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    marginTop: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  retryBtnDisabled: { opacity: 0.65 },
+  retryBtnText: { color: '#2563eb', fontSize: 14, fontWeight: '700' },
   emptyPreview: {
     marginTop: 16,
     padding: 14,
@@ -512,26 +798,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   previewBody: { marginTop: 6, fontSize: 14, color: '#0f172a', lineHeight: 20 },
-  recoveryCard: {
-    backgroundColor: '#fff7ed',
-    borderColor: '#fed7aa',
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    gap: 10,
-  },
-  recoveryText: { color: '#9a3412', fontSize: 14, lineHeight: 20 },
-  retryButton: {
-    minHeight: 44,
-    alignSelf: 'flex-start',
-    justifyContent: 'center',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    backgroundColor: '#1d4ed8',
-  },
-  retryButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  buttonDisabled: { opacity: 0.55 },
   footer: {
     padding: 16,
     backgroundColor: 'rgba(255,255,255,0.96)',

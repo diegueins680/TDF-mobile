@@ -2,36 +2,51 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   clearPendingOnboardingIntent,
+  clearPendingOnboardingIntentIfCurrent,
+  completeOnboardingExitWithRetry,
   markFirstValueCompleted,
   ONBOARDING_INTENT_OPTIONS,
+  PENDING_FIRST_VALUE_PREFIX,
+  PENDING_ONBOARDING_EXIT_PREFIX,
+  PENDING_PARTY_INTENT_PREFIX,
   parseOnboardingIntent,
-  PENDING_FIRST_VALUE_KEY_PREFIX,
   persistOnboardingIntent,
   readPendingOnboardingIntent,
-  resolveMobileIntentDestination,
+  retryPendingOnboardingIntent,
+  retryPendingOnboardingExit,
   retryPendingFirstValueCompletion,
+  resolveMobileIntentDestination,
+  resolveMobileIntentNavigation,
 } from '../src/lib/onboardingIntent';
 
 const mockCompleteOnboardingProgress = jest.fn();
-const mockAssertAuthSession = jest.fn();
-const mockBinding = { authorization: 'Bearer token', signal: {}, version: 1 };
-const mockRequestConfig = { headers: { Authorization: 'Bearer token' } };
+const mockUpdateOnboardingIntent = jest.fn();
 
 jest.mock('../src/api/onboarding', () => ({
   completeOnboardingProgress: (...args: unknown[]) => mockCompleteOnboardingProgress(...args),
+  updateOnboardingIntent: (...args: unknown[]) => mockUpdateOnboardingIntent(...args),
 }));
 
-jest.mock('../src/api/client', () => ({
-  assertAuthSession: (...args: unknown[]) => mockAssertAuthSession(...args),
-  authSessionRequestConfig: () => mockRequestConfig,
-  captureAuthSession: () => mockBinding,
-}));
+const useStoredValues = (entries: readonly (readonly [string, string])[]) => {
+  const values = new Map(entries);
+  jest.mocked(AsyncStorage.getItem).mockImplementation(async (key) => values.get(key) ?? null);
+  jest.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+    values.set(key, value);
+  });
+  jest.mocked(AsyncStorage.removeItem).mockImplementation(async (key) => {
+    values.delete(key);
+  });
+  return values;
+};
 
 describe('onboarding intent', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
-    mockAssertAuthSession.mockReset();
-    await AsyncStorage.clear();
+    jest.mocked(AsyncStorage.getItem).mockReset().mockResolvedValue(null);
+    jest.mocked(AsyncStorage.setItem).mockReset().mockResolvedValue(undefined);
+    jest.mocked(AsyncStorage.removeItem).mockReset().mockResolvedValue(undefined);
+    mockCompleteOnboardingProgress.mockReset();
+    mockUpdateOnboardingIntent.mockReset();
   });
 
   it('normalizes canonical and legacy campaign values without interpreting arbitrary roles', () => {
@@ -51,11 +66,8 @@ describe('onboarding intent', () => {
     ]));
   });
 
-  it('routes governed intents to access requests unless the returned session is authorized', () => {
-    expect(resolveMobileIntentDestination('artist_profile', ['Customer'])).toEqual({
-      pathname: '/access-requests/new',
-      params: { feature: 'artist.onboarding', action: 'create' },
-    });
+  it('routes artists directly to profile creation and retains internship access requests', () => {
+    expect(resolveMobileIntentDestination('artist_profile', ['Customer'])).toBe('/createArtistProfile');
     expect(resolveMobileIntentDestination('artist_profile', ['Artist'])).toBe('/createArtistProfile');
     expect(resolveMobileIntentDestination('internships', ['Customer'])).toEqual({
       pathname: '/access-requests/new',
@@ -63,35 +75,30 @@ describe('onboarding intent', () => {
     });
   });
 
+  it('routes learning and professional intents to registry-governed public first actions', () => {
+    expect(resolveMobileIntentNavigation('learning')).toEqual({
+      kind: 'web',
+      value: 'https://tdf-app.pages.dev/trials',
+    });
+    expect(resolveMobileIntentNavigation('professional_tools')).toEqual({
+      kind: 'web',
+      value: 'https://tdf-app.pages.dev/herramientas/creador-musical',
+    });
+    expect(resolveMobileIntentNavigation('events')).toEqual({
+      kind: 'native',
+      value: '/(tabs)/directory',
+    });
+  });
+
   it('records first value only when the server atomically claims completion', async () => {
     mockCompleteOnboardingProgress
-      .mockResolvedValueOnce({
-        newlyCompleted: true,
-        progress: {
-          eligible: false,
-          completedAt: '2026-09-09T10:00:00Z',
-          firstValue: 'event_saved',
-        },
-      })
-      .mockResolvedValueOnce({
-        newlyCompleted: false,
-        progress: { eligible: true, completedAt: null, firstValue: null },
-      });
+      .mockResolvedValueOnce({ newlyCompleted: true, progress: { firstValue: "artist_followed", completedAt: "2026-10-04T00:00:00Z" } })
+      .mockResolvedValueOnce({ newlyCompleted: false });
 
-    await expect(markFirstValueCompleted('9', 'artist_followed', 'token')).resolves.toBe('event_saved');
-    await expect(markFirstValueCompleted('10', 'artist_followed', 'token')).resolves.toBeNull();
-    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(
-      1,
-      'artist_followed',
-      mockRequestConfig,
-    );
-    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(
-      2,
-      'artist_followed',
-      mockRequestConfig,
-    );
-    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toBeNull();
-    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}10`)).resolves.toContain('artist_followed');
+    await expect(markFirstValueCompleted('9', 'artist_followed')).resolves.toBe('artist_followed');
+    await expect(markFirstValueCompleted('10', 'artist_followed')).resolves.toBe(false);
+    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(1, 'artist_followed');
+    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(2, 'artist_followed');
   });
 
   it('keeps intent only while authentication is pending', async () => {
@@ -105,6 +112,78 @@ describe('onboarding intent', () => {
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
   });
 
+  it('only clears the intent acknowledged by the authenticated session', async () => {
+    jest.mocked(AsyncStorage.getItem)
+      .mockResolvedValueOnce('events')
+      .mockResolvedValueOnce('follow_artists');
+
+    await clearPendingOnboardingIntentIfCurrent('follow_artists');
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
+
+    await clearPendingOnboardingIntentIfCurrent('follow_artists');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
+  });
+
+  it('retries a retained intent only while the authenticated Party still owns it', async () => {
+    let stillOwnsParty = true;
+    const partyKey = `${PENDING_PARTY_INTENT_PREFIX}42`;
+    useStoredValues([[partyKey, 'follow_artists']]);
+    mockUpdateOnboardingIntent.mockImplementationOnce(async () => {
+      stillOwnsParty = false;
+      return { eligible: false };
+    });
+
+    await expect(retryPendingOnboardingIntent(
+      '42',
+      () => stillOwnsParty,
+    )).resolves.toBe(false);
+
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('follow_artists');
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
+  });
+
+  it('transfers a pre-auth intent to Party storage and clears both after recovery', async () => {
+    const partyKey = `${PENDING_PARTY_INTENT_PREFIX}42`;
+    const values = useStoredValues([['tdf-onboarding-intent:pending', 'internships']]);
+    mockUpdateOnboardingIntent.mockResolvedValueOnce({ eligible: false });
+
+    await expect(retryPendingOnboardingIntent('42')).resolves.toBe(true);
+
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('internships');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(partyKey, 'internships');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(partyKey);
+    expect(values.size).toBe(0);
+  });
+
+  it('retains an offline recovery under the authenticated Party, not the global key', async () => {
+    const partyKey = `${PENDING_PARTY_INTENT_PREFIX}42`;
+    const values = useStoredValues([['tdf-onboarding-intent:pending', 'learning']]);
+    mockUpdateOnboardingIntent.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(retryPendingOnboardingIntent('42')).resolves.toBe(false);
+
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('learning');
+    expect(values.get(partyKey)).toBe('learning');
+    expect(values.has('tdf-onboarding-intent:pending')).toBe(false);
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(partyKey);
+  });
+
+  it('prioritizes Party recovery without consuming another pre-auth attempt', async () => {
+    const partyKey = `${PENDING_PARTY_INTENT_PREFIX}42`;
+    const values = useStoredValues([
+      [partyKey, 'learning'],
+      ['tdf-onboarding-intent:pending', 'events'],
+    ]);
+    mockUpdateOnboardingIntent.mockResolvedValueOnce({ eligible: false });
+
+    await expect(retryPendingOnboardingIntent('42')).resolves.toBe(true);
+
+    expect(mockUpdateOnboardingIntent).toHaveBeenCalledWith('learning');
+    expect(values.has(partyKey)).toBe(false);
+    expect(values.get('tdf-onboarding-intent:pending')).toBe('events');
+  });
+
   it('discards an invalid pending value instead of restoring a permission-like role', async () => {
     jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce('Admin');
 
@@ -112,95 +191,130 @@ describe('onboarding intent', () => {
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('tdf-onboarding-intent:pending');
   });
 
-  it('keeps a Party-bound retry marker when durable completion is unavailable', async () => {
+  it('fails closed when durable completion is unavailable', async () => {
     mockCompleteOnboardingProgress.mockRejectedValueOnce(new Error('offline'));
 
-    await expect(markFirstValueCompleted('9', 'event_saved', 'token')).resolves.toBeNull();
-    await expect(markFirstValueCompleted(null, 'event_saved', 'token')).resolves.toBeNull();
+    await expect(markFirstValueCompleted('9', 'event_saved')).resolves.toBe(false);
+    await expect(markFirstValueCompleted(null, 'event_saved')).resolves.toBe(false);
     expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
-    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toContain('event_saved');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      `${PENDING_FIRST_VALUE_PREFIX}9`,
+      'event_saved',
+    );
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(`${PENDING_FIRST_VALUE_PREFIX}9`);
   });
 
-  it('replays a pending first value after relaunch and clears it on authoritative completion', async () => {
-    mockCompleteOnboardingProgress
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce({
-        newlyCompleted: true,
-        progress: {
-          eligible: false,
-          completedAt: '2026-09-09T10:00:00Z',
-          firstValue: 'moment_reaction',
-        },
-      });
-    await markFirstValueCompleted('9', 'moment_reaction', 'token');
+  it('retries a Party-scoped completion handshake and clears it after server acknowledgement', async () => {
+    jest.mocked(AsyncStorage.getItem).mockResolvedValue('moment_reaction');
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
+    });
 
-    await expect(retryPendingFirstValueCompletion('9', 'token')).resolves.toEqual({
+    await expect(retryPendingFirstValueCompletion('party/9')).resolves.toEqual({
       value: 'moment_reaction',
       result: {
         newlyCompleted: true,
-        progress: {
-          eligible: false,
-          completedAt: '2026-09-09T10:00:00Z',
-          firstValue: 'moment_reaction',
-        },
+        progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
       },
     });
-    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(2);
-    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toBeNull();
+
+    const key = `${PENDING_FIRST_VALUE_PREFIX}party%2F9`;
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith(key);
+    expect(mockCompleteOnboardingProgress).toHaveBeenCalledWith('moment_reaction');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(key);
   });
 
-  it('does not read or send another Party pending first value', async () => {
-    mockCompleteOnboardingProgress.mockRejectedValueOnce(new Error('offline'));
-    await markFirstValueCompleted('9', 'access_requested', 'token');
+  it('removes invalid pending first-value state without sending it to the server', async () => {
+    jest.mocked(AsyncStorage.getItem).mockResolvedValueOnce('admin_granted');
 
-    await expect(retryPendingFirstValueCompletion('10', 'token')).resolves.toBeNull();
-    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
-    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toContain('access_requested');
-  });
+    await expect(retryPendingFirstValueCompletion('9')).resolves.toBeNull();
 
-  it('retains the old Party marker and makes no request after a session replacement', async () => {
-    mockAssertAuthSession.mockImplementationOnce(() => {
-      throw new Error('session changed');
-    });
-
-    await expect(markFirstValueCompleted('9', 'event_saved', 'token')).resolves.toBeNull();
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(`${PENDING_FIRST_VALUE_PREFIX}9`);
     expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
-    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toContain('event_saved');
   });
 
-  it('still attempts the handshake when local retry storage is unavailable', async () => {
-    jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('storage unavailable'));
-    mockCompleteOnboardingProgress.mockResolvedValueOnce({
-      newlyCompleted: true,
-      progress: {
-        eligible: false,
-        completedAt: '2026-09-09T10:00:00Z',
-        firstValue: 'artist_followed',
-      },
+  it('does not clear or attribute a completion after the active Party changes', async () => {
+    let stillOwnsParty = true;
+    mockCompleteOnboardingProgress.mockImplementationOnce(async () => {
+      stillOwnsParty = false;
+      return { newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } };
     });
 
-    await expect(markFirstValueCompleted('9', 'artist_followed', 'token')).resolves.toBe('artist_followed');
-    expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
+    await expect(markFirstValueCompleted(
+      '9',
+      'moment_reaction',
+      () => stillOwnsParty,
+    )).resolves.toBe(false);
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      `${PENDING_FIRST_VALUE_PREFIX}9`,
+      'moment_reaction',
+    );
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(`${PENDING_FIRST_VALUE_PREFIX}9`);
   });
 
-  it('retains the retry marker when the window expired without durable completion', async () => {
+  it('retains an offline explicit exit and clears it after an authoritative retry', async () => {
+    const key = `${PENDING_ONBOARDING_EXIT_PREFIX}party%2F9`;
+    const values = useStoredValues([]);
+    mockCompleteOnboardingProgress
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } });
+
+    await expect(completeOnboardingExitWithRetry('party/9')).resolves.toBeNull();
+    expect(values.get(key)).toBe('pending');
+
+    await expect(retryPendingOnboardingExit('party/9')).resolves.toEqual({
+      result: { newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } },
+    });
+    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(1);
+    expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(2);
+    expect(values.has(key)).toBe(false);
+  });
+
+  it('does not clear a retained exit after the authenticated Party changes', async () => {
+    let stillOwnsParty = true;
+    const key = `${PENDING_ONBOARDING_EXIT_PREFIX}42`;
+    const values = useStoredValues([[key, 'pending']]);
+    mockCompleteOnboardingProgress.mockImplementationOnce(async () => {
+      stillOwnsParty = false;
+      return { newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } };
+    });
+
+    await expect(retryPendingOnboardingExit(
+      '42',
+      () => stillOwnsParty,
+    )).resolves.toEqual({ result: null });
+
+    expect(values.get(key)).toBe('pending');
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(key);
+  });
+
+  it('removes invalid retained exit state without completing onboarding', async () => {
+    const key = `${PENDING_ONBOARDING_EXIT_PREFIX}42`;
+    const values = useStoredValues([[key, 'completed']]);
+
+    await expect(retryPendingOnboardingExit('42')).resolves.toBeNull();
+
+    expect(values.has(key)).toBe(false);
+    expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
+  });
+  it('retains retry evidence when eligibility expired without durable completion', async () => {
+    jest.mocked(AsyncStorage.getItem).mockResolvedValue('event_saved');
     mockCompleteOnboardingProgress.mockResolvedValueOnce({
       newlyCompleted: false,
       progress: { eligible: false, completedAt: null, firstValue: null },
     });
-
-    await expect(markFirstValueCompleted('9', 'event_saved', 'token')).resolves.toBeNull();
-    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toContain('event_saved');
+    await retryPendingFirstValueCompletion('9');
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(`${PENDING_FIRST_VALUE_PREFIX}9`);
   });
 
-  it('discards malformed completion metadata without sending a claim', async () => {
-    await AsyncStorage.setItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`, JSON.stringify({
-      version: 1,
-      value: 'admin',
-    }));
-
-    await expect(retryPendingFirstValueCompletion('9', 'token')).resolves.toBeNull();
-    expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
-    await expect(AsyncStorage.getItem(`${PENDING_FIRST_VALUE_KEY_PREFIX}9`)).resolves.toBeNull();
+  it('reports the server-confirmed value instead of the requested hint', async () => {
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, completedAt: '2026-10-04T00:00:00Z', firstValue: 'event_saved' },
+    });
+    await expect(markFirstValueCompleted('9', 'artist_followed')).resolves.toBe('event_saved');
   });
+
 });

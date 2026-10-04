@@ -5,6 +5,21 @@ import EventDetailScreen from '../app/eventDetail';
 
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockCapture = jest.fn();
+type FirstValueCompletionArgs = [
+  string | null | undefined,
+  string,
+  () => boolean,
+  { capture: typeof mockCapture },
+];
+const mockRecordFirstValueCompletion = jest.fn<Promise<boolean>, FirstValueCompletionArgs>(async () => false);
+const mockRecordMomentReactionFirstValue = jest.fn<
+  Promise<boolean>,
+  [unknown, string | null, () => boolean, { capture: typeof mockCapture }]
+>(async () => false);
+const mockMutationOptions: Array<{
+  onSuccess?: (result: unknown, variables: unknown) => void;
+}> = [];
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
@@ -18,7 +33,10 @@ jest.mock('@expo/vector-icons', () => ({
 
 jest.mock('@tanstack/react-query', () => ({
   useQuery: jest.fn(),
-  useMutation: jest.fn(() => ({ mutate: mockMutate, isPending: false })),
+  useMutation: jest.fn((options) => {
+    mockMutationOptions.push(options);
+    return { mutate: mockMutate, isPending: false };
+  }),
   useQueryClient: jest.fn(() => ({ invalidateQueries: mockInvalidateQueries })),
 }));
 
@@ -52,8 +70,9 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
     partyId: '7',
     displayName: 'Cuco',
     locale: 'es',
-    timezone: 'America/Guayaquil',
+    timezone: 'UTC',
     currency: 'USD',
+    showEventRsvpsOnProfile: true,
     getCatalogItems: (code: string) => code === 'reaction-types' ? [{
       id: '50800000-0000-4000-8000-000000000001',
       code: 'fire',
@@ -68,6 +87,9 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
 jest.mock('../src/api/events', () => ({
   Events: {
     getById: jest.fn(),
+    getPublicById: jest.fn(),
+    getMyRSVP: jest.fn(),
+    getRSVPSummary: jest.fn(),
     getRSVPs: jest.fn(),
     getInvitations: jest.fn(),
     listTicketTiers: jest.fn(),
@@ -75,6 +97,7 @@ jest.mock('../src/api/events', () => ({
     createTicketPaymentSheet: jest.fn(),
     updateTicketOrderStatus: jest.fn(),
     rsvp: jest.fn(),
+    deleteRSVP: jest.fn(),
     sendInvitation: jest.fn(),
     respondToInvitation: jest.fn(),
   },
@@ -95,12 +118,26 @@ jest.mock('../src/lib/liveBroadcastPublishing', () => ({
   startWhipBroadcastPublisher: jest.fn(),
 }));
 
+jest.mock('../src/analytics/AnalyticsProvider', () => ({
+  useAnalytics: () => ({ capture: mockCapture }),
+}));
+
+jest.mock('../src/lib/momentReactionFirstValue', () => ({
+  recordMomentReactionFirstValue: (...args: Parameters<typeof mockRecordMomentReactionFirstValue>) =>
+    mockRecordMomentReactionFirstValue(...args),
+}));
+
+jest.mock('../src/lib/firstValueCompletion', () => ({
+  recordFirstValueCompletion: (...args: FirstValueCompletionArgs) => mockRecordFirstValueCompletion(...args),
+}));
+
 describe('EventDetail moments tab', () => {
   const useQuery = jest.mocked(require('@tanstack/react-query').useQuery as jest.Mock);
   const imagePicker = jest.mocked(require('expo-image-picker'));
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMutationOptions.length = 0;
 
     useQuery.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
       if (queryKey[0] === 'event') {
@@ -134,6 +171,8 @@ describe('EventDetail moments tab', () => {
             ],
             createdBy: '7',
             isPublic: true,
+            publicListable: true,
+            rsvpEligible: true,
             rsvpCount: 2,
             createdAt: '2026-04-01T00:00:00.000Z',
             updatedAt: '2026-04-01T00:00:00.000Z',
@@ -144,7 +183,11 @@ describe('EventDetail moments tab', () => {
       }
 
       if (queryKey[0] === 'event-rsvps') {
-        return { data: [], isLoading: false };
+        return { data: { status: 'INTERESTED', showOnProfile: false }, isLoading: false };
+      }
+
+      if (queryKey[0] === 'event-rsvp-summary') {
+        return { data: { goingCount: 2, interestedCount: 1 }, isLoading: false };
       }
 
       if (queryKey[0] === 'event-invitations') {
@@ -152,17 +195,7 @@ describe('EventDetail moments tab', () => {
       }
 
       if (queryKey[0] === 'saved-event-ids') {
-        return {
-          data: {
-            ids: [],
-            pendingImportIds: [],
-            pendingImportError: null,
-            source: 'server',
-            cachedAt: null,
-          },
-          isLoading: false,
-          isError: false,
-        };
+        return { data: { ids: [], source: 'server', pendingCount: 0 }, isLoading: false };
       }
 
       if (queryKey[0] === 'event-ticket-tiers') {
@@ -231,6 +264,17 @@ describe('EventDetail moments tab', () => {
     });
   });
 
+  it('shows the authoritative RSVP selection, separate counts, and submits the chosen state', async () => {
+    render(<EventDetailScreen />);
+
+    await waitFor(() => expect(screen.getAllByRole('radio')[1]?.props.accessibilityState.selected).toBe(true));
+    expect(screen.getByText('2 van · 1 interesadas')).toBeTruthy();
+    expect(screen.getByLabelText('Mostrar este RSVP en mi perfil').props.value).toBe(false);
+
+    fireEvent.press(screen.getByText('✓ Voy'));
+    expect(mockMutate).toHaveBeenCalledWith({ status: 'GOING', profile: false });
+  });
+
   it('renders the social feed when switching to Momentos', () => {
     render(<EventDetailScreen />);
 
@@ -246,6 +290,55 @@ describe('EventDetail moments tab', () => {
     fireEvent.press(screen.getByLabelText('Ver foto de Andrea'));
     expect(screen.getByLabelText('Cerrar vista previa')).toBeTruthy();
     expect(screen.getByLabelText('Vista previa de la foto')).toBeTruthy();
+  });
+
+  it('binds a successful reaction to the initiating Party first-value boundary', async () => {
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByLabelText('Fuego: 1'));
+
+    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({
+      momentId: 'moment-1',
+      ownerPartyId: '7',
+    }));
+
+    const reactionOptions = mockMutationOptions[6];
+    const result = { source: 'remote', selected: true };
+    reactionOptions.onSuccess?.(result, { ownerPartyId: '7' });
+
+    await waitFor(() => expect(mockRecordMomentReactionFirstValue).toHaveBeenCalledWith(
+      result,
+      '7',
+      expect.any(Function),
+      expect.objectContaining({ capture: mockCapture }),
+    ));
+    const stillOwnsParty = mockRecordMomentReactionFirstValue.mock.calls[0][2] as () => boolean;
+    expect(stillOwnsParty()).toBe(true);
+  });
+
+  it('binds a successful event save to the initiating Party first-value boundary', async () => {
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Guardar evento'));
+
+    expect(mockMutate).toHaveBeenCalledWith({
+      targetEventId: '42',
+      ownerPartyId: '7',
+    });
+
+    const saveOptions = mockMutationOptions[4];
+    saveOptions.onSuccess?.(
+      { saved: true, serverAcknowledged: true },
+      { targetEventId: '42', ownerPartyId: '7' },
+    );
+
+    await waitFor(() => expect(mockRecordFirstValueCompletion).toHaveBeenCalledWith(
+      '7',
+      'event_saved',
+      expect.any(Function),
+      expect.objectContaining({ capture: mockCapture }),
+    ));
+    const stillOwnsParty = mockRecordFirstValueCompletion.mock.calls[0][2] as () => boolean;
+    expect(stillOwnsParty()).toBe(true);
   });
 
   it('adds several gallery photos with immediate thumbnails and one publish action', async () => {

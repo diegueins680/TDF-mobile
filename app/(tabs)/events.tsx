@@ -1,3 +1,5 @@
+import { eventExperienceLanguage, savedEventCopy } from '../../src/localization/eventExperienceCopy';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
@@ -15,27 +17,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Calendar } from 'react-native-calendars';
-import { useRouter } from 'expo-router';
 
 import { Events } from '../../src/api/events';
 import { EventCard } from '../../src/components/EventCard';
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import type { EventCityInput, SocialEvent } from '../../src/types';
-import {
-  importPendingSavedEvents,
-  loadSavedEventSnapshot,
-  SavedEventImportError,
-  setSavedEventDesiredState,
-  type SavedEventSnapshot,
-} from '../../src/lib/savedEvents';
+import { loadSavedEventSnapshot, toggleSavedEvent } from '../../src/lib/savedEvents';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { EventListSkeleton } from '../../src/components/skeletons/EventListSkeleton';
 import { impactLight } from '../../src/utils/haptics';
-import { markFirstValueCompleted } from '../../src/lib/onboardingIntent';
-import { eventExperienceLanguage, savedEventCopy } from '../../src/localization/eventExperienceCopy';
+import { recordFirstValueCompletion } from '../../src/lib/firstValueCompletion';
+import { usePartyOwnership } from '../../src/hooks/usePartyOwnership';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -58,7 +53,8 @@ export default function EventsScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
-  const { partyId, token } = useAuth();
+  const { partyId } = useAuth();
+  const ownsParty = usePartyOwnership(partyId);
   const { locale, timezone, countryCode } = useUserSettings();
   const savedCopy = savedEventCopy[eventExperienceLanguage(locale)];
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -72,11 +68,6 @@ export default function EventsScreen() {
   const [newCountryCode, setNewCountryCode] = useState(countryCode ?? 'US');
   const debouncedSearch = useDebouncedValue(searchFilter, 250);
   const [refreshing, setRefreshing] = useState(false);
-  const [showSavedImportNotice, setShowSavedImportNotice] = useState(true);
-
-  useEffect(() => {
-    setShowSavedImportNotice(true);
-  }, [partyId]);
 
   const { data: events, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ['events', 'buyer-upcoming', discoveryScope],
@@ -90,25 +81,22 @@ export default function EventsScreen() {
 
   const savedEventIdsQuery = useQuery({
     queryKey: ['saved-event-ids', partyId],
-    queryFn: () => loadSavedEventSnapshot(partyId as string, token as string),
-    enabled: Boolean(partyId && token),
-    retry: false,
+    queryFn: () => loadSavedEventSnapshot(
+      partyId as string,
+      () => ownsParty(partyId),
+    ),
+    enabled: Boolean(partyId),
   });
 
-  const savedEventIds = useMemo(
-    () => savedEventIdsQuery.data?.ids ?? [],
-    [savedEventIdsQuery.data?.ids],
-  );
+  const savedEventIds = useMemo(() => savedEventIdsQuery.data?.ids ?? [], [savedEventIdsQuery.data]);
 
   const savedEventsQuery = useQuery({
     queryKey: ['saved-events', partyId, 'browse', savedEventIds],
     enabled: savedEventIds.length > 0,
     queryFn: async () => {
       const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
-      return {
-        events: settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])),
-        unavailableCount: settled.filter((result) => result.status === 'rejected').length,
-      };
+      const resolved = settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+      return { events: resolved, unavailableCount: settled.filter(result => result.status === 'rejected').length };
     }
   });
 
@@ -127,76 +115,41 @@ export default function EventsScreen() {
   }, [eventScope, partyId, qc, refetch, savedEventIdsQuery]);
 
   const saveToggleMutation = useMutation({
-    networkMode: 'always',
-    mutationFn: ({
-      eventId,
-      ownerPartyId,
-      desiredSaved,
-    }: {
-      eventId: string;
-      ownerPartyId: string;
-      desiredSaved: boolean;
-    }) => token
-      ? setSavedEventDesiredState(ownerPartyId, eventId, desiredSaved, token)
-      : Promise.reject(new Error(savedCopy.sessionExpired)),
-    onSuccess: ({ saved }, { eventId, ownerPartyId }) => {
-      if (partyId !== ownerPartyId) return;
-      qc.setQueryData<SavedEventSnapshot>(['saved-event-ids', ownerPartyId], (current) => {
-        if (!current) return current;
-        const withoutEvent = current.ids.filter((savedEventId) => savedEventId !== eventId);
-        return {
-          ...current,
-          ids: saved ? [eventId, ...withoutEvent] : withoutEvent,
-          source: 'server',
-          cachedAt: null,
-        };
-      });
-      void qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
-      void qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
+    mutationFn: ({ eventId, ownerPartyId }: { eventId: string; ownerPartyId: string }) =>
+      toggleSavedEvent(
+        ownerPartyId,
+        eventId,
+        () => ownsParty(ownerPartyId),
+      ),
+    onSuccess: async ({ saved, serverAcknowledged }, { eventId, ownerPartyId }) => {
+      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
+      qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
+      if (!ownsParty(ownerPartyId)) return;
       void impactLight();
+      if (!serverAcknowledged) {
+        Alert.alert(
+          'Cambio pendiente de sincronización',
+          'Lo guardamos en este dispositivo y lo sincronizaremos con tu cuenta cuando vuelva la conexión.',
+        );
+        return;
+      }
       analytics.capture('feature_favorite_changed', {
         platform: 'mobile',
         event_id: eventId,
         action: saved ? 'saved' : 'unsaved',
       });
-      if (saved && token) {
-        void markFirstValueCompleted(ownerPartyId, 'event_saved', token).then((completedValue) => {
-          if (!completedValue) return;
-          analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
-          analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
-        });
-      }
+      if (saved) void recordFirstValueCompletion(
+        ownerPartyId,
+        'event_saved',
+        () => ownsParty(ownerPartyId),
+        analytics,
+      );
     },
     onError: (_error, { ownerPartyId }) => {
-      if (partyId !== ownerPartyId) return;
+      if (!ownsParty(ownerPartyId)) return;
       Alert.alert(
         savedCopy.updateFailureTitle,
-        savedCopy.updateFailureBody,
-      );
-    },
-  });
-
-  const importSavedEventsMutation = useMutation({
-    networkMode: 'always',
-    mutationFn: (ownerPartyId: string) => token
-      ? importPendingSavedEvents(ownerPartyId, token)
-      : Promise.reject(new Error(savedCopy.sessionExpired)),
-    onSuccess: ({ importedCount }, ownerPartyId) => {
-      qc.invalidateQueries({ queryKey: ['saved-event-ids', ownerPartyId] });
-      qc.invalidateQueries({ queryKey: ['saved-events', ownerPartyId] });
-      if (partyId !== ownerPartyId) return;
-      Alert.alert(
-        savedCopy.importSuccessTitle,
-        savedCopy.importSuccess(importedCount),
-      );
-    },
-    onError: (error, ownerPartyId) => {
-      if (partyId !== ownerPartyId) return;
-      Alert.alert(
-        savedCopy.importFailureTitle,
-        error instanceof SavedEventImportError
-          ? savedCopy.importFailure(error.importedCount, error.totalCount)
-          : savedCopy.importFailureFallback,
+        'El cambio no se pudo guardar ni poner en cola. Comprueba la sesión y el almacenamiento e inténtalo nuevamente.',
       );
     },
   });
@@ -329,20 +282,10 @@ export default function EventsScreen() {
 
   const handleToggleSaved = useCallback(async (eventId: string) => {
     if (!partyId) {
-      Alert.alert(
-        savedCopy.signInTitle,
-        savedCopy.signInBody,
-        [
-          { text: savedCopy.later, style: 'cancel' },
-          {
-            text: savedCopy.signIn,
-            onPress: () => router.push({
-              pathname: '/auth',
-              params: { intent: 'events', returnTo: '/(tabs)/events' },
-            }),
-          },
-        ],
-      );
+      Alert.alert(savedCopy.signInTitle, savedCopy.signInBody, [
+        { text: savedCopy.later, style: 'cancel' },
+        { text: savedCopy.signIn, onPress: () => router.push({ pathname: '/auth', params: { intent: 'events', returnTo: '/(tabs)/events' } }) },
+      ]);
       return;
     }
     if (savedEventIdsQuery.isError) {
@@ -350,12 +293,12 @@ export default function EventsScreen() {
       if (result.isError) {
         Alert.alert(
           savedCopy.loadFailureTitle,
-          savedCopy.loadFailureBody,
+          'Comprueba tu conexión, sesión y almacenamiento e inténtalo nuevamente.',
         );
       }
       return;
     }
-    if (!token || savedEventIdsQuery.isLoading || !savedEventIdsQuery.data) return;
+    if (savedEventIdsQuery.isLoading || !savedEventIdsQuery.data) return;
     const isCurrentlySaved = savedEventIds.includes(eventId);
     if (isCurrentlySaved) {
       Alert.alert(
@@ -363,42 +306,28 @@ export default function EventsScreen() {
         savedCopy.removeConfirmBody,
         [
           { text: savedCopy.cancel, style: 'cancel' },
-          {
-            text: savedCopy.remove,
-            style: 'destructive',
-            onPress: () => saveToggleMutation.mutate({
-              eventId,
-              ownerPartyId: partyId,
-              desiredSaved: false,
-            }),
-          },
+          { text: savedCopy.remove, style: 'destructive', onPress: () => saveToggleMutation.mutate({ eventId, ownerPartyId: partyId }) },
         ],
       );
     } else {
-      saveToggleMutation.mutate({
-        eventId,
-        ownerPartyId: partyId,
-        desiredSaved: true,
-      });
+      saveToggleMutation.mutate({ eventId, ownerPartyId: partyId });
     }
-  }, [partyId, router, saveToggleMutation, savedCopy, savedEventIds, savedEventIdsQuery, token]);
+  }, [partyId, saveToggleMutation, savedEventIds, savedEventIdsQuery, savedCopy, router]);
+
+  const isCardUpdating = useCallback((eventId: string) => (
+    saveToggleMutation.isPending && saveToggleMutation.variables?.eventId === eventId
+  ), [saveToggleMutation.isPending, saveToggleMutation.variables]);
 
   const renderEventItem = useCallback(({ item }: { item: SocialEvent }) => (
     <EventCard
       event={item}
       saved={savedEventIds.includes(String(item.id))}
       onToggleSaved={() => void handleToggleSaved(String(item.id))}
-      saveStatus={!partyId
-        ? 'ready'
-        : savedEventIdsQuery.isError
-            ? 'unavailable'
-          : savedEventIdsQuery.isLoading || !savedEventIdsQuery.data
-            ? 'loading'
-            : saveToggleMutation.isPending
-              ? 'updating'
-              : 'ready'}
+      saveStatus={!partyId ? 'ready' : savedEventIdsQuery.isError ? 'unavailable'
+        : savedEventIdsQuery.isLoading || !savedEventIdsQuery.data ? 'loading'
+          : isCardUpdating(String(item.id)) ? 'updating' : 'ready'}
     />
-  ), [handleToggleSaved, partyId, saveToggleMutation.isPending, savedEventIds, savedEventIdsQuery.data, savedEventIdsQuery.isError, savedEventIdsQuery.isLoading]);
+  ), [handleToggleSaved, isCardUpdating, partyId, savedEventIds, savedEventIdsQuery.data, savedEventIdsQuery.isError, savedEventIdsQuery.isLoading]);
 
   const keyExtractor = useCallback((item: SocialEvent) => String(item.id), []);
 
@@ -422,12 +351,8 @@ export default function EventsScreen() {
   if (listError) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <Text style={[styles.error, { color: colors.danger }]} accessibilityLiveRegion="polite">
-          {eventScope === 'saved' ? savedCopy.loadFailureTitle : 'No se pudieron cargar los eventos'}
-        </Text>
-        <Text style={[styles.errorHelper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">
-          {eventScope === 'saved' ? savedCopy.loadFailureBody : 'Comprueba tu conexión e inténtalo nuevamente.'}
-        </Text>
+        <Text style={[styles.error, { color: colors.danger }]} accessibilityLiveRegion="polite">No se pudieron cargar los eventos</Text>
+        <Text style={[styles.errorHelper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">Comprueba tu conexión e inténtalo nuevamente.</Text>
         <TouchableOpacity
           style={[styles.retryButton, { backgroundColor: colors.actionPrimary }]}
           onPress={() => {
@@ -442,11 +367,9 @@ export default function EventsScreen() {
             }
           }}
           accessibilityRole="button"
-          accessibilityLabel={eventScope === 'saved' ? savedCopy.retrySavedAccessibility : 'Reintentar cargar eventos'}
+          accessibilityLabel="Reintentar cargar eventos"
         >
-          <Text style={[styles.retryButtonText, { color: colors.actionPrimaryContrast }]}>
-            {eventScope === 'saved' ? savedCopy.retry : 'Reintentar'}
-          </Text>
+          <Text style={[styles.retryButtonText, { color: colors.actionPrimaryContrast }]}>{savedCopy.retry}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -454,6 +377,12 @@ export default function EventsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.canvas }]} edges={['top']}>
+      {savedEventIdsQuery.data && savedEventIdsQuery.data.source !== 'server' ? (
+        <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary }}>{savedCopy.cacheNotice}</Text>
+      ) : null}
+      {eventScope === 'saved' && (savedEventsQuery.data?.unavailableCount ?? 0) > 0 ? (
+        <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary }}>{savedCopy.someUnavailable}</Text>
+      ) : null}
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.canvas }]}>
         <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">Eventos cerca de ti</Text>
@@ -485,102 +414,6 @@ export default function EventsScreen() {
         />
         {isFetching && !isLoading ? <ActivityIndicator size="small" color={colors.actionPrimary} /> : null}
       </View>
-
-      {savedEventIdsQuery.data?.source === 'cache' ? (
-        <View style={[styles.savedStatusNotice, { backgroundColor: colors.selected }]}>
-          <Text style={[styles.savedStatusText, { color: colors.textPrimary }]} accessibilityLiveRegion="polite">
-            {savedCopy.cacheNotice}
-          </Text>
-        </View>
-      ) : null}
-
-      {partyId && savedEventIdsQuery.isError ? (
-        <View style={[styles.savedImportNotice, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-          <Text
-            style={[styles.savedImportTitle, { color: colors.textPrimary }]}
-            accessibilityRole="alert"
-            accessibilityLiveRegion="assertive"
-          >
-            {savedCopy.loadFailureTitle}
-          </Text>
-          <Text style={[styles.savedImportBody, { color: colors.textSecondary }]}>
-            {savedCopy.loadFailureBody}
-          </Text>
-          <View style={styles.savedImportActions}>
-            <TouchableOpacity
-              style={[
-                styles.savedImportButton,
-                { backgroundColor: colors.actionPrimary },
-                savedEventIdsQuery.isFetching && styles.manageCitiesButtonDisabled,
-              ]}
-              onPress={() => void savedEventIdsQuery.refetch()}
-              disabled={savedEventIdsQuery.isFetching}
-              accessibilityRole="button"
-              accessibilityLabel={savedCopy.retrySavedAccessibility}
-              accessibilityState={{
-                busy: savedEventIdsQuery.isFetching,
-                disabled: savedEventIdsQuery.isFetching,
-              }}
-            >
-              <Text style={[styles.savedImportButtonText, { color: colors.actionPrimaryContrast }]}>
-                {savedEventIdsQuery.isFetching ? savedCopy.loading : savedCopy.retry}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : null}
-
-      {savedEventIdsQuery.data?.pendingImportError ? (
-        <View style={[styles.savedStatusNotice, { backgroundColor: colors.selected }]}>
-          <Text
-            style={[styles.savedStatusText, { color: colors.textPrimary }]}
-            accessibilityRole="alert"
-            accessibilityLiveRegion="assertive"
-          >
-            {savedCopy.pendingImportFailure}
-          </Text>
-        </View>
-      ) : null}
-
-      {showSavedImportNotice && (savedEventIdsQuery.data?.pendingImportIds.length ?? 0) > 0 ? (
-        <View style={[styles.savedImportNotice, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-          <Text style={[styles.savedImportTitle, { color: colors.textPrimary }]}>
-            {savedCopy.importTitle}
-          </Text>
-          <Text style={[styles.savedImportBody, { color: colors.textSecondary }]}>
-            {savedCopy.importBody}
-          </Text>
-          <View style={styles.savedImportActions}>
-            <TouchableOpacity
-              style={styles.savedImportLater}
-              onPress={() => setShowSavedImportNotice(false)}
-              accessibilityRole="button"
-              accessibilityLabel={savedCopy.importLaterAccessibility}
-            >
-              <Text style={[styles.savedImportLaterText, { color: colors.textSecondary }]}>{savedCopy.later}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.savedImportButton,
-                { backgroundColor: colors.actionPrimary },
-                importSavedEventsMutation.isPending && styles.manageCitiesButtonDisabled,
-              ]}
-              onPress={() => partyId && importSavedEventsMutation.mutate(partyId)}
-              disabled={importSavedEventsMutation.isPending}
-              accessibilityRole="button"
-              accessibilityLabel={savedCopy.importAccessibility}
-              accessibilityState={{
-                busy: importSavedEventsMutation.isPending,
-                disabled: importSavedEventsMutation.isPending,
-              }}
-            >
-              <Text style={[styles.savedImportButtonText, { color: colors.actionPrimaryContrast }]}>
-                {importSavedEventsMutation.isPending ? savedCopy.importing : savedCopy.import}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : null}
 
       {/* View Mode Toggle */}
       <View style={[styles.toggleContainer, { backgroundColor: colors.surface }]}>
@@ -628,7 +461,7 @@ export default function EventsScreen() {
           accessibilityState={{ selected: eventScope === 'saved' }}
         >
           <Text style={[styles.toggleBtnText, { color: colors.textSecondary }, eventScope === 'saved' && [styles.toggleBtnTextActive, { color: colors.actionPrimaryContrast }]]}>
-            {savedCopy.savedTab} ({savedEventIds.length})
+            Guardados ({savedEventIds.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -657,14 +490,6 @@ export default function EventsScreen() {
           </Text>
         </TouchableOpacity>
       </View>
-
-      {eventScope === 'saved' && (savedEventsQuery.data?.unavailableCount ?? 0) > 0 ? (
-        <View style={[styles.savedStatusNotice, { backgroundColor: colors.selected }]}>
-          <Text style={[styles.savedStatusText, { color: colors.textPrimary }]} accessibilityLiveRegion="polite">
-            {savedCopy.someUnavailable}
-          </Text>
-        </View>
-      ) : null}
 
       {/* Content */}
       {viewMode === 'calendar' ? (
@@ -786,7 +611,7 @@ export default function EventsScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Quitar ${city.name}`}
                   >
-                    <Text style={[styles.cityRemove, { color: colors.danger }]}>Quitar</Text>
+                    <Text style={[styles.cityRemove, { color: colors.danger }]}>{savedCopy.remove}</Text>
                   </TouchableOpacity>
                 </View>
               ))}
@@ -901,56 +726,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-  },
-  savedStatusNotice: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  savedStatusText: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  savedImportNotice: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-  },
-  savedImportTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  savedImportBody: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 4,
-  },
-  savedImportActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
-  },
-  savedImportLater: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  savedImportLaterText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  savedImportButton: {
-    minHeight: 44,
-    justifyContent: 'center',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-  },
-  savedImportButtonText: {
-    fontSize: 13,
-    fontWeight: '800',
   },
   toggleContainer: {
     flexDirection: 'row',

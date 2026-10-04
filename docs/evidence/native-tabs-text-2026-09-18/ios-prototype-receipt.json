@@ -1,0 +1,17 @@
+{
+  "device": "77D6F1CA-D073-4539-A54A-5A07E3304BD6",
+  "sourceSHA": "3647203bb20198ce7727b928492963f2ece20cd1",
+  "originalBundleSHA256": "2395d8ee5891beaaf88461dedd8648ebca0a9eaea76270203a88491f6a231e35",
+  "replacementSHA256": "1b46801c024702c21c9efda1e476cc61167e74a52c3782c4c3eed7a3d39efece",
+  "originalContentSize": "large",
+  "kind": "existing compatible simulator native binary plus verified production Hermes bundle; not signed App Store artifact",
+  "verifiedBundleSHA256": "232ca7fe22206e7fb0b865a399ce7d8e5866f9493ca500cfcff2efc6605539df",
+  "restoredContentSize": "large",
+  "evidenceLimits": [
+    "Actual iOS18.3 simulator with existing compatible native binary and production Hermes; not physical iPhone or App Store binary execution.",
+    "First incremental export contained only948 modules and was excluded; reset-cache export2317 modules and source map verified actual tab implementation.",
+    "Setting numberOfLines alone still ellipsized; moving measurement outside constrained bar allowed all lines.",
+    "Hierarchy captured after restoring large reports5localized tabs and0exposed measurement nodes.",
+    "Final conditional confines independent measurement to iOS; Android retains the prior physically verified path."
+  ]
+}

@@ -16,9 +16,10 @@ type Props = {
   saved?: boolean;
   onToggleSaved?: () => void;
   saveStatus?: 'ready' | 'loading' | 'updating' | 'unavailable';
+  saveDisabled?: boolean;
 };
 
-function EventCardComponent({ event, onPress, saved = false, onToggleSaved, saveStatus = 'ready' }: Props) {
+function EventCardComponent({ event, onPress, saved = false, onToggleSaved, saveDisabled = false, saveStatus = saveDisabled ? 'updating' : 'ready' }: Props) {
   const router = useRouter();
   const analytics = useAnalytics();
   const { locale } = useUserSettings();

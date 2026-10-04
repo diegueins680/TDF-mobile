@@ -3,7 +3,7 @@ import type { operations } from './generated/types';
 
 export type PartySelectorContext = Extract<
   NonNullable<operations['searchPartiesForSelector']['parameters']['query']['context']>,
-  'event_invitation' | 'social_connection'
+  'event_invitation' | 'social_connection' | 'interaction_mention'
 >;
 
 export type PartySelectorOption = {
@@ -20,7 +20,7 @@ type PartySelectorPage = { items: PartySelectorOption[]; nextCursor: number | nu
 
 export async function searchPartiesForSelector(
   query: string,
-  options: { context?: PartySelectorContext; kind?: 'any' | 'person' | 'organization'; accountOnly?: boolean; excludedPartyIds?: number[]; cursor?: number; limit?: number; signal?: AbortSignal } = {},
+  options: { context?: PartySelectorContext; scopeId?: string; kind?: 'any' | 'person' | 'organization'; accountOnly?: boolean; excludedPartyIds?: number[]; cursor?: number; limit?: number; signal?: AbortSignal } = {},
 ): Promise<PartySelectorPage> {
   try {
     const response = await http.get<PartySelectorPage>('/parties/search', {
@@ -28,6 +28,7 @@ export async function searchPartiesForSelector(
       params: {
         q: query,
         context: options.context ?? 'event_invitation',
+        scopeId: options.scopeId,
         kind: options.kind ?? 'person',
         accountOnly: options.accountOnly ?? true,
         excludePartyId: options.excludedPartyIds ?? [],

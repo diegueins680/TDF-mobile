@@ -1,0 +1,77 @@
+# Run through the isolated backend fixture runner, never against production.
+appId: ${APP_ID || "com.tdfrecords.app"}
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - launchApp:
+          clearState: true
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - clearState
+- openLink:
+    link: "tdf://auth"
+    autoVerify: true
+- tapOn:
+    text: "^Open$"
+    optional: true
+- runFlow:
+    when:
+      visible: "I already have an account|Ya tengo una cuenta"
+    commands:
+      - tapOn: "I already have an account|Ya tengo una cuenta"
+- runFlow:
+    when:
+      notVisible:
+        id: usernameInput
+    commands:
+      - tapOn: "^Cerrar sesión$|^Sign out$"
+- extendedWaitUntil:
+    visible:
+      id: usernameInput
+    timeout: 30000
+- tapOn:
+    id: usernameInput
+- waitForAnimationToEnd
+- tapOn:
+    id: usernameInput
+- inputText: ${TDF_USERNAME}
+- assertVisible: ${TDF_USERNAME}
+- tapOn:
+    id: passwordInput
+- inputText: ${TDF_PASSWORD}
+- pressKey: Enter
+- extendedWaitUntil:
+    notVisible:
+      id: usernameInput
+    timeout: 120000
+- openLink:
+    link: "tdf://conversacion/target/${TDF_TARGET_ID}"
+    autoVerify: true
+- extendedWaitUntil:
+    visible: "API publication"
+    timeout: 30000
+- tapOn: "Me gusta:.*"
+- tapOn:
+    text: "Escribe un comentario"
+    index: 1
+- runFlow:
+    when:
+      visible: "Speed up your typing.*"
+    commands:
+      - tapOn: "^Continue$"
+- inputText: ${TDF_COMMENT_BODY}
+- tapOn: "API publication"
+- scrollUntilVisible:
+    centerElement: true
+    element: "^Publicar$"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "^Publicar$"
+- extendedWaitUntil:
+    visible: ${TDF_COMMENT_BODY}
+    timeout: 30000
+- takeScreenshot: /tmp/tdf-interaction-native-created

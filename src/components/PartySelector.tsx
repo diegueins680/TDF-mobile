@@ -19,6 +19,8 @@ type CommonProps = {
   excludedPartyIds?: number[];
   label?: string;
   context?: PartySelectorContext;
+  scopeId?: string;
+  initialQuery?: string;
 };
 
 type Props = CommonProps & {
@@ -56,8 +58,9 @@ function commitSelection<T>({
   }
 }
 
-function usePartySearch(excludedPartyIds: number[], context: PartySelectorContext) {
-  const [text, setText] = useState('');
+function usePartySearch(excludedPartyIds: number[], context: PartySelectorContext, scopeId?: string, initialQuery = '') {
+  const [text, setText] = useState(initialQuery);
+  useEffect(() => setText(initialQuery), [initialQuery]);
   const normalizedText = text.trim();
   const deferred = useDebouncedValue(normalizedText, 300);
   const activeQuery = deferred === normalizedText ? deferred : '';
@@ -69,13 +72,14 @@ function usePartySearch(excludedPartyIds: number[], context: PartySelectorContex
   );
   const analytics = getAnalyticsClient();
   const query = useInfiniteQuery({
-    queryKey: ['party-selector', cacheScope, context, activeQuery, exclusionKey],
+    queryKey: ['party-selector', cacheScope, context, scopeId, activeQuery, exclusionKey],
     queryFn: ({ pageParam, signal }) => observePartySelectorSearch({
       analytics,
       context,
       pageKind: pageParam == null ? 'initial' : 'load_more',
       request: () => searchPartiesForSelector(activeQuery, {
         context,
+        scopeId,
         excludedPartyIds,
         cursor: pageParam,
         signal,
@@ -145,8 +149,8 @@ function PartySearchResults({ label, search, onSelect }: ResultsProps) {
 }
 
 /** A mobile relationship picker. Free text is never treated as a Party ID. */
-export function PartySelector({ value, onChange, excludedPartyIds = [], label = 'Buscar persona', context = 'event_invitation' }: Props) {
-  const search = usePartySearch(excludedPartyIds, context);
+export function PartySelector({ value, onChange, excludedPartyIds = [], label = 'Buscar persona', context = 'event_invitation', scopeId, initialQuery }: Props) {
+  const search = usePartySearch(excludedPartyIds, context, scopeId, initialQuery);
 
   if (value) {
     return <View style={styles.selected} accessibilityLabel={`Seleccionado: ${value.displayName}`}>
@@ -177,13 +181,13 @@ export function PartySelector({ value, onChange, excludedPartyIds = [], label = 
 }
 
 /** Multiple picker that keeps existing selections and prevents duplicate IDs. */
-export function PartyMultiSelector({ value, onChange, excludedPartyIds = [], label = 'Buscar personas', context = 'event_invitation' }: MultiProps) {
+export function PartyMultiSelector({ value, onChange, excludedPartyIds = [], label = 'Buscar personas', context = 'event_invitation', scopeId }: MultiProps) {
   const selectedIds = useMemo(() => value.map((party) => party.partyId), [value]);
   const effectiveExclusions = useMemo(
     () => [...new Set([...excludedPartyIds, ...selectedIds])],
     [excludedPartyIds, selectedIds],
   );
-  const search = usePartySearch(effectiveExclusions, context);
+  const search = usePartySearch(effectiveExclusions, context, scopeId);
 
   return <View>
     {value.map((party) => <View key={party.partyId} style={styles.selected} accessibilityLabel={`Seleccionado: ${party.displayName}`}>

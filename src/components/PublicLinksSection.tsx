@@ -3,19 +3,19 @@ import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-
 const PUBLIC_LINKS = [
   {
     label: 'Support',
-    url: 'https://tdf-app.pages.dev/mobile-app/support.html'
+    url: 'https://www.tdfrecords.net/mobile-app/support.html'
   },
   {
     label: 'Privacy Policy',
-    url: 'https://tdf-app.pages.dev/mobile-app/privacy.html'
+    url: 'https://www.tdfrecords.net/mobile-app/privacy.html'
   },
   {
     label: 'Terms of Service',
-    url: 'https://tdf-app.pages.dev/mobile-app/terms.html'
+    url: 'https://www.tdfrecords.net/mobile-app/terms.html'
   },
   {
     label: 'Data Deletion',
-    url: 'https://tdf-app.pages.dev/mobile-app/data-deletion.html'
+    url: 'https://www.tdfrecords.net/mobile-app/data-deletion.html'
   }
 ] as const;
 

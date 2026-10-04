@@ -12,6 +12,7 @@ jest.mock('../src/analytics/AnalyticsProvider', () => ({ useAnalytics: () => moc
 const mockCompleteOnboardingProgress = jest.fn();
 const mockUpdateOnboardingIntent = jest.fn();
 let mockPartyId: string | null = '42';
+let mockToken = 'test-session';
 let mockIsConnected = true;
 let appStateChangeListener: ((state: AppStateStatus) => void) | null = null;
 const mockRemoveAppStateListener = jest.fn();
@@ -24,7 +25,7 @@ jest.mock('../src/api/onboarding', () => ({
 }));
 
 jest.mock('../src/providers/AuthProvider', () => ({
-  useAuth: () => ({ partyId: mockPartyId }),
+  useAuth: () => ({ partyId: mockPartyId, token: mockToken }),
 }));
 
 jest.mock('../src/providers/NetworkProvider', () => ({
@@ -89,6 +90,7 @@ describe('FirstRunProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     setAuthToken("test-session");
+    mockToken = 'test-session';
     mockGetOnboardingProgress.mockReset().mockResolvedValue({ eligible: false });
     mockReconcileOnboardingProgress.mockReset().mockImplementation(async (...args: unknown[]) => ({
       progress: await mockGetOnboardingProgress(...args), newlyCompleted: false,
@@ -666,6 +668,7 @@ describe('FirstRunProvider', () => {
     const config = mockReconcileOnboardingProgress.mock.calls[0][0];
     expect(config.headers.Authorization).toBe('Bearer test-session');
     setAuthToken('replacement-session');
+    mockToken = 'replacement-session';
     view.rerender(<FirstRunProvider><Probe /></FirstRunProvider>);
     await waitFor(() => expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(2));
     expect(config.signal.aborted).toBe(true);
@@ -681,6 +684,22 @@ describe('FirstRunProvider', () => {
     renderProvider();
     await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
     expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('never sends a new credential with a stale rendered Party session', async () => {
+    setAuthToken('different-account-session');
+    const view = renderProvider();
+    expect(screen.getByText('false:false')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Complete first value'));
+    expect(mockReconcileOnboardingProgress).not.toHaveBeenCalled();
+    expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
+    expect(mockCapture).not.toHaveBeenCalled();
+    mockToken = 'different-account-session';
+    mockPartyId = '77';
+    view.rerender(<FirstRunProvider><Probe /></FirstRunProvider>);
+    await screen.findByText('true:false');
+    expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(1);
+    expect(mockReconcileOnboardingProgress.mock.calls[0][0].headers.Authorization).toBe('Bearer different-account-session');
   });
 
 });

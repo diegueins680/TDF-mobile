@@ -33,7 +33,7 @@ import {
   type RetriedFirstValueCompletion,
   type RetriedOnboardingExit,
 } from '../lib/onboardingIntent';
-import { assertAuthSession, authSessionRequestConfig, captureAuthSession, getAuthToken } from '../api/client';
+import { assertAuthSession, authSessionRequestConfig, captureAuthSession, isCurrentAuthToken } from '../api/client';
 import { useAnalytics } from '../analytics/AnalyticsProvider';
 import { readPendingExperimentConversion } from '../lib/firstRunFlags';
 import { usePartyOwnership } from '../hooks/usePartyOwnership';
@@ -66,7 +66,7 @@ type FirstRunState = {
 };
 
 export function FirstRunProvider({ children }: PropsWithChildren) {
-  const { partyId } = useAuth();
+  const { partyId, token } = useAuth();
   const { isConnected } = useNetwork();
   const ownsParty = usePartyOwnership(partyId);
   const analytics = useAnalytics();
@@ -97,7 +97,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
   });
 
   useEffect(() => {
-    if (!partyId) {
+    if (!partyId || !isCurrentAuthToken(token)) {
       recoveryTriggerRef.current = null;
       locallyExitedPartyIdRef.current = null;
       setState({
@@ -137,7 +137,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       if (activeRecovery?.partyId === partyId) return activeRecovery.promise;
 
       const promise = (async () => {
-        const binding = captureAuthSession(getAuthToken());
+        const binding = captureAuthSession(token);
         const result = await reconcileOnboardingProgress(authSessionRequestConfig(binding));
         assertAuthSession(binding);
         await captureReconciledCompletion(result);
@@ -282,7 +282,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       }
       subscription.remove();
     };
-  }, [analytics, ownsParty, partyId]);
+  }, [analytics, ownsParty, partyId, token]);
 
   useEffect(() => {
     const wasConnected = previousConnectivityRef.current;
@@ -294,7 +294,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     firstValue?: OnboardingFirstValue,
   ): Promise<OnboardingCompletionResult | null> => {
     const ownerPartyId = partyId;
-    if (!ownerPartyId || !ownsParty(ownerPartyId)) return null;
+    if (!ownerPartyId || !ownsParty(ownerPartyId) || !isCurrentAuthToken(token)) return null;
     if (!firstValue) {
       locallyExitedPartyIdRef.current = ownerPartyId;
       setState((current) => current.partyId === ownerPartyId
@@ -346,7 +346,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
           : current);
       }
     }
-  }, [analytics, ownsParty, partyId]);
+  }, [analytics, ownsParty, partyId, token]);
 
   const stateIsCurrent = state.partyId === partyId;
 

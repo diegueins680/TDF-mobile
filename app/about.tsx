@@ -1,3 +1,4 @@
+import { FeedbackEntry } from '../src/feedback/FeedbackEntry';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
@@ -57,6 +58,7 @@ export default function About() {
           )}
         </View>
       )}
+      <FeedbackEntry surface="about" />
       <PublicLinksSection />
     </ScrollView>
   );

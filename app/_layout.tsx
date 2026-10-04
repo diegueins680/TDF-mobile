@@ -1,3 +1,4 @@
+import { recordMobileSession } from '../src/feedback/participation';
 import { useNotificationResponses } from '../src/navigation/useNotificationResponses';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
@@ -10,7 +11,7 @@ import {
   useUnstableGlobalHref,
 } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, StyleSheet, Text, View } from 'react-native';
 import * as Linking from 'expo-linking';
 
 import { AppProviders } from '../src/providers/AppProviders';
@@ -25,6 +26,11 @@ import { evaluateFeatureAccess, getFeaturesByMobilePath } from '../src/features/
 import { currentRouteReturnTo, mobileDeepLinkTarget } from '../src/navigation/deepLinks';
 
 function RootNavigator() {
+  useEffect(() => {
+    void recordMobileSession();
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') void recordMobileSession(); });
+    return () => subscription.remove();
+  }, []);
   useNotificationResponses();
   useLegacyDeepLinks();
   const { colorScheme } = useAppTheme();

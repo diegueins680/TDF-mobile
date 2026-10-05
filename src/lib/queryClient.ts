@@ -10,7 +10,7 @@ if (Platform.OS !== 'web') {
   });
 }
 
-export const queryClient = new QueryClient({
+export const createQueryClient = () => new QueryClient({
   defaultOptions: {
     queries: { staleTime: 30_000, retry: 1 },
     mutations: { retry: 0 }

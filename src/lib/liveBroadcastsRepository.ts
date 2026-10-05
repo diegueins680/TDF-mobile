@@ -62,18 +62,6 @@ const shouldFallbackToLocal = (error: unknown): boolean => {
   return status === undefined || status === 404 || status >= 500;
 };
 
-const getFallbackReason = (error: unknown): string | undefined => {
-  if (error instanceof Error) {
-    const message = error.message.trim();
-    return message ? message : undefined;
-  }
-  if (typeof error === 'object' && error !== null && 'message' in error) {
-    const message = String(error.message ?? '').trim();
-    return message ? message : undefined;
-  }
-  return undefined;
-};
-
 export async function listLiveBroadcastFeed(
   eventId: ID,
   options?: RemoteModeOptions,
@@ -104,21 +92,8 @@ export async function startLiveBroadcastSession(
     return { broadcast, source: 'local' };
   }
 
-  try {
-    const broadcast = await LiveBroadcasts.start(input);
-    return { broadcast, source: 'remote' };
-  } catch (error) {
-    if (!shouldFallbackToLocal(error)) {
-      throw error;
-    }
-
-    const broadcast = await createLocalBroadcast(input);
-    return {
-      broadcast,
-      source: 'local',
-      fallbackReason: getFallbackReason(error),
-    };
-  }
+  const broadcast = await LiveBroadcasts.start(input);
+  return { broadcast, source: 'remote' };
 }
 
 export async function endLiveBroadcastSession(
@@ -134,20 +109,8 @@ export async function endLiveBroadcastSession(
     return { source: 'local' };
   }
 
-  try {
-    await LiveBroadcasts.end(input.eventId, input.broadcastId, input.broadcasterPartyId);
-    return { source: 'remote' };
-  } catch (error) {
-    if (!shouldFallbackToLocal(error)) {
-      throw error;
-    }
-
-    await endLocalBroadcast(input);
-    return {
-      source: 'local',
-      fallbackReason: getFallbackReason(error),
-    };
-  }
+  await LiveBroadcasts.end(input.eventId, input.broadcastId, input.broadcasterPartyId);
+  return { source: 'remote' };
 }
 
 export async function heartbeatLiveBroadcastSession(
@@ -159,18 +122,6 @@ export async function heartbeatLiveBroadcastSession(
     return { source: 'local' };
   }
 
-  try {
-    await LiveBroadcasts.heartbeat(input);
-    return { source: 'remote' };
-  } catch (error) {
-    if (!shouldFallbackToLocal(error)) {
-      throw error;
-    }
-
-    await heartbeatLocalBroadcast(input);
-    return {
-      source: 'local',
-      fallbackReason: getFallbackReason(error),
-    };
-  }
+  await LiveBroadcasts.heartbeat(input);
+  return { source: 'remote' };
 }

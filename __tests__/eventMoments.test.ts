@@ -12,7 +12,7 @@ import {
   toggleMomentReaction,
 } from '../src/lib/eventMoments';
 
-const STORAGE_KEY = 'tdf-event-moments';
+const STORAGE_KEY = 'tdf-event-moments:v2:guest:anon';
 const FIRE_ID = '50800000-0000-4000-8000-000000000001';
 const LOVE_ID = '50800000-0000-4000-8000-000000000002';
 const APPLAUSE_ID = '50800000-0000-4000-8000-000000000003';
@@ -71,6 +71,49 @@ describe('event moments storage', () => {
     ]);
   });
 
+  it('isolates local moments by Party and leaves the legacy shared store untouched', async () => {
+    storage['tdf-event-moments'] = JSON.stringify({ legacy: 'private-data' });
+
+    const partySevenMoment = await createEventMoment({
+      eventId: 12,
+      authorName: 'Cuenta siete',
+      media: { kind: 'image', uri: 'file:///seven.jpg', mimeType: 'image/jpeg' },
+    }, 'party:7');
+    const partyEightMoment = await createEventMoment({
+      eventId: 12,
+      authorName: 'Cuenta ocho',
+      media: { kind: 'image', uri: 'file:///eight.jpg', mimeType: 'image/jpeg' },
+    }, 'party:8');
+
+    await expect(listEventMoments(12, 'party:7')).resolves.toMatchObject([
+      { id: partySevenMoment.id, authorName: 'Cuenta siete' },
+    ]);
+    await expect(listEventMoments(12, 'party:8')).resolves.toMatchObject([
+      { id: partyEightMoment.id, authorName: 'Cuenta ocho' },
+    ]);
+    await expect(listEventMoments(12)).resolves.toEqual([]);
+    expect(storage['tdf-event-moments']).toBe(JSON.stringify({ legacy: 'private-data' }));
+  });
+
+  it('surfaces storage failures instead of reporting a moment that was not persisted', async () => {
+    setItemMock.mockRejectedValueOnce(new Error('disk unavailable'));
+
+    await expect(createEventMoment({
+      eventId: 12,
+      authorName: 'Ana',
+      media: { kind: 'image', uri: 'file:///failed.jpg', mimeType: 'image/jpeg' },
+    })).rejects.toThrow('disk unavailable');
+    await expect(listEventMoments(12)).resolves.toEqual([]);
+  });
+
+  it('surfaces storage read failures instead of replacing an unread store', async () => {
+    getItemMock.mockRejectedValueOnce(new Error('keychain unavailable'));
+
+    await expect(listEventMoments(12, 'party:7')).rejects.toThrow('keychain unavailable');
+    expect(setItemMock).not.toHaveBeenCalled();
+    expect(removeItemMock).not.toHaveBeenCalled();
+  });
+
   it('toggles one exclusive reaction per actor and supports comments', async () => {
     const actor = buildMomentActor({ partyId: '7', displayName: 'Cuco' });
     const moment = await createEventMoment({
@@ -120,6 +163,28 @@ describe('event moments storage', () => {
       authorPartyId: '7',
       body: 'Suena durísimo',
     });
+  });
+
+  it('applies desired reaction state idempotently in local fallback mode', async () => {
+    const moment = await createEventMoment({
+      eventId: 9,
+      authorName: 'Andrea',
+      media: { kind: 'image', uri: 'file:///moment.jpg', mimeType: 'image/jpeg' },
+    }, 'party:7');
+    const request = {
+      eventId: 9,
+      momentId: moment.id,
+      actorKey: 'party:7',
+      reactionTypeId: FIRE_ID,
+    };
+
+    await toggleMomentReaction({ ...request, active: true }, 'party:7');
+    await toggleMomentReaction({ ...request, active: true }, 'party:7');
+    expect((await listEventMoments(9, 'party:7'))[0]?.reactions[FIRE_ID]).toEqual(['party:7']);
+
+    await toggleMomentReaction({ ...request, active: false }, 'party:7');
+    await toggleMomentReaction({ ...request, active: false }, 'party:7');
+    expect((await listEventMoments(9, 'party:7'))[0]?.reactions[FIRE_ID]).toEqual([]);
   });
 
   it('sanitizes corrupted storage payloads on read', async () => {

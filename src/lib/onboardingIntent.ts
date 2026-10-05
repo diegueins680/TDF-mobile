@@ -1,3 +1,4 @@
+import { bindSessionOwnership } from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Href } from 'expo-router';
 
@@ -40,6 +41,10 @@ const FIRST_VALUES = new Set<OnboardingFirstValue>([
   'event_saved',
   'moment_reaction',
 ]);
+
+export function isOnboardingFirstValue(value: unknown): value is OnboardingFirstValue {
+  return typeof value === 'string' && FIRST_VALUES.has(value as OnboardingFirstValue);
+}
 
 const LEGACY_INTENTS: Record<string, OnboardingIntent> = {
   fan: 'follow_artists',
@@ -115,6 +120,7 @@ export async function clearPendingOnboardingIntentIfCurrent(
   intent: OnboardingIntent,
   stillOwnsParty: () => boolean = () => true,
 ): Promise<void> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   try {
     if (
       stillOwnsParty()
@@ -181,6 +187,7 @@ export async function persistOnboardingIntentForPartyWithRetry(
   intent: OnboardingIntent,
   stillOwnsParty: () => boolean = () => true,
 ): Promise<boolean> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const partyId = String(rawPartyId ?? '').trim();
   if (!partyId || !stillOwnsParty()) return false;
   const storedForParty = await storePendingPartyIntent(partyId, intent);
@@ -205,6 +212,7 @@ export async function retryPendingOnboardingIntent(
   rawPartyId: string | null | undefined,
   stillOwnsParty: () => boolean = () => true,
 ): Promise<boolean> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const partyId = rawPartyId?.trim();
   if (!partyId || !stillOwnsParty()) return false;
   const intent = await readPendingPartyIntent(partyId)
@@ -217,9 +225,12 @@ export async function markFirstValueCompleted(
   partyId: string | null | undefined,
   value: OnboardingFirstValue,
   stillOwnsParty: () => boolean = () => true,
-): Promise<boolean> {
+): Promise<OnboardingFirstValue | false> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const result = await completeFirstValueWithRetry(partyId, value, stillOwnsParty);
-  return result?.newlyCompleted === true;
+  const authoritativeValue = result?.progress?.firstValue;
+  return result?.newlyCompleted === true && isOnboardingFirstValue(authoritativeValue)
+    ? authoritativeValue : false;
 }
 
 const firstValueKey = (partyId: string): string =>
@@ -244,6 +255,7 @@ export async function completeFirstValueWithRetry(
   value: OnboardingFirstValue,
   stillOwnsParty: () => boolean = () => true,
 ): Promise<OnboardingCompletionResult | null> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const partyId = rawPartyId?.trim();
   if (!partyId || !stillOwnsParty()) return null;
   try {
@@ -255,7 +267,7 @@ export async function completeFirstValueWithRetry(
   try {
     const result = await completeOnboardingProgress(value);
     if (!stillOwnsParty()) return null;
-    await clearPendingFirstValueIfCurrent(partyId, value);
+    if (result.progress?.completedAt) await clearPendingFirstValueIfCurrent(partyId, value);
     return result;
   } catch {
     return null;
@@ -271,6 +283,7 @@ export async function retryPendingFirstValueCompletion(
   rawPartyId: string | null | undefined,
   stillOwnsParty: () => boolean = () => true,
 ): Promise<RetriedFirstValueCompletion | null> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const partyId = rawPartyId?.trim();
   if (!partyId || !stillOwnsParty()) return null;
   const key = firstValueKey(partyId);
@@ -294,8 +307,11 @@ export async function retryPendingFirstValueCompletion(
   try {
     const result = await completeOnboardingProgress(value);
     if (!stillOwnsParty()) return null;
-    await clearPendingFirstValueIfCurrent(partyId, value);
-    return { value, result };
+    if (result.progress?.completedAt) await clearPendingFirstValueIfCurrent(partyId, value);
+    return {
+      value: isOnboardingFirstValue(result.progress?.firstValue) ? result.progress.firstValue : value,
+      result,
+    };
   } catch {
     return null;
   }
@@ -326,6 +342,7 @@ export async function completeOnboardingExitWithRetry(
   rawPartyId: string | null | undefined,
   stillOwnsParty: () => boolean = () => true,
 ): Promise<OnboardingCompletionResult | null> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const partyId = rawPartyId?.trim();
   if (!partyId || !stillOwnsParty()) return null;
   try {
@@ -355,6 +372,7 @@ export async function retryPendingOnboardingExit(
   rawPartyId: string | null | undefined,
   stillOwnsParty: () => boolean = () => true,
 ): Promise<RetriedOnboardingExit | null> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const partyId = rawPartyId?.trim();
   if (!partyId || !stillOwnsParty()) return null;
   const key = onboardingExitKey(partyId);

@@ -11,6 +11,7 @@ jest.mock('../src/api/client', () => ({
 import {
   completeOnboardingProgress,
   getOnboardingProgress,
+  reconcileOnboardingProgress,
   updateOnboardingIntent,
 } from '../src/api/onboarding';
 
@@ -55,5 +56,22 @@ describe('onboarding API client', () => {
       firstValue: 'event_saved',
     });
     expect(mockPost).toHaveBeenNthCalledWith(2, '/session/onboarding/complete', {});
+  });
+
+  it('reconciles from the authenticated Party without sending a Party or value', async () => {
+    const result = {
+      newlyCompleted: true,
+      progress: { eligible: false, firstValue: 'event_saved' },
+    };
+    mockPost.mockResolvedValueOnce(result);
+    const config = { headers: { Authorization: 'Bearer token' } };
+
+    await expect(reconcileOnboardingProgress(config)).resolves.toEqual(result);
+
+    expect(mockPost).toHaveBeenCalledWith(
+      '/session/onboarding/reconcile',
+      undefined,
+      config,
+    );
   });
 });

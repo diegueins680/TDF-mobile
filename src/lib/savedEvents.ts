@@ -1,3 +1,4 @@
+import { bindSessionOwnership } from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
@@ -16,6 +17,12 @@ const OUTBOX_STORAGE_KEY_PREFIX = 'tdf-saved-event-outbox:party:';
 type PendingSavedEventChange = {
   eventId: string;
   desiredSaved: boolean;
+};
+
+export type SavedEventSnapshot = {
+  ids: string[];
+  source: 'server' | 'cache' | 'pending';
+  pendingCount: number;
 };
 
 export type SavedEventMutationResult = {
@@ -254,21 +261,23 @@ const remoteEventIds = async (stillOwnsParty: StillOwnsParty): Promise<string[]>
 async function synchronizeSavedEventIdsWithinQueue(
   partyId: string,
   stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
-): Promise<string[]> {
+): Promise<SavedEventSnapshot> {
   const [cachedIds, pendingChanges] = await Promise.all([
     readIds(partyId),
     readOutbox(partyId),
   ]);
   let authoritativeIds: string[];
+  let cached = false;
   try {
-    if (!stillOwnsParty()) return cachedIds;
+    if (!stillOwnsParty()) return { ids: cachedIds, source: 'cache', pendingCount: pendingChanges.length };
     authoritativeIds = await remoteEventIds(stillOwnsParty);
   } catch (error) {
     if (!isRetryableSyncError(error)) throw error;
     authoritativeIds = cachedIds;
+    cached = true;
   }
 
-  if (!stillOwnsParty()) return cachedIds;
+  if (!stillOwnsParty()) return { ids: cachedIds, source: 'cache', pendingCount: pendingChanges.length };
   const flush = await flushOutbox(partyId, pendingChanges, stillOwnsParty);
   await retryOnboardingAfterAcknowledgedReplay(partyId, flush, stillOwnsParty);
   const nextIds = applyDesiredChanges(
@@ -276,16 +285,24 @@ async function synchronizeSavedEventIdsWithinQueue(
     [...flush.acknowledged, ...flush.retrying],
   );
   await writeIds(partyId, nextIds);
-  return nextIds;
+  return { ids: nextIds, source: cached ? 'cache' : flush.retrying.length ? 'pending' : 'server', pendingCount: flush.retrying.length };
+}
+
+export async function loadSavedEventSnapshot(
+  partyId: ID,
+  stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
+): Promise<SavedEventSnapshot> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
+  const normalizedPartyId = requirePartyId(partyId);
+  return withPartyQueue(normalizedPartyId, () =>
+    synchronizeSavedEventIdsWithinQueue(normalizedPartyId, stillOwnsParty));
 }
 
 export async function listSavedEventIds(
   partyId: ID,
   stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
 ): Promise<string[]> {
-  const normalizedPartyId = requirePartyId(partyId);
-  return withPartyQueue(normalizedPartyId, () =>
-    synchronizeSavedEventIdsWithinQueue(normalizedPartyId, stillOwnsParty));
+  return (await loadSavedEventSnapshot(partyId, stillOwnsParty)).ids;
 }
 
 async function setSavedEventDesiredStateWithinQueue(
@@ -327,6 +344,7 @@ export async function saveEvent(
   eventId: ID,
   stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
 ): Promise<SavedEventMutationResult> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const normalizedPartyId = requirePartyId(partyId);
   const normalizedEventId = requireEventId(eventId);
   return withPartyQueue(normalizedPartyId, () =>
@@ -338,6 +356,7 @@ export async function unsaveEvent(
   eventId: ID,
   stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
 ): Promise<SavedEventMutationResult> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const normalizedPartyId = requirePartyId(partyId);
   const normalizedEventId = requireEventId(eventId);
   return withPartyQueue(normalizedPartyId, () =>
@@ -349,10 +368,11 @@ export async function toggleSavedEvent(
   eventId: ID,
   stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
 ): Promise<SavedEventMutationResult> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const normalizedPartyId = requirePartyId(partyId);
   const normalizedEventId = requireEventId(eventId);
   return withPartyQueue(normalizedPartyId, async () => {
-    const ids = await synchronizeSavedEventIdsWithinQueue(normalizedPartyId, stillOwnsParty);
+    const { ids } = await synchronizeSavedEventIdsWithinQueue(normalizedPartyId, stillOwnsParty);
     return setSavedEventDesiredStateWithinQueue(
       normalizedPartyId,
       normalizedEventId,
@@ -375,6 +395,7 @@ export async function importLegacySavedEvents(
   partyId: ID,
   stillOwnsParty: StillOwnsParty = alwaysOwnsParty,
 ): Promise<LegacySavedEventImportResult> {
+  stillOwnsParty = bindSessionOwnership(stillOwnsParty);
   const normalizedPartyId = requirePartyId(partyId);
   return withPartyQueue(normalizedPartyId, async () => {
     const raw = await AsyncStorage.getItem(LEGACY_STORAGE_KEY);

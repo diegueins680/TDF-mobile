@@ -1,3 +1,5 @@
+import { eventExperienceLanguage, savedEventCopy } from '../../src/localization/eventExperienceCopy';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
@@ -20,7 +22,7 @@ import { Events } from '../../src/api/events';
 import { EventCard } from '../../src/components/EventCard';
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import type { EventCityInput, SocialEvent } from '../../src/types';
-import { listSavedEventIds, toggleSavedEvent } from '../../src/lib/savedEvents';
+import { loadSavedEventSnapshot, toggleSavedEvent } from '../../src/lib/savedEvents';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
@@ -48,11 +50,13 @@ const toLocalDateKey = (value: string | Date, timeZone: string): string => {
 
 export default function EventsScreen() {
   const qc = useQueryClient();
+  const router = useRouter();
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
   const { partyId } = useAuth();
   const ownsParty = usePartyOwnership(partyId);
   const { locale, timezone, countryCode } = useUserSettings();
+  const savedCopy = savedEventCopy[eventExperienceLanguage(locale)];
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
   const [discoveryScope, setDiscoveryScope] = useState<DiscoveryScope>('subscribed');
@@ -77,14 +81,14 @@ export default function EventsScreen() {
 
   const savedEventIdsQuery = useQuery({
     queryKey: ['saved-event-ids', partyId],
-    queryFn: () => listSavedEventIds(
+    queryFn: () => loadSavedEventSnapshot(
       partyId as string,
       () => ownsParty(partyId),
     ),
     enabled: Boolean(partyId),
   });
 
-  const savedEventIds = useMemo(() => savedEventIdsQuery.data ?? [], [savedEventIdsQuery.data]);
+  const savedEventIds = useMemo(() => savedEventIdsQuery.data?.ids ?? [], [savedEventIdsQuery.data]);
 
   const savedEventsQuery = useQuery({
     queryKey: ['saved-events', partyId, 'browse', savedEventIds],
@@ -92,7 +96,7 @@ export default function EventsScreen() {
     queryFn: async () => {
       const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
       const resolved = settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
-      return resolved;
+      return { events: resolved, unavailableCount: settled.filter(result => result.status === 'rejected').length };
     }
   });
 
@@ -100,14 +104,15 @@ export default function EventsScreen() {
     setRefreshing(true);
     try {
       if (eventScope === 'saved') {
-        await savedEventsQuery.refetch();
+        await savedEventIdsQuery.refetch();
+        await qc.invalidateQueries({ queryKey: ['saved-events', partyId] });
       } else {
         await refetch();
       }
     } finally {
       setRefreshing(false);
     }
-  }, [eventScope, refetch, savedEventsQuery]);
+  }, [eventScope, partyId, qc, refetch, savedEventIdsQuery]);
 
   const saveToggleMutation = useMutation({
     mutationFn: ({ eventId, ownerPartyId }: { eventId: string; ownerPartyId: string }) =>
@@ -143,7 +148,7 @@ export default function EventsScreen() {
     onError: (_error, { ownerPartyId }) => {
       if (!ownsParty(ownerPartyId)) return;
       Alert.alert(
-        'No pudimos actualizar tus guardados',
+        savedCopy.updateFailureTitle,
         'El cambio no se pudo guardar ni poner en cola. Comprueba la sesión y el almacenamiento e inténtalo nuevamente.',
       );
     },
@@ -213,7 +218,7 @@ export default function EventsScreen() {
   }, [draftCities, newCityName, newCountryCode]);
 
   const effectiveEvents = useMemo(() => {
-    const source = eventScope === 'saved' ? savedEventsQuery.data ?? [] : events ?? [];
+    const source = eventScope === 'saved' ? savedEventsQuery.data?.events ?? [] : events ?? [];
     const needle = debouncedSearch.trim().toLocaleLowerCase(locale);
     return source
       .filter((event) => {
@@ -277,33 +282,37 @@ export default function EventsScreen() {
 
   const handleToggleSaved = useCallback(async (eventId: string) => {
     if (!partyId) {
-      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para guardar eventos.');
+      Alert.alert(savedCopy.signInTitle, savedCopy.signInBody, [
+        { text: savedCopy.later, style: 'cancel' },
+        { text: savedCopy.signIn, onPress: () => router.push({ pathname: '/auth', params: { intent: 'events', returnTo: '/(tabs)/events' } }) },
+      ]);
       return;
     }
     if (savedEventIdsQuery.isError) {
       const result = await savedEventIdsQuery.refetch();
       if (result.isError) {
         Alert.alert(
-          'No pudimos cargar tus guardados',
+          savedCopy.loadFailureTitle,
           'Comprueba tu conexión, sesión y almacenamiento e inténtalo nuevamente.',
         );
       }
       return;
     }
+    if (savedEventIdsQuery.isLoading || !savedEventIdsQuery.data) return;
     const isCurrentlySaved = savedEventIds.includes(eventId);
     if (isCurrentlySaved) {
       Alert.alert(
-        'Quitar evento guardado',
-        '¿Quieres quitar este evento de tus guardados?',
+        savedCopy.removeConfirmTitle,
+        savedCopy.removeConfirmBody,
         [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Quitar', style: 'destructive', onPress: () => saveToggleMutation.mutate({ eventId, ownerPartyId: partyId }) },
+          { text: savedCopy.cancel, style: 'cancel' },
+          { text: savedCopy.remove, style: 'destructive', onPress: () => saveToggleMutation.mutate({ eventId, ownerPartyId: partyId }) },
         ],
       );
     } else {
       saveToggleMutation.mutate({ eventId, ownerPartyId: partyId });
     }
-  }, [partyId, saveToggleMutation, savedEventIds, savedEventIdsQuery]);
+  }, [partyId, saveToggleMutation, savedEventIds, savedEventIdsQuery, savedCopy, router]);
 
   const isCardUpdating = useCallback((eventId: string) => (
     saveToggleMutation.isPending && saveToggleMutation.variables?.eventId === eventId
@@ -314,9 +323,11 @@ export default function EventsScreen() {
       event={item}
       saved={savedEventIds.includes(String(item.id))}
       onToggleSaved={() => void handleToggleSaved(String(item.id))}
-      saveDisabled={!partyId || isCardUpdating(String(item.id))}
+      saveStatus={!partyId ? 'ready' : savedEventIdsQuery.isError ? 'unavailable'
+        : savedEventIdsQuery.isLoading || !savedEventIdsQuery.data ? 'loading'
+          : isCardUpdating(String(item.id)) ? 'updating' : 'ready'}
     />
-  ), [handleToggleSaved, isCardUpdating, partyId, savedEventIds]);
+  ), [handleToggleSaved, isCardUpdating, partyId, savedEventIds, savedEventIdsQuery.data, savedEventIdsQuery.isError, savedEventIdsQuery.isLoading]);
 
   const keyExtractor = useCallback((item: SocialEvent) => String(item.id), []);
 
@@ -358,7 +369,7 @@ export default function EventsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Reintentar cargar eventos"
         >
-          <Text style={[styles.retryButtonText, { color: colors.actionPrimaryContrast }]}>Reintentar</Text>
+          <Text style={[styles.retryButtonText, { color: colors.actionPrimaryContrast }]}>{savedCopy.retry}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -366,6 +377,12 @@ export default function EventsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.canvas }]} edges={['top']}>
+      {savedEventIdsQuery.data && savedEventIdsQuery.data.source !== 'server' ? (
+        <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary }}>{savedCopy.cacheNotice}</Text>
+      ) : null}
+      {eventScope === 'saved' && (savedEventsQuery.data?.unavailableCount ?? 0) > 0 ? (
+        <Text accessibilityLiveRegion="polite" style={{ color: colors.textSecondary }}>{savedCopy.someUnavailable}</Text>
+      ) : null}
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.canvas }]}>
         <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">Eventos cerca de ti</Text>
@@ -440,7 +457,7 @@ export default function EventsScreen() {
           style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, eventScope === 'saved' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
           onPress={() => setEventScope('saved')}
           accessibilityRole="tab"
-          accessibilityLabel="Mostrar eventos guardados"
+          accessibilityLabel={savedCopy.showSavedAccessibility}
           accessibilityState={{ selected: eventScope === 'saved' }}
         >
           <Text style={[styles.toggleBtnText, { color: colors.textSecondary }, eventScope === 'saved' && [styles.toggleBtnTextActive, { color: colors.actionPrimaryContrast }]]}>
@@ -511,7 +528,7 @@ export default function EventsScreen() {
           ) : (
             <View style={styles.empty}>
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                {eventScope === 'saved' ? 'No hay eventos guardados en esta fecha' : 'No hay eventos en esta fecha'}
+                {eventScope === 'saved' ? savedCopy.savedDateEmpty : 'No hay eventos en esta fecha'}
               </Text>
             </View>
           )}
@@ -531,7 +548,7 @@ export default function EventsScreen() {
                 {debouncedSearch
                   ? 'No encontramos eventos que coincidan con tu búsqueda'
                   : eventScope === 'saved'
-                    ? 'No se encontraron eventos guardados'
+                    ? savedCopy.savedListEmpty
                     : discoveryScope === 'subscribed'
                       ? 'Añade ciudades para ver los eventos que ocurren cerca de ti'
                     : 'No hay próximos eventos publicados'}
@@ -594,7 +611,7 @@ export default function EventsScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Quitar ${city.name}`}
                   >
-                    <Text style={[styles.cityRemove, { color: colors.danger }]}>Quitar</Text>
+                    <Text style={[styles.cityRemove, { color: colors.danger }]}>{savedCopy.remove}</Text>
                   </TouchableOpacity>
                 </View>
               ))}

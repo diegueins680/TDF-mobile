@@ -7,7 +7,7 @@ export type MarkFirstValue = (
   partyId: string | null | undefined,
   value: OnboardingFirstValue,
   stillOwnsParty?: () => boolean,
-) => Promise<boolean>;
+) => Promise<boolean | OnboardingFirstValue>;
 
 export async function recordFirstValueCompletion(
   ownerPartyId: string | null | undefined,
@@ -21,7 +21,8 @@ export async function recordFirstValueCompletion(
   const newlyCompleted = await markFirstValue(ownerPartyId, value, stillOwnsParty);
   if (!newlyCompleted || !stillOwnsParty()) return false;
 
-  analytics.capture('first_value_completed', { platform: 'mobile', value });
-  analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value });
+  const completedValue = typeof newlyCompleted === 'string' ? newlyCompleted : value;
+  analytics.capture('first_value_completed', { platform: 'mobile', value: completedValue });
+  analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: completedValue });
   return true;
 }

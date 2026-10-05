@@ -85,17 +85,10 @@ export default function SocialScreen() {
       if (!isPositivePartyId(targetId)) throw new Error('No pudimos reconocer ese perfil.');
       await Social.addFriend(targetId);
     },
-    onSuccess: (_data, { targetId, ownerPartyId }) => {
+    onSuccess: (_data, { ownerPartyId }) => {
       if (!ownsParty(ownerPartyId)) return;
       invalidateAll();
       void impactMedium();
-      analytics.capture('artist_followed', { platform: 'mobile', target_party_id: targetId });
-      void recordFirstValueCompletion(
-        ownerPartyId,
-        'artist_followed',
-        () => ownsParty(ownerPartyId),
-        analytics,
-      );
       Alert.alert('Listo', 'Ahora sigues a esta persona.');
     },
     onError: (err, { ownerPartyId }) => {

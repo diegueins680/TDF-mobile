@@ -82,4 +82,39 @@ describe('EventCard ticket discovery', () => {
     expect(screen.getByText('TDF Showcase')).toBeTruthy();
     expect(screen.queryByText(/Invalid Date/i)).toBeNull();
   });
+
+  it('exposes saved state and the event identity without limiting system text scaling', () => {
+    const onToggleSaved = jest.fn();
+    render(
+      <EventCard
+        event={event}
+        saved
+        onToggleSaved={onToggleSaved}
+        saveStatus="ready"
+      />,
+    );
+
+    const saveButton = screen.getByRole('button', { name: 'Remove TDF Showcase from my saved events' });
+    expect(saveButton.props.accessibilityState).toMatchObject({ selected: true, disabled: false });
+    fireEvent.press(saveButton);
+    expect(onToggleSaved).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('TDF Showcase').props.maxFontSizeMultiplier).toBeUndefined();
+  });
+
+  it('does not let an unknown saved state become a duplicate save', () => {
+    const onToggleSaved = jest.fn();
+    render(
+      <EventCard
+        event={event}
+        onToggleSaved={onToggleSaved}
+        saveStatus="loading"
+      />,
+    );
+
+    const saveButton = screen.getByRole('button', { name: 'Save TDF Showcase' });
+    expect(saveButton.props.accessibilityState).toMatchObject({ busy: true, disabled: true });
+    expect(screen.getByText('Loading saved events…')).toBeTruthy();
+    fireEvent.press(saveButton);
+    expect(onToggleSaved).not.toHaveBeenCalled();
+  });
 });

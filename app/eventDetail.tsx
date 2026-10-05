@@ -1,3 +1,4 @@
+import { eventExperienceLanguage, savedEventCopy } from '../src/localization/eventExperienceCopy';
 import { InteractionBar } from '../src/features/interactions/InteractionBar';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -69,7 +70,7 @@ import { clearEventRsvpIntent, readEventRsvpIntent, saveEventRsvpIntent } from '
 import { useAuth } from '../src/providers/AuthProvider';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
-import { listSavedEventIds, toggleSavedEvent } from '../src/lib/savedEvents';
+import { loadSavedEventSnapshot, toggleSavedEvent } from '../src/lib/savedEvents';
 import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
 import { recordFirstValueCompletion } from '../src/lib/firstValueCompletion';
 import { recordMomentReactionFirstValue } from '../src/lib/momentReactionFirstValue';
@@ -142,6 +143,7 @@ export default function EventDetailScreen() {
   const eventId = normalizeRouteParam(rawEventId);
   const { token, partyId: normalizedPartyId, session } = useAuth();
   const { locale, timezone, currency, showEventRsvpsOnProfile, getCatalogItems } = useUserSettings();
+  const savedCopy = savedEventCopy[eventExperienceLanguage(locale)];
   const displayName = session?.displayName ?? null;
   const reactionOptions = useMemo<EventMomentReactionOption[]>(
     () => getCatalogItems('reaction-types').flatMap((item) => {
@@ -220,7 +222,7 @@ export default function EventDetailScreen() {
 
   const savedEventIdsQuery = useQuery({
     queryKey: ['saved-event-ids', normalizedPartyId],
-    queryFn: () => listSavedEventIds(
+    queryFn: () => loadSavedEventSnapshot(
       normalizedPartyId as string,
       () => ownsParty(normalizedPartyId),
     ),
@@ -234,13 +236,13 @@ export default function EventDetailScreen() {
   });
 
   const momentsQueryKey = useMemo(
-    () => ['event-moments', eventId, shouldPreferRemoteMoments ? 'remote' : 'local'] as const,
-    [eventId, shouldPreferRemoteMoments],
+    () => ['event-moments', eventId, currentActor.actorKey, shouldPreferRemoteMoments ? 'remote' : 'local'] as const,
+    [eventId, currentActor.actorKey, shouldPreferRemoteMoments],
   );
 
   const momentsQuery = useQuery({
     queryKey: momentsQueryKey,
-    queryFn: () => listMomentFeed(eventId as ID, { preferRemote: shouldPreferRemoteMoments }),
+    queryFn: () => listMomentFeed(eventId as ID, { preferRemote: shouldPreferRemoteMoments, storageScope: currentActor.actorKey }),
     enabled: Boolean(eventId && activeTab === 'moments'),
   });
 
@@ -477,12 +479,12 @@ export default function EventDetailScreen() {
           locale.toLowerCase().startsWith('en') ? 'RSVP saved' : 'RSVP guardado',
           locale.toLowerCase().startsWith('en') ? 'Would you like to share this event?' : '¿Quieres compartir este evento?',
           [
-            { text: locale.toLowerCase().startsWith('en') ? 'Not now' : 'Ahora no', style: 'cancel' },
+            { text: locale.toLowerCase().startsWith('en') ? 'Not now' : savedCopy.later, style: 'cancel' },
             { text: locale.toLowerCase().startsWith('en') ? 'Share' : 'Compartir', onPress: () => { void handleShareEvent('native', data.status); } },
           ],
         );
       } else {
-        Alert.alert(locale.toLowerCase().startsWith('en') ? 'Done' : 'Listo', locale.toLowerCase().startsWith('en') ? "Your RSVP is now Can't go." : 'Marcaste que no irás.');
+        Alert.alert(locale.toLowerCase().startsWith('en') ? 'Done' : savedCopy.readyTitle, locale.toLowerCase().startsWith('en') ? "Your RSVP is now Can't go." : 'Marcaste que no irás.');
       }
     },
     onError: (err) => {
@@ -507,7 +509,7 @@ export default function EventDetailScreen() {
       qc.invalidateQueries({ queryKey: ['event-rsvp-summary', eventId] });
       qc.invalidateQueries({ queryKey: ['event-rsvp-feed'] });
       analytics.capture('event_rsvp_deleted', { platform: 'mobile', event_id: eventId });
-      Alert.alert(locale.toLowerCase().startsWith('en') ? 'Done' : 'Listo', locale.toLowerCase().startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
+      Alert.alert(locale.toLowerCase().startsWith('en') ? 'Done' : savedCopy.readyTitle, locale.toLowerCase().startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
     },
     onError: (error) => Alert.alert('Error', error instanceof Error ? error.message : 'No pudimos eliminar tu RSVP.'),
     onSettled: () => {
@@ -568,7 +570,7 @@ export default function EventDetailScreen() {
       setInviteMessage('');
       qc.invalidateQueries({ queryKey: ['event-invitations', eventId] });
       setShowInviteModal(false);
-      Alert.alert('Listo', 'Invitación enviada');
+      Alert.alert(savedCopy.readyTitle, 'Invitación enviada');
     },
     onError: (err) => {
       const msg = err instanceof Error ? err.message : 'No pudimos enviar la invitación';
@@ -614,9 +616,9 @@ export default function EventDetailScreen() {
         );
       }
       Alert.alert(
-        serverAcknowledged ? 'Listo' : 'Cambio pendiente de sincronización',
+        serverAcknowledged ? savedCopy.readyTitle : 'Cambio pendiente de sincronización',
         serverAcknowledged
-          ? (saved ? 'Evento guardado en tu cuenta.' : 'Evento removido de los guardados de tu cuenta.')
+          ? (saved ? 'Evento guardado en tu cuenta.' : savedCopy.removedSuccess)
           : 'Lo guardamos en este dispositivo y lo sincronizaremos con tu cuenta cuando vuelva la conexión.',
       );
     },
@@ -673,7 +675,7 @@ export default function EventDetailScreen() {
               authorPartyId: currentActor.partyId,
               caption: submission.caption,
               media: mediaForMoment,
-            }, { preferRemote });
+            }, { preferRemote, storageScope: currentActor.actorKey });
 
             if (result.source === 'local' && shouldPreferRemoteMoments && result.fallbackReason) {
               notices.push(result.fallbackReason);
@@ -762,9 +764,10 @@ export default function EventDetailScreen() {
   });
 
   const reactionMutation = useMutation({
-    mutationFn: ({ momentId, reaction }: {
+    mutationFn: ({ momentId, reaction, active }: {
       momentId: string;
       reaction: EventMomentReactionOption;
+      active: boolean;
       ownerPartyId: string | null;
     }) => {
       if (!eventId) throw new Error('Event not found');
@@ -773,7 +776,8 @@ export default function EventDetailScreen() {
         momentId,
         actorKey: currentActor.actorKey,
         reaction,
-      }, { preferRemote: shouldPreferRemoteMoments });
+        active,
+      }, { preferRemote: shouldPreferRemoteMoments, storageScope: currentActor.actorKey });
     },
     onSuccess: (result, { ownerPartyId }) => {
       qc.invalidateQueries({ queryKey: ['event-moments', eventId] });
@@ -799,7 +803,7 @@ export default function EventDetailScreen() {
         authorName: currentActor.displayName,
         authorPartyId: currentActor.partyId,
         body,
-      }, { preferRemote: shouldPreferRemoteMoments });
+      }, { preferRemote: shouldPreferRemoteMoments, storageScope: currentActor.actorKey });
     },
     onSuccess: (_data, variables) => {
       setCommentDrafts((current) => ({ ...current, [variables.momentId]: '' }));
@@ -820,7 +824,7 @@ export default function EventDetailScreen() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['social-friends'] });
       qc.invalidateQueries({ queryKey: ['social-suggestions'] });
-      Alert.alert('Listo', 'Agregaste este contacto a tu red.');
+      Alert.alert(savedCopy.readyTitle, 'Agregaste este contacto a tu red.');
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'No pudimos crear la conexión.';
@@ -975,7 +979,7 @@ export default function EventDetailScreen() {
     onSuccess: () => {
       setActiveBroadcastId(null);
       qc.invalidateQueries({ queryKey: ['event-live-broadcasts', eventId] });
-      Alert.alert('Listo', 'Transmisión finalizada.');
+      Alert.alert(savedCopy.readyTitle, 'Transmisión finalizada.');
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'No pudimos finalizar la transmisión.';
@@ -1068,21 +1072,21 @@ export default function EventDetailScreen() {
       return;
     }
     if (!normalizedPartyId) {
-      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para guardar eventos.');
+      Alert.alert(savedCopy.signInTitle, 'Necesitas una cuenta vinculada para guardar eventos.');
       return;
     }
     if (savedEventIdsQuery.isError) {
       const result = await savedEventIdsQuery.refetch();
       if (result.isError) {
         Alert.alert(
-          'No pudimos cargar tus guardados',
+          savedCopy.loadFailureTitle,
           'Comprueba tu conexión, sesión y almacenamiento e inténtalo nuevamente.',
         );
       }
       return;
     }
     saveEventMutation.mutate({ targetEventId: eventId, ownerPartyId: normalizedPartyId });
-  }, [eventId, normalizedPartyId, saveEventMutation, savedEventIdsQuery]);
+  }, [eventId, normalizedPartyId, saveEventMutation, savedEventIdsQuery, savedCopy]);
 
   const selectMomentMedia = useCallback(async (
     mode: 'camera' | 'photos' | 'video',
@@ -1223,7 +1227,7 @@ export default function EventDetailScreen() {
         <Text style={styles.error}>No pudimos cargar el evento</Text>
         <Text style={styles.text}>Comprueba tu conexión e inténtalo nuevamente.</Text>
         <TouchableOpacity style={styles.backButton} onPress={() => void refetchEvent()} accessibilityRole="button">
-          <Text style={styles.backButtonText}>Reintentar</Text>
+          <Text style={styles.backButtonText}>{savedCopy.retry}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} accessibilityRole="button">
           <Text style={styles.backButtonText}>Volver a eventos</Text>
@@ -1239,7 +1243,7 @@ export default function EventDetailScreen() {
   const rsvpBusy = rsvpMutation.isPending || deleteRsvpMutation.isPending;
   const english = locale.toLowerCase().startsWith('en');
   const invitations = invitationsQuery.data ?? [];
-  const isSaved = savedEventIdsQuery.data?.includes(String(event.id)) ?? false;
+  const isSaved = savedEventIdsQuery.data?.ids.includes(String(event.id)) ?? false;
   const momentCount = displayedMoments.length;
   const liveBroadcasts = liveBroadcastsQuery.data ?? [];
   const liveBroadcastCount = countLiveBroadcasts(liveBroadcasts);
@@ -1408,7 +1412,7 @@ export default function EventDetailScreen() {
                     onPress={() => { void rsvpQuery.refetch(); }}
                     accessibilityRole="button"
                   >
-                    <Text style={styles.removeRsvpButtonText}>{english ? 'Retry' : 'Reintentar'}</Text>
+                    <Text style={styles.removeRsvpButtonText}>{english ? 'Retry' : savedCopy.retry}</Text>
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -1490,6 +1494,9 @@ export default function EventDetailScreen() {
               </View>
             </View>
 
+            {savedEventIdsQuery.data && savedEventIdsQuery.data.source !== 'server' ? (
+              <Text style={styles.helperText} accessibilityLiveRegion="polite">{savedCopy.cacheNotice}</Text>
+            ) : null}
             <View style={styles.actionRow}>
               <TouchableOpacity
                 style={[
@@ -1498,17 +1505,19 @@ export default function EventDetailScreen() {
                   saveEventMutation.isPending && styles.buttonDisabled,
                 ]}
                 onPress={() => void handleToggleSaved()}
-                disabled={saveEventMutation.isPending}
-                accessibilityState={{ disabled: saveEventMutation.isPending }}
+                disabled={saveEventMutation.isPending || savedEventIdsQuery.isLoading}
+                accessibilityRole="button"
+                accessibilityLabel={savedEventIdsQuery.isError ? savedCopy.retrySavedAccessibility : isSaved ? savedCopy.removeAccessibility : savedCopy.saveAccessibility}
+                accessibilityState={{ busy: saveEventMutation.isPending || savedEventIdsQuery.isLoading, disabled: saveEventMutation.isPending || savedEventIdsQuery.isLoading }}
               >
                 <Text style={[styles.saveEventButtonText, isSaved && styles.saveEventButtonTextActive]}>
-                  {saveEventMutation.isPending
-                    ? 'Guardando…'
+                  {savedEventIdsQuery.isLoading ? savedCopy.loading : saveEventMutation.isPending
+                    ? savedCopy.saving
                     : savedEventIdsQuery.isError
-                      ? 'Reintentar guardados'
+                      ? savedCopy.retrySaved
                       : isSaved
-                        ? 'Guardado'
-                        : 'Guardar evento'}
+                        ? savedCopy.saved
+                        : savedCopy.save}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.inviteButton} onPress={() => setShowInviteModal(true)}>
@@ -1608,6 +1617,7 @@ export default function EventDetailScreen() {
                 <View style={styles.momentList}>
                   {displayedMoments.map((moment, index) => (
                     <EventMomentCard
+                      locale={locale}
                       key={moment.id}
                       moment={moment}
                       currentActorKey={currentActor.actorKey}
@@ -1627,7 +1637,8 @@ export default function EventDetailScreen() {
                       commentDraft={commentDrafts[moment.id] ?? ''}
                       onChangeComment={handleCommentChange}
                       onSubmitComment={handleCommentSubmit}
-                      onToggleReaction={(momentId, reaction) => reactionMutation.mutate({
+                      onToggleReaction={(momentId, reaction, active) => reactionMutation.mutate({
+                        active,
                         momentId,
                         reaction,
                         ownerPartyId: normalizedPartyId,

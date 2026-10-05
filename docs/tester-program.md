@@ -13,3 +13,25 @@ Las URLs de privacidad, soporte, términos y borrado usan www.tdfrecords.net/mob
 QA de referencia antes de los últimos ajustes de metadata/foreground: 89 suites/558 tests y release:check pasaron; Expo Doctor 17/17 con red; 12 tests Python de signing/artifact guards pasaron. TesterFeedback y TesterParticipation añaden prueba de consentimiento/envío y de privacidad/frecuencia. Consultar el PR para resultados finales exactos. No se fabricó evidencia física VoiceOver/TalkBack/OAuth.
 
 Para publicar estos cambios hacen falta CI y revisión independiente del commit actual, merge protegido, un build firmado nuevo, y los gates de distribución del canal elegido. La versión 1.0.1 build29 observada en Apple precede a estos cambios; no contiene este formulario. No se atribuye este trabajo a los builds ya existentes.
+
+## Production analytics configuration
+
+TDF Records / TDF Production uses PostHog EU project `294698` and
+`https://eu.i.posthog.com`. The owner authorized the free plan with
+`info@tdfrecords.net`. Session replay, autocapture, console capture and heatmaps
+remain disabled; IP anonymization is enabled.
+
+The signed iOS and Android GitHub Actions lanes read the public repository
+variables `EXPO_PUBLIC_POSTHOG_KEY` and `EXPO_PUBLIC_POSTHOG_HOST`. Keep the same
+values in the EAS **production** project environment for EAS builds. Neither
+value is a personal API credential; never put account passwords, signing
+credentials or private API keys into `EXPO_PUBLIC_*`. Unit tests remove these
+variables before running so they cannot send synthetic events.
+
+Changing environment variables does not update installed apps. Generate and
+qualify new signed artifacts, then use the existing authorized beta submission
+lanes. iOS 1.0.1 (31) and Android 1.0.1 (23), built from `7a1fca369`, predate
+this project and do not demonstrate production analytics receipt. Record the
+exact source commit and verify a real app session before claiming first-open
+or native feedback telemetry. First open is not an attributed installation,
+and a web click cannot be joined to an anonymous native user by assumption.

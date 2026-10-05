@@ -18,12 +18,13 @@ import {
 import { AppState } from 'react-native';
 
 import {
-  getOnboardingProgress,
+  reconcileOnboardingProgress,
   type OnboardingCompletionResult,
   type OnboardingFirstValue,
   type OnboardingProgress,
 } from '../api/onboarding';
 import {
+  isOnboardingFirstValue,
   completeOnboardingExitWithRetry,
   completeFirstValueWithRetry,
   retryPendingOnboardingIntent,
@@ -32,6 +33,9 @@ import {
   type RetriedFirstValueCompletion,
   type RetriedOnboardingExit,
 } from '../lib/onboardingIntent';
+import { assertAuthSession, authSessionRequestConfig, captureAuthSession, isCurrentAuthToken } from '../api/client';
+import { useAnalytics } from '../analytics/AnalyticsProvider';
+import { readPendingExperimentConversion } from '../lib/firstRunFlags';
 import { usePartyOwnership } from '../hooks/usePartyOwnership';
 import { useAuth } from './AuthProvider';
 import { useNetwork } from './NetworkProvider';
@@ -62,9 +66,10 @@ type FirstRunState = {
 };
 
 export function FirstRunProvider({ children }: PropsWithChildren) {
-  const { partyId } = useAuth();
+  const { partyId, token } = useAuth();
   const { isConnected } = useNetwork();
   const ownsParty = usePartyOwnership(partyId);
+  const analytics = useAnalytics();
   const recoveryTriggerRef = useRef<(() => void) | null>(null);
   const previousConnectivityRef = useRef(isConnected);
   const intentRecoveryRef = useRef<{
@@ -92,7 +97,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
   });
 
   useEffect(() => {
-    if (!partyId) {
+    if (!partyId || !isCurrentAuthToken(token)) {
       recoveryTriggerRef.current = null;
       locallyExitedPartyIdRef.current = null;
       setState({
@@ -107,12 +112,37 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       locallyExitedPartyIdRef.current = null;
     }
 
+    // Session replacement must not share an older account request, even if
+    // the Party id is reused after a token refresh or A -> B -> A transition.
+    progressRecoveryRef.current = null;
+    firstValueRecoveryRef.current = null;
+    exitRecoveryRef.current = null;
+    intentRecoveryRef.current = null;
     let cancelled = false;
+    const captureReconciledCompletion = async (result: OnboardingCompletionResult) => {
+      const value = result.progress.firstValue;
+      if (!result.newlyCompleted || !isOnboardingFirstValue(value)) return;
+      const pendingConversion = await readPendingExperimentConversion(
+        partyId, 'single-feature-onboarding-v1', () => !cancelled && ownsParty(partyId),
+      );
+      // A matching durable experiment queue owns its conversion and first-value
+      // analytics. Other winning completions are attributed by this request once.
+      if (!cancelled && ownsParty(partyId) && pendingConversion?.firstValue !== value) {
+        analytics.capture('first_value_completed', { platform: 'mobile', value });
+        analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value });
+      }
+    };
     const loadOnboardingProgress = (): Promise<OnboardingProgress | null> => {
       const activeRecovery = progressRecoveryRef.current;
       if (activeRecovery?.partyId === partyId) return activeRecovery.promise;
 
-      const promise = getOnboardingProgress()
+      const promise = (async () => {
+        const binding = captureAuthSession(token);
+        const result = await reconcileOnboardingProgress(authSessionRequestConfig(binding));
+        assertAuthSession(binding);
+        await captureReconciledCompletion(result);
+        return result.progress;
+      })()
         .catch(() => null)
         .finally(() => {
           if (progressRecoveryRef.current?.promise === promise) {
@@ -148,6 +178,10 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
         partyId,
         () => !cancelled && ownsParty(partyId),
       )
+        .then(async (replayed) => {
+          if (replayed) await captureReconciledCompletion(replayed.result);
+          return replayed;
+        })
         .catch(() => null)
         .finally(() => {
           if (firstValueRecoveryRef.current?.promise === promise) {
@@ -248,7 +282,7 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
       }
       subscription.remove();
     };
-  }, [ownsParty, partyId]);
+  }, [analytics, ownsParty, partyId, token]);
 
   useEffect(() => {
     const wasConnected = previousConnectivityRef.current;
@@ -260,12 +294,19 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
     firstValue?: OnboardingFirstValue,
   ): Promise<OnboardingCompletionResult | null> => {
     const ownerPartyId = partyId;
-    if (!ownerPartyId || !ownsParty(ownerPartyId)) return null;
-    locallyExitedPartyIdRef.current = ownerPartyId;
-    setState((current) => current.partyId === ownerPartyId
-      ? { ...current, isNewUser: false }
-      : current);
+    if (!ownerPartyId || !ownsParty(ownerPartyId) || !isCurrentAuthToken(token)) return null;
+    if (!firstValue) {
+      locallyExitedPartyIdRef.current = ownerPartyId;
+      setState((current) => current.partyId === ownerPartyId
+        ? { ...current, isNewUser: false } : current);
+    }
     try {
+      const activeProgress = progressRecoveryRef.current;
+      if (firstValue && activeProgress?.partyId === ownerPartyId) {
+        const progress = await activeProgress.promise;
+        if (!ownsParty(ownerPartyId)) return null;
+        if (progress?.completedAt) return { progress, newlyCompleted: false };
+      }
       const result = firstValue
         ? await completeFirstValueWithRetry(
           ownerPartyId,
@@ -276,18 +317,36 @@ export function FirstRunProvider({ children }: PropsWithChildren) {
           ownerPartyId,
           () => ownsParty(ownerPartyId),
         );
-      return ownsParty(ownerPartyId) ? result : null;
+      if (!ownsParty(ownerPartyId)) return null;
+      if (firstValue && result) {
+        // A concurrent server-evidenced action may win with a different value.
+        // The caller owns analytics for its requested value only.
+        const actualValue = result.progress.firstValue;
+        if (result.newlyCompleted && isOnboardingFirstValue(actualValue) && actualValue !== firstValue) {
+          const conversion = await readPendingExperimentConversion(
+            ownerPartyId, 'single-feature-onboarding-v1', () => ownsParty(ownerPartyId),
+          );
+          if (!ownsParty(ownerPartyId)) return null;
+          if (conversion?.firstValue !== actualValue) {
+            analytics.capture('first_value_completed', { platform: 'mobile', value: actualValue });
+            analytics.capture('onboarding_completed', { platform: 'mobile', reason: 'first_value', value: actualValue });
+          }
+        }
+        setState((current) => current.partyId === ownerPartyId
+          ? { ...current, cohortReady: true, isNewUser: result.progress.eligible } : current);
+      }
+      return result;
     } catch {
       // Leaving optional onboarding must not trap the current app session.
       return null;
     } finally {
-      if (ownsParty(ownerPartyId)) {
+      if (!firstValue && ownsParty(ownerPartyId)) {
         setState((current) => current.partyId === ownerPartyId
           ? { ...current, isNewUser: false }
           : current);
       }
     }
-  }, [ownsParty, partyId]);
+  }, [analytics, ownsParty, partyId, token]);
 
   const stateIsCurrent = state.partyId === partyId;
 

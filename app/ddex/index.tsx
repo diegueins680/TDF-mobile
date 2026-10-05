@@ -4,27 +4,13 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { type Href, Stack, useRouter } from 'expo-router';
 
-import { DDEX_ERROR_STATUSES, DDEX_PENDING_STATUSES, listDdexDocuments } from '../../src/api/ddex';
+import { DDEX_ERROR_STATUSES, DDEX_PENDING_STATUSES, getDdexReferences, listDdexDocuments } from '../../src/api/ddex';
 import { FeatureAccessNotice } from '../../src/components/FeatureAccessNotice';
 import { evaluateFeatureAccess } from '../../src/features/featureRegistry';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
-
-const STATUS_LABELS: Record<string, { es: string; en: string }> = {
-  received: { es: 'Recibido', en: 'Received' },
-  queued: { es: 'Pendiente', en: 'Queued' },
-  validating: { es: 'Validando', en: 'Validating' },
-  invalid: { es: 'Inválido', en: 'Invalid' },
-  valid: { es: 'Válido', en: 'Valid' },
-  mapping_required: { es: 'Requiere mapeo', en: 'Mapping required' },
-  ready_to_import: { es: 'Listo para importar', en: 'Ready to import' },
-  importing: { es: 'Importando', en: 'Importing' },
-  imported: { es: 'Importado', en: 'Imported' },
-  import_failed: { es: 'Importación fallida', en: 'Import failed' },
-  quarantined: { es: 'En cuarentena', en: 'Quarantined' },
-};
 
 export default function DdexInboxScreen() {
   const router = useRouter();
@@ -37,6 +23,7 @@ export default function DdexInboxScreen() {
   const access = evaluateFeatureAccess('label.ddex.inbox', { authenticated: Boolean(token), roles, modules }, 'view');
   const importAccess = evaluateFeatureAccess('label.ddex.inbox', { authenticated: Boolean(token), roles, modules }, 'import');
   const partnersAccess = evaluateFeatureAccess('label.ddex.partners', { authenticated: Boolean(token), roles, modules }, 'view');
+  const references = useQuery({ queryKey: ['ddex-references'], queryFn: getDdexReferences, enabled: access.state === 'allowed' });
   const query = useQuery({
     queryKey: ['ddex-documents', status ?? 'all'],
     queryFn: () => listDdexDocuments(status),
@@ -46,14 +33,15 @@ export default function DdexInboxScreen() {
   const counts = useMemo(() => {
     const documents = query.data ?? [];
     return {
-      errors: documents.filter((document) => DDEX_ERROR_STATUSES.has(document.ddexDocumentStatus)).length,
-      pending: documents.filter((document) => DDEX_PENDING_STATUSES.has(document.ddexDocumentStatus)).length,
+      errors: documents.filter((document) => DDEX_ERROR_STATUSES.has(document.ddexDocumentWorkflowStateCode)).length,
+      pending: documents.filter((document) => DDEX_PENDING_STATUSES.has(document.ddexDocumentWorkflowStateCode)).length,
     };
   }, [query.data]);
 
   if (access.state !== 'allowed') return <FeatureAccessNotice decision={access} locale={locale} />;
 
-  const filters = [undefined, 'invalid', 'import_failed', 'ready_to_import', 'imported'] as const;
+  const filters = [undefined, ...(references.data?.ddexReferenceDocumentStates ?? [])];
+  const stateLabel = (item: NonNullable<typeof query.data>[number]) => english ? item.ddexDocumentWorkflowStateNameEn : item.ddexDocumentWorkflowStateNameEs;
   return (
     <View style={[styles.container, { backgroundColor: colors.canvas }]}>
       <Stack.Screen options={{ headerShown: true, title: english ? 'DDEX / Inbox' : 'DDEX / Bandeja' }} />
@@ -106,19 +94,20 @@ export default function DdexInboxScreen() {
         <View style={styles.filters} accessibilityRole="toolbar">
           {filters.map((filter) => (
             <TouchableOpacity
-              key={filter ?? 'all'}
+              key={filter?.ddexDocumentStateId ?? 'all'}
               accessibilityRole="button"
-              accessibilityState={{ selected: status === filter }}
-              onPress={() => setStatus(filter)}
-              style={[styles.filter, { borderColor: colors.border, backgroundColor: status === filter ? colors.selected : colors.surface }]}
+              accessibilityState={{ selected: status === filter?.ddexDocumentStateId }}
+              onPress={() => setStatus(filter?.ddexDocumentStateId)}
+              style={[styles.filter, { borderColor: colors.border, backgroundColor: status === filter?.ddexDocumentStateId ? colors.selected : colors.surface }]}
             >
               <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>
-                {filter ? (STATUS_LABELS[filter]?.[english ? 'en' : 'es'] ?? filter) : (english ? 'All' : 'Todos')}
+                {filter ? (english ? filter.ddexDocumentStateNameEn : filter.ddexDocumentStateNameEs) : (english ? 'All' : 'Todos')}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
+      {references.isError ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{english ? 'Status filters could not be loaded.' : 'No se pudieron cargar los filtros de estado.'}</Text> : null}
       {query.isLoading ? <ActivityIndicator style={styles.loader} color={colors.actionPrimary} accessibilityLabel="Cargando DDEX" /> : null}
       {query.isError ? (
         <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>
@@ -134,11 +123,11 @@ export default function DdexInboxScreen() {
           <Text style={[styles.empty, { color: colors.textSecondary }]}>{english ? 'No DDEX documents.' : 'No hay documentos DDEX.'}</Text>
         ) : null}
         renderItem={({ item }) => {
-          const isError = DDEX_ERROR_STATUSES.has(item.ddexDocumentStatus);
+          const isError = DDEX_ERROR_STATUSES.has(item.ddexDocumentWorkflowStateCode);
           return (
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel={`${item.ddexDocumentFileName}, ${STATUS_LABELS[item.ddexDocumentStatus]?.[english ? 'en' : 'es'] ?? item.ddexDocumentStatus}`}
+              accessibilityLabel={`${item.ddexDocumentFileName}, ${stateLabel(item)}`}
               onPress={() => {
                 analytics.capture('feature_navigation_selected', { feature_id: 'label.ddex.document', platform: 'mobile', source: 'ddex_inbox' });
                 router.push(`/ddex/document/${item.ddexDocumentId}` as Href);
@@ -149,7 +138,7 @@ export default function DdexInboxScreen() {
               <View style={styles.documentText}>
                 <Text numberOfLines={1} style={[styles.fileName, { color: colors.textPrimary }]}>{item.ddexDocumentFileName}</Text>
                 <Text style={[styles.meta, { color: colors.textSecondary }]}>
-                  {item.ddexDocumentFamily} · {item.ddexDocumentVersion} · {STATUS_LABELS[item.ddexDocumentStatus]?.[english ? 'en' : 'es'] ?? item.ddexDocumentStatus}
+                  {item.ddexDocumentStandardCode} · {item.ddexDocumentVersionCode} · {stateLabel(item)}
                 </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textSecondary} />

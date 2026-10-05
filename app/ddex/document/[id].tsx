@@ -50,12 +50,12 @@ export default function DdexDocumentScreen() {
       </TouchableOpacity>
       <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>{document.ddexDocumentFileName}</Text>
       <View style={[styles.status, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-        <Text style={[styles.statusText, { color: colors.textPrimary }]}>{document.ddexDocumentStatus}</Text>
+        <Text style={[styles.statusText, { color: colors.textPrimary }]}>{(english ? document.ddexDocumentWorkflowStateNameEn : document.ddexDocumentWorkflowStateNameEs)}</Text>
       </View>
       <View style={[styles.card, { borderColor: colors.border, backgroundColor: colors.surface }]}>
         {[
-          [english ? 'Family' : 'Familia', document.ddexDocumentFamily],
-          [english ? 'Version' : 'Versión', document.ddexDocumentVersion],
+          [english ? 'Family' : 'Familia', document.ddexDocumentStandardCode],
+          [english ? 'Version' : 'Versión', document.ddexDocumentVersionCode],
           [english ? 'Message' : 'Mensaje', document.ddexDocumentMessageId ?? '—'],
           [english ? 'Sender' : 'Remitente', document.ddexDocumentSenderId ?? '—'],
           [english ? 'Received' : 'Recibido', new Date(document.ddexDocumentCreatedAt).toLocaleString(locale)],
@@ -77,7 +77,7 @@ export default function DdexDocumentScreen() {
           </Text>
           {report.reportIssues.map((issue, index) => (
             <View key={`${issue.issueCode}:${index}`} style={[styles.issue, { borderTopColor: colors.borderSubtle }]}>
-              <Text style={[styles.issueCode, { color: colors.textPrimary }]}>{issue.issueSeverity} · {issue.issueCode || issue.issueLayer}</Text>
+              <Text style={[styles.issueCode, { color: colors.textPrimary }]}>{issue.issueSeverityCode} · {issue.issueCode || issue.issueLayerCode}</Text>
               <Text style={[styles.issueMessage, { color: colors.textSecondary }]}>{issue.issueMessage}</Text>
             </View>
           ))}
@@ -86,8 +86,8 @@ export default function DdexDocumentScreen() {
       <View style={[styles.beta, { backgroundColor: colors.warningSurface, borderColor: colors.warningBorder }]}>
         <Text style={[styles.betaText, { color: colors.textPrimary }]}>
           {english
-            ? 'Preview, raw download, conflict resolution, and commit are concealed until their backend implementations are complete.'
-            : 'Vista previa, descarga original, resolución de conflictos y confirmación permanecen ocultas hasta completar su implementación de backend.'}
+            ? 'Preview and raw download are not exposed in this Mobile screen. Import and export remain unavailable; structural validation does not establish official profile validity.'
+            : 'Esta pantalla móvil no ofrece vista previa ni descarga original. La importación y exportación siguen sin estar disponibles; la validación estructural no acredita la validez del perfil oficial.'}
         </Text>
       </View>
     </ScrollView>

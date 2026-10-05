@@ -116,7 +116,7 @@
     "@expo/metro-config": {
       "postcss": "8.5.26"
     },
-    "brace-expansion@^2.0.0": "2.1.4",
+    "brace-expansion@^2.0.0": "2.1.7",
     "react-native-reanimated": "~4.1.1"
   },
   "expo": {

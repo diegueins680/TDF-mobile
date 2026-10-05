@@ -21,10 +21,10 @@
 - Co-locate supporting helpers (forms, hooks) with their route folder to maintain small import surfaces.
 
 ## Testing Guidelines
-- No automated suite is configured yet; manually verify features in Expo Go before pushing.
+- Automated Jest tests are configured. Run `npm run lint`, `npm run typecheck` and `npm test`; retain native device checks for behavior unit tests cannot establish.
 - When introducing tests, favor React Native Testing Library (`*.test.tsx`) alongside the component.
 - Mock API layers via the wrappers in `src/api` so tests stay independent of live services.
-- Document any manual QA steps in the PR description until automated coverage exists.
+- Document exact automated and manual results in the PR description; a root check that skipped Mobile is not a pass.
 
 ## Commit & Pull Request Guidelines
 - Use Conventional Commits (`feat:`, `fix:`, `chore:`) to seed a readable history.
@@ -33,6 +33,6 @@
 - Request review only after `npm run start` succeeds locally and relevant tests/manual checks pass.
 
 ## Configuration & Environment
-- `src/lib/api.ts` consumes `EXPO_PUBLIC_API_BASE`, defaulting to `http://localhost:8080`; override per environment.
+- `src/lib/api.ts` resolves `EXPO_PUBLIC_API_BASE`, Expo `extra.apiBase`, then the development host. Verify release configuration and generated clients against the parent repository's exact API contract.
 - Set `EXPO_PUBLIC_TZ` to override the detected device timezone; the fallback is `UTC`.
-- Never commit secrets or tokens; rely on Expo CLI `.env` files or EAS environment variables for sensitive data.
+- Never commit secrets or embed privileged tokens in `EXPO_PUBLIC_*` variables; public build configuration ships to devices.

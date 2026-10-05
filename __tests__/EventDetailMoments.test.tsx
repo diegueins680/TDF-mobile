@@ -195,7 +195,7 @@ describe('EventDetail moments tab', () => {
       }
 
       if (queryKey[0] === 'saved-event-ids') {
-        return { data: [], isLoading: false };
+        return { data: { ids: [], source: 'server', pendingCount: 0 }, isLoading: false };
       }
 
       if (queryKey[0] === 'event-ticket-tiers') {
@@ -283,7 +283,7 @@ describe('EventDetail moments tab', () => {
     expect(screen.getByText('Momentos del evento')).toBeTruthy();
     expect(screen.getByText('Top Momentos')).toBeTruthy();
     expect(screen.getAllByText('Luces arriba').length).toBeGreaterThan(0);
-    expect(screen.getByText('Top moment')).toBeTruthy();
+    expect(screen.getByText('Momento destacado')).toBeTruthy();
     expect(screen.getByText('Conectar')).toBeTruthy();
     expect(screen.getByText('Publicas como Cuco')).toBeTruthy();
 

@@ -7,7 +7,7 @@ const mockCapture = jest.fn();
 const mockGetOnboardingProgress = jest.fn();
 const mockCompleteOnboarding = jest.fn(() => Promise.resolve({
   newlyCompleted: true,
-  progress: { eligible: false },
+  progress: { eligible: false, firstValue: "moment_reaction", completedAt: "2026-10-04T00:00:00Z" },
 }));
 const mockInvalidateQueries = jest.fn();
 const mockRefetchQueries = jest.fn();
@@ -509,7 +509,7 @@ describe('NewUserOnboardingGate states', () => {
   it('suppresses a late conversion after the active Party changes', async () => {
     let resolveOldCompletion!: (value: {
       newlyCompleted: boolean;
-      progress: { eligible: boolean };
+      progress: { eligible: boolean; firstValue: string; completedAt: string };
     }) => void;
     mockCompleteOnboarding.mockReturnValueOnce(new Promise((resolve) => {
       resolveOldCompletion = resolve;
@@ -526,7 +526,7 @@ describe('NewUserOnboardingGate states', () => {
       <NewUserOnboardingGate><Text>Full app shell</Text></NewUserOnboardingGate>,
     );
     await act(async () => {
-      resolveOldCompletion({ newlyCompleted: true, progress: { eligible: false } });
+      resolveOldCompletion({ newlyCompleted: true, progress: { eligible: false, firstValue: "moment_reaction", completedAt: "2026-10-04T00:00:00Z" } });
       await Promise.resolve();
     });
 
@@ -537,7 +537,7 @@ describe('NewUserOnboardingGate states', () => {
   it('suppresses completion analytics when onboarding was already completed', async () => {
     mockCompleteOnboarding.mockResolvedValueOnce({
       newlyCompleted: false,
-      progress: { eligible: false },
+      progress: { eligible: false, firstValue: "moment_reaction", completedAt: "2026-10-04T00:00:00Z" },
     });
     mockEventsState = { data: [pastEvent], isLoading: false, isError: false };
     mockMomentsState = { data: [moment], isLoading: false, isError: false };
@@ -584,7 +584,7 @@ describe('NewUserOnboardingGate states', () => {
     mockReadPendingExperimentConversion.mockResolvedValue(pendingConversion);
     mockReplayedFirstValueCompletion = {
       value: 'moment_reaction',
-      result: { newlyCompleted: true, progress: { eligible: false } },
+      result: { newlyCompleted: true, progress: { eligible: false, firstValue: "moment_reaction", completedAt: "2026-10-04T00:00:00Z" } },
     };
 
     renderGate();

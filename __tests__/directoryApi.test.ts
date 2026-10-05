@@ -2,12 +2,14 @@ const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockPut = jest.fn();
 const mockPatch = jest.fn();
+const mockDel = jest.fn();
 
 jest.mock('../src/api/client', () => ({
   get: (...args: unknown[]) => mockGet(...args),
   post: (...args: unknown[]) => mockPost(...args),
   put: (...args: unknown[]) => mockPut(...args),
   patch: (...args: unknown[]) => mockPatch(...args),
+  del: (...args: unknown[]) => mockDel(...args),
 }));
 
 import { Directory } from '../src/api/directory';
@@ -89,5 +91,31 @@ describe('mobile music directory canonical API', () => {
     };
     await Directory.createReview(request, 'mobile-review-retry-1');
     expect(mockPost).toHaveBeenLastCalledWith('/directory/reviews', request, { headers: { 'Idempotency-Key': 'mobile-review-retry-1' } });
+  });
+
+  it('uses filtered, encoded, desired-state favorite endpoints with explicit auth binding', async () => {
+    const config = {
+      headers: { Authorization: 'Bearer account-token' },
+      signal: new AbortController().signal,
+    };
+    mockGet.mockResolvedValue([]);
+    mockPut.mockResolvedValue(undefined);
+    mockDel.mockResolvedValue(undefined);
+
+    await Directory.favorites('event', config);
+    expect(mockGet).toHaveBeenCalledWith('/directory/favorites?targetKind=event', config);
+
+    await Directory.addFavorite('event', '42 / encore', config);
+    expect(mockPut).toHaveBeenCalledWith(
+      '/directory/favorites/event/42%20%2F%20encore',
+      {},
+      config,
+    );
+
+    await Directory.removeFavorite('event', '42 / encore', config);
+    expect(mockDel).toHaveBeenCalledWith(
+      '/directory/favorites/event/42%20%2F%20encore',
+      config,
+    );
   });
 });

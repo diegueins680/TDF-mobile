@@ -272,6 +272,7 @@ export function NewUserOnboardingGate({ children }: Props) {
       queryFn: () =>
         listMomentFeed(event.id as ID, {
           preferRemote: shouldPreferRemoteMoments,
+          storageScope: currentActor.actorKey,
         }),
       enabled: gateEngaged,
     })),
@@ -306,6 +307,7 @@ export function NewUserOnboardingGate({ children }: Props) {
     queryFn: () =>
       listMomentFeed(featuredEvent!.id as ID, {
         preferRemote: shouldPreferRemoteMoments,
+          storageScope: currentActor.actorKey,
       }),
     enabled: gateEngaged && Boolean(featuredEvent?.id),
     initialData: featuredProbe?.data,
@@ -486,6 +488,7 @@ export function NewUserOnboardingGate({ children }: Props) {
     if (
       !normalizedPartyId
       || replayed?.value !== 'moment_reaction'
+      || replayed.result.progress.firstValue !== 'moment_reaction'
       || (
         !replayed.result.newlyCompleted
         && (
@@ -556,7 +559,7 @@ export function NewUserOnboardingGate({ children }: Props) {
         if (!ownsParty(ownerPartyId)) return;
         const result = await completeOnboarding('moment_reaction');
         if (!ownsParty(ownerPartyId) || !result) return;
-        if (result.newlyCompleted) {
+        if (result.newlyCompleted && result.progress.firstValue === 'moment_reaction') {
           await recordMomentConversion(ownerPartyId, conversion);
           return;
         }
@@ -586,7 +589,7 @@ export function NewUserOnboardingGate({ children }: Props) {
   }, []);
 
   const handleToggleReaction = useCallback(
-    async (momentId: string, reaction: EventMomentReactionOption) => {
+    async (momentId: string, reaction: EventMomentReactionOption, active: boolean) => {
       const ownerPartyId = normalizedPartyId;
       if (!featuredEvent?.id || !ownerPartyId || !ownsParty(ownerPartyId)) return false;
       try {
@@ -596,8 +599,9 @@ export function NewUserOnboardingGate({ children }: Props) {
             momentId,
             actorKey: currentActor.actorKey,
             reaction,
+            active,
           },
-          { preferRemote: shouldPreferRemoteMoments },
+          { preferRemote: shouldPreferRemoteMoments, storageScope: currentActor.actorKey },
         );
         if (!ownsParty(ownerPartyId)) return false;
         return result.source === 'remote' && result.selected === true;
@@ -681,6 +685,7 @@ export function NewUserOnboardingGate({ children }: Props) {
         ) : moments.length > 0 ? (
           moments.slice(0, 3).map((moment, idx) => (
             <EventMomentCard
+                locale={locale}
               key={moment.id}
               moment={moment}
               currentActorKey={currentActor.actorKey}

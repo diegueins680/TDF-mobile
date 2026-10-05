@@ -1,25 +1,31 @@
 import React from 'react';
+import { setAuthToken } from '../src/api/client';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, type AppStateStatus, Text, TouchableOpacity } from 'react-native';
 
 const mockGetOnboardingProgress = jest.fn();
+const mockCapture = jest.fn();
+const mockAnalytics = { capture: mockCapture };
+const mockReconcileOnboardingProgress = jest.fn();
+jest.mock('../src/analytics/AnalyticsProvider', () => ({ useAnalytics: () => mockAnalytics }));
 const mockCompleteOnboardingProgress = jest.fn();
 const mockUpdateOnboardingIntent = jest.fn();
 let mockPartyId: string | null = '42';
+let mockToken = 'test-session';
 let mockIsConnected = true;
 let appStateChangeListener: ((state: AppStateStatus) => void) | null = null;
 const mockRemoveAppStateListener = jest.fn();
 const mockAddAppStateListener = jest.spyOn(AppState, 'addEventListener');
 
 jest.mock('../src/api/onboarding', () => ({
-  getOnboardingProgress: (...args: unknown[]) => mockGetOnboardingProgress(...args),
+  reconcileOnboardingProgress: (...args: unknown[]) => mockReconcileOnboardingProgress(...args),
   completeOnboardingProgress: (...args: unknown[]) => mockCompleteOnboardingProgress(...args),
   updateOnboardingIntent: (...args: unknown[]) => mockUpdateOnboardingIntent(...args),
 }));
 
 jest.mock('../src/providers/AuthProvider', () => ({
-  useAuth: () => ({ partyId: mockPartyId }),
+  useAuth: () => ({ partyId: mockPartyId, token: mockToken }),
 }));
 
 jest.mock('../src/providers/NetworkProvider', () => ({
@@ -65,12 +71,33 @@ const emitAppStateChange = (state: AppStateStatus) => {
 };
 
 describe('FirstRunProvider', () => {
+  it('attributes a different server-evidenced winner without claiming the requested action', async () => {
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, completedAt: '2026-10-04T00:00:00Z', firstValue: 'event_saved' },
+    });
+    renderProvider();
+    await screen.findByText('true:false');
+    fireEvent.press(screen.getByLabelText('Complete first value'));
+    await waitFor(() => expect(mockCapture).toHaveBeenCalledWith(
+      'first_value_completed', { platform: 'mobile', value: 'event_saved' },
+    ));
+    expect(mockCapture).not.toHaveBeenCalledWith(
+      'first_value_completed', { platform: 'mobile', value: 'artist_followed' },
+    );
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
+    setAuthToken("test-session");
+    mockToken = 'test-session';
     mockGetOnboardingProgress.mockReset().mockResolvedValue({ eligible: false });
+    mockReconcileOnboardingProgress.mockReset().mockImplementation(async (...args: unknown[]) => ({
+      progress: await mockGetOnboardingProgress(...args), newlyCompleted: false,
+    }));
     mockCompleteOnboardingProgress.mockReset().mockResolvedValue({
       newlyCompleted: false,
-      progress: { eligible: false },
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
     });
     jest.mocked(AsyncStorage.getItem).mockReset().mockResolvedValue(null);
     jest.mocked(AsyncStorage.setItem).mockReset().mockResolvedValue(undefined);
@@ -107,7 +134,7 @@ describe('FirstRunProvider', () => {
     mockGetOnboardingProgress.mockResolvedValueOnce({ eligible: true });
     mockCompleteOnboardingProgress.mockResolvedValueOnce({
       newlyCompleted: true,
-      progress: { eligible: false },
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
     });
     renderProvider();
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
@@ -123,7 +150,7 @@ describe('FirstRunProvider', () => {
     jest.mocked(AsyncStorage.getItem).mockResolvedValue('moment_reaction');
     mockCompleteOnboardingProgress.mockResolvedValueOnce({
       newlyCompleted: true,
-      progress: { eligible: false },
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
     });
 
     renderProvider();
@@ -239,7 +266,7 @@ describe('FirstRunProvider', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({
         newlyCompleted: true,
-        progress: { eligible: false },
+        progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
       });
 
     renderProvider();
@@ -261,7 +288,7 @@ describe('FirstRunProvider', () => {
       storageKey === key ? 'event_saved' : null);
     let resolveCompletion!: (result: {
       newlyCompleted: boolean;
-      progress: { eligible: boolean };
+      progress: { eligible: boolean; completedAt?: string };
     }) => void;
     mockCompleteOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
       resolveCompletion = resolve;
@@ -277,7 +304,7 @@ describe('FirstRunProvider', () => {
     expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      resolveCompletion({ newlyCompleted: true, progress: { eligible: false } });
+      resolveCompletion({ newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } });
       await Promise.resolve();
     });
     await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
@@ -285,7 +312,7 @@ describe('FirstRunProvider', () => {
   });
 
   it('does not let late eligibility reopen onboarding after a foreground replay', async () => {
-    let resolveProgress!: (progress: { eligible: boolean }) => void;
+    let resolveProgress!: (progress: { eligible: boolean; completedAt?: string }) => void;
     mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
       resolveProgress = resolve;
     }));
@@ -298,7 +325,7 @@ describe('FirstRunProvider', () => {
     });
     mockCompleteOnboardingProgress.mockResolvedValueOnce({
       newlyCompleted: true,
-      progress: { eligible: false },
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
     });
 
     renderProvider();
@@ -329,7 +356,7 @@ describe('FirstRunProvider', () => {
   });
 
   it('coalesces repeated foreground eligibility loads for the active Party', async () => {
-    let resolveProgress!: (progress: { eligible: boolean }) => void;
+    let resolveProgress!: (progress: { eligible: boolean; completedAt?: string }) => void;
     mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
       resolveProgress = resolve;
     }));
@@ -349,7 +376,7 @@ describe('FirstRunProvider', () => {
   });
 
   it('does not let an older foreground eligibility response reopen an exited Party', async () => {
-    let resolveForegroundProgress!: (progress: { eligible: boolean }) => void;
+    let resolveForegroundProgress!: (progress: { eligible: boolean; completedAt?: string }) => void;
     mockGetOnboardingProgress
       .mockResolvedValueOnce({ eligible: true })
       .mockReturnValueOnce(new Promise((resolve) => {
@@ -357,7 +384,7 @@ describe('FirstRunProvider', () => {
       }));
     mockCompleteOnboardingProgress.mockResolvedValueOnce({
       newlyCompleted: true,
-      progress: { eligible: false },
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
     });
     renderProvider();
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
@@ -413,7 +440,7 @@ describe('FirstRunProvider', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({
         newlyCompleted: true,
-        progress: { eligible: false },
+        progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
       });
 
     const view = renderProvider();
@@ -441,7 +468,7 @@ describe('FirstRunProvider', () => {
       storageKey === key ? 'pending' : null);
     let resolveCompletion!: (result: {
       newlyCompleted: boolean;
-      progress: { eligible: boolean };
+      progress: { eligible: boolean; completedAt?: string };
     }) => void;
     mockCompleteOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
       resolveCompletion = resolve;
@@ -460,7 +487,7 @@ describe('FirstRunProvider', () => {
 
     expect(mockCompleteOnboardingProgress).toHaveBeenCalledTimes(1);
     await act(async () => {
-      resolveCompletion({ newlyCompleted: true, progress: { eligible: false } });
+      resolveCompletion({ newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } });
       await Promise.resolve();
     });
     await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
@@ -506,7 +533,7 @@ describe('FirstRunProvider', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({
         newlyCompleted: true,
-        progress: { eligible: false },
+        progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
       });
     const view = renderProvider();
     await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
@@ -530,7 +557,7 @@ describe('FirstRunProvider', () => {
 
   it('coalesces reconnect and foreground recovery for the active Party', async () => {
     mockIsConnected = false;
-    let resolveProgress!: (progress: { eligible: boolean }) => void;
+    let resolveProgress!: (progress: { eligible: boolean; completedAt?: string }) => void;
     mockGetOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
       resolveProgress = resolve;
     }));
@@ -584,7 +611,7 @@ describe('FirstRunProvider', () => {
   it('ignores a late exit completion after the active Party changes', async () => {
     let resolveCompletion!: (value: {
       newlyCompleted: boolean;
-      progress: { eligible: boolean };
+      progress: { eligible: boolean; completedAt?: string };
     }) => void;
     mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
     mockCompleteOnboardingProgress.mockReturnValueOnce(new Promise((resolve) => {
@@ -603,8 +630,76 @@ describe('FirstRunProvider', () => {
     );
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
 
-    resolveCompletion({ newlyCompleted: true, progress: { eligible: false } });
+    resolveCompletion({ newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } });
 
     await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
   });
+  it('reconciles cross-device evidence and attributes the winning result once', async () => {
+    mockReconcileOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, completedAt: '2026-10-04T00:00:00Z', firstValue: 'event_saved' },
+    });
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(mockCapture).toHaveBeenCalledWith('first_value_completed', { platform: 'mobile', value: 'event_saved' });
+    expect(mockCapture).toHaveBeenCalledTimes(2);
+    act(() => emitAppStateChange('active'));
+    await waitFor(() => expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(2));
+    expect(mockCapture).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps eligibility when the first-value handshake has no durable evidence yet', async () => {
+    mockGetOnboardingProgress.mockResolvedValue({ eligible: true });
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: false, progress: { eligible: true, completedAt: null, firstValue: null },
+    });
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:true')).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: 'Complete first value' }));
+    await waitFor(() => expect(mockCompleteOnboardingProgress).toHaveBeenCalled());
+    expect(screen.getByText('true:true')).toBeTruthy();
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith('tdf-onboarding-first-value:party:42');
+  });
+
+  it('rejects a replaced session result and creates a fresh same-Party request', async () => {
+    let finishOld!: (result: unknown) => void;
+    mockReconcileOnboardingProgress.mockReturnValueOnce(new Promise(resolve => { finishOld = resolve; }));
+    const view = renderProvider();
+    const config = mockReconcileOnboardingProgress.mock.calls[0][0];
+    expect(config.headers.Authorization).toBe('Bearer test-session');
+    setAuthToken('replacement-session');
+    mockToken = 'replacement-session';
+    view.rerender(<FirstRunProvider><Probe /></FirstRunProvider>);
+    await waitFor(() => expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(2));
+    expect(config.signal.aborted).toBe(true);
+    await act(async () => finishOld({ newlyCompleted: true, progress: { eligible: true, firstValue: 'event_saved' } }));
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('does not invent analytics for malformed reconciliation evidence', async () => {
+    mockReconcileOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true, progress: { eligible: false, firstValue: 'invented' },
+    });
+    renderProvider();
+    await waitFor(() => expect(screen.getByText('true:false')).toBeTruthy());
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('never sends a new credential with a stale rendered Party session', async () => {
+    setAuthToken('different-account-session');
+    const view = renderProvider();
+    expect(screen.getByText('false:false')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Complete first value'));
+    expect(mockReconcileOnboardingProgress).not.toHaveBeenCalled();
+    expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
+    expect(mockCapture).not.toHaveBeenCalled();
+    mockToken = 'different-account-session';
+    mockPartyId = '77';
+    view.rerender(<FirstRunProvider><Probe /></FirstRunProvider>);
+    await screen.findByText('true:false');
+    expect(mockReconcileOnboardingProgress).toHaveBeenCalledTimes(1);
+    expect(mockReconcileOnboardingProgress.mock.calls[0][0].headers.Authorization).toBe('Bearer different-account-session');
+  });
+
 });

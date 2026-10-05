@@ -1,5 +1,6 @@
 import {
   endLiveBroadcastSession,
+  heartbeatLiveBroadcastSession,
   listLiveBroadcastFeed,
   startLiveBroadcastSession,
 } from '../src/lib/liveBroadcastsRepository';
@@ -131,6 +132,33 @@ describe('live broadcasts repository', () => {
 
     expect(mockLocal.createEventLiveBroadcast).not.toHaveBeenCalled();
   });
+
+  it.each([undefined, 401, 403, 404, 409, 500, 503])(
+    'propagates remote mutation failure %s without claiming local acceptance',
+    async (status) => {
+      const error = normalizeApiError({
+        isAxiosError: true,
+        message: 'Synthetic remote failure',
+        ...(status === undefined ? {} : { response: { status, data: 'Unavailable' } }),
+      });
+      mockApi.start.mockRejectedValueOnce(error);
+      mockApi.end.mockRejectedValueOnce(error);
+      mockApi.heartbeat.mockRejectedValueOnce(error);
+      await expect(startLiveBroadcastSession({
+        eventId: '42', artistId: '7', artistName: 'Demo', broadcasterName: 'Fan',
+        broadcasterPartyId: '9',
+      }, { preferRemote: true })).rejects.toBe(error);
+      await expect(endLiveBroadcastSession({
+        eventId: '42', broadcastId: 'remote-1', broadcasterPartyId: '9',
+      }, { preferRemote: true })).rejects.toBe(error);
+      await expect(heartbeatLiveBroadcastSession({
+        eventId: '42', broadcastId: 'remote-1',
+      }, { preferRemote: true })).rejects.toBe(error);
+      expect(mockLocal.createEventLiveBroadcast).not.toHaveBeenCalled();
+      expect(mockLocal.endEventLiveBroadcast).not.toHaveBeenCalled();
+      expect(mockLocal.heartbeatEventLiveBroadcast).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps local broadcast endings on the local path', async () => {
     mockLocal.endEventLiveBroadcast.mockResolvedValue({

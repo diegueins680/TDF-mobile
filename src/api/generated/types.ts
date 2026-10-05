@@ -24036,6 +24036,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Current document lifecycle or source binding changed; rejected validation makes no changes */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Required private storage or supported runtime profile is unavailable */
             503: {
                 headers: {

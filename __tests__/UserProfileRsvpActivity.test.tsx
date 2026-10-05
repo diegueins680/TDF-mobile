@@ -25,7 +25,7 @@ jest.mock('expo-router', () => ({
 jest.mock('@tanstack/react-query', () => ({
   useQuery: jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
     if (queryKey[0] === 'upcoming-events') return { data: [], isLoading: false };
-    if (queryKey[0] === 'saved-event-ids') return { data: [], isLoading: false };
+    if (queryKey[0] === 'saved-event-ids') return { data: { ids: [], source: 'server', pendingCount: 0 }, isLoading: false };
     return { data: null, isLoading: false };
   }),
   useInfiniteQuery: jest.fn(() => ({

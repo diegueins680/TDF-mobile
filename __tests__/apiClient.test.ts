@@ -1,4 +1,7 @@
 import {
+  assertAuthSession,
+  authSessionRequestConfig,
+  captureAuthSession,
   getAuthToken,
   http,
   isCurrentAuthToken,
@@ -51,6 +54,21 @@ describe('API client auth header', () => {
     setAuthToken(null);
     expect(getAuthToken()).toBeUndefined();
     expect(http.defaults.headers.common.Authorization).toBeUndefined();
+  });
+
+  it('binds a protected request to one auth session and aborts it on account change', () => {
+    setAuthToken('account-a-token');
+    const binding = captureAuthSession('Bearer account-a-token');
+    expect(authSessionRequestConfig(binding)).toMatchObject({
+      headers: { Authorization: 'Bearer account-a-token' },
+      signal: binding.signal,
+    });
+    expect(binding.signal.aborted).toBe(false);
+
+    setAuthToken('account-b-token');
+
+    expect(binding.signal.aborted).toBe(true);
+    expect(() => assertAuthSession(binding)).toThrow(/sesión cambió/i);
   });
 });
 
@@ -118,4 +136,14 @@ describe('API client buyer errors', () => {
     );
     expect(error.message).not.toMatch(/agotaron|otra cantidad/i);
   });
+  it('never revives a captured request after token A -> B -> A', () => {
+    setAuthToken('account-a');
+    const binding = captureAuthSession('account-a');
+    setAuthToken('account-b');
+    setAuthToken('account-a');
+    expect(() => assertAuthSession(binding)).toThrow(/sesión cambió/i);
+    expect(binding.signal.aborted).toBe(true);
+    setAuthToken(null);
+  });
+
 });

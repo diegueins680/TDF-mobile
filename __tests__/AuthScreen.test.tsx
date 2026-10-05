@@ -89,6 +89,7 @@ jest.mock('../src/api/onboarding', () => ({
 }));
 
 jest.mock('../src/api/client', () => ({
+  ...jest.requireActual('../src/api/client'),
   isCurrentAuthToken: (...args: unknown[]) => mockIsCurrentAuthToken(...args),
 }));
 

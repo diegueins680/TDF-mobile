@@ -8,7 +8,7 @@
 - Store feature assets alongside their route or module to keep the tree co-located.
 
 ## Build, Test, and Development Commands
-- `npm install` installs dependencies pinned in `package-lock.json`.
+- Use the Node version in `.nvmrc`; `npm ci` installs the committed `package-lock.json`.
 - `npm run start` launches the Metro-powered Expo dev server.
 - `npm run android` / `npm run ios` opens Expo Go on the respective emulator or device.
 - `npm run web` runs the app in the Expo web preview for quick layout checks.
@@ -21,10 +21,10 @@
 - Co-locate supporting helpers (forms, hooks) with their route folder to maintain small import surfaces.
 
 ## Testing Guidelines
-- No automated suite is configured yet; manually verify features in Expo Go before pushing.
-- When introducing tests, favor React Native Testing Library (`*.test.tsx`) alongside the component.
+- Run the existing Jest/React Native Testing Library suite with `npm test -- --runInBand`, plus `npm run lint`, `npm run typecheck`, and `npm run release:check`. Validate changed flows in Expo and applicable Android/iOS simulator checks.
+- Preserve account/session, replay, canonical interaction and generated-contract regression coverage when changing behavior.
 - Mock API layers via the wrappers in `src/api` so tests stay independent of live services.
-- Document any manual QA steps in the PR description until automated coverage exists.
+- Record exact automated results and any unverified manual/device prerequisites in the PR description.
 
 ## Commit & Pull Request Guidelines
 - Use Conventional Commits (`feat:`, `fix:`, `chore:`) to seed a readable history.
@@ -33,6 +33,6 @@
 - Request review only after `npm run start` succeeds locally and relevant tests/manual checks pass.
 
 ## Configuration & Environment
-- `src/lib/api.ts` consumes `EXPO_PUBLIC_API_BASE`, defaulting to `http://localhost:8080`; override per environment.
+- `src/lib/api.ts` is the API-host authority. Use the canonical production API `https://api.tdfrecords.net`; inspect development fallbacks and `EXPO_PUBLIC_API_BASE` validation before overriding it.
 - Set `EXPO_PUBLIC_TZ` to override the detected device timezone; the fallback is `UTC`.
 - Never commit secrets or tokens; rely on Expo CLI `.env` files or EAS environment variables for sensitive data.

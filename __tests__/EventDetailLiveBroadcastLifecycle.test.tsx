@@ -202,7 +202,7 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
       }
       if (queryKey[0] === 'event-rsvps') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-invitations') return { data: [], isLoading: false };
-      if (queryKey[0] === 'saved-event-ids') return { data: [], isLoading: false };
+      if (queryKey[0] === 'saved-event-ids') return { data: { ids: [], source: 'server', pendingCount: 0 }, isLoading: false };
       if (queryKey[0] === 'event-ticket-tiers') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-ticket-orders') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-moments') return { data: [], isLoading: false };

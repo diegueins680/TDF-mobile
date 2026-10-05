@@ -13,7 +13,7 @@ const ANDROID_VERSION_CODE = Number.parseInt(process.env.ANDROID_VERSION_CODE?.t
 const IOS_BUNDLE_ID = 'com.tdfrecords.app';
 const ANDROID_PACKAGE = 'com.tdf.records';
 const DEFAULT_TIME_ZONE = 'America/Guayaquil';
-const PUBLIC_SITE_URL = 'https://tdf-app.pages.dev/mobile-app';
+const PUBLIC_SITE_URL = 'https://www.tdfrecords.net/mobile-app';
 // The apex redirects; verified hosts must serve association files directly.
 const PUBLIC_UNIVERSAL_LINK_HOSTS = ['www.tdfrecords.net', 'tdf-app.pages.dev'];
 const PUBLIC_SUPPORT_URL = `${PUBLIC_SITE_URL}/support.html`;

@@ -2,7 +2,7 @@
   "name": "tdf-mobile",
   "version": "1.0.1",
   "description": "TDF Records mobile app for bookings, inventory, events, venues, pipelines, and social tools.",
-  "homepage": "https://tdf-app.pages.dev/mobile-app",
+  "homepage": "https://www.tdfrecords.net/mobile-app",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/diegueins680/TDF-mobile.git"

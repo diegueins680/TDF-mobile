@@ -1,0 +1,26 @@
+import React from 'react';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { FeedbackEntry } from '../src/feedback/FeedbackEntry';
+const mockCapture = jest.fn();
+jest.mock('../src/analytics/AnalyticsProvider', () => ({ useAnalytics: () => ({ capture: (...args: unknown[]) => mockCapture(...args) }) }));
+jest.mock('../src/providers/UserSettingsProvider', () => ({ useUserSettings: () => ({ locale: 'es' }) }));
+jest.mock('expo-application', () => ({ nativeApplicationVersion: '1.0.1', nativeBuildVersion: '30' }));
+jest.mock('../src/api/client', () => ({ getAuthToken: () => 'Bearer private-token' }));
+jest.mock('../src/api/catalogs', () => ({ fetchCatalogBatch: async () => ({ batch: { catalogs: ['feedback-categories','feedback-severities'].map(code => ({catalog:{code},items:(code==='feedback-categories'?['bug','idea','ux']:['p2','p4']).map((itemCode,index)=>({id:index===0?'id':`id-${itemCode}`,code:itemCode,active:true,workflowState:'published'})),defaults:[{scopeKind:code==='feedback-categories'?'feedback-category':'feedback-severity',scopeId:'global',entityId:'id'}]})) } }) }));
+beforeEach(() => { mockCapture.mockClear(); global.fetch = jest.fn().mockResolvedValue({ok:true}); });
+it.each([['bug', 'Encontré un problema', 'id'], ['general', 'Comentario', 'id-idea']])('sends consented %s feedback with a matching published category and private analytics', async (kind, label, categoryId) => {
+  const screen = render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { gcTime: 0 }, mutations: { gcTime: 0 } } })}><FeedbackEntry /></QueryClientProvider>);
+  fireEvent.press(screen.getByText('Enviar feedback'));
+  if (kind === 'general') fireEvent.press(screen.getByText(label));
+  fireEvent.changeText(screen.getByLabelText('Cuéntanos qué pasó y qué esperabas'), 'My private draft');
+  fireEvent(screen.getByLabelText('Autorizo usar este comentario para mejorar TDF.'), 'valueChange', true);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' }).props.accessibilityState.disabled).toBe(false));
+  fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
+  await waitFor(() => expect(screen.getByText('¡Gracias! Recibimos tu comentario.')).toBeTruthy());
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+  const body = (global.fetch as jest.Mock).mock.calls[0][1].body as FormData;
+  expect(body.get('categoryId')).toBe(categoryId);
+  expect(mockCapture).toHaveBeenCalledWith('mobile_feedback_submitted', expect.objectContaining({surface:'profile',feedback_kind:kind}));
+  expect(JSON.stringify(mockCapture.mock.calls)).not.toMatch(/private-token|private draft/);
+});

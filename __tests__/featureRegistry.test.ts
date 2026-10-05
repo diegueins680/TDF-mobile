@@ -74,6 +74,9 @@ describe('mobile feature registry', () => {
     const fan = { authenticated: true, roles: ['Fan', 'Customer'], modules: ['Packages'] };
     const artist = { authenticated: true, roles: ['Artist', 'Fan', 'Customer'], modules: ['Scheduling', 'Packages'] };
     expect(feature.routeAction).toBe('create');
+    // The canonical registry now permits authenticated self-service onboarding.
+    // The backend still binds profile creation to the current account.
+    expect(evaluateFeatureAccess(feature, fan, 'view').state).toBe('allowed');
     expect(evaluateFeatureAccess(feature, fan, feature.routeAction).state).toBe('allowed');
     expect(evaluateFeatureAccess(feature, artist, feature.routeAction).state).toBe('allowed');
   });

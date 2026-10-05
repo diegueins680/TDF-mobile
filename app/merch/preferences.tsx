@@ -10,7 +10,7 @@ import {
 import { getLocale } from '../../src/i18n';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 
-type SubjectKind = 'store' | 'product';
+type SubjectKind = MerchReputationPriorities['subjectKind'];
 const emptyNotifications: MerchNotificationPreferences = {
   reviewInvitation: false,
   reviewReminder: false,

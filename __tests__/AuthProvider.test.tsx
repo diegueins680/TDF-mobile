@@ -236,7 +236,6 @@ describe('AuthProvider', () => {
     getSecureItemMock.mockResolvedValueOnce('Bearer revoked-token');
     getMock.mockResolvedValueOnce(null as never);
     const queryClient = createTestQueryClient();
-    const clearSpy = jest.spyOn(queryClient, 'clear');
 
     const { result } = renderAuthProvider(queryClient);
 
@@ -248,7 +247,7 @@ describe('AuthProvider', () => {
     expect(setAuthTokenMock).toHaveBeenLastCalledWith(null);
     expect(deleteSecureItemMock).toHaveBeenCalledWith('tdf-auth-token');
     expect(removeLegacyItemMock).toHaveBeenCalledWith('tdf-auth-token');
-    expect(clearSpy).toHaveBeenCalled();
+    expect(result.current.sessionEpoch).toBeGreaterThan(0);
   });
 
   it('hydrates normalized roles, modules, and feature flags from the authoritative session endpoint', async () => {
@@ -378,34 +377,36 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(result.current.partyId).toBe('22'));
   });
 
-  it('clears cached queries when the auth token changes', async () => {
+  it('advances cache occurrences for explicit auth transitions including the same token', async () => {
     const queryClient = createTestQueryClient();
-    const clearSpy = jest.spyOn(queryClient, 'clear');
 
     const { result } = renderAuthProvider(queryClient);
 
     await waitFor(() => expect(result.current.loading).toBe(false));
+    const previousEpoch = result.current.sessionEpoch;
 
     act(() => {
       result.current.setToken('Bearer first-token');
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer first-token'));
-    expect(clearSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.sessionEpoch).toBeGreaterThan(previousEpoch);
+    const firstEpoch = result.current.sessionEpoch;
 
     act(() => {
       result.current.setToken('Bearer first-token');
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith('Bearer first-token'));
-    expect(clearSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.sessionEpoch).toBeGreaterThan(firstEpoch);
+    const secondEpoch = result.current.sessionEpoch;
 
     act(() => {
       result.current.clearToken();
     });
 
     await waitFor(() => expect(setAuthTokenMock).toHaveBeenLastCalledWith(null));
-    expect(clearSpy).toHaveBeenCalledTimes(2);
+    expect(result.current.sessionEpoch).toBeGreaterThan(secondEpoch);
   });
 
   it('preserves a known party id passed with a fresh token without waiting for hydration', async () => {

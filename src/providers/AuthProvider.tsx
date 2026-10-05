@@ -1,7 +1,6 @@
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { AppState, Platform } from 'react-native';
 
@@ -17,6 +16,7 @@ export type AuthSessionSnapshot = {
 };
 
 type AuthContextValue = {
+  sessionEpoch: number;
   token: string | null;
   partyId: string | null;
   session: AuthSessionSnapshot | null;
@@ -137,7 +137,7 @@ const clearLegacyToken = async () => {
 };
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const queryClient = useQueryClient();
+  const [sessionEpoch, setSessionEpoch] = useState(0);
   const [token, setTokenState] = useState<string | null>(normalizeToken(getAuthToken()));
   const [partyId, setPartyIdState] = useState<string | null>(null);
   const [session, setSessionState] = useState<AuthSessionSnapshot | null>(null);
@@ -149,6 +149,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const appliedTokenRef = useRef<string | null>(normalizeToken(getAuthToken()));
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       profileLookupIdRef.current += 1;
@@ -169,8 +170,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     appliedTokenRef.current = next;
     setPartyIdState(null);
     setSessionState(null);
-    queryClient.clear();
-  }, [queryClient, syncTokenState]);
+    setSessionEpoch((current) => current + 1);
+  }, [syncTokenState]);
 
   const persistStoredToken = useCallback((
     next: string | null,
@@ -333,6 +334,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     nextSession?: Partial<AuthSessionSnapshot> | null,
   ) => {
     authVersionRef.current += 1;
+    setSessionEpoch((current) => current + 1);
     profileLookupIdRef.current += 1;
     const normalized = normalizeToken(next);
     const normalizedPartyId = normalized ? normalizePartyId(nextPartyId) : null;
@@ -357,6 +359,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<AuthContextValue>(
     () => ({
+      sessionEpoch,
       token,
       partyId,
       session,
@@ -368,7 +371,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       clearToken,
       refreshSession,
     }),
-    [token, partyId, session, loading, setToken, clearToken, refreshSession]
+    [sessionEpoch, token, partyId, session, loading, setToken, clearToken, refreshSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

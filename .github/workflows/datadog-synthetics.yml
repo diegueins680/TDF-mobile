@@ -29,7 +29,7 @@ jobs:
 
       - name: Run Datadog Synthetic tests
         if: ${{ env.DD_API_KEY != '' && env.DD_APP_KEY != '' }}
-        uses: DataDog/synthetics-ci-github-action@v3.8.1
+        uses: DataDog/synthetics-ci-github-action@676b9d61f8118d2fa134d964d56151714d755c0a # v3.8.1
         with:
           # REQUIRED — must be set in GitHub repo secrets (Settings → Secrets and variables → Actions)
           api-key: ${{ env.DD_API_KEY }}
@@ -50,3 +50,5 @@ jobs:
 
           # Fail if the selector finds no tests (helps catch mis-tagging)
           fail-on-missing-tests: true
+          # A rejected credential or provider outage must never appear green.
+          fail-on-critical-errors: true

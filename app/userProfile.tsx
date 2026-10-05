@@ -1,4 +1,5 @@
 import { eventExperienceLanguage, savedEventCopy } from '../src/localization/eventExperienceCopy';
+import { FeedbackEntry } from '../src/feedback/FeedbackEntry';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, FlatList, TextInput, Alert, Image, Share
@@ -733,6 +734,7 @@ export default function UserProfileScreen() {
             )}
           </View>
         )}
+      <FeedbackEntry />
       </ScrollView>
     </SafeAreaView>
   );

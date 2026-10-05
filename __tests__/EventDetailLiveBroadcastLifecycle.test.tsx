@@ -202,7 +202,7 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
       }
       if (queryKey[0] === 'event-rsvps') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-invitations') return { data: [], isLoading: false };
-      if (queryKey[0] === 'saved-event-ids') return { data: [], isLoading: false };
+      if (queryKey[0] === 'saved-event-ids') return { data: { ids: [], source: 'server', pendingCount: 0 }, isLoading: false };
       if (queryKey[0] === 'event-ticket-tiers') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-ticket-orders') return { data: [], isLoading: false };
       if (queryKey[0] === 'event-moments') return { data: [], isLoading: false };
@@ -231,6 +231,21 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
       );
     });
     expect(alertSpy).not.toHaveBeenCalledWith('Listo', expect.any(String));
+  });
+
+  it('does not publish or announce live when backend admission fails', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockBroadcastsRepo.startLiveBroadcastSession.mockRejectedValueOnce(
+      new Error('Broadcasting unavailable'),
+    );
+    const rendered = render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('En Vivo (0)'));
+    fireEvent.press(screen.getByText('Iniciar en vivo'));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Error', 'Broadcasting unavailable'));
+    expect(mockStartPublisher).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalledWith('En vivo', expect.any(String));
+    rendered.unmount();
+    expect(mockBroadcastsRepo.endLiveBroadcastSession).not.toHaveBeenCalled();
   });
 
   it('ends the tracked backend broadcast when the broadcasting screen unmounts', async () => {

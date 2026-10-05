@@ -1,3 +1,4 @@
+import { eventExperienceLanguage, savedEventCopy } from '../src/localization/eventExperienceCopy';
 import { FeedbackEntry } from '../src/feedback/FeedbackEntry';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -15,7 +16,7 @@ import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import {
   getLegacySavedEventCandidate,
   importLegacySavedEvents,
-  listSavedEventIds,
+  loadSavedEventSnapshot,
   unsaveEvent,
 } from '../src/lib/savedEvents';
 import { formatTicketMoney } from '../src/lib/tickets';
@@ -44,6 +45,7 @@ export default function UserProfileScreen() {
     getCatalogItems,
     setRegionalPreferences,
   } = useUserSettings();
+  const savedCopy = savedEventCopy[eventExperienceLanguage(locale)];
   const countries = useMemo(() => getCatalogItems('countries'), [getCatalogItems]);
   const localeOptions = useMemo(() => getCatalogItems('locales'), [getCatalogItems]);
   const currencyOptions = useMemo(() => getCatalogItems('currencies'), [getCatalogItems]);
@@ -86,7 +88,7 @@ export default function UserProfileScreen() {
 
   const savedEventIdsQuery = useQuery({
     queryKey: ['saved-event-ids', partyId],
-    queryFn: () => listSavedEventIds(
+    queryFn: () => loadSavedEventSnapshot(
       partyId as string,
       () => ownsParty(partyId),
     ),
@@ -99,14 +101,14 @@ export default function UserProfileScreen() {
     enabled: Boolean(partyId),
   });
 
-  const savedEventIds = useMemo(() => savedEventIdsQuery.data ?? [], [savedEventIdsQuery.data]);
+  const savedEventIds = useMemo(() => savedEventIdsQuery.data?.ids ?? [], [savedEventIdsQuery.data]);
 
   const savedEventsQuery = useQuery({
     queryKey: ['saved-events', partyId, savedEventIds],
     enabled: savedEventIds.length > 0,
     queryFn: async () => {
       const settled = await Promise.allSettled(savedEventIds.map((savedEventId) => Events.getById(savedEventId)));
-      return settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+      return { events: settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])), unavailableCount: settled.filter(result => result.status === 'rejected').length };
     }
   });
 
@@ -134,7 +136,7 @@ export default function UserProfileScreen() {
   const savedEvents = useMemo(() => {
     if (!savedEventsQuery.data) return [];
     const order = new Map<string, number>(savedEventIds.map((id, index) => [String(id), index] as const));
-    return [...savedEventsQuery.data].sort((a, b) => {
+    return [...savedEventsQuery.data.events].sort((a, b) => {
       const aOrder = order.get(String(a.id)) ?? Number.MAX_SAFE_INTEGER;
       const bOrder = order.get(String(b.id)) ?? Number.MAX_SAFE_INTEGER;
       return aOrder - bOrder;
@@ -162,7 +164,7 @@ export default function UserProfileScreen() {
     mutationFn: (eventId: ID) => Events.deleteRSVP(eventId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['event-rsvp-feed', partyId] });
-      Alert.alert(locale.startsWith('en') ? 'Done' : 'Listo', locale.startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
+      Alert.alert(locale.startsWith('en') ? 'Done' : savedCopy.readyTitle, locale.startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
     },
     onError: () => Alert.alert('Error', locale.startsWith('en') ? 'Could not remove your RSVP.' : 'No pudimos eliminar tu RSVP.'),
   });
@@ -231,32 +233,32 @@ export default function UserProfileScreen() {
       'Vincular guardados anteriores',
       `Este dispositivo tiene ${legacySavedEventsQuery.data.count} evento(s) guardado(s) sin una cuenta identificable. Continúa solo si te pertenecen; se vincularán a la cuenta actual.`,
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: savedCopy.cancel, style: 'cancel' },
         {
           text: 'Vincular a mi cuenta',
           onPress: () => legacyImportMutation.mutate({ ownerPartyId: partyId }),
         },
       ],
     );
-  }, [legacyImportMutation, legacySavedEventsQuery.data, partyId]);
+  }, [legacyImportMutation, legacySavedEventsQuery.data, partyId, savedCopy]);
 
   const handleCreateArtistProfile = useCallback(() => {
     if (!partyId) {
-      Alert.alert('Inicia sesión', 'Inicia sesión para crear tu perfil de artista.');
+      Alert.alert(savedCopy.signInTitle, 'Inicia sesión para crear tu perfil de artista.');
       return;
     }
     router.push('/createArtistProfile');
-  }, [partyId, router]);
+  }, [partyId, router, savedCopy]);
 
   const handleEditArtistProfile = useCallback(() => {
     if (!partyId) {
-      Alert.alert('Inicia sesión', 'Inicia sesión para editar tu perfil de artista.');
+      Alert.alert(savedCopy.signInTitle, 'Inicia sesión para editar tu perfil de artista.');
       return;
     }
     if (artistQuery.data) {
       router.push({ pathname: '/editArtistProfile', params: { artistId: artistQuery.data.id } });
     }
-  }, [artistQuery.data, partyId, router]);
+  }, [artistQuery.data, partyId, router, savedCopy]);
 
   const handleEventPress = useCallback((eventId: ID) => {
     router.push({ pathname: '/eventDetail', params: { eventId: String(eventId) } });
@@ -264,11 +266,11 @@ export default function UserProfileScreen() {
 
   const handleUnsaveEvent = useCallback((eventId: ID) => {
     if (!partyId) {
-      Alert.alert('Inicia sesión', 'Necesitas una cuenta vinculada para cambiar tus eventos guardados.');
+      Alert.alert(savedCopy.signInTitle, 'Necesitas una cuenta vinculada para cambiar tus eventos guardados.');
       return;
     }
     unsaveMutation.mutate({ eventId, ownerPartyId: partyId });
-  }, [partyId, unsaveMutation]);
+  }, [partyId, unsaveMutation, savedCopy]);
 
   const handleSaveRegion = useCallback(() => {
     if (countrySearch.trim() && !draftCountryId) {
@@ -276,8 +278,8 @@ export default function UserProfileScreen() {
       return;
     }
     setRegionalPreferences({ timezone: draftTimezone, countryId: draftCountryId || null });
-    Alert.alert('Guardado', 'Actualizamos tus preferencias regionales.');
-  }, [countrySearch, draftCountryId, draftTimezone, setRegionalPreferences]);
+    Alert.alert(savedCopy.saved, 'Actualizamos tus preferencias regionales.');
+  }, [countrySearch, draftCountryId, draftTimezone, setRegionalPreferences, savedCopy]);
 
   const headerName = displayName || 'Tu perfil';
   const headerSubtitle = partyId ? 'Sesión conectada' : 'Inicia sesión para usar RSVP e invitaciones';
@@ -322,7 +324,7 @@ export default function UserProfileScreen() {
             {unsaveMutation.isPending ? (
               <ActivityIndicator size="small" color={colors.textPrimary} />
             ) : (
-              <Text style={styles.unsaveButtonText}>Quitar</Text>
+              <Text style={styles.unsaveButtonText}>{savedCopy.remove}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -532,7 +534,7 @@ export default function UserProfileScreen() {
                   {locale.startsWith('en') ? 'Could not load your activity.' : 'No pudimos cargar tu actividad.'}
                 </Text>
                 <TouchableOpacity style={styles.activityAction} onPress={() => void activityQuery.refetch()}>
-                  <Text style={styles.activityActionText}>{locale.startsWith('en') ? 'Retry' : 'Reintentar'}</Text>
+                  <Text style={styles.activityActionText}>{locale.startsWith('en') ? 'Retry' : savedCopy.retry}</Text>
                 </TouchableOpacity>
               </View>
             ) : rsvpFeedItems.length === 0 ? (
@@ -670,6 +672,12 @@ export default function UserProfileScreen() {
 
         {activeTab === 'saved' && (
           <View style={styles.section}>
+            {savedEventIdsQuery.data && savedEventIdsQuery.data.source !== 'server' ? (
+              <Text style={styles.noDataText} accessibilityLiveRegion="polite">{savedCopy.cacheNotice}</Text>
+            ) : null}
+            {(savedEventsQuery.data?.unavailableCount ?? 0) > 0 ? (
+              <Text style={styles.noDataText} accessibilityLiveRegion="polite">{savedCopy.someUnavailable}</Text>
+            ) : null}
             {legacySavedEventsQuery.data && (
               <View style={styles.legacyImportCard}>
                 <Text style={styles.legacyImportTitle}>Guardados anteriores detectados</Text>
@@ -700,13 +708,13 @@ export default function UserProfileScreen() {
                   style={styles.actionButton}
                   onPress={() => void savedEventIdsQuery.refetch()}
                   accessibilityRole="button"
-                  accessibilityLabel="Reintentar cargar eventos guardados"
+                  accessibilityLabel={savedCopy.retrySavedAccessibility}
                 >
-                  <Text style={styles.actionButtonText}>Reintentar</Text>
+                  <Text style={styles.actionButtonText}>{savedCopy.retry}</Text>
                 </TouchableOpacity>
               </>
             ) : savedEventIds.length === 0 ? (
-              <Text style={styles.noDataText}>Aún no hay eventos guardados. Toca Guardar evento dentro de cualquier evento.</Text>
+              <Text style={styles.noDataText}>{savedCopy.savedEmpty}</Text>
             ) : savedEventsQuery.isLoading ? (
               <ActivityIndicator size="large" color="#2563eb" />
             ) : savedEvents.length > 0 ? (

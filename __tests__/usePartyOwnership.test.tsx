@@ -1,4 +1,5 @@
 import React from 'react';
+import { setAuthToken } from '../src/api/client';
 import { render } from '@testing-library/react-native';
 
 import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
@@ -27,4 +28,32 @@ describe('usePartyOwnership', () => {
     view.unmount();
     expect(ownsParty?.('77')).toBe(false);
   });
+  it('does not revive a callback when the same Party returns after another account', () => {
+    const view = render(<Probe partyId="42" />);
+    const original = ownsParty;
+    view.rerender(<Probe partyId="77" />);
+    view.rerender(<Probe partyId="42" />);
+    expect(original?.('42')).toBe(false);
+    expect(ownsParty?.('42')).toBe(true);
+  });
+
+  it('rejects token replacement immediately, before a screen rerenders', () => {
+    setAuthToken('account-a');
+    const view = render(<Probe partyId="42" />);
+    const original = ownsParty;
+    setAuthToken('account-b');
+    setAuthToken('account-a');
+    expect(original?.('42')).toBe(false);
+    view.rerender(<Probe partyId="42" />);
+    expect(ownsParty?.('42')).toBe(true);
+    setAuthToken(null);
+  });
+
+  it('remains usable through a StrictMode mount and fails closed on unmount', () => {
+    const view = render(<React.StrictMode><Probe partyId="42" /></React.StrictMode>);
+    expect(ownsParty?.('42')).toBe(true);
+    view.unmount();
+    expect(ownsParty?.('42')).toBe(false);
+  });
+
 });

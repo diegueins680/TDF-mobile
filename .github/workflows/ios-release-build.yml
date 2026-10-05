@@ -29,6 +29,8 @@ jobs:
       EXPO_PUBLIC_API_BASE: https://api.tdfrecords.net
       EXPO_PUBLIC_UPLOAD_URL: https://api.tdfrecords.net/drive/upload
       EXPO_PUBLIC_TZ: UTC
+      EXPO_PUBLIC_POSTHOG_KEY: ${{ vars.EXPO_PUBLIC_POSTHOG_KEY }}
+      EXPO_PUBLIC_POSTHOG_HOST: ${{ vars.EXPO_PUBLIC_POSTHOG_HOST }}
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 1016946267087-mvr22vuc8dql37fem7aa1msdnatjvhh4.apps.googleusercontent.com
       EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 1016946267087-p40em8ihkugloistpfnjt7es94mguhgv.apps.googleusercontent.com
       GOOGLE_IOS_URL_SCHEME: com.googleusercontent.apps.1016946267087-p40em8ihkugloistpfnjt7es94mguhgv
@@ -53,7 +55,7 @@ jobs:
           npm run release:check
           # Expo's Babel transform captures public env values before test fixtures run.
           # Keep production values for native compilation and isolate Jest's fixtures.
-          env -u EXPO_PUBLIC_API_BASE -u EXPO_PUBLIC_UPLOAD_URL -u EXPO_PUBLIC_TZ -u EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID -u EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID -u GOOGLE_IOS_URL_SCHEME NODE_ENV=test npm test -- --watch=false --runInBand
+          env -u EXPO_PUBLIC_POSTHOG_KEY -u EXPO_PUBLIC_POSTHOG_HOST -u EXPO_PUBLIC_API_BASE -u EXPO_PUBLIC_UPLOAD_URL -u EXPO_PUBLIC_TZ -u EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID -u EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID -u GOOGLE_IOS_URL_SCHEME NODE_ENV=test npm test -- --watch=false --runInBand
           python3 -m unittest discover -s scripts/tests -p 'test_ios_signing.py'
       - name: Install locked native dependencies
         working-directory: ios

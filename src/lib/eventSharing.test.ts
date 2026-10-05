@@ -16,4 +16,3 @@ describe('event sharing', () => {
       .toBe("I'm interested in Festival TDF. Take a look.");
   });
 });
-

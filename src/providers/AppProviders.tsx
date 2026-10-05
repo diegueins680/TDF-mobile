@@ -1,12 +1,10 @@
 import { PropsWithChildren } from 'react';
-import { QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AnalyticsProvider } from '../analytics/AnalyticsProvider';
 import { ExperimentProvider } from '../experiments/ExperimentProvider';
 import { OptionalStripeProvider } from '../lib/nativeStripe';
-import { queryClient } from '../lib/queryClient';
-import { AuthProvider } from './AuthProvider';
+import { AuthQueryProviders } from './AuthQueryProviders';
 import { FirstRunProvider } from './FirstRunProvider';
 import { NetworkProvider } from './NetworkProvider';
 import { UserSettingsProvider } from './UserSettingsProvider';
@@ -25,25 +23,23 @@ export function AppProviders({ children }: PropsWithChildren) {
       setReturnUrlSchemeOnAndroid
     >
       <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            {/* AnalyticsProvider must sit inside AuthProvider so it can observe partyId. */}
-            <AnalyticsProvider>
-              <UserSettingsProvider>
-                <AppThemeProvider>
-                  <NetworkProvider>
-                    {/* FirstRunProvider derives the 24-hour post-signup cohort
-                        and persists durable onboarding completion. */}
-                    <FirstRunProvider>
-                      {/* ExperimentProvider sits inside Analytics so assignment events have a destination. */}
-                      <ExperimentProvider>{children}</ExperimentProvider>
-                    </FirstRunProvider>
-                  </NetworkProvider>
-                </AppThemeProvider>
-              </UserSettingsProvider>
-            </AnalyticsProvider>
-          </AuthProvider>
-        </QueryClientProvider>
+        <AuthQueryProviders>
+          {/* AnalyticsProvider must sit inside AuthProvider so it can observe partyId. */}
+          <AnalyticsProvider>
+            <UserSettingsProvider>
+              <AppThemeProvider>
+                <NetworkProvider>
+                  {/* FirstRunProvider derives the 24-hour post-signup cohort
+                      and persists durable onboarding completion. */}
+                  <FirstRunProvider>
+                    {/* ExperimentProvider sits inside Analytics so assignment events have a destination. */}
+                    <ExperimentProvider>{children}</ExperimentProvider>
+                  </FirstRunProvider>
+                </NetworkProvider>
+              </AppThemeProvider>
+            </UserSettingsProvider>
+          </AnalyticsProvider>
+        </AuthQueryProviders>
       </SafeAreaProvider>
     </OptionalStripeProvider>
   );

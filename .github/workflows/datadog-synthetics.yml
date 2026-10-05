@@ -2,9 +2,9 @@ name: Run Datadog Synthetic tests
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "release/tdf-shipped-*" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "release/tdf-shipped-*" ]
   workflow_dispatch:
 
 jobs:

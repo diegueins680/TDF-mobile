@@ -233,6 +233,21 @@ describe('EventDetail persistence and live broadcast lifecycle', () => {
     expect(alertSpy).not.toHaveBeenCalledWith('Listo', expect.any(String));
   });
 
+  it('does not publish or announce live when backend admission fails', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockBroadcastsRepo.startLiveBroadcastSession.mockRejectedValueOnce(
+      new Error('Broadcasting unavailable'),
+    );
+    const rendered = render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('En Vivo (0)'));
+    fireEvent.press(screen.getByText('Iniciar en vivo'));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Error', 'Broadcasting unavailable'));
+    expect(mockStartPublisher).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalledWith('En vivo', expect.any(String));
+    rendered.unmount();
+    expect(mockBroadcastsRepo.endLiveBroadcastSession).not.toHaveBeenCalled();
+  });
+
   it('ends the tracked backend broadcast when the broadcasting screen unmounts', async () => {
     const rendered = render(<EventDetailScreen />);
 

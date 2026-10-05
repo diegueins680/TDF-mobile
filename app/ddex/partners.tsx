@@ -3,15 +3,13 @@ import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpac
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 
-import { createDdexPartner, listDdexPartners } from '../../src/api/ddex';
+import { createDdexPartner, getDdexReferences, listDdexPartners } from '../../src/api/ddex';
 import { FeatureAccessNotice } from '../../src/components/FeatureAccessNotice';
 import { evaluateFeatureAccess } from '../../src/features/featureRegistry';
 import { useAnalytics } from '../../src/analytics/AnalyticsProvider';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
-
-const ALLOWED_VERSIONS = ['3.8.2', '4.2', '4.3'] as const;
 
 export default function DdexPartnersScreen() {
   const analytics = useAnalytics();
@@ -22,10 +20,13 @@ export default function DdexPartnersScreen() {
   const english = locale.startsWith('en');
   const [name, setName] = useState('');
   const [dpid, setDpid] = useState('');
-  const [version, setVersion] = useState<(typeof ALLOWED_VERSIONS)[number]>('4.3');
+  const [version, setVersion] = useState('');
   const [showForm, setShowForm] = useState(false);
   const access = evaluateFeatureAccess('label.ddex.partners', { authenticated: Boolean(token), roles, modules }, 'view');
   const createAccess = evaluateFeatureAccess('label.ddex.partners', { authenticated: Boolean(token), roles, modules }, 'create');
+  const references = useQuery({ queryKey: ['ddex-references'], queryFn: getDdexReferences, enabled: access.state === 'allowed' });
+  const allowedVersions = (references.data?.ddexReferenceStandardVersions ?? []).filter(item => item.ddexStandardDetectionEnabled);
+  const selectedVersion = allowedVersions.find(item => item.ddexStandardVersionId === version);
   const partners = useQuery({ queryKey: ['ddex-partners'], queryFn: listDdexPartners, enabled: access.state === 'allowed' });
   const createPartner = useMutation({
     mutationFn: createDdexPartner,
@@ -41,8 +42,8 @@ export default function DdexPartnersScreen() {
   const submit = () => {
     const cleanName = name.trim();
     const cleanDpid = dpid.trim();
-    if (!cleanName || cleanName.length > 160 || cleanDpid.length > 200) return;
-    createPartner.mutate({ partnerName: cleanName, partnerDpid: cleanDpid || null, partnerAllowedVersions: [version] });
+    if (createAccess.state !== 'allowed' || createPartner.isPending || !selectedVersion || !cleanName || cleanName.length > 160 || cleanDpid.length > 200) return;
+    createPartner.mutate({ partnerName: cleanName, partnerDpid: cleanDpid || null, partnerAllowedStandardVersionIds: [selectedVersion.ddexStandardVersionId] });
   };
 
   return (
@@ -80,25 +81,28 @@ export default function DdexPartnersScreen() {
               style={[styles.input, { borderColor: colors.border, color: colors.textPrimary }]}
               value={dpid}
             />
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{english ? 'Allowed ERN version' : 'Versión ERN permitida'}</Text>
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{english ? 'Allowed standard version' : 'Versión de estándar permitida'}</Text>
+            {references.isLoading ? <ActivityIndicator color={colors.actionPrimary} /> : null}
+            {references.isError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{english ? 'Standard versions could not be loaded.' : 'No se pudieron cargar las versiones.'}</Text> : null}
+            {!references.isLoading && !references.isError && allowedVersions.length === 0 ? <Text style={{ color: colors.textSecondary }}>{english ? 'No enabled standard versions are available.' : 'No hay versiones de estándar habilitadas.'}</Text> : null}
             <View style={styles.versions}>
-              {ALLOWED_VERSIONS.map((value) => (
+              {allowedVersions.map((value) => (
                 <TouchableOpacity
-                  key={value}
+                  key={value.ddexStandardVersionId}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: version === value }}
-                  onPress={() => setVersion(value)}
-                  style={[styles.version, { borderColor: colors.border, backgroundColor: version === value ? colors.selected : colors.surface }]}
+                  accessibilityState={{ checked: version === value.ddexStandardVersionId }}
+                  onPress={() => setVersion(value.ddexStandardVersionId)}
+                  style={[styles.version, { borderColor: colors.border, backgroundColor: version === value.ddexStandardVersionId ? colors.selected : colors.surface }]}
                 >
-                  <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{value}</Text>
+                  <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{value.ddexStandardCode} {value.ddexVersionCode}</Text>
                 </TouchableOpacity>
               ))}
             </View>
             {createPartner.isError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{english ? 'Partner could not be created.' : 'No se pudo crear el partner.'}</Text> : null}
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityState={{ disabled: !name.trim() || createPartner.isPending }}
-              disabled={!name.trim() || createPartner.isPending}
+              accessibilityState={{ disabled: !name.trim() || !selectedVersion || createPartner.isPending }}
+              disabled={!name.trim() || !selectedVersion || createPartner.isPending}
               onPress={submit}
               style={[styles.primaryButton, { backgroundColor: colors.actionPrimary, opacity: !name.trim() ? 0.55 : 1 }]}
             >
@@ -117,7 +121,7 @@ export default function DdexPartnersScreen() {
           <View style={[styles.partner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.partnerName, { color: colors.textPrimary }]}>{item.ddexPartnerName}</Text>
             <Text style={[styles.partnerMeta, { color: colors.textSecondary }]}>{item.ddexPartnerDpid ?? (english ? 'No DPID' : 'Sin DPID')}</Text>
-            <Text style={[styles.partnerMeta, { color: colors.textSecondary }]}>{item.ddexPartnerAllowedVersions.join(', ') || '—'}</Text>
+            <Text style={[styles.partnerMeta, { color: colors.textSecondary }]}>{item.ddexPartnerAllowedStandardVersions.map(value => `${value.ddexStandardCode} ${value.ddexVersionCode}`).join(', ') || '—'}</Text>
           </View>
         )}
         ListEmptyComponent={!partners.isLoading ? <Text style={[styles.empty, { color: colors.textSecondary }]}>{english ? 'No partners configured.' : 'No hay partners configurados.'}</Text> : null}

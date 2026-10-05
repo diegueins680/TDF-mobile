@@ -929,6 +929,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Consume an unexpired single-use recovery challenge
+         * @description Requires credential-bound metadata and a current database time within the 15-minute challenge lifetime, checked after lock waits. Legacy metadata-free challenges require a fresh request. Atomically replaces the password, consumes the challenge, revokes existing interactive sessions for the Party, and issues one replacement session. Failure rolls back these changes.
+         */
+        post: operations["confirmPasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/password/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change a password using the current password
+         * @description Requires current password proof and an explicit username or active bearer token identifying the credential. Atomically revokes the Party's interactive sessions and issues a replacement. Service tokens retain their separate policy.
+         */
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/password/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change a password using the current password
+         * @description Requires current password proof and an explicit username or active bearer token identifying the credential. Atomically revokes the Party's interactive sessions and issues a replacement. Service tokens retain their separate policy.
+         */
+        post: operations["changePasswordV1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/login": {
         parameters: {
             query?: never;
@@ -983,6 +1043,26 @@ export interface paths {
          * @description Registers a new party + credential pair, sets a session cookie, and returns a ready-to-use token.
          */
         post: operations["signup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an account
+         * @description Registers a new party + credential pair, sets a session cookie, and returns a ready-to-use token.
+         */
+        post: operations["signupV1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3127,7 +3207,7 @@ export interface paths {
         head?: never;
         /**
          * Update user account
-         * @description Update username, active flag, roles, or force a password reset for a specific user.
+         * @description Strict administrator updates one credential's username, active flag or password. Disable, username change or password replacement atomically revokes the Party's existing password, Google and recovery tokens; custom service tokens remain separately managed. Another active credential may authenticate anew.
          */
         patch: operations["adminUpdateUser"];
         trace?: never;
@@ -5150,6 +5230,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List bookings within the caller's object scope
+         * @description Scheduling access is required. Admin, Manager, StudioManager and Reception can view the studio calendar; other actors see only bookings where their party is the customer or assigned engineer. Query filters never widen this scope. A foreign or missing bookingId returns an empty list. Only the studio-wide unfiltered calendar includes synthetic course sessions.
+         */
+        get: operations["listBookings"];
+        put?: never;
+        /**
+         * Create an authenticated studio booking
+         * @description Scheduling access is required. Studio-wide roles may choose a customer; other actors may create only for themselves, with an omitted/null partyId resolving to their authenticated party. Resource conflicts roll back the transaction. This compatibility operation does not establish payment.
+         */
+        post: operations["createBooking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bookings/{bookingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bookingId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update an owned, assigned or staff-accessible booking
+         * @description Scheduling access and persisted object scope are checked before mutation; a requested engineer assignment cannot grant access. Updates serialize on the booking row and project interval/status changes atomically into the exclusion-backed calendar. Checkout-bound intervals/offering and lifecycle cannot diverge from their authoritative runtime. Omitted/null fields retain existing values; a blank notes string clears notes. At least one field must be non-null. Resources and customer ownership cannot be reassigned here.
+         */
+        put: operations["updateBooking"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/bookings/public/availability": {
         parameters: {
             query?: never;
@@ -5886,6 +6012,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** @description Requires Admin role and Admin module with a reviewer distinct from the claimant. Decisions serialize on the current claim; identical-state retries preserve review evidence and cannot reactivate revoked grants. */
         patch: operations["decideDirectoryClaim"];
         trace?: never;
     };
@@ -9459,6 +9586,63 @@ export interface components {
             customerName?: string | null;
             partyDisplayName?: string | null;
             resources: components["schemas"]["BookingResource"][];
+            courseSlug?: string | null;
+            /** Format: double */
+            coursePrice?: number | null;
+            courseCurrency?: string | null;
+            courseCapacity?: number | null;
+            courseRemaining?: number | null;
+            courseLocation?: string | null;
+        };
+        BookingCreate: {
+            cbTitle: string;
+            /** Format: date-time */
+            cbStartsAt: string;
+            /** Format: date-time */
+            cbEndsAt: string;
+            /** @description One of Tentative, Confirmed, InProgress, Completed, Cancelled, NoShow; normalized case and separators accepted */
+            cbStatus: string;
+            cbNotes?: string | null;
+            /** Format: int64 */
+            cbPartyId?: number | null;
+            /** Format: int64 */
+            cbEngineerPartyId?: number | null;
+            cbEngineerName?: string | null;
+            /** Format: uuid */
+            cbServiceOfferingId: string;
+            cbResourceIds?: string[] | null;
+        };
+        /** @description At least one supported field must be non-null; null alone is not an update. */
+        BookingUpdate: {
+            ubTitle?: string | null;
+            /** Format: date-time */
+            ubStartsAt?: string | null;
+            /** Format: date-time */
+            ubEndsAt?: string | null;
+            /** @description One of Tentative, Confirmed, InProgress, Completed, Cancelled, NoShow; normalized case and separators accepted */
+            ubStatus?: string | null;
+            ubNotes?: string | null;
+            /** Format: int64 */
+            ubEngineerPartyId?: number | null;
+            ubEngineerName?: string | null;
+            /** Format: uuid */
+            ubServiceOfferingId?: string | null;
+        } | {
+            ubTitle: string;
+        } | {
+            ubStartsAt: string;
+        } | {
+            ubEndsAt: string;
+        } | {
+            ubStatus: string;
+        } | {
+            ubNotes: string;
+        } | {
+            ubEngineerPartyId: number;
+        } | {
+            ubEngineerName: string;
+        } | {
+            ubServiceOfferingId: string;
         };
         PublicBookingCreate: {
             pbFullName: string;
@@ -11231,10 +11415,25 @@ export interface components {
             fanArtistIds?: number[];
             /**
              * Format: int64
-             * @description Optional existing artist profile to claim when it is not already assigned to a user. A verified email match applies the persisted artist-claim policy server-side.
+             * @deprecated
+             * @description Unsupported legacy ownership claim. A supplied positive identifier is rejected with 403 before database effects. Create an independent account, then use the authenticated reviewed directory-claim workflow.
              */
             claimArtistId?: number;
             onboardingIntent?: components["schemas"]["OnboardingIntent"];
+        };
+        PasswordResetConfirmRequest: {
+            /** Format: uuid */
+            token: string;
+            /** Format: password */
+            newPassword: string;
+        };
+        ChangePasswordRequest: {
+            /** @description Optional when an active bearer token supplies the identifier */
+            username?: string;
+            /** Format: password */
+            currentPassword: string;
+            /** Format: password */
+            newPassword: string;
         };
         LoginResponse: {
             /** @description Bearer token for authenticated requests when a client is not using cookies. */
@@ -12248,10 +12447,10 @@ export interface components {
             uacActive?: boolean | null;
         };
         UpdateUserAccountRequest: {
-            uauUsername?: string | null;
+            uauUsername?: string;
             /** Format: password */
-            uauPassword?: string | null;
-            uauActive?: boolean | null;
+            uauPassword?: string;
+            uauActive?: boolean;
         };
         ArtistProfile: {
             /** Format: int64 */
@@ -17998,7 +18197,7 @@ export interface operations {
         };
         responses: {
             /** @description Request processed without revealing whether the account exists or email delivery succeeded. */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18006,6 +18205,167 @@ export interface operations {
             };
             /** @description Invalid request email. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirmPasswordReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Password replaced and session issued */
+            200: {
+                headers: {
+                    /** @description Replacement browser session */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Invalid payload or invalid, expired, revoked, consumed or unbound challenge */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Credential is disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Transaction failed; no credential or session changes committed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Bearer token used to resolve the username when omitted from the body; current password proof is still required. */
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password replaced and session issued */
+            200: {
+                headers: {
+                    /** @description Replacement browser session */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Invalid request fields */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current credentials or identifier session are invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Credential is disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Transaction failed; no credential or session changes committed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    changePasswordV1: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Bearer token used to resolve the username when omitted from the body; current password proof is still required. */
+                Authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password replaced and session issued */
+            200: {
+                headers: {
+                    /** @description Replacement browser session */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Invalid request fields */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current credentials or identifier session are invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Credential is disabled */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Transaction failed; no credential or session changes committed */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18102,6 +18462,67 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LoginResponse"];
                 };
+            };
+            /** @description Invalid signup fields or missing terms acceptance */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Public signup cannot claim an existing artist identity */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email already registered */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    signupV1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created */
+            200: {
+                headers: {
+                    /** @description Session cookie for browser-based clients. */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Invalid signup fields or missing terms acceptance */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Public signup cannot claim an existing artist identity */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Email already registered */
             409: {
@@ -23929,6 +24350,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Stored cart quantity or price is invalid */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     upsertMarketplaceCartItem: {
@@ -26427,6 +26855,178 @@ export interface operations {
             };
         };
     };
+    listBookings: {
+        parameters: {
+            query?: {
+                bookingId?: number;
+                partyId?: number;
+                engineerPartyId?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Scoped bookings; party and engineer filters combine by union within object scope */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"][];
+                };
+            };
+            /** @description Invalid positive identifier filter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Scheduling module access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createBooking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingCreate"];
+            };
+        };
+        responses: {
+            /** @description Persisted booking */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            /** @description Invalid or unknown input field */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Scheduling access or customer scope denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Resource conflict or stale concurrent operation; no mutation committed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid referenced party */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateBooking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bookingId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingUpdate"];
+            };
+        };
+        responses: {
+            /** @description Authoritatively accepted booking */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            /** @description Invalid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Scheduling module access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Booking absent or outside the caller's object scope */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Calendar */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid referenced party or offering */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getPublicBookingAvailability: {
         parameters: {
             query: {
@@ -27890,8 +28490,43 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Reviewed claim; only approval can create a manager grant */
+            /** @description Reviewed claim; only a new approval transition creates a manager grant */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing Admin role or module or attempted self-review */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Claim not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current claim state forbids this transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Transaction failed; decision and grant rolled back */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

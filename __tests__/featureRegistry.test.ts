@@ -36,6 +36,15 @@ const expoRouteForFile = (filename: string): string => {
 };
 
 describe('mobile feature registry', () => {
+  it('opens account deletion on the canonical web origin and requires an authenticated account', () => {
+    const feature = getFeatureById('account.deletion')!;
+    expect(resolveMobileDestination(feature)).toEqual({ kind: 'web', value: 'https://www.tdfrecords.net/cuenta/eliminar' });
+    expect(feature.pinEligible).toBe(false);
+    expect(evaluateFeatureAccess(feature, { authenticated: false }, 'submit').state).not.toBe('allowed');
+    expect(evaluateFeatureAccess(feature, { authenticated: true }, 'submit').state).toBe('allowed');
+    expect(searchFeatures('borrar mis datos').map(item => item.id)).toContain('account.deletion');
+    expect(searchFeatures('delete my account').map(item => item.id)).toContain('account.deletion');
+  });
   it('contains unique stable ids and valid parent references', () => {
     const ids = mobileFeatureRegistry.map((feature) => feature.id);
     expect(new Set(ids).size).toBe(ids.length);

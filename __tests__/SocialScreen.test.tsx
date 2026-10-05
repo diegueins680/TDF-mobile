@@ -173,6 +173,17 @@ describe('Social screen', () => {
     expect(mockMutate).not.toHaveBeenCalled();
   });
 
+  it('does not classify a person follow as an artist or onboarding conversion', async () => {
+    render(<SocialScreen />);
+    await act(async () => {
+      mockMutationOptions[0].onSuccess?.({}, {
+        targetId: 7, ownerPartyId: '42',
+      });
+    });
+    expect(mockRecordFirstValueCompletion).not.toHaveBeenCalled();
+    expect(mockCapture).not.toHaveBeenCalledWith('artist_followed', expect.anything());
+  });
+
   it('uses the canonical artist Party ID and ignores a previous account response', async () => {
     const { FanArtists } = jest.requireMock('../src/api/fanArtists');
     render(<SocialScreen />);

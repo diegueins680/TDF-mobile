@@ -4090,6 +4090,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/feedback/account-deletion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Initiate manual account deletion with authenticated acceptance
+         * @description Requires a live authenticated session belonging to accountId. Rejects expired, anonymous or mismatched sessions before insertion or notification. Returns the authoritative owner and request ID; does not erase the account.
+         */
+        post: operations["requestAccountDeletion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/feedback/internal": {
         parameters: {
             query?: never;
@@ -10169,6 +10189,8 @@ export interface components {
             currency: string;
             buyerFeeBps: number;
             organizerFeeBps: number;
+            /** @description Whether the advertised face value and buyer fee include tax. Omitted by older additive-tax APIs. */
+            taxIncluded?: boolean;
             taxBps: number;
             holdMinutes: number;
             /** @description Approved per-order limit. Older API versions omit this field and enforce the legacy limit of 100. This is not a cumulative per-buyer quota. */
@@ -10223,6 +10245,8 @@ export interface components {
             buyerPlatformFeeMinor: number;
             /** Format: int64 */
             organizerPlatformFeeMinor: number;
+            /** @description Immutable purchased tax mode. If true taxMinor is included in checkoutTotalMinor rather than added to face value and buyer fee. */
+            taxIncluded?: boolean;
             /** Format: int64 */
             taxMinor: number;
             /** Format: int64 */
@@ -14151,6 +14175,11 @@ export interface components {
             ifsCreatedAt: string;
             /** Format: date-time */
             ifsUpdatedAt: string;
+        };
+        AccountDeletionReceipt: {
+            adrRequestId: string;
+            /** Format: int64 */
+            adrCreatedBy: number;
         };
         FeedbackMultipart: {
             title: string;
@@ -25892,6 +25921,53 @@ export interface operations {
             };
         };
     };
+    requestAccountDeletion: {
+        parameters: {
+            query: {
+                accountId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["FeedbackMultipart"];
+            };
+        };
+        responses: {
+            /** @description Authenticated request accepted for manual fulfilment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDeletionReceipt"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Active authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated account does not match accountId */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listInternalFeedback: {
         parameters: {
             query?: {
@@ -26010,7 +26086,11 @@ export interface operations {
     };
     listLegacyFeedbackForAdmin: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter privacy requests before pagination; returns up to 20 records including normalized ones. */
+                accountDeletionOnly?: boolean;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -9,6 +9,7 @@ import {
   getLegacySavedEventCandidate,
   importLegacySavedEvents,
   listSavedEventIds,
+  loadSavedEventSnapshot,
   saveEvent,
   toggleSavedEvent,
   unsaveEvent,
@@ -125,6 +126,39 @@ describe('savedEvents account synchronization', () => {
 
     await expect(listSavedEventIds('42')).resolves.toEqual(['8']);
     expect(storage[storageKeyFor('42')]).toBe(JSON.stringify(['8']));
+  });
+
+  it('distinguishes confirmed server state from a cached offline snapshot', async () => {
+    remoteIds.add('8');
+    await expect(loadSavedEventSnapshot('42')).resolves.toEqual({
+      ids: ['8'], source: 'server', pendingCount: 0,
+    });
+    listRemoteMock.mockRejectedValueOnce(new Error('offline'));
+    await expect(loadSavedEventSnapshot('42')).resolves.toEqual({
+      ids: ['8'], source: 'cache', pendingCount: 0,
+    });
+  });
+
+  it('labels queued saves as pending even when the server read succeeds', async () => {
+    saveRemoteMock.mockRejectedValue(new Error('offline'));
+    await saveEvent('42', '9');
+    await expect(loadSavedEventSnapshot('42')).resolves.toEqual({
+      ids: ['9'], source: 'pending', pendingCount: 1,
+    });
+    saveRemoteMock.mockResolvedValue(undefined);
+    await expect(loadSavedEventSnapshot('42')).resolves.toEqual({
+      ids: ['9'], source: 'server', pendingCount: 0,
+    });
+  });
+
+  it('retains queued edits and their status when both read and write are offline', async () => {
+    saveRemoteMock.mockRejectedValue(new Error('offline'));
+    await saveEvent('42', '9');
+    listRemoteMock.mockRejectedValueOnce(new Error('offline'));
+    await expect(loadSavedEventSnapshot('42')).resolves.toEqual({
+      ids: ['9'], source: 'cache', pendingCount: 1,
+    });
+    expect(markFirstValueMock).not.toHaveBeenCalled();
   });
 
   it('converges another device cache to the latest server state', async () => {

@@ -92,10 +92,10 @@ describe('onboarding intent', () => {
 
   it('records first value only when the server atomically claims completion', async () => {
     mockCompleteOnboardingProgress
-      .mockResolvedValueOnce({ newlyCompleted: true })
+      .mockResolvedValueOnce({ newlyCompleted: true, progress: { firstValue: "artist_followed", completedAt: "2026-10-04T00:00:00Z" } })
       .mockResolvedValueOnce({ newlyCompleted: false });
 
-    await expect(markFirstValueCompleted('9', 'artist_followed')).resolves.toBe(true);
+    await expect(markFirstValueCompleted('9', 'artist_followed')).resolves.toBe('artist_followed');
     await expect(markFirstValueCompleted('10', 'artist_followed')).resolves.toBe(false);
     expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(1, 'artist_followed');
     expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(2, 'artist_followed');
@@ -208,14 +208,14 @@ describe('onboarding intent', () => {
     jest.mocked(AsyncStorage.getItem).mockResolvedValue('moment_reaction');
     mockCompleteOnboardingProgress.mockResolvedValueOnce({
       newlyCompleted: true,
-      progress: { eligible: false },
+      progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
     });
 
     await expect(retryPendingFirstValueCompletion('party/9')).resolves.toEqual({
       value: 'moment_reaction',
       result: {
         newlyCompleted: true,
-        progress: { eligible: false },
+        progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" },
       },
     });
 
@@ -238,7 +238,7 @@ describe('onboarding intent', () => {
     let stillOwnsParty = true;
     mockCompleteOnboardingProgress.mockImplementationOnce(async () => {
       stillOwnsParty = false;
-      return { newlyCompleted: true, progress: { eligible: false } };
+      return { newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } };
     });
 
     await expect(markFirstValueCompleted(
@@ -259,13 +259,13 @@ describe('onboarding intent', () => {
     const values = useStoredValues([]);
     mockCompleteOnboardingProgress
       .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce({ newlyCompleted: true, progress: { eligible: false } });
+      .mockResolvedValueOnce({ newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } });
 
     await expect(completeOnboardingExitWithRetry('party/9')).resolves.toBeNull();
     expect(values.get(key)).toBe('pending');
 
     await expect(retryPendingOnboardingExit('party/9')).resolves.toEqual({
-      result: { newlyCompleted: true, progress: { eligible: false } },
+      result: { newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } },
     });
     expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(1);
     expect(mockCompleteOnboardingProgress).toHaveBeenNthCalledWith(2);
@@ -278,7 +278,7 @@ describe('onboarding intent', () => {
     const values = useStoredValues([[key, 'pending']]);
     mockCompleteOnboardingProgress.mockImplementationOnce(async () => {
       stillOwnsParty = false;
-      return { newlyCompleted: true, progress: { eligible: false } };
+      return { newlyCompleted: true, progress: { eligible: false, completedAt: "2026-10-04T00:00:00Z" } };
     });
 
     await expect(retryPendingOnboardingExit(
@@ -299,4 +299,22 @@ describe('onboarding intent', () => {
     expect(values.has(key)).toBe(false);
     expect(mockCompleteOnboardingProgress).not.toHaveBeenCalled();
   });
+  it('retains retry evidence when eligibility expired without durable completion', async () => {
+    jest.mocked(AsyncStorage.getItem).mockResolvedValue('event_saved');
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: false,
+      progress: { eligible: false, completedAt: null, firstValue: null },
+    });
+    await retryPendingFirstValueCompletion('9');
+    expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith(`${PENDING_FIRST_VALUE_PREFIX}9`);
+  });
+
+  it('reports the server-confirmed value instead of the requested hint', async () => {
+    mockCompleteOnboardingProgress.mockResolvedValueOnce({
+      newlyCompleted: true,
+      progress: { eligible: false, completedAt: '2026-10-04T00:00:00Z', firstValue: 'event_saved' },
+    });
+    await expect(markFirstValueCompleted('9', 'artist_followed')).resolves.toBe('event_saved');
+  });
+
 });

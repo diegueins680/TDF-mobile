@@ -31,7 +31,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function harness() {
+async function harness() {
   let auth!: ReturnType<typeof useAuth>;
   let client!: QueryClient;
   let show!: (visible: boolean) => void;
@@ -57,6 +57,10 @@ function harness() {
     return visible ? <Screen /> : null;
   }
   const view = render(<AuthQueryProviders><Consumer /></AuthQueryProviders>);
+  // React Native Testing Library must perform its initial synchronous render
+  // before an asynchronous act scope. Then flush provider bootstrap promises
+  // before starting waitFor's short observation clock on a cold screen.
+  await act(async () => { await Promise.resolve(); });
   return {
     view, reads, get auth() { return auth; }, get client() { return client; },
     show: (visible: boolean) => show(visible),
@@ -74,7 +78,7 @@ it.each(['favorite', 'visit'] as const)('isolates a late %s response after actua
   };
   jest.mocked(put).mockReturnValue(pending.promise as never);
   jest.mocked(post).mockReturnValue(pending.promise as never);
-  const h = harness();
+  const h = await harness();
   await waitFor(() => expect(h.auth.loading).toBe(false));
   act(() => h.auth.setToken('synthetic-A', 101, { roles: ['admin'], modules: ['admin'] }));
   await waitFor(() => expect(h.reads).toEqual(['101']));
@@ -106,7 +110,7 @@ it.each(['favorite', 'visit'] as const)('isolates a late %s response after actua
 });
 
 it('allocates a fresh cache for batched same-token relogin, A-B-A and changed role scope', async () => {
-  const h = harness();
+  const h = await harness();
   await waitFor(() => expect(h.auth.loading).toBe(false));
   act(() => h.auth.setToken('synthetic-A', 101));
   await waitFor(() => expect(h.reads).toHaveLength(1));

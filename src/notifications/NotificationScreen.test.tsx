@@ -37,13 +37,13 @@ it('keeps the destination and unread count after a failed read update', async ()
 });
 it('shows the specific pending request and review controls without deciding or cancelling', async () => {
   mockNotification.mockResolvedValue({ ...row, nTargetType: 'feature_access_request', nTargetId: 17 }); const view = screen();
-  await waitFor(() => expect(view.getByText('Approve for provisioning')).toBeTruthy());
+  await waitFor(() => expect(view.getByText('Approve request')).toBeTruthy());
   expect(mockRequest).toHaveBeenCalledWith(17); expect(view.getByText('Requester')).toBeTruthy(); expect(mockDecide).not.toHaveBeenCalled(); expect(mockCancel).not.toHaveBeenCalled();
 });
 it('keeps handled status visible and hides details for inaccessible targets', async () => {
   mockNotification.mockResolvedValue({ ...row, nTargetType: 'feature_access_request', nTargetId: 17 });
   const data = await mockRequest(); mockRequest.mockResolvedValue({ ...data, request: { ...data.request, status: 'approved', reviewerNotes: 'Already reviewed' } }); const view = screen();
-  await waitFor(() => expect(view.getByText('Already reviewed')).toBeTruthy()); expect(view.queryByText('Approve for provisioning')).toBeNull();
+  await waitFor(() => expect(view.getByText('Already reviewed')).toBeTruthy()); expect(view.queryByText('Approve request')).toBeNull();
   mockRequest.mockRejectedValue(new Error('404')); await client.invalidateQueries({ queryKey: ['access-requests'] });
   await waitFor(() => expect(view.getByText('This request is unavailable to your account or your access has changed.')).toBeTruthy());
   expect(view.queryByText('Already reviewed')).toBeNull(); expect(mockDecide).not.toHaveBeenCalled();

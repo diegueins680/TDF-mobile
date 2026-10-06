@@ -18,6 +18,8 @@ export function ReviewCard({ request, locale }: { request: AccessRequest; locale
   const [notes, setNotes] = useState('');
   const english = locale.startsWith('en');
   const feature = getFeatureById(request.featureId);
+  const provisionsArtistRole = request.featureId.trim().toLowerCase() === 'artist.onboarding'
+    && request.action.trim().toLowerCase() === 'create';
   const mutation = useMutation({
     mutationFn: (decision: 'approved' | 'rejected') => decideAccessRequest(request.id, decision, notes.trim() || null),
     onSuccess: async (updated) => {
@@ -47,12 +49,18 @@ export function ReviewCard({ request, locale }: { request: AccessRequest; locale
         value={notes}
       />
       <Text style={[styles.provisioning, { color: colors.textSecondary }]}>
-        {english ? 'Approval records provisioning intent only; it cannot broaden roles or modules.' : 'Aprobar registra la intención de provisión; no puede ampliar roles ni módulos.'}
+        {provisionsArtistRole
+          ? (english
+            ? 'Approval assigns the Artist role through an auditable review.'
+            : 'La aprobación asigna el rol Artista mediante una revisión auditable.')
+          : (english
+            ? 'This approval requires manual provisioning in Roles and permissions.'
+            : 'Esta aprobación requiere provisión manual en Roles y permisos.')}
       </Text>
       {mutation.isError ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{english ? 'Decision failed.' : 'La decisión falló.'}</Text> : null}
       <View style={styles.cardActions}>
         <TouchableOpacity accessibilityRole="button" disabled={mutation.isPending} onPress={() => mutation.mutate('approved')} style={[styles.primary, { backgroundColor: colors.actionPrimary }]}>
-          <Text style={[styles.primaryText, { color: colors.actionPrimaryContrast }]}>{english ? 'Approve for provisioning' : 'Aprobar para provisión'}</Text>
+          <Text style={[styles.primaryText, { color: colors.actionPrimaryContrast }]}>{english ? 'Approve request' : 'Aprobar solicitud'}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           accessibilityRole="button"

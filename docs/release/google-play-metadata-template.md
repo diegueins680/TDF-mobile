@@ -42,10 +42,10 @@ Verify the real backend retention and sharing behavior before answering the fina
 
 Support email: `soporte@tdfrecords.com`
 
-Website: `https://tdf-app.pages.dev/mobile-app/support.html`
+Website: `https://www.tdfrecords.net/mobile-app/support.html`
 
-Privacy policy URL: `https://tdf-app.pages.dev/mobile-app/privacy.html`
+Privacy policy URL: `https://www.tdfrecords.net/mobile-app/privacy.html`
 
-Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
+Terms of service: `https://www.tdfrecords.net/mobile-app/terms.html`
 
-Data deletion URL: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
+Data deletion URL: `https://www.tdfrecords.net/mobile-app/data-deletion.html`

@@ -35,5 +35,5 @@ Information is retained only as long as needed for operational, support, securit
 ## Contact
 
 - Support email: `soporte@tdfrecords.com`
-- Support page: `https://tdf-app.pages.dev/mobile-app/support.html`
-- Data deletion instructions: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
+- Support page: `https://www.tdfrecords.net/mobile-app/support.html`
+- Data deletion instructions: `https://www.tdfrecords.net/mobile-app/data-deletion.html`

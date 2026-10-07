@@ -19,4 +19,4 @@ To request deletion of account-linked mobile app data, email `soporte@tdfrecords
 
 For general support, see:
 
-`https://tdf-app.pages.dev/mobile-app/support.html`
+`https://www.tdfrecords.net/mobile-app/support.html`

@@ -255,7 +255,7 @@ describe('Auth screen', () => {
     fireEvent.press(screen.getByTestId('loginButton'));
 
     await waitFor(() => expect(mockOpenURL).toHaveBeenCalledWith(
-      'https://tdf-app.pages.dev/herramientas/creador-musical',
+      'https://www.tdfrecords.net/herramientas/creador-musical',
     ));
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory');
   });
@@ -340,11 +340,11 @@ describe('Auth screen', () => {
 
     expect(mockOpenURL).toHaveBeenNthCalledWith(
       1,
-      'https://tdf-app.pages.dev/account/terms-es.html',
+      'https://www.tdfrecords.net/account/terms-es.html',
     );
     expect(mockOpenURL).toHaveBeenNthCalledWith(
       2,
-      'https://tdf-app.pages.dev/account/privacy-es.html',
+      'https://www.tdfrecords.net/account/privacy-es.html',
     );
   });
 
@@ -354,8 +354,8 @@ describe('Auth screen', () => {
     render(<AuthScreen />);
     fireEvent.press(await screen.findByRole('link', { name: 'View terms' }));
     fireEvent.press(screen.getByRole('link', { name: 'View privacy' }));
-    expect(mockOpenURL).toHaveBeenNthCalledWith(1, 'https://tdf-app.pages.dev/account/terms.html');
-    expect(mockOpenURL).toHaveBeenNthCalledWith(2, 'https://tdf-app.pages.dev/account/privacy.html');
+    expect(mockOpenURL).toHaveBeenNthCalledWith(1, 'https://www.tdfrecords.net/account/terms.html');
+    expect(mockOpenURL).toHaveBeenNthCalledWith(2, 'https://www.tdfrecords.net/account/privacy.html');
   });
 
   it('preserves signup input and offers a retry when a policy document cannot open', async () => {
@@ -373,7 +373,7 @@ describe('Auth screen', () => {
     fireEvent.press(screen.getByRole('link', { name: 'Ver términos' }));
     await waitFor(() => expect(screen.queryByText(failureCopy)).toBeNull());
     expect(mockOpenURL).toHaveBeenCalledTimes(2);
-    expect(mockOpenURL).toHaveBeenLastCalledWith('https://tdf-app.pages.dev/account/terms-es.html');
+    expect(mockOpenURL).toHaveBeenLastCalledWith('https://www.tdfrecords.net/account/terms-es.html');
   });
 
   it('creates an account without caller-selected roles and stores the returned session', async () => {

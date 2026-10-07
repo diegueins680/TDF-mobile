@@ -737,13 +737,13 @@ export default function AuthScreen() {
                   <View style={styles.legalLinks}>
                     <TouchableOpacity accessibilityRole="link" onPress={() => {
                       setPolicyError(false);
-                      void Linking.openURL(`https://tdf-app.pages.dev/account/terms${language === 'en' ? '' : '-es'}.html`).catch(() => setPolicyError(true));
+                      void Linking.openURL(`https://www.tdfrecords.net/account/terms${language === 'en' ? '' : '-es'}.html`).catch(() => setPolicyError(true));
                     }}>
                       <Text style={styles.legalLink}>{copy.terms}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity accessibilityRole="link" onPress={() => {
                       setPolicyError(false);
-                      void Linking.openURL(`https://tdf-app.pages.dev/account/privacy${language === 'en' ? '' : '-es'}.html`).catch(() => setPolicyError(true));
+                      void Linking.openURL(`https://www.tdfrecords.net/account/privacy${language === 'en' ? '' : '-es'}.html`).catch(() => setPolicyError(true));
                     }}>
                       <Text style={styles.legalLink}>{copy.privacy}</Text>
                     </TouchableOpacity>

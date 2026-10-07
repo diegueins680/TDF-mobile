@@ -10,6 +10,7 @@ import { Directory, type DirectoryEntityType } from '../api/directory';
 import { useAnalytics } from '../analytics/AnalyticsProvider';
 import { useAuth } from '../providers/AuthProvider';
 import { useAppTheme } from '../theme/ThemeProvider';
+import { DirectoryPreviewImage } from './DirectoryPreviewImage';
 
 type DetailValue = Record<string, unknown>;
 
@@ -66,6 +67,11 @@ export function DirectoryPublicDetailScreen({ kind, identifier }: { kind: Direct
   const id = textValue(data.id) ?? identifier;
   const title = textValue(data.name) ?? textValue(data.title) ?? 'Directorio musical TDF';
   const description = textValue(data.bio) ?? textValue(data.description);
+  const previewImageUrl = kind === 'profile' ? textValue(data.previewImageUrl) : textValue(data.imageUrl);
+  const sourceProfile = kind === 'classified' && data.sourceProfile && typeof data.sourceProfile === 'object'
+    ? data.sourceProfile as DetailValue
+    : undefined;
+  const sourceProfileSlug = textValue(sourceProfile?.slug);
   const location = data.location && typeof data.location === 'object' ? data.location as DetailValue : undefined;
   const locations = useMemo(() => arrayValue(data.locations), [data.locations]);
   const shareUrl = useMemo(
@@ -173,6 +179,16 @@ export function DirectoryPublicDetailScreen({ kind, identifier }: { kind: Direct
         <Pressable accessibilityRole="button" onPress={() => router.back()}><Text style={{ color: colors.actionPrimary }}>← Volver a buscar</Text></Pressable>
         <Text style={[styles.kind, { color: colors.actionPrimary }]}>{kind.toUpperCase()}</Text>
         <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+        {previewImageUrl ? <DirectoryPreviewImage kind={kind} imageUrl={previewImageUrl} label={title} /> : null}
+        {sourceProfileSlug ? (
+          <Pressable
+            accessibilityRole="link"
+            style={[styles.secondaryButton, { borderColor: colors.actionPrimary }]}
+            onPress={() => router.push(`/directory/profile/${encodeURIComponent(sourceProfileSlug)}`)}
+          >
+            <Text style={{ color: colors.actionPrimary, fontWeight: '700' }}>Ver perfil</Text>
+          </Pressable>
+        ) : null}
         {description ? <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text> : null}
         {facts.length ? (
           <View style={[styles.panel, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSubtle }]}>

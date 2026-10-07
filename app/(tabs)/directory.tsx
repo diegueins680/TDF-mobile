@@ -29,6 +29,7 @@ import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
+import { DirectoryPreviewImage } from '../../src/components/DirectoryPreviewImage';
 
 const CITY_STORAGE_KEY = 'tdf-mobile/directory-city-id';
 type ViewMode = 'list' | 'grid' | 'map';
@@ -49,6 +50,8 @@ const MODE_OPTIONS: ReadonlyArray<{ id: ViewMode; label: string }> = [
 ];
 
 const detailHref = (item: DirectorySearchItem): Href => {
+  // Listings derived from an artist profile open that canonical profile.
+  if (item.sourceProfile) return `/directory/profile/${encodeURIComponent(item.sourceProfile.slug)}` as Href;
   const resource = item.type === 'profile' || item.type === 'classified' ? item.slug : item.id;
   return `/directory/${item.type}/${encodeURIComponent(resource)}` as Href;
 };
@@ -336,6 +339,7 @@ function ResultCard({ item, compact = false, onOpen }: { item: DirectorySearchIt
         onPress={onOpen}
         style={styles.cardLink}
       >
+        <DirectoryPreviewImage kind={item.type} imageUrl={item.imageUrl} label={item.title} aspectRatio={compact ? 4 / 3 : 16 / 9} />
         <Text style={[styles.kind, { color: colors.actionPrimary }]}>{item.type.toUpperCase()}</Text>
         <Text numberOfLines={2} style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.title}</Text>
         {item.subtitle ? <Text numberOfLines={2} style={{ color: colors.textSecondary }}>{item.subtitle}</Text> : null}
@@ -343,6 +347,7 @@ function ResultCard({ item, compact = false, onOpen }: { item: DirectorySearchIt
         <Text style={{ color: colors.textSecondary }}>
           {item.location.city ?? 'Disponible en remoto'}{item.location.distanceKm != null ? ` · ~${item.location.distanceKm} km` : ''}
         </Text>
+        {item.sourceProfile ? <Text style={[styles.badge, { color: colors.actionPrimary }]}>Ver perfil</Text> : null}
       </Pressable>
       <View style={styles.actionsRow}>
         {item.modality?.remote ? <Text style={[styles.badge, { color: colors.success }]}>Remoto</Text> : null}

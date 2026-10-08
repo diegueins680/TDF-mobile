@@ -14,6 +14,7 @@ const mockScreenEvent = jest.fn();
 const mockBuyTickets = jest.fn();
 const mockCreatePaymentSheet = jest.fn();
 let mockTierPriceCents = 2500;
+let mockTicketPolicy: Record<string, unknown> | null = null;
 let mockIncludeUnavailableTier = false;
 let mockTierQueryError = false;
 let mockAuthToken: string | null = 'Bearer token';
@@ -128,6 +129,7 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
     mockAuthPartyId = '7';
     mockAuthDisplayName = 'Ana';
     mockOrders = [];
+    mockTicketPolicy = null;
     jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(true);
     jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     mockBuyTickets.mockResolvedValue({ ...paidOrder, amountCents: 0 });
@@ -198,6 +200,9 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
           isError: mockTierQueryError,
           refetch: jest.fn(),
         };
+      }
+      if (queryKey[0] === 'event-ticket-policy') {
+        return { data: mockTicketPolicy, isLoading: false, isError: false, refetch: jest.fn() };
       }
       if (queryKey[0] === 'ticket-checkout-party') {
         return {
@@ -300,6 +305,62 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
     expect(mockBuyTickets).not.toHaveBeenCalled();
     expect(Linking.openURL).not.toHaveBeenCalled();
     expect(await screen.findByText('¡Entradas confirmadas!')).toBeTruthy();
+  });
+
+  it('requires accepting the approved ticket policy in the app before confirming free tickets', async () => {
+    mockTierPriceCents = 0;
+    mockTicketPolicy = {
+      termsVersion: 'event-ticket-terms-v2',
+      termsSummary: 'Entradas personales.',
+      refundPolicy: 'Sin reembolso para entradas gratuitas.',
+    };
+    mockCreatePaymentSheet.mockResolvedValue({
+      orderId: '10',
+      amountCents: 0,
+      currency: 'USD',
+      clientSecret: '',
+      paymentSheet: null,
+    });
+    render(<TicketCheckoutScreen />);
+
+    await screen.findByDisplayValue('ana@example.com');
+    const terms = screen.getByRole('button', { name: 'Términos de las entradas' });
+    expect(terms.props.accessibilityState).toEqual({ expanded: false });
+    expect(screen.getByText('Versión event-ticket-terms-v2')).toBeTruthy();
+    expect(screen.queryByText('Entradas personales.')).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'Política de reembolso' }));
+    expect(screen.getByText('Sin reembolso para entradas gratuitas.')).toBeTruthy();
+
+    const submit = screen.getByTestId('ticket-checkout-submit');
+    expect(submit.props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
+    fireEvent.press(submit);
+    expect(mockCreatePaymentSheet).not.toHaveBeenCalled();
+
+    const consent = screen.getByRole('checkbox', { name: /versión event-ticket-terms-v2/ });
+    expect(consent.props.accessibilityState).toEqual(expect.objectContaining({ checked: false }));
+    fireEvent.press(consent);
+    expect(screen.getByTestId('ticket-checkout-submit').props.accessibilityState)
+      .toEqual(expect.objectContaining({ disabled: false }));
+    fireEvent.press(screen.getByRole('button', { name: /Confirmar 1 entrada gratis/i }));
+
+    await waitFor(() => expect(mockCreatePaymentSheet).toHaveBeenCalledWith(
+      expect.objectContaining({ acceptedTermsVersion: 'event-ticket-terms-v2' }),
+      undefined,
+    ));
+  });
+
+  it('shows the ticket policy for paid tickets and leaves acceptance to the secure checkout', async () => {
+    mockTicketPolicy = {
+      termsVersion: 'event-ticket-terms-v2',
+      termsSummary: 'Entradas personales.',
+      refundPolicy: 'Reembolso total hasta 48 horas antes.',
+    };
+    render(<TicketCheckoutScreen />);
+
+    await screen.findByDisplayValue('ana@example.com');
+    expect(screen.getByRole('button', { name: 'Términos de las entradas' })).toBeTruthy();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.getByText('Aceptarás estos términos en el checkout seguro antes de pagar.')).toBeTruthy();
   });
 
   it('opens the canonical web checkout for paid tickets without forwarding customer PII', async () => {

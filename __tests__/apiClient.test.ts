@@ -136,6 +136,22 @@ describe('API client buyer errors', () => {
     );
     expect(error.message).not.toMatch(/agotaron|otra cantidad/i);
   });
+
+  it('explains missing ticket terms acceptance in Spanish and keeps the terms-changed reason', () => {
+    const missing = normalizeApiError({
+      isAxiosError: true,
+      message: 'Request failed',
+      response: { status: 400, data: 'Ticket terms must be accepted before seats can be held' },
+    });
+    expect(missing.message).toMatch(/Acepta los términos/);
+
+    const changed = normalizeApiError({
+      isAxiosError: true,
+      message: 'Request failed',
+      response: { status: 409, data: 'Ticket terms changed; review the current terms and accept them again' },
+    });
+    expect(changed.message).toMatch(/terms changed/i);
+  });
   it('never revives a captured request after token A -> B -> A', () => {
     setAuthToken('account-a');
     const binding = captureAuthSession('account-a');

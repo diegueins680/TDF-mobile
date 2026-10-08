@@ -19,6 +19,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Events } from '../src/api/events';
 import { getParty } from '../src/api/parties';
 import { TicketOrderCard } from '../src/components/tickets/TicketOrderCard';
+import { LegalDisclosure } from '../src/components/LegalDisclosure';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import {
   formatTicketDateTime,
@@ -84,6 +85,7 @@ export default function TicketCheckoutScreen() {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [showOrders, setShowOrders] = useState(false);
   const [submittedOrderId, setSubmittedOrderId] = useState<string | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const pendingPollStartedAt = useRef<number | null>(null);
   const checkoutKeysByFingerprint = useRef(new Map<string, string>());
   const checkoutFingerprintsByOrderId = useRef(new Map<string, string>());
@@ -114,6 +116,16 @@ export default function TicketCheckoutScreen() {
     enabled: Boolean(eventId && token?.trim()),
     refetchInterval: 15000,
   });
+
+  // Approved ticket policy: free tickets are confirmed in the app, so their terms must be accepted here.
+  // Paid tickets continue on the web checkout, which asks for the same acceptance before payment.
+  const policyQuery = useQuery({
+    queryKey: ['event-ticket-policy', eventId],
+    queryFn: () => Events.getPublicTicketPolicy(eventId as ID),
+    enabled: Boolean(eventId),
+    retry: false,
+  });
+  const ticketPolicy = policyQuery.data ?? null;
 
   const partyQuery = useQuery({
     queryKey: ['ticket-checkout-party', partyId],
@@ -157,6 +169,9 @@ export default function TicketCheckoutScreen() {
     () => availableTiers.find((tier) => tier.id === selectedTierId) ?? availableTiers[0] ?? null,
     [availableTiers, selectedTierId],
   );
+  const requiresInAppConsent = Boolean(ticketPolicy) && selectedTier?.priceCents === 0;
+  const consentBlocksCheckout = selectedTier?.priceCents === 0
+    && (policyQuery.isLoading || (requiresInAppConsent && !termsAccepted));
   const maxQuantity = selectedTier
     ? Math.min(ticketTierAvailability(selectedTier), MAX_TICKETS_PER_ORDER)
     : 1;
@@ -238,6 +253,10 @@ export default function TicketCheckoutScreen() {
         return { kind: 'provider-neutral-opened', checkoutUrl };
       }
 
+      if (ticketPolicy && !termsAccepted) {
+        throw new Error('Acepta los términos y la política de reembolso para continuar.');
+      }
+
       const input = {
         eventId,
         tierId: selectedTier.id,
@@ -247,6 +266,7 @@ export default function TicketCheckoutScreen() {
         buyerEmail: buyerEmail.trim().toLowerCase(),
         promoCode: promoCode.trim().toUpperCase() || null,
         checkoutKey: undefined as string | undefined,
+        acceptedTermsVersion: ticketPolicy?.termsVersion ?? null,
       };
 
       const checkoutFingerprint = JSON.stringify([
@@ -316,6 +336,16 @@ export default function TicketCheckoutScreen() {
     },
     onError: (error) => {
       analytics.capture('ticket_checkout_failed', { event_id: eventId });
+      if (/terms changed/i.test(errorMessage(error, ''))) {
+        setTermsAccepted(false);
+        void policyQuery.refetch();
+        setFeedback({
+          tone: 'error',
+          title: 'Los términos se actualizaron',
+          message: 'Revisa la nueva versión de los términos y vuelve a aceptarla para continuar.',
+        });
+        return;
+      }
       setFeedback({
         tone: 'error',
         title: 'No pudimos completar la compra',
@@ -756,6 +786,43 @@ export default function TicketCheckoutScreen() {
                   </View>
                 )}
 
+                {ticketPolicy ? (
+                  <View style={styles.termsSection}>
+                    <LegalDisclosure
+                      testID="ticket-terms"
+                      title="Términos de las entradas"
+                      summary={`Versión ${ticketPolicy.termsVersion}`}
+                    >
+                      <Text style={styles.termsText}>{ticketPolicy.termsSummary}</Text>
+                    </LegalDisclosure>
+                    <LegalDisclosure testID="ticket-refund-policy" title="Política de reembolso">
+                      <Text style={styles.termsText}>{ticketPolicy.refundPolicy}</Text>
+                    </LegalDisclosure>
+                    {requiresInAppConsent ? (
+                      <TouchableOpacity
+                        testID="ticket-terms-consent"
+                        style={styles.consentRow}
+                        onPress={() => setTermsAccepted((current) => !current)}
+                        disabled={purchaseMutation.isPending}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: termsAccepted, disabled: purchaseMutation.isPending }}
+                        accessibilityHint="Los términos y la política de reembolso están arriba"
+                      >
+                        <MaterialCommunityIcons
+                          name={termsAccepted ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                          size={24}
+                          color="#7c3aed"
+                        />
+                        <Text style={styles.consentText}>
+                          Acepto los términos de las entradas (versión {ticketPolicy.termsVersion}) y la política de reembolso indicados arriba.
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={styles.helperText}>Aceptarás estos términos en el checkout seguro antes de pagar.</Text>
+                    )}
+                  </View>
+                ) : null}
+
                 <View style={styles.trustRow}>
                   <MaterialCommunityIcons name="lock-outline" size={19} color="#15803d" />
                   <Text style={styles.trustText}>Pago en el checkout seguro de TDF Records. TDF no guarda los datos de tu tarjeta.</Text>
@@ -816,9 +883,10 @@ export default function TicketCheckoutScreen() {
               </Text>
             </View>
             <TouchableOpacity
-              style={[styles.checkoutButton, (purchaseMutation.isPending || submittedOrderId) && styles.buttonDisabled]}
+              testID="ticket-checkout-submit"
+              style={[styles.checkoutButton, (purchaseMutation.isPending || submittedOrderId || consentBlocksCheckout) && styles.buttonDisabled]}
               onPress={handlePurchase}
-              disabled={purchaseMutation.isPending || Boolean(submittedOrderId)}
+              disabled={purchaseMutation.isPending || Boolean(submittedOrderId) || consentBlocksCheckout}
               accessibilityRole="button"
               accessibilityLabel={
                 selectedTier.priceCents === 0
@@ -828,7 +896,7 @@ export default function TicketCheckoutScreen() {
                   : `Pagar ${formatTicketMoney(totalCents, selectedTier.currency)}`
               }
               accessibilityState={{
-                disabled: purchaseMutation.isPending || Boolean(submittedOrderId),
+                disabled: purchaseMutation.isPending || Boolean(submittedOrderId) || consentBlocksCheckout,
                 busy: purchaseMutation.isPending || Boolean(submittedOrderId),
               }}
             >
@@ -932,6 +1000,10 @@ const styles = StyleSheet.create({
   stepBadgeText: { color: '#6d28d9', fontSize: 13, fontWeight: '900' },
   sectionTitle: { color: '#111827', fontSize: 17, fontWeight: '900' },
   helperText: { color: '#6b7280', fontSize: 12, lineHeight: 18 },
+  termsSection: { gap: 8 },
+  termsText: { color: '#374151', fontSize: 14, lineHeight: 20 },
+  consentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, minHeight: 48, paddingVertical: 6 },
+  consentText: { flex: 1, color: '#111827', fontSize: 14, lineHeight: 20 },
   errorTitle: { color: '#991b1b', fontSize: 17, fontWeight: '900' },
   tierList: { gap: 10 },
   tierCard: {

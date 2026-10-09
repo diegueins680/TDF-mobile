@@ -15,6 +15,8 @@ const ANDROID_PACKAGE = 'com.tdf.records';
 const DEFAULT_TIME_ZONE = 'America/Guayaquil';
 const PUBLIC_SITE_URL = 'https://www.tdfrecords.net/mobile-app';
 // The apex redirects; verified hosts must serve association files directly.
+// tdf-app.pages.dev is accepted only so links shared before the move to
+// tdfrecords.net still open in the app; new links never use it.
 const PUBLIC_UNIVERSAL_LINK_HOSTS = ['www.tdfrecords.net', 'tdf-app.pages.dev'];
 const PUBLIC_SUPPORT_URL = `${PUBLIC_SITE_URL}/support.html`;
 const PUBLIC_PRIVACY_POLICY_URL = `${PUBLIC_SITE_URL}/privacy.html`;

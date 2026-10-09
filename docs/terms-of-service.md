@@ -23,7 +23,7 @@ TDF Records may update, suspend, or limit features as needed for security, maint
 
 Use of the app involves processing operational business data as described in the privacy policy:
 
-`https://tdf-app.pages.dev/mobile-app/privacy.html`
+`https://www.tdfrecords.net/mobile-app/privacy.html`
 
 ## Termination
 

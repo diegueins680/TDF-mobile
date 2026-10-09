@@ -27,10 +27,10 @@ Deep link scheme: `tdf`
 
 ## Published public pages
 
-- Support: `https://tdf-app.pages.dev/mobile-app/support.html`
-- Privacy policy: `https://tdf-app.pages.dev/mobile-app/privacy.html`
-- Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
-- Data deletion: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
+- Support: `https://www.tdfrecords.net/mobile-app/support.html`
+- Privacy policy: `https://www.tdfrecords.net/mobile-app/privacy.html`
+- Terms of service: `https://www.tdfrecords.net/mobile-app/terms.html`
+- Data deletion: `https://www.tdfrecords.net/mobile-app/data-deletion.html`
 
 ## How to build and submit
 

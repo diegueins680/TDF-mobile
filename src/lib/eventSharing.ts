@@ -1,6 +1,6 @@
 import type { RSVPStatus } from '../types';
 
-export const PUBLIC_EVENT_ORIGIN = 'https://tdf-app.pages.dev';
+export const PUBLIC_EVENT_ORIGIN = 'https://www.tdfrecords.net';
 const EVENT_ID = /^[1-9]\d{0,18}$/;
 const ALLOWED_ATTRIBUTION: Record<string, ReadonlySet<string>> = {
   utm_source: new Set(['tdf_mobile']),

@@ -8,7 +8,7 @@ Product: `TDF Records`
 
 Support email: `soporte@tdfrecords.com`
 
-Support URL: `https://tdf-app.pages.dev/mobile-app/support.html`
+Support URL: `https://www.tdfrecords.net/mobile-app/support.html`
 
 Response target: publish a real SLA only if the support team has agreed one; otherwise omit it from the public page and keep store-facing promises qualitative.
 
@@ -23,9 +23,9 @@ Response target: publish a real SLA only if the support team has agreed one; oth
 
 ## Legal links
 
-- Privacy policy: `https://tdf-app.pages.dev/mobile-app/privacy.html`
-- Terms of service: `https://tdf-app.pages.dev/mobile-app/terms.html`
-- Data deletion: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
+- Privacy policy: `https://www.tdfrecords.net/mobile-app/privacy.html`
+- Terms of service: `https://www.tdfrecords.net/mobile-app/terms.html`
+- Data deletion: `https://www.tdfrecords.net/mobile-app/data-deletion.html`
 - Security contact: `security@tdfrecords.com`
 
 ## App review notes landing page

@@ -28,10 +28,10 @@ canónica; se verificaron sus títulos y contenido, no sólo el código HTTP.
 - Category: `Business`
 - Secondary category suggestion: `Productivity`
 - Content rating suggestion: `Everyone` / `4+`
-- Support URL: `https://tdf-app.pages.dev/mobile-app/support.html`
-- Privacy policy URL: `https://tdf-app.pages.dev/mobile-app/privacy.html`
-- Marketing site: `https://tdf-app.pages.dev/mobile-app/`
-- Public data deletion URL: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
+- Support URL: `https://www.tdfrecords.net/mobile-app/support.html`
+- Privacy policy URL: `https://www.tdfrecords.net/mobile-app/privacy.html`
+- Marketing site: `https://www.tdfrecords.net/mobile-app/`
+- Public data deletion URL: `https://www.tdfrecords.net/mobile-app/data-deletion.html`
 - Contact email: `soporte@tdfrecords.com`
 
 ## Google Play
@@ -73,9 +73,9 @@ A valid backend token is required for protected CRM and inventory features.`
 
 - Keywords: `bookings,events,crm,inventory,venues,contacts,artists,parties`
 - Primary category: `Business`
-- Support URL: `https://tdf-app.pages.dev/mobile-app/support.html`
-- Marketing URL: `https://tdf-app.pages.dev/mobile-app/`
-- Privacy policy URL: `https://tdf-app.pages.dev/mobile-app/privacy.html`
+- Support URL: `https://www.tdfrecords.net/mobile-app/support.html`
+- Marketing URL: `https://www.tdfrecords.net/mobile-app/`
+- Privacy policy URL: `https://www.tdfrecords.net/mobile-app/privacy.html`
 
 ## Screenshot Plan
 

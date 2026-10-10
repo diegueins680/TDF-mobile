@@ -345,7 +345,8 @@ export default function TicketCheckoutScreen() {
     },
     onError: (error) => {
       analytics.capture('ticket_checkout_failed', { event_id: eventId });
-      if (/terms changed/i.test(errorMessage(error, ''))) {
+      // The policy changed, or became required, after this screen loaded.
+      if (/terms changed|terms must be accepted/i.test(errorMessage(error, ''))) {
         setTermsAccepted(false);
         void policyQuery.refetch();
         setFeedback({

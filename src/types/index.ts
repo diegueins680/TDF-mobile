@@ -421,6 +421,8 @@ export type EventTicketPurchaseInput = {
   buyerEmail?: string | null;
   promoCode?: string | null;
   checkoutKey?: string | null;
+  /** Terms version of the event's approved ticket policy that the buyer accepted in the app. */
+  acceptedTermsVersion?: string | null;
 };
 
 export type EventTicketPaymentSheetParams = {

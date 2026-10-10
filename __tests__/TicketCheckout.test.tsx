@@ -15,6 +15,8 @@ const mockBuyTickets = jest.fn();
 const mockCreatePaymentSheet = jest.fn();
 let mockTierPriceCents = 2500;
 let mockTicketPolicy: Record<string, unknown> | null = null;
+let mockTicketPolicyQuery: { isFetching?: boolean; isError?: boolean } = {};
+const mockRefetchTicketPolicy = jest.fn();
 let mockIncludeUnavailableTier = false;
 let mockTierQueryError = false;
 let mockAuthToken: string | null = 'Bearer token';
@@ -130,6 +132,8 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
     mockAuthDisplayName = 'Ana';
     mockOrders = [];
     mockTicketPolicy = null;
+    mockTicketPolicyQuery = {};
+    mockRefetchTicketPolicy.mockReset();
     jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(true);
     jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     mockBuyTickets.mockResolvedValue({ ...paidOrder, amountCents: 0 });
@@ -202,7 +206,7 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
         };
       }
       if (queryKey[0] === 'event-ticket-policy') {
-        return { data: mockTicketPolicy, isLoading: false, isError: false, refetch: jest.fn() };
+        return { data: mockTicketPolicy, isLoading: false, isError: false, refetch: mockRefetchTicketPolicy, ...mockTicketPolicyQuery };
       }
       if (queryKey[0] === 'ticket-checkout-party') {
         return {
@@ -347,6 +351,47 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
       expect.objectContaining({ acceptedTermsVersion: 'event-ticket-terms-v2' }),
       undefined,
     ));
+  });
+
+  it('clears and locks free-ticket consent while changed terms are still loading', async () => {
+    mockTierPriceCents = 0;
+    mockTicketPolicy = { termsVersion: 'event-ticket-terms-v2', termsSummary: 'A.', refundPolicy: 'B.' };
+    const view = render(<TicketCheckoutScreen />);
+    await screen.findByDisplayValue('ana@example.com');
+    fireEvent.press(screen.getByRole('checkbox', { name: /versión event-ticket-terms-v2/ }));
+    expect(screen.getByRole('checkbox', { name: /versión event-ticket-terms-v2/ }).props.accessibilityState)
+      .toEqual(expect.objectContaining({ checked: true }));
+
+    // The old version stays on screen during the refetch: it must not be acceptable.
+    mockTicketPolicyQuery = { isFetching: true };
+    view.rerender(<TicketCheckoutScreen />);
+    expect(screen.getByRole('checkbox', { name: /versión event-ticket-terms-v2/ }).props.accessibilityState)
+      .toEqual(expect.objectContaining({ disabled: true }));
+    expect(screen.getByTestId('ticket-checkout-submit').props.accessibilityState)
+      .toEqual(expect.objectContaining({ disabled: true }));
+
+    mockTicketPolicy = { termsVersion: 'event-ticket-terms-v3', termsSummary: 'C.', refundPolicy: 'D.' };
+    mockTicketPolicyQuery = {};
+    view.rerender(<TicketCheckoutScreen />);
+    const fresh = await screen.findByRole('checkbox', { name: /versión event-ticket-terms-v3/ });
+    await waitFor(() => expect(fresh.props.accessibilityState).toEqual(expect.objectContaining({ checked: false })));
+    expect(screen.getByTestId('ticket-checkout-submit').props.accessibilityState)
+      .toEqual(expect.objectContaining({ disabled: true }));
+    expect(mockCreatePaymentSheet).not.toHaveBeenCalled();
+  });
+
+  it('blocks free tickets and offers a retry when the ticket policy cannot be loaded', async () => {
+    mockTierPriceCents = 0;
+    mockTicketPolicyQuery = { isError: true };
+    render(<TicketCheckoutScreen />);
+    await screen.findByDisplayValue('ana@example.com');
+    expect(screen.getByText(/No pudimos cargar los términos de las entradas/)).toBeTruthy();
+    const submit = screen.getByTestId('ticket-checkout-submit');
+    expect(submit.props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
+    fireEvent.press(submit);
+    expect(mockCreatePaymentSheet).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('ticket-terms-retry'));
+    expect(mockRefetchTicketPolicy).toHaveBeenCalledTimes(1);
   });
 
   it('shows the ticket policy for paid tickets and leaves acceptance to the secure checkout', async () => {

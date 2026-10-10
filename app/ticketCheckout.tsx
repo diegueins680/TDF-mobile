@@ -126,6 +126,15 @@ export default function TicketCheckoutScreen() {
     retry: false,
   });
   const ticketPolicy = policyQuery.data ?? null;
+  // A refetch keeps the previous policy on screen, so it counts as pending too.
+  const policyPending = policyQuery.isLoading || Boolean(policyQuery.isFetching);
+  // An unknown policy is not "no policy": the server may still require acceptance.
+  const policyUnavailable = policyQuery.isError && !policyPending;
+  // Acceptance belongs to the version that was on screen: a different version starts unaccepted.
+  const ticketPolicyVersion = ticketPolicy?.termsVersion ?? null;
+  useEffect(() => {
+    setTermsAccepted(false);
+  }, [ticketPolicyVersion]);
 
   const partyQuery = useQuery({
     queryKey: ['ticket-checkout-party', partyId],
@@ -171,7 +180,7 @@ export default function TicketCheckoutScreen() {
   );
   const requiresInAppConsent = Boolean(ticketPolicy) && selectedTier?.priceCents === 0;
   const consentBlocksCheckout = selectedTier?.priceCents === 0
-    && (policyQuery.isLoading || (requiresInAppConsent && !termsAccepted));
+    && (policyPending || policyUnavailable || (requiresInAppConsent && !termsAccepted));
   const maxQuantity = selectedTier
     ? Math.min(ticketTierAvailability(selectedTier), MAX_TICKETS_PER_ORDER)
     : 1;
@@ -786,6 +795,22 @@ export default function TicketCheckoutScreen() {
                   </View>
                 )}
 
+                {policyUnavailable && selectedTier?.priceCents === 0 ? (
+                  <View style={styles.termsSection} accessibilityRole="alert">
+                    <Text style={styles.helperText}>
+                      No pudimos cargar los términos de las entradas. No se reservó nada; reintenta para continuar.
+                    </Text>
+                    <TouchableOpacity
+                      testID="ticket-terms-retry"
+                      style={styles.secondaryButton}
+                      onPress={() => void policyQuery.refetch()}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.secondaryButtonText}>Reintentar</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
                 {ticketPolicy ? (
                   <View style={styles.termsSection}>
                     <LegalDisclosure
@@ -803,9 +828,9 @@ export default function TicketCheckoutScreen() {
                         testID="ticket-terms-consent"
                         style={styles.consentRow}
                         onPress={() => setTermsAccepted((current) => !current)}
-                        disabled={purchaseMutation.isPending}
+                        disabled={purchaseMutation.isPending || policyPending}
                         accessibilityRole="checkbox"
-                        accessibilityState={{ checked: termsAccepted, disabled: purchaseMutation.isPending }}
+                        accessibilityState={{ checked: termsAccepted, disabled: purchaseMutation.isPending || policyPending }}
                         accessibilityHint="Los términos y la política de reembolso están arriba"
                       >
                         <MaterialCommunityIcons

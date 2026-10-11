@@ -328,7 +328,9 @@ function ProfileForm({ profile, taxonomies, onSaved }: { profile?: ManagedDirect
 function ClassifiedForm({ taxonomies, profiles, onCreated }: { taxonomies: Taxonomies; profiles: Awaited<ReturnType<typeof Directory.managedProfiles>>; onCreated: () => void }) {
   const { colors } = useAppTheme();
   const [profileId, setProfileId] = useState(profiles[0]?.id ?? '');
-  const [categoryId, setCategoryId] = useState(taxonomies.classifiedCategories[0]?.id ?? '');
+  // Artist-profile listings are generated from profiles, never created by hand.
+  const manualCategories = taxonomies.classifiedCategories.filter((category) => !category.derived);
+  const [categoryId, setCategoryId] = useState(manualCategories[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [cityIds, setCityIds] = useState<string[]>([]);
@@ -383,7 +385,7 @@ function ClassifiedForm({ taxonomies, profiles, onCreated }: { taxonomies: Taxon
       <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Publicar como</Text>
       <View style={styles.chips}>{profiles.map((profile) => <Segment key={profile.id} label={profile.name} selected={profile.id === profileId} onPress={() => setProfileId(profile.id)} />)}</View>
       <Text style={[styles.fieldLabel, { color: colors.textPrimary }]}>Categoría</Text>
-      <View style={styles.chips}>{taxonomies.classifiedCategories.map((category) => <Segment key={category.id} label={category.name} selected={category.id === categoryId} onPress={() => setCategoryId(category.id)} />)}</View>
+      <View style={styles.chips}>{manualCategories.map((category) => <Segment key={category.id} label={category.name} selected={category.id === categoryId} onPress={() => setCategoryId(category.id)} />)}</View>
       <TextInput accessibilityLabel="Título del anuncio" placeholder="Título" placeholderTextColor={colors.textSecondary} value={title} onChangeText={setTitle} style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]} />
       <TextInput accessibilityLabel="Descripción del anuncio" placeholder="Describe la oportunidad" placeholderTextColor={colors.textSecondary} multiline value={description} onChangeText={setDescription} style={[styles.input, styles.multiline, { color: colors.textPrimary, borderColor: colors.border }]} />
       {required.size ? <Text style={{ color: colors.textSecondary }}>Requisitos: {Array.from(required).map(requirementLabel).join(', ')}.</Text> : null}

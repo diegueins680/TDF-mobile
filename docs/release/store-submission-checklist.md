@@ -9,10 +9,10 @@
 - EAS build profiles live in `eas.json`.
 - Release environment validation lives in `scripts/release-check.mjs`.
 - Store metadata and legal templates live in this folder.
-- Public support page: `https://tdf-app.pages.dev/mobile-app/support.html`
-- Public privacy policy: `https://tdf-app.pages.dev/mobile-app/privacy.html`
-- Public terms page: `https://tdf-app.pages.dev/mobile-app/terms.html`
-- Public data deletion page: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
+- Public support page: `https://www.tdfrecords.net/mobile-app/support.html`
+- Public privacy policy: `https://www.tdfrecords.net/mobile-app/privacy.html`
+- Public terms page: `https://www.tdfrecords.net/mobile-app/terms.html`
+- Public data deletion page: `https://www.tdfrecords.net/mobile-app/data-deletion.html`
 
 ## Before the next store upload
 

@@ -290,7 +290,7 @@ export const mobileFeatureRegistry = [
     "recentBehavior": "none",
     "mobilePresentation": {
       "kind": "external-web",
-      "destination": "https://tdf-app.pages.dev/tdf",
+      "destination": "https://www.tdfrecords.net/tdf",
       "documentedException": null
     },
     "mobileAliases": [],
@@ -358,7 +358,7 @@ export const mobileFeatureRegistry = [
     "recentBehavior": "none",
     "mobilePresentation": {
       "kind": "external-web",
-      "destination": "https://tdf-app.pages.dev/comercio",
+      "destination": "https://www.tdfrecords.net/comercio",
       "documentedException": null
     },
     "mobileAliases": [],
@@ -423,7 +423,7 @@ export const mobileFeatureRegistry = [
     "recentBehavior": "none",
     "mobilePresentation": {
       "kind": "external-web",
-      "destination": "https://tdf-app.pages.dev/distribucion",
+      "destination": "https://www.tdfrecords.net/distribucion",
       "documentedException": "Protected release management remains authenticated."
     },
     "mobileAliases": [],
@@ -484,7 +484,7 @@ export const mobileFeatureRegistry = [
     "recentBehavior": "feature",
     "mobilePresentation": {
       "kind": "external-web",
-      "destination": "https://tdf-app.pages.dev/inicio",
+      "destination": "https://www.tdfrecords.net/inicio",
       "documentedException": "The pinned native client does not yet include the directory landing route; use the public responsive web home."
     },
     "mobileAliases": [],
@@ -1347,7 +1347,7 @@ export const mobileFeatureRegistry = [
     "recentBehavior": "feature",
     "mobilePresentation": {
       "kind": "external-web",
-      "destination": "https://tdf-app.pages.dev/marketplace",
+      "destination": "https://www.tdfrecords.net/marketplace",
       "documentedException": "Native commerce catalog is not implemented; secure checkout remains web based."
     },
     "mobileAliases": [],
@@ -2310,7 +2310,7 @@ export const mobileFeatureRegistry = [
     "recentBehavior": "feature",
     "mobilePresentation": {
       "kind": "external-web",
-      "destination": "https://tdf-app.pages.dev/donar",
+      "destination": "https://www.tdfrecords.net/donar",
       "documentedException": null
     },
     "mobileAliases": [],
@@ -2370,7 +2370,7 @@ export const mobileFeatureRegistry = [
     "recentBehavior": "feature",
     "mobilePresentation": {
       "kind": "external-web",
-      "destination": "https://tdf-app.pages.dev/domo-del-pululahua",
+      "destination": "https://www.tdfrecords.net/domo-del-pululahua",
       "documentedException": null
     },
     "mobileAliases": [],
@@ -5034,7 +5034,7 @@ export const mobileFeatureRegistry = [
     "recentBehavior": "feature",
     "mobilePresentation": {
       "kind": "external-web",
-      "destination": "https://tdf-app.pages.dev/practicas/auditorias/:planId",
+      "destination": "https://www.tdfrecords.net/practicas/auditorias/:planId",
       "documentedException": "The audit checklist uses the responsive authenticated web workflow on mobile."
     },
     "mobileAliases": [],
@@ -10148,7 +10148,7 @@ export const mobileFeatureRegistry = [
     "recentBehavior": "feature",
     "mobilePresentation": {
       "kind": "external-web",
-      "destination": "https://tdf-app.pages.dev/feedback/interno",
+      "destination": "https://www.tdfrecords.net/feedback/interno",
       "documentedException": "Internal reports use the responsive authenticated web workflow on mobile."
     },
     "mobileAliases": [],

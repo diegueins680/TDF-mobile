@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Alert, Linking, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Alert, Linking, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import * as Application from 'expo-application';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,7 +10,7 @@ import { API_BASE } from '../lib/api';
 import { useAnalytics } from '../analytics/AnalyticsProvider';
 import { useUserSettings } from '../providers/UserSettingsProvider';
 import { t } from '../i18n';
-import { feedbackMetadata, feedbackPromptDue, nextParticipation, PARTICIPATION_KEY } from './metadata';
+import { deviceClass, feedbackMetadata, feedbackPromptDue, nextParticipation, PARTICIPATION_KEY } from './metadata';
 
 export function FeedbackEntry({ surface = 'profile' }: { surface?: 'profile' | 'about' }) {
   const { locale } = useUserSettings();
@@ -24,7 +24,8 @@ export function FeedbackEntry({ surface = 'profile' }: { surface?: 'profile' | '
   const [technical, setTechnical] = useState(true);
   const [attachment, setAttachment] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [fileError, setFileError] = useState(false);
-  const metadata = feedbackMetadata({ version: Application.nativeApplicationVersion, build: Application.nativeBuildVersion, os: Platform.OS, osVersion: Platform.Version, locale, route: surface, environment: __DEV__ ? 'development' : 'release' });
+  const { width, height } = useWindowDimensions();
+  const metadata = feedbackMetadata({ version: Application.nativeApplicationVersion, build: Application.nativeBuildVersion, os: Platform.OS, osVersion: Platform.Version, deviceClass: deviceClass({ isPad: Platform.OS === 'ios' && Platform.isPad, width, height }), locale, route: surface, environment: __DEV__ ? 'development' : 'release' });
   useEffect(() => {
     let live = true;
     const refresh = () => { void AsyncStorage.getItem(PARTICIPATION_KEY).then(raw => {

@@ -36,7 +36,7 @@ Contact: `TODO support email`
 
 - Users can clear their locally stored token from the app.
 - Users can deny camera, photo library, or location permissions and continue using other parts of the app.
-- Data deletion and related requests: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
+- Data deletion and related requests: `https://www.tdfrecords.net/mobile-app/data-deletion.html`
 
 ## 7. Security
 

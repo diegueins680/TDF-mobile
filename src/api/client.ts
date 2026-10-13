@@ -176,6 +176,12 @@ export function normalizeApiError(error: unknown): Error {
       'Estas entradas acaban de agotarse o ya no hay suficientes. Actualiza y elige otra cantidad.',
     );
   }
+  if (normalized.includes('ticket terms must be accepted')) {
+    return withApiErrorMessage(
+      error,
+      'Acepta los términos y la política de reembolso de las entradas para continuar.',
+    );
+  }
   if (normalized.includes('ticket sales are closed')) {
     return withApiErrorMessage(error, 'La venta de esta entrada ya no está disponible.');
   }

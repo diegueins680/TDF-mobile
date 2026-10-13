@@ -5,6 +5,7 @@
     "scheme": "tdf",
     "plugins": [
       "expo-router",
+      "expo-apple-authentication",
       [
         "@react-native-google-signin/google-signin",
         {
@@ -51,6 +52,7 @@
     "ios": {
       "bundleIdentifier": "com.tdfrecords.app",
       "supportsTablet": false,
+      "usesAppleSignIn": true,
       "config": {
         "usesNonExemptEncryption": false
       }

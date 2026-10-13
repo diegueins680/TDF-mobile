@@ -76,6 +76,7 @@ const withGoogleSigninModularHeadersPlugin =
 
 const plugins: NonNullable<ExpoConfig['plugins']> = [
   'expo-router',
+  'expo-apple-authentication',
   'expo-secure-store',
   [
     'expo-notifications',
@@ -150,6 +151,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: IOS_BUNDLE_ID,
     supportsTablet: false,
+    // App Store guideline 4.8: Sign in with Apple must accompany Google login.
+    usesAppleSignIn: true,
     associatedDomains: PUBLIC_UNIVERSAL_LINK_HOSTS.map((host) => `applinks:${host}`),
     config: {
       usesNonExemptEncryption: false

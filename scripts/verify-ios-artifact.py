@@ -27,6 +27,8 @@ def validate_interaction_release(entitlements, configs, updates):
         raise ValueError('Wrong signed application identifier')
     if set(entitlements.get('com.apple.developer.associated-domains', [])) != required:
         raise ValueError('Signed universal-link domains do not match the deployed hosts')
+    if entitlements.get('com.apple.developer.applesignin') != ['Default']:
+        raise ValueError('Signed build is missing the Sign in with Apple entitlement (App Store guideline 4.8)')
     if not configs or any(c.get('extra', {}).get('apiBase') != 'https://api.tdfrecords.net' for c in configs):
         raise ValueError('Wrong production API in embedded Expo config')
 

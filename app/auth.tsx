@@ -14,7 +14,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 
-import { loginRequest, googleLoginRequest, signupRequest, requestPasswordReset } from '../src/api/auth';
+import {
+  appleLoginRequest,
+  googleLoginRequest,
+  loginRequest,
+  requestPasswordReset,
+  signupRequest,
+  type LoginResponseDTO,
+} from '../src/api/auth';
 import { isCurrentAuthToken } from '../src/api/client';
 import { API_BASE } from '../src/lib/api';
 import {
@@ -23,6 +30,13 @@ import {
   GOOGLE_WEB_CLIENT_ID
 } from '../src/lib/authConfig';
 import { loadNativeGoogleSignin, type NativeGoogleSigninModule } from '../src/lib/nativeGoogleSignin';
+import { loadNativeAppleAuthentication, type NativeAppleAuthenticationModule } from '../src/lib/nativeAppleAuthentication';
+import {
+  createAppleSignInNonce,
+  isAppleSignInCancellation,
+  isSignupConsentRequiredMessage,
+  readAppleFullName,
+} from '../src/lib/appleSignIn';
 import FormField from '../src/components/FormField';
 import { useAuth } from '../src/providers/AuthProvider';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
@@ -76,7 +90,7 @@ const resolveAuthorizedReturnTo = (
 };
 
 export default function AuthScreen() {
-  const { colors } = useAppTheme();
+  const { colors, colorScheme } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -103,6 +117,8 @@ export default function AuthScreen() {
   const [password, setPassword] = useState('');
   const [googleConnectionRequired, setGoogleConnectionRequired] = useState(false);
   useEffect(() => { setGoogleConnectionRequired(false); }, [mode]);
+  const [appleConnectionRequired, setAppleConnectionRequired] = useState(false);
+  useEffect(() => { setAppleConnectionRequired(false); }, [mode]);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
@@ -124,6 +140,9 @@ export default function AuthScreen() {
   const [isSignupSubmitting, setIsSignupSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [googleSigninModule, setGoogleSigninModule] = useState<NativeGoogleSigninModule | null>(null);
+  const [isAppleSubmitting, setIsAppleSubmitting] = useState(false);
+  // Only set once expo-apple-authentication loaded and reported the device supports it.
+  const [appleAuthModule, setAppleAuthModule] = useState<NativeAppleAuthenticationModule | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
@@ -167,6 +186,8 @@ export default function AuthScreen() {
     (Platform.OS !== 'ios' || Boolean(GOOGLE_IOS_URL_SCHEME));
   const showLoginActions = !loading && !hasToken;
   const showGoogleLogin = showLoginActions && isGoogleLoginAvailable;
+  const showAppleLogin = showLoginActions && Platform.OS === 'ios' && appleAuthModule !== null;
+  const showSocialLogin = (showGoogleLogin || showAppleLogin) && (mode !== 'signup' || termsAccepted);
 
   const chooseLanguage = (code: 'es' | 'en') => {
     const option = getCatalogItems('locales').find((item) => item.code === code);
@@ -227,6 +248,24 @@ export default function AuthScreen() {
     void loadNativeGoogleSignin().then((module) => {
       if (active) {
         setGoogleSigninModule(module);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
+    let active = true;
+
+    void loadNativeAppleAuthentication().then(async (module) => {
+      if (!module) return;
+      const available = await module.isAvailableAsync().catch(() => false);
+      if (active && available) {
+        setAppleAuthModule(module);
       }
     });
 
@@ -355,6 +394,49 @@ export default function AuthScreen() {
     }
   };
 
+  // Shared by Google and Apple: both providers answer with the same LoginResponse and the
+  // same account-creation semantics, so the session, intent and navigation handling is identical.
+  const completeSocialLogin = async (
+    session: LoginResponseDTO,
+    method: 'google' | 'apple',
+    pendingIntentPromise: Promise<OnboardingIntent | null>,
+    successMessage: string,
+  ) => {
+    setToken(session.token, session.partyId ?? null, {
+      roles: session.roles ?? [],
+      modules: session.modules ?? [],
+    });
+    setPassword('');
+    const createdAccount = session.accountCreated === true;
+    const pendingIntent = await pendingIntentPromise;
+    const postLoginIntent = pendingIntent ?? selectedIntent;
+    if (createdAccount) {
+      await clearPendingOnboardingIntent();
+    } else {
+      void persistIntentForExistingAccount(pendingIntent, session.token, session.partyId);
+    }
+    analytics.capture(createdAccount ? 'signup_completed' : 'login_completed', {
+      platform: 'mobile',
+      method,
+      ...(createdAccount ? { intent: selectedIntent } : {}),
+    });
+    const pendingRsvpIntent = createdAccount ? await readEventRsvpIntent() : null;
+    if (pendingRsvpIntent?.sharedAttribution) {
+      analytics.capture('event_shared_visit_to_signup', {
+        platform: 'mobile', event_id: pendingRsvpIntent.eventId, method,
+      });
+    }
+    setFeedbackMessage(successMessage);
+    const authorizedReturnTo = resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []);
+    const destination = mode === 'signup'
+      && (!authorizedReturnTo || selectedIntent === 'artist_profile' || selectedIntent === 'internships')
+      ? resolveMobileIntentNavigation(selectedIntent, session.roles ?? [], session.modules ?? [])
+      : authorizedReturnTo
+        ? { kind: 'native' as const, value: authorizedReturnTo }
+        : resolveMobileIntentNavigation(postLoginIntent, session.roles ?? [], session.modules ?? []);
+    finishAuthNavigation(destination);
+  };
+
   const handleGoogleLogin = async () => {
     setErrorMessage(null);
     setFeedbackMessage(null);
@@ -404,39 +486,7 @@ export default function AuthScreen() {
           onboardingIntent: selectedIntent,
         } : {}),
       });
-      setToken(session.token, session.partyId ?? null, {
-        roles: session.roles ?? [],
-        modules: session.modules ?? [],
-      });
-      setPassword('');
-      const googleCreatedAccount = session.accountCreated === true;
-      const pendingIntent = await pendingIntentPromise;
-      const postLoginIntent = pendingIntent ?? selectedIntent;
-      if (googleCreatedAccount) {
-        await clearPendingOnboardingIntent();
-      } else {
-        void persistIntentForExistingAccount(pendingIntent, session.token, session.partyId);
-      }
-      analytics.capture(googleCreatedAccount ? 'signup_completed' : 'login_completed', {
-        platform: 'mobile',
-        method: 'google',
-        ...(googleCreatedAccount ? { intent: selectedIntent } : {}),
-      });
-      const pendingRsvpIntent = googleCreatedAccount ? await readEventRsvpIntent() : null;
-      if (pendingRsvpIntent?.sharedAttribution) {
-        analytics.capture('event_shared_visit_to_signup', {
-          platform: 'mobile', event_id: pendingRsvpIntent.eventId, method: 'google',
-        });
-      }
-      setFeedbackMessage(copy.googleSuccess);
-      const authorizedReturnTo = resolveAuthorizedReturnTo(safeReturnTo, session.roles ?? [], session.modules ?? []);
-      const destination = mode === 'signup'
-        && (!authorizedReturnTo || selectedIntent === 'artist_profile' || selectedIntent === 'internships')
-        ? resolveMobileIntentNavigation(selectedIntent, session.roles ?? [], session.modules ?? [])
-        : authorizedReturnTo
-          ? { kind: 'native' as const, value: authorizedReturnTo }
-          : resolveMobileIntentNavigation(postLoginIntent, session.roles ?? [], session.modules ?? []);
-      finishAuthNavigation(destination);
+      await completeSocialLogin(session, 'google', pendingIntentPromise, copy.googleSuccess);
     } catch (error) {
       if (googleSigninModule.isErrorWithCode(error)) {
         if (error.code === googleSigninModule.statusCodes.SIGN_IN_CANCELLED) {
@@ -460,7 +510,7 @@ export default function AuthScreen() {
         method: 'google',
         ...(mode === 'signup' ? { intent: selectedIntent } : {}),
       });
-      if (mode === 'login' && readErrorMessage(error, '') === 'Accept the terms and privacy policy through the signup flow before creating a Google account') {
+      if (mode === 'login' && isSignupConsentRequiredMessage(readErrorMessage(error, ''))) {
         setGoogleConnectionRequired(true);
         setFeedbackMessage(copy.googleConnectExplanation);
         return;
@@ -468,6 +518,82 @@ export default function AuthScreen() {
       setErrorMessage(readErrorMessage(error, copy.googleFailure));
     } finally {
       setIsGoogleSubmitting(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    if (isAppleSubmitting) return;
+    setErrorMessage(null);
+    setFeedbackMessage(null);
+
+    if (!showAppleLogin || !appleAuthModule) {
+      setErrorMessage(copy.appleUnavailable);
+      return;
+    }
+
+    if (mode === 'login' && appleConnectionRequired && (!username.trim() || !password)) {
+      setErrorMessage(copy.appleConnectExplanation);
+      return;
+    }
+    setIsAppleSubmitting(true);
+    const pendingIntentPromise = mode === 'signup'
+      ? Promise.resolve(selectedIntent)
+      : requestedIntent
+        ? persistRequestedIntentOnce(requestedIntent).then(() => requestedIntent)
+        : readPendingOnboardingIntent();
+
+    try {
+      // Apple embeds the SHA-256 digest in the identity token; the backend receives the raw
+      // nonce and recomputes the digest, so a captured token cannot be replayed elsewhere.
+      const { rawNonce, hashedNonce } = await createAppleSignInNonce();
+      const credential = await appleAuthModule.signInAsync({
+        requestedScopes: [
+          appleAuthModule.AppleAuthenticationScope.FULL_NAME,
+          appleAuthModule.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce: hashedNonce,
+      });
+
+      if (!credential.identityToken) {
+        throw new Error(copy.appleMissingToken);
+      }
+
+      const fullName = readAppleFullName(credential.fullName);
+      const session = await appleLoginRequest({
+        identityToken: credential.identityToken,
+        nonce: rawNonce,
+        ...(fullName ? { fullName } : {}),
+        ...(mode === 'login' && appleConnectionRequired ? {
+          linkAccount: { username: username.trim(), password },
+        } : {}),
+        ...(mode === 'signup' ? {
+          createNewAccount: true,
+          marketingOptIn,
+          termsAccepted: true,
+          termsVersion: ACCOUNT_TERMS_VERSION,
+          onboardingIntent: selectedIntent,
+        } : {}),
+      });
+      await completeSocialLogin(session, 'apple', pendingIntentPromise, copy.appleSuccess);
+    } catch (error) {
+      if (isAppleSignInCancellation(error)) {
+        // The user dismissed Apple's sheet; nothing happened, so nothing to report.
+        return;
+      }
+
+      analytics.capture(mode === 'signup' ? 'signup_failed' : 'login_failed', {
+        platform: 'mobile',
+        method: 'apple',
+        ...(mode === 'signup' ? { intent: selectedIntent } : {}),
+      });
+      if (mode === 'login' && isSignupConsentRequiredMessage(readErrorMessage(error, ''))) {
+        setAppleConnectionRequired(true);
+        setFeedbackMessage(copy.appleConnectExplanation);
+        return;
+      }
+      setErrorMessage(readErrorMessage(error, copy.appleFailure));
+    } finally {
+      setIsAppleSubmitting(false);
     }
   };
 
@@ -812,7 +938,7 @@ export default function AuthScreen() {
                 )}
               </TouchableOpacity>
 
-              {showGoogleLogin && (mode !== 'signup' || termsAccepted) ? (
+              {showSocialLogin ? (
                 <>
                   <View style={styles.dividerRow}>
                     <View style={styles.divider} />
@@ -820,6 +946,39 @@ export default function AuthScreen() {
                     <View style={styles.divider} />
                   </View>
 
+                  {showAppleLogin && appleAuthModule ? (
+                    <View style={styles.appleButtonContainer}>
+                      {mode === 'login' && appleConnectionRequired ? (
+                        <Text style={styles.appleConnectLabel}>{copy.appleConnect}</Text>
+                      ) : null}
+                      {isAppleSubmitting ? (
+                        <View
+                          style={styles.secondaryButton}
+                          accessibilityRole="button"
+                          accessibilityState={{ disabled: true, busy: true }}
+                        >
+                          <ActivityIndicator color={colors.textPrimary} />
+                        </View>
+                      ) : (
+                        <appleAuthModule.AppleAuthenticationButton
+                          testID="appleSignInButton"
+                          buttonType={mode === 'signup'
+                            ? appleAuthModule.AppleAuthenticationButtonType.SIGN_UP
+                            : appleAuthModule.AppleAuthenticationButtonType.SIGN_IN}
+                          buttonStyle={colorScheme === 'dark'
+                            ? appleAuthModule.AppleAuthenticationButtonStyle.WHITE
+                            : appleAuthModule.AppleAuthenticationButtonStyle.BLACK}
+                          cornerRadius={10}
+                          style={styles.appleButton}
+                          onPress={() => {
+                            void handleAppleLogin();
+                          }}
+                        />
+                      )}
+                    </View>
+                  ) : null}
+
+                  {showGoogleLogin ? (
                   <TouchableOpacity
                     style={[styles.secondaryButton, isGoogleSubmitting && styles.buttonDisabled]}
                     onPress={() => {
@@ -837,7 +996,7 @@ export default function AuthScreen() {
                       </Text>
                     )}
                   </TouchableOpacity>
-
+                  ) : null}
                 </>
               ) : null}
 
@@ -1043,6 +1202,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     justifyContent: 'center',
   },
   secondaryButtonText: { color: colors.textPrimary, fontWeight: '700' },
+  appleButtonContainer: { gap: 6 },
+  appleButton: { width: '100%', height: 48 },
+  appleConnectLabel: { color: colors.textSecondary, fontSize: 12, fontWeight: '700' },
   ghostButton: {
     minHeight: 44,
     alignItems: 'center',

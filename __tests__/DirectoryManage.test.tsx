@@ -1,12 +1,16 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import DirectoryManageScreen from '../app/directory/manage';
 
 let mockCreateParam: string | string[] | undefined = 'classified';
+let mockClassifieds: Array<Record<string, unknown>> = [];
 
 jest.mock('@tanstack/react-query', () => ({
   useQuery: jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
+    if (queryKey[0] === 'directory-managed-classifieds') {
+      return { data: mockClassifieds, isLoading: false };
+    }
     if (queryKey[0] === 'directory-managed-profiles') {
       return { data: [{
         id: 'profile-1', name: 'Perfil de prueba', kind: 'person', status: 'published', slug: 'perfil-de-prueba',
@@ -51,6 +55,21 @@ jest.mock('../src/theme/ThemeProvider', () => ({
 describe('Directory manage screen', () => {
   beforeEach(() => {
     mockCreateParam = 'classified';
+    mockClassifieds = [];
+  });
+
+  it('offers no status actions on a listing derived from an artist profile', async () => {
+    mockCreateParam = undefined;
+    mockClassifieds = [
+      { id: 'derived-1', title: 'Synthetic Band', status: 'published', expiresAt: null, sourceProfileId: 'profile-9' },
+      { id: 'manual-1', title: 'Se busca baterista', status: 'published', expiresAt: null, sourceProfileId: null },
+    ];
+    render(<DirectoryManageScreen />);
+
+    fireEvent.press(await screen.findByRole('button', { name: 'Anuncios (2)' }));
+    await waitFor(() => expect(screen.getByText('Se busca baterista')).toBeTruthy());
+    expect(screen.getAllByText('Marcar cubierto')).toHaveLength(1);
+    expect(screen.getByText(/Anuncio automático de tu perfil de artista/)).toBeTruthy();
   });
 
   it('opens the classified form from the quick-create route', async () => {

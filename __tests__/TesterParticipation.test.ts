@@ -1,4 +1,4 @@
-import { feedbackMetadata, feedbackPromptDue, nextParticipation } from '../src/feedback/metadata';
+import { deviceClass, feedbackMetadata, feedbackPromptDue, nextParticipation } from '../src/feedback/metadata';
 describe('tester participation and privacy', () => {
   const now = 1800000000000;
   it('counts real opportunities, caps prompts and honors opt out', () => {
@@ -18,9 +18,17 @@ describe('tester participation and privacy', () => {
     expect(nextParticipation('{"sessions": "999", "lastSession": "bad"}', now).sessions).toBe(1);
   });
   it('uses an allowlist, never spreading private input into metadata', () => {
-    const input = { version: '1.0.1', build: '30', os: 'ios', osVersion: '18.3', locale: 'es', route: 'profile', environment: 'release', token: 'secret', email: 'private@example.com', username: 'tester' };
+    const input = { version: '1.0.1', build: '30', os: 'ios', osVersion: '18.3', locale: 'es', route: 'profile', environment: 'release', deviceClass: 'phone' as const, token: 'secret', email: 'private@example.com', username: 'tester' };
     const metadata = feedbackMetadata(input);
-    expect(metadata.app_build).toBe('30'); expect(metadata.surface).toBe('profile');
+    expect(metadata.app_build).toBe('30'); expect(metadata.surface).toBe('profile'); expect(metadata.device_class).toBe('phone');
     expect(JSON.stringify(metadata)).not.toMatch(/secret|private|tester|token|email|username/);
+    expect(feedbackMetadata({ ...input, deviceClass: undefined }).device_class).toBe('unknown');
+  });
+  it('derives a coarse device class without collecting the model', () => {
+    expect(deviceClass({ isPad: true, width: 390, height: 844 })).toBe('tablet');
+    expect(deviceClass({ width: 390, height: 844 })).toBe('phone');
+    expect(deviceClass({ width: 1024, height: 768 })).toBe('tablet');
+    expect(deviceClass({ width: 0, height: 0 })).toBe('unknown');
+    expect(deviceClass({ width: Number.NaN, height: 800 })).toBe('unknown');
   });
 });

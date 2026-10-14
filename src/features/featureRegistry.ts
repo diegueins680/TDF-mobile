@@ -217,7 +217,7 @@ export type ResolvedMobileDestination = { kind: 'native' | 'web'; value: string 
 
 export function resolveMobileDestination(
   feature: MobileFeature,
-  hqBaseUrl = process.env.EXPO_PUBLIC_HQ_URL?.trim() || 'https://tdf-app.pages.dev',
+  hqBaseUrl = process.env.EXPO_PUBLIC_HQ_URL?.trim() || 'https://www.tdfrecords.net',
 ): ResolvedMobileDestination | null {
   const kind = feature.mobilePresentation.kind;
   if (kind === 'technical' || kind === 'security-concealed') return null;

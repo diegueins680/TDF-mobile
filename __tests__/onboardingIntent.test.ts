@@ -78,11 +78,11 @@ describe('onboarding intent', () => {
   it('routes learning and professional intents to registry-governed public first actions', () => {
     expect(resolveMobileIntentNavigation('learning')).toEqual({
       kind: 'web',
-      value: 'https://tdf-app.pages.dev/trials',
+      value: 'https://www.tdfrecords.net/trials',
     });
     expect(resolveMobileIntentNavigation('professional_tools')).toEqual({
       kind: 'web',
-      value: 'https://tdf-app.pages.dev/herramientas/creador-musical',
+      value: 'https://www.tdfrecords.net/herramientas/creador-musical',
     });
     expect(resolveMobileIntentNavigation('events')).toEqual({
       kind: 'native',

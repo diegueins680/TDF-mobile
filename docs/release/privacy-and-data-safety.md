@@ -21,8 +21,8 @@ Use this as a starting point for Google Play Data safety and App Store privacy n
 - Data is tied to user or business accounts managed by the backend.
 - Sensitive access is role-gated by bearer token.
 - Location, camera, and photo access are optional at runtime.
-- Public privacy policy URL: `https://tdf-app.pages.dev/mobile-app/privacy.html`
-- Public data deletion URL: `https://tdf-app.pages.dev/mobile-app/data-deletion.html`
+- Public privacy policy URL: `https://www.tdfrecords.net/mobile-app/privacy.html`
+- Public data deletion URL: `https://www.tdfrecords.net/mobile-app/data-deletion.html`
 
 ## Human Verification Still Required
 

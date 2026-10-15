@@ -1508,6 +1508,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/login/apple": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login with Apple
+         * @description Verifies a Sign in with Apple identity token (RS256 against Apple's published keys, issuer, configured audiences, lifetime and nonce), sets a session cookie, and issues a session. Creates a Customer/Fan account only with explicit createNewAccount and current terms acceptance; otherwise it links with existing credentials or refuses.
+         */
+        post: operations["loginWithApple"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/signup": {
         parameters: {
             query?: never;
@@ -12382,6 +12402,28 @@ export interface components {
             termsVersion?: string;
             onboardingIntent?: components["schemas"]["OnboardingIntent"];
         };
+        AppleLoginRequest: {
+            /** @description Apple identity token (JWT) returned by AuthenticationServices */
+            identityToken: string;
+            /** @description Raw nonce the client generated; the token carries its SHA-256 hex digest. Required when the token contains a nonce. */
+            nonce?: string;
+            /** @description Only sent by Apple on the first authorization; used for the display name when creating an account. */
+            fullName?: {
+                givenName?: string;
+                familyName?: string;
+            };
+            /** @description Must be explicitly true, with current terms acceptance, to create a new account for an unbound Apple subject. Omission never creates an account. */
+            createNewAccount?: boolean;
+            /** @description Explicitly connect the verified Apple identity using the existing TDF account credentials. No account or permission is merged. */
+            linkAccount?: components["schemas"]["LoginRequest"];
+            /** @description Optional consent to receive TDF product and marketing updates when creating an account. */
+            marketingOptIn?: boolean;
+            /** @description Account terms acceptance when Apple is used from signup. */
+            termsAccepted?: boolean;
+            /** @description Version of the account terms accepted during Apple signup. */
+            termsVersion?: string;
+            onboardingIntent?: components["schemas"]["OnboardingIntent"];
+        };
         SignupRequest: {
             /** @example Diego */
             firstName: string;
@@ -13906,6 +13948,13 @@ export interface components {
             whatsappCtaUrl?: string;
             /** Format: uri */
             landingUrl?: string;
+            /** @description Terms of the approved active checkout policy, shown before the buyer accepts them. Null when the course has no approved policy. */
+            checkoutTerms?: components["schemas"]["CourseCheckoutTerms"] | null;
+        };
+        CourseCheckoutTerms: {
+            termsVersion: string;
+            termsSummary: string;
+            cancellationPolicy: string;
         };
         UTMTags: {
             source?: string | null;
@@ -13925,6 +13974,8 @@ export interface components {
             utm?: components["schemas"]["UTMTags"];
             /** @description Must be true to create a canonical payable seat hold. Omitted only for non-checkout legacy intake such as WhatsApp leads. */
             termsAccepted?: boolean | null;
+            /** @description The CourseMetadata.checkoutTerms.termsVersion the buyer was shown. Required for a canonical checkout (400 when absent); checkout returns 409 if the active policy now has a different terms version. */
+            acceptedTermsVersion?: string | null;
         };
         CourseRegistrationResponse: {
             /** Format: int64 */
@@ -15453,7 +15504,7 @@ export interface components {
                 reviewAverage?: number;
                 reviewCount?: number;
             };
-            /** @description Canonical preview image (cover */
+            /** @description Canonical preview image (cover, featured, linked profile media, avatar/logo, first portfolio image); null means no valid media */
             previewImageUrl?: string | null;
             /** @description The listing derived automatically from this artist profile, when public. */
             derivedListing?: {
@@ -15535,7 +15586,7 @@ export interface components {
             endsAt?: string | null;
             /**
              * Format: date-time
-             * @description Null for listings derived from artist profiles
+             * @description Null for listings derived from artist profiles, which follow the profile lifecycle instead of expiring
              */
             expiresAt: string | null;
             imageUrl?: string | null;
@@ -15581,6 +15632,8 @@ export interface components {
             name: string;
             capacity?: number | null;
             location: components["schemas"]["PublicLocation"];
+            /** @description Venue image as shown on its search card; null means no valid media */
+            imageUrl?: string | null;
             canonicalUrl: string;
         };
         AgeAssuranceRequest: {
@@ -21615,6 +21668,46 @@ export interface operations {
             };
             /** @description Invalid or expired Google token */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    loginWithApple: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppleLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Authenticated successfully */
+            200: {
+                headers: {
+                    /** @description Session cookie for browser-based clients. */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Invalid or expired Apple token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sign in with Apple is not configured */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

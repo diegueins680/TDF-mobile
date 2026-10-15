@@ -107,6 +107,63 @@ it('opens exact reply context, announces it, and preserves replies after author 
   fireEvent.press(ui.getAllByLabelText('Opciones del comentario')[0]); fireEvent.press(ui.getByText('Eliminar mi comentario')); fireEvent.press(ui.getByText('Confirmar'));
   await ui.findByText('Comentario eliminado'); expect(ui.getByText('A reply')).toBeTruthy(); announce.mockRestore(); scroll.mockRestore(); offset.mockRestore();
 });
+it('retries exact-reply focus after late layout temporarily cannot be measured', async () => {
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  const scroll = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {});
+  const offset = jest.spyOn(FlatList.prototype, 'scrollToOffset').mockImplementation(() => {});
+  try {
+    mockParams = { destinationKind: 'comment', destinationId: replyId };
+    const ui = view(<DiscussionScreen />); await ui.findByText('A reply');
+    const list = ui.UNSAFE_getByType(FlatList);
+    fireEvent(list, 'layout', { nativeEvent: { layout: { height: 800, width: 400 } } });
+    await waitFor(() => expect(scroll).toHaveBeenCalled());
+    const viewport = ui.UNSAFE_getAllByType(View).find(node => node.props.testID === 'discussion-viewport')!.instance;
+    const linkedHeading = ui.UNSAFE_getAllByType(Text).find(node => node.props.children === 'Luis')!.instance;
+    viewport.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 40, 400, 800));
+    linkedHeading.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 300, 200, 24));
+    fireEvent(list, 'viewableItemsChanged', { viewableItems: [{ item: reply, isViewable: true }] });
+    expect(announce).toHaveBeenCalledTimes(1);
+    // Let the successful initial-focus loop stop before the independent layout change.
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 350)); });
+    offset.mockClear(); scroll.mockClear();
+    viewport.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 40, 400, 800))
+      .mockImplementationOnce((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 40, 400, 0));
+    linkedHeading.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 1000, 200, 24));
+    fireEvent(list, 'contentSizeChange', 400, 1800);
+    expect(offset).not.toHaveBeenCalled();
+    await waitFor(() => expect(offset).toHaveBeenCalledWith({ offset: 720, animated: false }));
+    expect(announce).toHaveBeenCalledTimes(1);
+    fireEvent(list, 'scrollBeginDrag');
+    offset.mockClear(); scroll.mockClear();
+    fireEvent(list, 'contentSizeChange', 400, 1900);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 350)); });
+    expect(offset).not.toHaveBeenCalled(); expect(scroll).not.toHaveBeenCalled();
+  } finally { announce.mockRestore(); scroll.mockRestore(); offset.mockRestore(); }
+});
+
+it('ignores a native focus measurement from an earlier layout pass', async () => {
+  const announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  const scroll = jest.spyOn(FlatList.prototype, 'scrollToIndex').mockImplementation(() => {});
+  try {
+    mockParams = { destinationKind: 'comment', destinationId: replyId };
+    const ui = view(<DiscussionScreen />); await ui.findByText('A reply');
+    const list = ui.UNSAFE_getByType(FlatList);
+    const viewport = ui.UNSAFE_getAllByType(View).find(node => node.props.testID === 'discussion-viewport')!.instance;
+    const linkedHeading = ui.UNSAFE_getAllByType(Text).find(node => node.props.children === 'Luis')!.instance;
+    const pending: ((x: number, y: number, width: number, height: number) => void)[] = [];
+    viewport.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => pending.push(callback));
+    linkedHeading.measureInWindow = jest.fn((callback: (x: number, y: number, width: number, height: number) => void) => callback(0, 300, 200, 24));
+    fireEvent(list, 'viewableItemsChanged', { viewableItems: [{ item: reply, isViewable: true }] });
+    const oldMeasurement = pending.shift()!;
+    fireEvent(list, 'contentSizeChange', 400, 1800);
+    const currentMeasurement = pending.pop()!;
+    act(() => oldMeasurement(0, 40, 400, 800));
+    expect(announce).not.toHaveBeenCalled();
+    act(() => currentMeasurement(0, 40, 400, 800));
+    expect(announce).toHaveBeenCalledTimes(1);
+  } finally { announce.mockRestore(); scroll.mockRestore(); }
+});
+
 it('does not keep cached discussion bodies visible after access is revoked', async () => {
   const ui = view(<DiscussionScreen />); await ui.findByText('Root comment', {}, { timeout: 10000 }); mockApi.summary.mockRejectedValue(new Error('404'));
   await act(async () => { await client.invalidateQueries({ queryKey: ['interactions'] }); });

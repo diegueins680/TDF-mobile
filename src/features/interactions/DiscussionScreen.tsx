@@ -45,14 +45,16 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
   const mounted = useRef(true); const scrollOffset = useRef(0);
   const anchoring = useRef(true); const announced = useRef(false);
   const headerHeight = useRef(0); const [listReady, setListReady] = useState(false);
+  const [layoutRevision, setLayoutRevision] = useState(0); const layoutEpoch = useRef(0);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // VirtualizedList may report a row visible before the dynamic header is measured.
   // Confirm native screen coordinates before stopping retries or moving a11y focus.
   const confirmTargetVisible = useRef((reveal = false) => {
     if (focused.current || !anchoring.current || !destination.commentId) return;
+    const epoch = layoutEpoch.current;
     viewport.current?.measureInWindow((_x, top, _width, height) => {
       targetHeading.current?.measureInWindow((_tx, y, _tw, headingHeight) => {
-        if (!mounted.current || focused.current || !anchoring.current || height <= 0 || headingHeight <= 0) return;
+        if (!mounted.current || focused.current || !anchoring.current || epoch !== layoutEpoch.current || height <= 0 || headingHeight <= 0) return;
         // A heading at the bottom edge hides the actual reply body. Keep the
         // heading in the upper half, leaving reading space below it.
         if (y < top || y > top + height * 0.5 || y + headingHeight > top + height) {
@@ -115,7 +117,7 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
     };
     timer = setTimeout(reveal, 100);
     return () => clearTimeout(timer);
-  }, [listReady, hasSummary, targetIndex, destination.commentId, confirmTargetVisible]);
+  }, [listReady, hasSummary, targetIndex, destination.commentId, confirmTargetVisible, layoutRevision]);
   const focus = (element: Text | null) => { const handle = element && findNodeHandle(element); if (handle) AccessibilityInfo.setAccessibilityFocus(handle); };
   const closeMenu = () => { if (actionPending) return; setMenu(null); setAction(null); setReason(''); setError(''); focus(heading.current); };
   const buttonStyle = { minHeight: 48, padding: 12, justifyContent: 'center' as const };
@@ -130,7 +132,14 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
         onContentSizeChange={() => {
           // Late header/media layout must not move a cold-linked reply offscreen.
           // Once the user interacts, preserve their position instead.
-          if (anchoring.current) { focused.current = false; confirmTargetVisible(true); }
+          if (anchoring.current) {
+            layoutEpoch.current += 1;
+            focused.current = false;
+            confirmTargetVisible(true);
+            // A native measurement can be unavailable during this layout pass.
+            // Restart bounded retries even if the previous focus loop finished.
+            setLayoutRevision(layoutEpoch.current);
+          }
         }}
         onScroll={(event) => { scrollOffset.current = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16}
         onViewableItemsChanged={onViewableItemsChanged} viewabilityConfig={viewabilityConfig}

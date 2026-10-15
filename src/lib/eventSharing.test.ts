@@ -5,7 +5,7 @@ describe('event sharing', () => {
     expect(canonicalEventPath(' 42 ')).toBe('/eventos/42');
     expect(canonicalEventUrl('42', {
       utm_source: 'tdf_mobile', utm_medium: 'share', utm_campaign: 'event_rsvp', partyId: '7', token: 'secret',
-    })).toBe('https://tdf-app.pages.dev/eventos/42?utm_source=tdf_mobile&utm_medium=share&utm_campaign=event_rsvp');
+    })).toBe('https://www.tdfrecords.net/eventos/42?utm_source=tdf_mobile&utm_medium=share&utm_campaign=event_rsvp');
     expect(() => canonicalEventPath('../social/eventos/42')).toThrow('Invalid public event identifier');
   });
 

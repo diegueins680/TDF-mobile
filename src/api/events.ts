@@ -1,4 +1,5 @@
 import { del, get, post, put } from './client';
+import type { components } from './generated/types';
 import type {
   ID,
   SocialEvent,
@@ -337,6 +338,8 @@ const normalizeOptionalPositiveIdParam = (value: ID | null | undefined): string 
   return trimmed;
 };
 
+export type PublicEventTicketPolicy = components['schemas']['PublicEventTicketPolicy'];
+
 const normalizePositiveIntegerIdParam = (value: ID | null | undefined): string | null => {
   if (value == null) return null;
   if (typeof value === 'number') {
@@ -636,6 +639,16 @@ export const Events = {
     return mapTicketOrderDto(dto, input.eventId);
   },
 
+  /** Approved ticket policy (terms, refund policy) of a public event, or null when there is none. */
+  getPublicTicketPolicy: async (eventId: ID): Promise<PublicEventTicketPolicy | null> => {
+    const normalizedEventId = normalizePositiveIntegerIdParam(eventId);
+    if (!normalizedEventId) return null;
+    const storefront = await get<components['schemas']['PublicEventTicketStorefront']>(
+      `/public/events/${normalizedEventId}/tickets`,
+    );
+    return storefront.policy ?? null;
+  },
+
   createTicketPaymentSheet: async (
     input: EventTicketPurchaseInput,
     mobileSdkStripeVersion?: string | null,
@@ -653,6 +666,7 @@ export const Events = {
     const buyerEmail = normalizeOptionalText(input.buyerEmail ?? null);
     const promoCode = normalizeOptionalText(input.promoCode ?? null);
     const checkoutKey = normalizeOptionalText(input.checkoutKey ?? null);
+    const acceptedTermsVersion = normalizeOptionalText(input.acceptedTermsVersion ?? null);
     const payload = {
       ticketPurchaseTierId: normalizedTierId,
       ticketPurchaseQuantity: input.quantity,
@@ -661,6 +675,7 @@ export const Events = {
       ...(buyerEmail ? { ticketPurchaseBuyerEmail: buyerEmail } : {}),
       ...(promoCode ? { ticketPurchasePromoCode: promoCode } : {}),
       ...(checkoutKey ? { ticketPurchaseIdempotencyKey: checkoutKey } : {}),
+      ...(acceptedTermsVersion ? { ticketPurchaseAcceptedTermsVersion: acceptedTermsVersion } : {}),
       ...(normalizedStripeVersion
         ? { ticketPurchaseMobileSdkStripeVersion: normalizedStripeVersion }
         : {}),

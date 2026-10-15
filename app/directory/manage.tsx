@@ -95,10 +95,16 @@ export default function DirectoryManageScreen() {
           <View key={classified.id} style={[styles.card, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSubtle }]}>
             <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{classified.title}</Text>
             <Text style={{ color: colors.textSecondary }}>{classified.status}{classified.expiresAt ? ` · vence ${new Date(classified.expiresAt).toLocaleDateString()}` : ''}</Text>
-            <View style={styles.row}>
-              {classified.status === 'draft' ? <Pressable onPress={() => classifiedStatus.mutate({ id: classified.id, status: 'published' })}><Text style={{ color: colors.actionPrimary }}>Publicar</Text></Pressable> : null}
-              {classified.status === 'published' ? <Pressable onPress={() => classifiedStatus.mutate({ id: classified.id, status: 'filled' })}><Text style={{ color: colors.actionPrimary }}>Marcar cubierto</Text></Pressable> : null}
-            </View>
+            {classified.sourceProfileId ? (
+              // A listing derived from an artist profile follows that profile;
+              // the API refuses direct status changes (409).
+              <Text style={{ color: colors.textSecondary }}>Anuncio automático de tu perfil de artista: se publica, pausa y actualiza con el perfil.</Text>
+            ) : (
+              <View style={styles.row}>
+                {classified.status === 'draft' ? <Pressable onPress={() => classifiedStatus.mutate({ id: classified.id, status: 'published' })}><Text style={{ color: colors.actionPrimary }}>Publicar</Text></Pressable> : null}
+                {classified.status === 'published' ? <Pressable onPress={() => classifiedStatus.mutate({ id: classified.id, status: 'filled' })}><Text style={{ color: colors.actionPrimary }}>Marcar cubierto</Text></Pressable> : null}
+              </View>
+            )}
           </View>
         )) : (invitations.data ?? []).map((invitation) => <InvitationCard key={invitation.id} invitation={invitation} onRefresh={refresh} />)}
       </ScrollView>

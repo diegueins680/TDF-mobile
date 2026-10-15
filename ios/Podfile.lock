@@ -50,10 +50,13 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - ExpoAdapterGoogleSignIn (16.1.2):
+  - ExpoAdapterGoogleSignIn (16.1.5):
     - ExpoModulesCore
     - GoogleSignIn (~> 9.0)
+    - GoogleUtilities/Environment
+    - GoogleUtilities/UserDefaults
     - React-Core
+    - RecaptchaInterop
   - ExpoAppleAuthentication (8.0.8):
     - ExpoModulesCore
   - ExpoAsset (12.0.13):
@@ -1920,7 +1923,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - RNGoogleSignin (16.1.2):
+  - RNGoogleSignin (16.1.5):
     - GoogleSignIn (~> 9.0)
     - hermes-engine
     - RCTRequired
@@ -2648,7 +2651,7 @@ SPEC CHECKSUMS:
   EXManifests: 378c7742de02a8605093b1c82b5774d8f9875cec
   EXNotifications: c67e92b9fdfe785ff9dbdc5f4c0ff935de357da7
   Expo: 3ccbb4de93972b9a8214b8853ab0c4d4a317e62b
-  ExpoAdapterGoogleSignIn: ab4d9fc38cb91077a4138d178395525ec65d0c2e
+  ExpoAdapterGoogleSignIn: dd506e5b1d8b9a172843ff6fc72875e0a9d241e1
   ExpoAppleAuthentication: 9413ae9a5e631a424cc04c1b13b0694dbab7d594
   ExpoAsset: 9e5a7c9c0a9fb83ad5b2bb365141f2bd7f289b66
   ExpoCamera: 6a326deb45ba840749652e4c15198317aa78497e
@@ -2751,7 +2754,7 @@ SPEC CHECKSUMS:
   ReactNativeDependencies: 71ce9c28beb282aa720ea7b46980fff9669f428a
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   RNCAsyncStorage: 3a4f5e2777dae1688b781a487923a08569e27fe4
-  RNGoogleSignin: 104dd7238c56fe354e4b0a8fd267f866039ffdf3
+  RNGoogleSignin: e4f3dcc95eb13ac4dcc76ee3160699829ab78b72
   RNReanimated: 1442a577e066e662f0ce1cd1864a65c8e547aee0
   RNScreens: d8d6f1792f6e7ac12b0190d33d8d390efc0c1845
   RNSVG: 31d6639663c249b7d5abc9728dde2041eb2a3c34

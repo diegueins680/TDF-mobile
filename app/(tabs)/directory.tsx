@@ -329,8 +329,17 @@ function FilterChip({ label, selected, onPress }: { label: string; selected: boo
   );
 }
 
+// Event cards show when the event starts (the search item's effectiveAt).
+const formatEventDate = (value: string | null | undefined) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString('es-EC', { dateStyle: 'medium', timeStyle: 'short' });
+};
+
 function ResultCard({ item, compact = false, onOpen }: { item: DirectorySearchItem; compact?: boolean; onOpen: () => void }) {
   const { colors } = useAppTheme();
+  const eventDate = item.type === 'event' ? formatEventDate(item.effectiveAt) : null;
   return (
     <View style={[styles.card, compact && styles.cardCompact, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderSubtle }]}>
       <Pressable
@@ -343,9 +352,10 @@ function ResultCard({ item, compact = false, onOpen }: { item: DirectorySearchIt
         <Text style={[styles.kind, { color: colors.actionPrimary }]}>{item.type.toUpperCase()}</Text>
         <Text numberOfLines={2} style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.title}</Text>
         {item.subtitle ? <Text numberOfLines={2} style={{ color: colors.textSecondary }}>{item.subtitle}</Text> : null}
+        {eventDate ? <Text accessibilityLabel={`Fecha del evento: ${eventDate}`} style={[styles.badge, { color: colors.actionPrimary }]}>{eventDate}</Text> : null}
         {item.summary ? <Text numberOfLines={compact ? 3 : 4} style={[styles.cardSummary, { color: colors.textSecondary }]}>{item.summary}</Text> : null}
         <Text style={{ color: colors.textSecondary }}>
-          {item.location.city ?? 'Disponible en remoto'}{item.location.distanceKm != null ? ` · ~${item.location.distanceKm} km` : ''}
+          {item.location.city ?? (item.type === 'event' || item.type === 'venue' ? 'Ubicación no indicada' : 'Disponible en remoto')}{item.location.distanceKm != null ? ` · ~${item.location.distanceKm} km` : ''}
         </Text>
         {item.sourceProfile ? <Text style={[styles.badge, { color: colors.actionPrimary }]}>Ver perfil</Text> : null}
       </Pressable>

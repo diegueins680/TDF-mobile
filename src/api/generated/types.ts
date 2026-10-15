@@ -15329,6 +15329,9 @@ export interface components {
             title: string;
             subtitle?: string | null;
             summary?: string | null;
+            profileKind?: string | null;
+            /** @description Same-origin canonical profile path */
+            canonicalPath?: string | null;
             /** Format: uri */
             imageUrl?: string | null;
             location: components["schemas"]["PublicLocation"];
@@ -31210,7 +31213,8 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
-                entityType?: components["schemas"]["DirectoryEntityType"];
+                entityType?: "profile" | "artist" | "classified" | "event" | "venue";
+                profileKind?: "person" | "artist" | "band" | "project";
                 cityId?: string;
                 /** @description Consented ephemeral search latitude */
                 latitude?: number;

@@ -53,6 +53,8 @@
     "@stripe/stripe-react-native": "^0.50.3",
     "@tanstack/react-query": "^5.90.5",
     "axios": "^1.12.2",
+    "decode-uri-component": "file:./vendor/decode-uri-component",
+    "decode-uri-component-upstream": "npm:decode-uri-component@0.5.0",
     "expo": "~54.0.37",
     "expo-application": "~7.0.8",
     "expo-camera": "~17.0.10",
@@ -119,7 +121,8 @@
     "brace-expansion@^2.0.0": "2.1.7",
     "react-native-reanimated": "~4.1.1",
     "source-map-js": "1.2.2",
-    "compression": "1.8.2"
+    "compression": "1.8.2",
+    "decode-uri-component": "$decode-uri-component"
   },
   "expo": {
     "doctor": {

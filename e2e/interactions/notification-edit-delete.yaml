@@ -12,7 +12,18 @@ appId: ${APP_ID || "com.tdfrecords.app"}
     timeout: 30000
 - tapOn: "Abrir conversación|Open discussion"
 - extendedWaitUntil:
-    visible: ${TDF_REPLY_BODY}
+    visible: ${TDF_COMMENT_BODY}
+    timeout: 30000
+- scrollUntilVisible:
+    centerElement: true
+    element: ${TDF_REPLY_BODY}
+    direction: DOWN
+    timeout: 30000
+- assertVisible: ${TDF_REPLY_BODY}
+- scrollUntilVisible:
+    centerElement: true
+    element: ${TDF_COMMENT_BODY}
+    direction: UP
     timeout: 30000
 - assertVisible: ${TDF_COMMENT_BODY}
 - tapOn:

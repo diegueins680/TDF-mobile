@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Linking } from 'react-native';
+import { Linking, Platform, Text, TouchableOpacity } from 'react-native';
 
 const mockSetToken = jest.fn();
 const mockClearToken = jest.fn();
@@ -13,6 +13,10 @@ const mockGoogleHasPlayServices = jest.fn();
 const mockGoogleSignIn = jest.fn();
 const mockGoogleSignOut = jest.fn();
 const mockLoadNativeGoogleSignin = jest.fn();
+const mockAppleLoginRequest = jest.fn();
+const mockAppleIsAvailable = jest.fn();
+const mockAppleSignIn = jest.fn();
+const mockLoadNativeAppleAuthentication = jest.fn();
 const mockReplace = jest.fn();
 const mockClearPendingOnboardingIntent = jest.fn();
 const mockPersistOnboardingIntent = jest.fn();
@@ -81,6 +85,7 @@ jest.mock('../src/api/auth', () => ({
   requestPasswordReset: (...args: unknown[]) => mockRequestPasswordReset(...args),
   loginRequest: (...args: unknown[]) => mockLoginRequest(...args),
   googleLoginRequest: (...args: unknown[]) => mockGoogleLoginRequest(...args),
+  appleLoginRequest: (...args: unknown[]) => mockAppleLoginRequest(...args),
   signupRequest: (...args: unknown[]) => mockSignupRequest(...args),
 }));
 
@@ -109,6 +114,37 @@ jest.mock('../src/lib/authConfig', () => ({
 jest.mock('../src/lib/nativeGoogleSignin', () => ({
   loadNativeGoogleSignin: () => mockLoadNativeGoogleSignin(),
 }));
+
+jest.mock('../src/lib/nativeAppleAuthentication', () => ({
+  loadNativeAppleAuthentication: () => mockLoadNativeAppleAuthentication(),
+}));
+
+// Deterministic nonce material so the test can assert what Apple and the backend receive.
+jest.mock('expo-crypto', () => ({
+  getRandomBytesAsync: async (length: number) => Uint8Array.from({ length }, () => 0xab),
+  digestStringAsync: async (_algorithm: string, data: string) => `sha256:${data}`,
+  CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+  CryptoEncoding: { HEX: 'hex' },
+}));
+
+const APPLE_RAW_NONCE = 'ab'.repeat(32);
+const APPLE_HASHED_NONCE = `sha256:${APPLE_RAW_NONCE}`;
+
+type FakeAppleButtonProps = { onPress: () => void; testID?: string; buttonType: number };
+const FakeAppleAuthenticationButton = ({ onPress, testID, buttonType }: FakeAppleButtonProps) => (
+  <TouchableOpacity onPress={onPress} testID={testID} accessibilityRole="button">
+    <Text>{buttonType === 2 ? 'Sign up with Apple' : 'Sign in with Apple'}</Text>
+  </TouchableOpacity>
+);
+
+const fakeAppleAuthenticationModule = {
+  isAvailableAsync: (...args: unknown[]) => mockAppleIsAvailable(...args),
+  signInAsync: (...args: unknown[]) => mockAppleSignIn(...args),
+  AppleAuthenticationButton: FakeAppleAuthenticationButton,
+  AppleAuthenticationButtonType: { SIGN_IN: 0, CONTINUE: 1, SIGN_UP: 2 },
+  AppleAuthenticationButtonStyle: { WHITE: 0, WHITE_OUTLINE: 1, BLACK: 2 },
+  AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
+};
 
 jest.mock('../src/lib/onboardingIntent', () => {
   const actual = jest.requireActual('../src/lib/onboardingIntent');
@@ -154,6 +190,8 @@ describe('Auth screen', () => {
     mockAuthConfig.GOOGLE_IOS_URL_SCHEME = 'com.googleusercontent.apps.123456';
     mockGoogleHasPlayServices.mockResolvedValue(true);
     mockGoogleSignOut.mockResolvedValue(null);
+    mockAppleIsAvailable.mockResolvedValue(true);
+    mockLoadNativeAppleAuthentication.mockResolvedValue(fakeAppleAuthenticationModule);
     mockLoadNativeGoogleSignin.mockResolvedValue({
       GoogleSignin: {
         configure: jest.fn(),
@@ -684,6 +722,18 @@ describe('Auth screen', () => {
     render(<AuthScreen />);
 
     await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
+    // Sign in with Apple is still offered on iOS, so the social divider stays.
+    expect(await screen.findByTestId('appleSignInButton')).toBeTruthy();
+    expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
+    expect(screen.getByText(/^o$/i)).toBeTruthy();
+    screen.unmount();
+
+    mockAppleIsAvailable.mockResolvedValue(false);
+    render(<AuthScreen />);
+
+    await waitFor(() => expect(mockAppleIsAvailable).toHaveBeenCalled());
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId('appleSignInButton')).toBeNull();
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
     expect(screen.queryByText(/^o$/i)).toBeNull();
   });
@@ -726,5 +776,176 @@ describe('Auth screen', () => {
     expect(screen.getByText(/Sesión cerrada/i)).toBeTruthy();
     expect(screen.queryByTestId('loginButton')).toBeNull();
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
+  });
+
+  describe('Sign in with Apple', () => {
+    beforeEach(() => {
+      // Earlier cases leave useAuth returning an active or hydrating session.
+      jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({
+        token: null,
+        partyId: null,
+        loading: false,
+        setToken: mockSetToken,
+        clearToken: mockClearToken,
+      });
+    });
+
+    const appleCredential = {
+      user: 'apple-user',
+      state: null,
+      fullName: { namePrefix: null, givenName: 'Diego', middleName: null, familyName: 'Saá', nameSuffix: null, nickname: null },
+      email: 'relay@privaterelay.appleid.com',
+      realUserStatus: 2,
+      identityToken: 'apple-identity-token',
+      authorizationCode: 'apple-auth-code',
+    };
+
+    it('renders the Apple button only on iOS devices that support it', async () => {
+      render(<AuthScreen />);
+      expect(await screen.findByTestId('appleSignInButton')).toBeTruthy();
+      expect(screen.getByText('Sign in with Apple')).toBeTruthy();
+      expect(screen.getByText(/Continuar con Google/i)).toBeTruthy();
+      screen.unmount();
+
+      mockAppleIsAvailable.mockResolvedValue(false);
+      render(<AuthScreen />);
+      await waitFor(() => expect(mockAppleIsAvailable).toHaveBeenCalled());
+      await screen.findByText(/Continuar con Google/i);
+      expect(screen.queryByTestId('appleSignInButton')).toBeNull();
+      screen.unmount();
+
+      mockAppleIsAvailable.mockResolvedValue(true);
+      mockLoadNativeAppleAuthentication.mockClear();
+      const originalPlatform = Platform.OS;
+      Platform.OS = 'android';
+      try {
+        render(<AuthScreen />);
+        await screen.findByText(/Continuar con Google/i);
+        expect(screen.queryByTestId('appleSignInButton')).toBeNull();
+        expect(mockLoadNativeAppleAuthentication).not.toHaveBeenCalled();
+      } finally {
+        Platform.OS = originalPlatform;
+      }
+    });
+
+    it('hides Apple on signup until the terms are accepted, then offers the sign-up variant', async () => {
+      mockSearchParams = { mode: 'signup' };
+      render(<AuthScreen />);
+      await waitFor(() => expect(mockAppleIsAvailable).toHaveBeenCalled());
+      expect(screen.queryByTestId('appleSignInButton')).toBeNull();
+      fireEvent.press(screen.getByTestId('termsCheckbox'));
+      expect(await screen.findByText('Sign up with Apple')).toBeTruthy();
+    });
+
+    it('signs in with a hashed nonce for Apple and the raw nonce plus name for the backend', async () => {
+      mockAppleSignIn.mockResolvedValue(appleCredential);
+      mockAppleLoginRequest.mockResolvedValue({
+        token: 'Bearer apple-mobile-token',
+        partyId: 91,
+        roles: [],
+        modules: [],
+        accountCreated: false,
+      });
+
+      render(<AuthScreen />);
+      fireEvent.press(await screen.findByTestId('appleSignInButton'));
+
+      await waitFor(() => expect(mockAppleSignIn).toHaveBeenCalledWith({
+        requestedScopes: [0, 1],
+        nonce: APPLE_HASHED_NONCE,
+      }));
+      await waitFor(() => expect(mockAppleLoginRequest).toHaveBeenCalledWith({
+        identityToken: 'apple-identity-token',
+        nonce: APPLE_RAW_NONCE,
+        fullName: { givenName: 'Diego', familyName: 'Saá' },
+      }));
+      await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('Bearer apple-mobile-token', 91, { roles: [], modules: [] }));
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory'));
+      expect(mockClearPendingOnboardingIntent).not.toHaveBeenCalled();
+      expect(screen.getByText('Sesión con Apple iniciada.')).toBeTruthy();
+    });
+
+    it('creates the account with explicit consent and intent when Apple is used from signup', async () => {
+      mockAppleSignIn.mockResolvedValue({ ...appleCredential, fullName: null });
+      mockAppleLoginRequest.mockResolvedValue({
+        token: 'Bearer apple-created-token',
+        partyId: 92,
+        roles: ['Customer'],
+        modules: [],
+        accountCreated: true,
+      });
+      mockSearchParams = { mode: 'signup', intent: 'follow_artists' };
+
+      render(<AuthScreen />);
+      fireEvent.press(await screen.findByTestId('termsCheckbox'));
+      fireEvent.press(await screen.findByText('Sign up with Apple'));
+
+      await waitFor(() => expect(mockAppleLoginRequest).toHaveBeenCalledWith({
+        identityToken: 'apple-identity-token',
+        nonce: APPLE_RAW_NONCE,
+        createNewAccount: true,
+        marketingOptIn: false,
+        termsAccepted: true,
+        termsVersion: 'tdf-account-terms-v1',
+        onboardingIntent: 'follow_artists',
+      }));
+      await waitFor(() => expect(mockClearPendingOnboardingIntent).toHaveBeenCalledTimes(1));
+      expect(mockReplace).toHaveBeenCalledWith('/(tabs)/social');
+    });
+
+    it('stays silent when the user dismisses the Apple sheet', async () => {
+      mockAppleSignIn.mockRejectedValue(Object.assign(new Error('The user canceled the authorization attempt'), {
+        code: 'ERR_REQUEST_CANCELED',
+      }));
+
+      render(<AuthScreen />);
+      fireEvent.press(await screen.findByTestId('appleSignInButton'));
+
+      await waitFor(() => expect(mockAppleSignIn).toHaveBeenCalled());
+      expect(await screen.findByTestId('appleSignInButton')).toBeTruthy();
+      expect(mockAppleLoginRequest).not.toHaveBeenCalled();
+      expect(mockSetToken).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.queryByText(/Apple/i, { exact: false })).toBeTruthy();
+      expect(screen.queryByText('No pudimos iniciar sesión con Apple.')).toBeNull();
+    });
+
+    it('reports other Apple failures in the current language', async () => {
+      mockLocale = 'en';
+      mockAppleSignIn.mockRejectedValue(Object.assign(new Error('boom'), { code: 'ERR_REQUEST_FAILED' }));
+
+      render(<AuthScreen />);
+      fireEvent.press(await screen.findByTestId('appleSignInButton'));
+
+      expect((await screen.findByRole('alert')).props.children).toBe('boom');
+      expect(mockAppleLoginRequest).not.toHaveBeenCalled();
+    });
+
+    it('connects Apple only after an explicit existing-account password confirmation', async () => {
+      mockAppleSignIn.mockResolvedValue({ ...appleCredential, fullName: null });
+      mockAppleLoginRequest
+        .mockRejectedValueOnce(new Error('Accept the terms and privacy policy through the signup flow before creating an Apple account'))
+        .mockResolvedValueOnce({ token: 'apple-linked-token', partyId: 93, roles: [], modules: [], accountCreated: false });
+
+      render(<AuthScreen />);
+      fireEvent.press(await screen.findByTestId('appleSignInButton'));
+      await screen.findByText('Conectar Apple a mi cuenta TDF');
+      expect(mockSetToken).not.toHaveBeenCalled();
+      expect(mockAppleLoginRequest).toHaveBeenCalledTimes(1);
+
+      fireEvent.press(screen.getByTestId('appleSignInButton'));
+      expect((await screen.findByRole('alert')).props.children).toMatch(/Para conectar Apple/);
+      expect(mockAppleLoginRequest).toHaveBeenCalledTimes(1);
+
+      fireEvent.changeText(screen.getByPlaceholderText('usuario o correo'), 'existing-user');
+      fireEvent.changeText(screen.getByPlaceholderText('Tu contraseña'), 'existing-password');
+      fireEvent.press(screen.getByTestId('appleSignInButton'));
+      await waitFor(() => expect(mockAppleLoginRequest).toHaveBeenLastCalledWith({
+        identityToken: 'apple-identity-token',
+        nonce: APPLE_RAW_NONCE,
+        linkAccount: { username: 'existing-user', password: 'existing-password' },
+      }));
+      await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('apple-linked-token', 93, { roles: [], modules: [] }));
+    });
   });
 });

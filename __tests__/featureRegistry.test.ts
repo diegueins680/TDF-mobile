@@ -45,6 +45,13 @@ describe('mobile feature registry', () => {
     expect(searchFeatures('borrar mis datos').map(item => item.id)).toContain('account.deletion');
     expect(searchFeatures('delete my account').map(item => item.id)).toContain('account.deletion');
   });
+  it('keeps the legacy DJ booth destination out of search', () => {
+    expect(getFeatureById('bookings.dj-booth')?.searchable).toBe(false);
+    for (const query of ['dj booth', 'cabina dj']) {
+      expect(searchFeatures(query).map(({ id }) => id)).not.toContain('bookings.dj-booth');
+    }
+  });
+
   it('contains unique stable ids and valid parent references', () => {
     const ids = mobileFeatureRegistry.map((feature) => feature.id);
     expect(new Set(ids).size).toBe(ids.length);

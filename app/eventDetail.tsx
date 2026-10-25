@@ -27,9 +27,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
+import { getAuthToken } from '../src/api/client';
 import { Artists } from '../src/api/artists';
 import { Social } from '../src/api/social';
-import { uploadMedia } from '../src/api/upload';
 import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard';
 import { EventMomentCard } from '../src/components/EventMomentCard';
 import { TicketPurchaseCard } from '../src/components/tickets/TicketPurchaseCard';
@@ -631,6 +631,7 @@ export default function EventDetailScreen() {
   const createMomentMutation = useMutation({
     mutationFn: async (submission: MomentSubmission): Promise<MomentPublishOutcome[]> => {
       if (!eventId) throw new Error('Event not found');
+      const publicationToken = getAuthToken();
       if (submission.media.length === 0) {
         throw new Error('Selecciona una imagen o video antes de publicar.');
       }
@@ -653,15 +654,11 @@ export default function EventDetailScreen() {
               const preparedMedia = await prepareMomentMediaForUpload(originalMedia);
               // An upload failure keeps the draft in the editor. It must never
               // become a locally saved item presented as a remote publication.
-              const mediaUri = await uploadMedia({
-                uri: preparedMedia.uri,
-                mimeType: preparedMedia.mimeType,
-                fileName: preparedMedia.fileName ?? undefined,
-                uploadLabel: preparedMedia.kind === 'video' ? 'video' : 'imagen',
-              });
+              const mediaUri = await Events.uploadMomentMedia(eventId, preparedMedia);
               mediaForMoment = { ...preparedMedia, uri: mediaUri };
             }
 
+            if (getAuthToken() !== publicationToken) throw new Error('Tu sesión cambió. Vuelve al evento con la cuenta activa antes de publicar.');
             const result = await createMomentFeedItem({
               eventId,
               authorName: currentActor.displayName,

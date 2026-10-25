@@ -1,4 +1,5 @@
 import { del, get, post, put } from './client';
+import { Platform } from 'react-native';
 import type { components } from './generated/types';
 import type {
   ID,
@@ -834,6 +835,20 @@ export const Events = {
   },
 
   // Event moments
+  uploadMomentMedia: async (eventId: ID, media: { uri: string; mimeType: string; fileName?: string | null; kind: 'image' | 'video' }): Promise<string> => {
+    const form = new FormData();
+    form.append('file', { uri: Platform.OS === 'ios' ? media.uri.replace('file://', '') : media.uri,
+      name: media.fileName || media.uri.split('/').pop() || (media.kind === 'image' ? 'memory.jpg' : 'memory.mp4'),
+      type: media.mimeType } as unknown as Blob);
+    // Images retain the existing endpoint for rolling backend compatibility.
+    // Video uses the same event-owned durable store after the backend upgrade.
+    const suffix = media.kind === 'image' ? 'image' : 'media';
+    const result = await post<{ eiuPublicUrl: string }>(`/social-events/events/${encodeURIComponent(String(eventId))}/moments/${suffix}`, form,
+      { headers: { 'Content-Type': 'multipart/form-data' } });
+    if (!/^https:\/\//i.test(result.eiuPublicUrl ?? '')) throw new Error('La subida no devolvió un enlace público válido. Conserva el borrador e inténtalo de nuevo.');
+    return result.eiuPublicUrl;
+  },
+
   listMoments: async (eventId: ID): Promise<EventMoment[]> => {
     const list = await get<BackendMomentDTO[]>(`/social-events/events/${eventId}/moments`);
     return list.map((dto, index) => mapMomentDto(dto, eventId, index));

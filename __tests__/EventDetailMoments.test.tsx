@@ -89,6 +89,7 @@ jest.mock('../src/api/events', () => ({
   Events: {
     getById: jest.fn(),
     createMoment: jest.fn(),
+    uploadMomentMedia: jest.fn(),
     getPublicById: jest.fn(),
     getMyRSVP: jest.fn(),
     getRSVPSummary: jest.fn(),
@@ -344,10 +345,9 @@ describe('EventDetail moments tab', () => {
   });
 
   it('keeps a failed authenticated upload in the editor without creating a shadow publication', async () => {
-    const upload = jest.mocked(require('../src/api/upload').uploadMedia);
     const api = jest.mocked(require('../src/api/events').Events);
     const storage = jest.mocked(require('@react-native-async-storage/async-storage'));
-    upload.mockRejectedValue(new Error('Network unavailable'));
+    api.uploadMomentMedia.mockRejectedValue(new Error('Network unavailable'));
     render(<EventDetailScreen />);
     const mutation = mockMutationOptions[5];
     const submission = { caption: 'Keep this draft', media: [{ kind: 'video', uri: 'file:///clip.mp4', mimeType: 'video/mp4' }], optimisticIds: ['pending-1'] };
@@ -358,6 +358,20 @@ describe('EventDetail moments tab', () => {
     act(() => mutation.onSuccess!(result, submission));
     await waitFor(() => expect(screen.getByDisplayValue('Keep this draft')).toBeTruthy());
     expect(screen.queryByText(/momento publicado/)).toBeNull();
+  });
+
+  it('does not publish an uploaded draft under a different account', async () => {
+    const client = require('../src/api/client');
+    const previous = client.getAuthToken();
+    const api = jest.mocked(require('../src/api/events').Events);
+    client.setAuthToken('first-synthetic-account');
+    api.uploadMomentMedia.mockImplementationOnce(async () => { client.setAuthToken('second-synthetic-account'); return 'https://assets.persona.test/video.mp4'; });
+    try {
+      render(<EventDetailScreen />);
+      const result = await mockMutationOptions[5].mutationFn!({ caption: 'First account draft', media: [{ kind: 'video', uri: 'file:///clip.mp4', mimeType: 'video/mp4' }], optimisticIds: ['pending-switch'] });
+      expect(result).toEqual([expect.objectContaining({ status: 'rejected', message: expect.stringContaining('Tu sesión cambió') })]);
+      expect(api.createMoment).not.toHaveBeenCalled();
+    } finally { client.setAuthToken(previous); }
   });
 
   it('adds several gallery photos with immediate thumbnails and one publish action', async () => {

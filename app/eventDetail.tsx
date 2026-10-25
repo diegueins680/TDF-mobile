@@ -646,27 +646,20 @@ export default function EventDetailScreen() {
 
           try {
             let mediaForMoment = originalMedia;
-            let preferRemote = shouldPreferRemoteMoments;
+            const preferRemote = shouldPreferRemoteMoments;
             const notices: string[] = [];
 
             if (token?.trim()) {
               const preparedMedia = await prepareMomentMediaForUpload(originalMedia);
-              try {
-                const mediaUri = await uploadMedia({
-                  uri: preparedMedia.uri,
-                  mimeType: preparedMedia.mimeType,
-                  fileName: preparedMedia.fileName ?? undefined,
-                  uploadLabel: preparedMedia.kind === 'video' ? 'video' : 'imagen',
-                });
-                mediaForMoment = { ...preparedMedia, uri: mediaUri };
-              } catch (error) {
-                preferRemote = false;
-                notices.push(
-                  error instanceof Error
-                    ? `${error.message} Guardamos ese momento solo en este dispositivo.`
-                    : 'Guardamos ese momento solo en este dispositivo.',
-                );
-              }
+              // An upload failure keeps the draft in the editor. It must never
+              // become a locally saved item presented as a remote publication.
+              const mediaUri = await uploadMedia({
+                uri: preparedMedia.uri,
+                mimeType: preparedMedia.mimeType,
+                fileName: preparedMedia.fileName ?? undefined,
+                uploadLabel: preparedMedia.kind === 'video' ? 'video' : 'imagen',
+              });
+              mediaForMoment = { ...preparedMedia, uri: mediaUri };
             }
 
             const result = await createMomentFeedItem({
@@ -734,11 +727,11 @@ export default function EventDetailScreen() {
       const notices = [...new Set(fulfilled.flatMap((outcome) => outcome.notices))];
       const rejectedMessages = [...new Set(rejected.map((outcome) => outcome.message))];
       const summary = [
-        fulfilled.length > 0
-          ? `${fulfilled.length} ${fulfilled.length === 1 ? 'momento publicado' : 'momentos publicados'}.`
+        fulfilled.length > localCount
+          ? `${fulfilled.length - localCount} ${fulfilled.length - localCount === 1 ? 'momento publicado' : 'momentos publicados'}.`
           : null,
         localCount > 0
-          ? `${localCount} ${localCount === 1 ? 'quedó guardado' : 'quedaron guardados'} solo en este dispositivo.`
+          ? `${localCount} ${localCount === 1 ? 'borrador guardado' : 'borradores guardados'} solo en este dispositivo; no ${localCount === 1 ? 'está publicado' : 'están publicados'} en TDF.`
           : null,
         rejected.length > 0
           ? `${rejected.length} ${rejected.length === 1 ? 'archivo volvió' : 'archivos volvieron'} al editor para reintentar.`

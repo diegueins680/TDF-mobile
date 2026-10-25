@@ -841,13 +841,12 @@ export const Events = {
 
   createMoment: async (input: EventMomentCreateInput): Promise<EventMoment> => {
     const payload = {
-      emCreateAuthorName: input.authorName,
-      emCreateCaption: input.caption ?? null,
+      emCreateCaption: input.caption ?? undefined,
       emCreateMediaUrl: input.media.uri,
       emCreateMediaType: input.media.kind,
-      emCreateMediaWidth: input.media.width ?? null,
-      emCreateMediaHeight: input.media.height ?? null,
-      emCreateMediaDurationMs: input.media.durationMs ?? null,
+      emCreateMediaWidth: input.media.width ?? undefined,
+      emCreateMediaHeight: input.media.height ?? undefined,
+      emCreateMediaDurationMs: input.media.durationMs ?? undefined,
     };
     const dto = await post<BackendMomentDTO>(`/social-events/events/${input.eventId}/moments`, payload);
     return mapMomentDto(dto, input.eventId);

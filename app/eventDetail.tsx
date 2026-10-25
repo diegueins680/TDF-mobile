@@ -27,9 +27,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
+import { getAuthToken } from '../src/api/client';
 import { Artists } from '../src/api/artists';
 import { Social } from '../src/api/social';
-import { uploadMedia } from '../src/api/upload';
 import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard';
 import { EventMomentCard } from '../src/components/EventMomentCard';
 import { TicketPurchaseCard } from '../src/components/tickets/TicketPurchaseCard';
@@ -631,6 +631,7 @@ export default function EventDetailScreen() {
   const createMomentMutation = useMutation({
     mutationFn: async (submission: MomentSubmission): Promise<MomentPublishOutcome[]> => {
       if (!eventId) throw new Error('Event not found');
+      const publicationToken = getAuthToken();
       if (submission.media.length === 0) {
         throw new Error('Selecciona una imagen o video antes de publicar.');
       }
@@ -646,29 +647,18 @@ export default function EventDetailScreen() {
 
           try {
             let mediaForMoment = originalMedia;
-            let preferRemote = shouldPreferRemoteMoments;
+            const preferRemote = shouldPreferRemoteMoments;
             const notices: string[] = [];
 
             if (token?.trim()) {
               const preparedMedia = await prepareMomentMediaForUpload(originalMedia);
-              try {
-                const mediaUri = await uploadMedia({
-                  uri: preparedMedia.uri,
-                  mimeType: preparedMedia.mimeType,
-                  fileName: preparedMedia.fileName ?? undefined,
-                  uploadLabel: preparedMedia.kind === 'video' ? 'video' : 'imagen',
-                });
-                mediaForMoment = { ...preparedMedia, uri: mediaUri };
-              } catch (error) {
-                preferRemote = false;
-                notices.push(
-                  error instanceof Error
-                    ? `${error.message} Guardamos ese momento solo en este dispositivo.`
-                    : 'Guardamos ese momento solo en este dispositivo.',
-                );
-              }
+              // An upload failure keeps the draft in the editor. It must never
+              // become a locally saved item presented as a remote publication.
+              const mediaUri = await Events.uploadMomentMedia(eventId, preparedMedia);
+              mediaForMoment = { ...preparedMedia, uri: mediaUri };
             }
 
+            if (getAuthToken() !== publicationToken) throw new Error('Tu sesión cambió. Vuelve al evento con la cuenta activa antes de publicar.');
             const result = await createMomentFeedItem({
               eventId,
               authorName: currentActor.displayName,
@@ -734,11 +724,11 @@ export default function EventDetailScreen() {
       const notices = [...new Set(fulfilled.flatMap((outcome) => outcome.notices))];
       const rejectedMessages = [...new Set(rejected.map((outcome) => outcome.message))];
       const summary = [
-        fulfilled.length > 0
-          ? `${fulfilled.length} ${fulfilled.length === 1 ? 'momento publicado' : 'momentos publicados'}.`
+        fulfilled.length > localCount
+          ? `${fulfilled.length - localCount} ${fulfilled.length - localCount === 1 ? 'momento publicado' : 'momentos publicados'}.`
           : null,
         localCount > 0
-          ? `${localCount} ${localCount === 1 ? 'quedó guardado' : 'quedaron guardados'} solo en este dispositivo.`
+          ? `${localCount} ${localCount === 1 ? 'borrador guardado' : 'borradores guardados'} solo en este dispositivo; no ${localCount === 1 ? 'está publicado' : 'están publicados'} en TDF.`
           : null,
         rejected.length > 0
           ? `${rejected.length} ${rejected.length === 1 ? 'archivo volvió' : 'archivos volvieron'} al editor para reintentar.`

@@ -30,11 +30,17 @@ type AuthContextValue = {
     nextSession?: Partial<AuthSessionSnapshot> | null,
   ) => void;
   clearToken: () => void;
+  clearTokenPersisted: () => Promise<boolean>;
   refreshSession: () => Promise<void>;
 };
 
 const SECURE_STORAGE_KEY = 'tdf-auth-token';
 const LEGACY_STORAGE_KEY = 'tdf-auth-token';
+const LOGOUT_INTENT_KEY = 'tdf-auth-logout-intent-v1';
+
+// Keep writes ordered across provider remounts. The marker carries no identity.
+let storedTokenQueue: Promise<unknown> = Promise.resolve();
+let volatileLogoutBarrier = false;
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -131,8 +137,28 @@ const readLegacyToken = async (): Promise<string | null> => {
 const clearLegacyToken = async () => {
   try {
     await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
+    return true;
   } catch {
-    // Ignore storage failures to avoid unhandled rejections in callers.
+    return false;
+  }
+};
+
+const writeLogoutIntent = async (): Promise<boolean> => {
+  try {
+    await AsyncStorage.setItem(LOGOUT_INTENT_KEY, 'blocked');
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const hasStoredLogoutIntent = async (): Promise<boolean> => {
+  if (volatileLogoutBarrier) return true;
+  try {
+    return await AsyncStorage.getItem(LOGOUT_INTENT_KEY) !== null;
+  } catch {
+    // An unreadable marker cannot authorize restoring a stored account.
+    return true;
   }
 };
 
@@ -145,7 +171,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const isMountedRef = useRef(true);
   const profileLookupIdRef = useRef(0);
   const authVersionRef = useRef(0);
-  const persistQueueRef = useRef<Promise<void>>(Promise.resolve());
   const appliedTokenRef = useRef<string | null>(normalizeToken(getAuthToken()));
 
   useEffect(() => {
@@ -176,31 +201,53 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const persistStoredToken = useCallback((
     next: string | null,
     options?: { preserveLegacyOnFailure?: boolean }
-  ): Promise<void> => {
-    const queued = persistQueueRef.current
+  ): Promise<boolean> => {
+    volatileLogoutBarrier = true;
+    const queued = storedTokenQueue
       .catch(() => undefined)
       .then(async () => {
+        const markerWritten = await writeLogoutIntent();
         if (Platform.OS === 'web') {
+          let persisted = false;
           try {
             if (next) {
               await AsyncStorage.setItem(LEGACY_STORAGE_KEY, next);
+              persisted = true;
             } else {
-              await clearLegacyToken();
+              persisted = await clearLegacyToken();
             }
           } catch {
             // Keep the in-memory auth state usable when browser storage is unavailable.
           }
-          return;
+          if (next === null) {
+            const durable = markerWritten || persisted;
+            volatileLogoutBarrier = !durable;
+            return durable;
+          }
+          if (!persisted) return false;
+        } else {
+          const securePersisted = await persistSecureToken(next);
+          let legacyCleared = false;
+          if (!options?.preserveLegacyOnFailure || securePersisted || next === null) {
+            legacyCleared = await clearLegacyToken();
+          }
+          if (next === null) {
+            const durable = markerWritten || (securePersisted && legacyCleared);
+            volatileLogoutBarrier = !durable;
+            return durable;
+          }
+          if (!securePersisted || !legacyCleared) return false;
         }
-
-        const securePersisted = await persistSecureToken(next);
-
-        if (!options?.preserveLegacyOnFailure || securePersisted || next === null) {
-          await clearLegacyToken();
+        try {
+          await AsyncStorage.removeItem(LOGOUT_INTENT_KEY);
+          volatileLogoutBarrier = false;
+          return true;
+        } catch {
+          return false;
         }
       });
 
-    persistQueueRef.current = queued;
+    storedTokenQueue = queued;
     return queued;
   }, []);
 
@@ -277,11 +324,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     (async () => {
       try {
+        await storedTokenQueue;
+        if (isStaleBootstrap()) return;
         const secureStored = await readSecureToken();
         const legacyStored = await readLegacyToken();
+        const logoutBlocked = await hasStoredLogoutIntent();
+        if (isStaleBootstrap()) return;
+        if (logoutBlocked) {
+          applyAuthState(null);
+          await refreshPartyId(null);
+          return;
+        }
         const secureToken = normalizeToken(secureStored);
         const legacyToken = normalizeToken(legacyStored);
-        const inMemoryToken = normalizeToken(getAuthToken());
+        const inMemoryToken = volatileLogoutBarrier ? null : normalizeToken(getAuthToken());
         const bootstrapToken = secureToken ?? legacyToken ?? inMemoryToken;
 
         if (isStaleBootstrap()) return;
@@ -313,7 +369,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       } catch {
         if (isStaleBootstrap()) return;
 
-        const inMemoryToken = normalizeToken(getAuthToken());
+        const inMemoryToken = volatileLogoutBarrier ? null : normalizeToken(getAuthToken());
         applyAuthState(inMemoryToken);
         await refreshPartyId(inMemoryToken);
       } finally {
@@ -328,7 +384,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, [applyAuthState, persistStoredToken, refreshPartyId]);
 
-  const setToken = useCallback((
+  const updateToken = useCallback((
     next: string | null,
     nextPartyId?: string | number | null,
     nextSession?: Partial<AuthSessionSnapshot> | null,
@@ -348,14 +404,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSessionState(normalizeSessionSnapshot(nextSession, normalizedPartyId));
     }
 
-    void persistStoredToken(normalized);
+    const persistence = persistStoredToken(normalized);
 
     if (normalized && normalizedPartyId === null) {
       void refreshPartyId(normalized);
     }
+    return persistence;
   }, [applyAuthState, persistStoredToken, refreshPartyId]);
 
+  const setToken = useCallback<AuthContextValue['setToken']>((next, nextPartyId, nextSession) => {
+    void updateToken(next, nextPartyId, nextSession);
+  }, [updateToken]);
   const clearToken = useCallback(() => setToken(null), [setToken]);
+  const clearTokenPersisted = useCallback(() => updateToken(null), [updateToken]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -369,9 +430,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       loading,
       setToken,
       clearToken,
+      clearTokenPersisted,
       refreshSession,
     }),
-    [sessionEpoch, token, partyId, session, loading, setToken, clearToken, refreshSession]
+    [sessionEpoch, token, partyId, session, loading, setToken, clearToken, clearTokenPersisted, refreshSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

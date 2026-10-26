@@ -125,3 +125,15 @@ it.each([
   jest.mocked(get).mockResolvedValueOnce(response);
   await expect(Events.listMoments('42')).rejects.toThrow('No se pudo confirmar');
 });
+
+
+it('uploads an audio attachment through the existing durable media endpoint with its name and MIME', async () => {
+  const append = jest.spyOn(FormData.prototype, 'append');
+  try {
+    jest.mocked(post).mockResolvedValueOnce({ eiuPublicUrl: 'https://assets.persona.test/recuerdo.wav' });
+    await expect(Events.uploadMomentMedia('42', { kind: 'audio', uri: 'file:///cache/recuerdo.wav', fileName: 'recuerdo.wav', mimeType: 'audio/wav' }))
+      .resolves.toBe('https://assets.persona.test/recuerdo.wav');
+    expect(post).toHaveBeenLastCalledWith('/social-events/events/42/moments/media', expect.any(FormData), { headers: { 'Content-Type': 'multipart/form-data' } });
+    expect(append).toHaveBeenCalledWith('file', expect.objectContaining({ uri: expect.stringContaining('recuerdo.wav'), name: 'recuerdo.wav', type: 'audio/wav' }));
+  } finally { append.mockRestore(); }
+});

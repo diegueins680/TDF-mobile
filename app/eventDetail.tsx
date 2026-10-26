@@ -2143,7 +2143,7 @@ function EventDetailContent() {
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <Text accessibilityRole="header" style={styles.modalTitle}>{audioCopy.editMemory}</Text>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel={audioCopy.cancelEdit}
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={audioCopy.cancelEdit} style={styles.modalHeaderAction}
               disabled={authorActionPending} accessibilityState={{ disabled: authorActionPending }} onPress={closeAuthorDialog}>
               <Text style={styles.modalClose}>{audioCopy.cancel}</Text>
             </TouchableOpacity>
@@ -2168,7 +2168,7 @@ function EventDetailContent() {
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <Text accessibilityRole="header" style={styles.modalTitle}>{audioCopy.deleteMemory}</Text>
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel={audioCopy.cancelDeleteMemory}
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={audioCopy.cancelDeleteMemory} style={styles.modalHeaderAction}
               disabled={authorActionPending} accessibilityState={{ disabled: authorActionPending }} onPress={closeAuthorDialog}>
               <Text style={styles.modalClose}>{audioCopy.cancel}</Text>
             </TouchableOpacity>

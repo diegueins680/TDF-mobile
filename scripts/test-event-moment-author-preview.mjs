@@ -14,7 +14,7 @@ const out = process.env.TDF_PREVIEW_OUTPUT || `/private/tmp/tdf-mobile-author-pr
 mkdirSync(out, { recursive: true });
 const old = '2026-10-26T08:00:00.123456Z';
 let moment = { emId: '77', emEventId: '42', emAuthorPartyId: '7', emAuthorName: 'Autor sintético', emCaption: 'Mi recuerdo original', emMediaType: 'text', emMediaUrl: '', emCreatedAt: old, emUpdatedAt: old };
-const report = { scope: 'Expo Web preview of native source; all API responses synthetic and external egress blocked, connectivity HEAD fulfilled locally; not a physical native device or real backend integration', status: 'NOT_EXECUTED', startedAt: new Date().toISOString(), node: process.version, sourceHashes: {}, syntheticConnectivityProbes: 0, apiRequests: [], blockedExternal: 0, pageErrors: [], edits: [], deletions: 0 };
+const report = { scope: 'Expo Web preview of native source; all API responses synthetic and external egress blocked, connectivity HEAD fulfilled locally; not a physical native device or real backend integration', status: 'NOT_EXECUTED', startedAt: new Date().toISOString(), node: process.version, sourceHashes: {}, syntheticConnectivityProbes: 0, apiRequests: [], blockedExternal: 0, pageErrors: [], edits: [], deletions: 0, touchTargets: [] };
 for (const path of ['app/eventDetail.tsx', 'src/api/events.ts', 'src/components/EventMomentCard.tsx', 'src/localization/eventExperienceCopy.ts'])
   report.sourceHashes[path] = createHash('sha256').update(readFileSync(path)).digest('hex');
 let browser;
@@ -85,6 +85,10 @@ try {
   await edit.scrollIntoViewIfNeeded();
   await page.screenshot({ path: out + '/author-controls.png', fullPage: true });
   await edit.click();
+  const cancelEditBounds = await page.getByRole('button', { name: 'Cancelar edición', exact: true }).boundingBox();
+  expect(cancelEditBounds?.width).toBeGreaterThanOrEqual(60);
+  expect(cancelEditBounds?.height).toBeGreaterThanOrEqual(44);
+  report.touchTargets.push({ action: 'cancelEdit', width: cancelEditBounds.width, height: cancelEditBounds.height });
   await page.getByRole('textbox', { name: 'Descripción del recuerdo', exact: true }).fill('Mi recuerdo corregido');
   expect(report.edits).toHaveLength(0);
   await page.screenshot({ path: out + '/author-edit.png', fullPage: true });
@@ -96,6 +100,10 @@ try {
   await page.getByRole('button', { name: 'Eliminar recuerdo', exact: true }).click();
   await expect(page.getByText('Se eliminará la publicación del evento. Los archivos públicos y las copias externas pueden seguir existiendo.', { exact: true })).toBeVisible();
   expect(report.deletions).toBe(0);
+  const cancelDeleteBounds = await page.getByRole('button', { name: 'Cancelar eliminación', exact: true }).boundingBox();
+  expect(cancelDeleteBounds?.width).toBeGreaterThanOrEqual(60);
+  expect(cancelDeleteBounds?.height).toBeGreaterThanOrEqual(44);
+  report.touchTargets.push({ action: 'cancelDelete', width: cancelDeleteBounds.width, height: cancelDeleteBounds.height });
   await page.screenshot({ path: out + '/author-delete-confirmation.png', fullPage: true });
   await page.getByRole('button', { name: 'Cancelar eliminación', exact: true }).click();
   expect(report.deletions).toBe(0);

@@ -40,3 +40,10 @@ El script solo acepta orígenes HTTP loopback y nunca contacta el backend config
 ## Integración y límites
 
 Cambio apilado sobre #173. Sus dependencias y configuraciones nativas permanecen idénticas a 6d0b109; los artefactos anteriores conservan su identidad y no demuestran estas nuevas acciones. Se requiere CI del head final y revisión independiente antes de integrar. No hay despliegue, publicación en tiendas, invitaciones reales ni aumento de conversión acreditado.
+
+
+## Seguimiento de accesibilidad después de 41505ce
+
+La revisión visual detectó que Cancelar no reutilizaba el área táctil mínima existente. Ambos diálogos usan ahora `modalHeaderAction`; la prueba visual mide **60 × 44 píxeles CSS** en Expo Web para las dos acciones. No acredita un dispositivo físico. Se repitieron **759 pruebas / 101 suites**, release:check, el recorrido visual completo y el bundle/mapa Android sobre estas fuentes finales; todos pasan. [Recibo final local](../reports/event-moment-author-accessibility-2026-10-26.json), [editor](../reports/event-moment-author-accessibility-20261026/author-edit.png) y [confirmación](../reports/event-moment-author-accessibility-20261026/author-delete-confirmation.png).
+
+El CI 40357472951 satisfactorio conserva la identidad 41505ce. Sus dos compilaciones nativas todavía en curso se cancelaron después del ajuste y **no cuentan como pases**. El head posterior requiere nuevas ejecuciones remotas. Las fuentes de firma, artefactos, dependencias y configuración nativa no cambiaron; los 14 controles locales originales conservan su ejecución previa.

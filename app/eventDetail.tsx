@@ -1,4 +1,4 @@
-import { eventExperienceLanguage, savedEventCopy } from '../src/localization/eventExperienceCopy';
+import { eventExperienceLanguage, eventMomentCopy, savedEventCopy } from '../src/localization/eventExperienceCopy';
 import { InteractionBar } from '../src/features/interactions/InteractionBar';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -42,6 +42,7 @@ import {
   listFeaturedMoments,
 } from '../src/lib/eventMoments';
 import { countLiveBroadcasts } from '../src/lib/liveBroadcasts';
+import { MomentAudioSelectionError, selectMomentAudio } from '../src/lib/momentAudio';
 import {
   MAX_MOMENT_MEDIA_SELECTION,
   prepareMomentMediaForUpload,
@@ -197,6 +198,11 @@ function EventDetailContent() {
   const [showMomentComposer, setShowMomentComposer] = useState(false);
   const [momentCaption, setMomentCaption] = useState('');
   const [momentMedia, setMomentMedia] = useState<DraftMomentMedia[]>([]);
+  const momentPickerEpoch = useRef(0);
+  const closeMomentComposer = useCallback(() => {
+    momentPickerEpoch.current += 1;
+    setShowMomentComposer(false);
+  }, []);
   const extendedMomentsQuery = useQuery({
     queryKey: ['event-moment-capability', normalizedPartyId, momentSessionVersion],
     queryFn: () => Events.supportsExtendedMoments(),
@@ -204,6 +210,7 @@ function EventDetailContent() {
     retry: false,
   });
   const canPublishText = shouldPreferRemoteMoments && extendedMomentsQuery.data === true;
+  const audioCopy = eventMomentCopy[eventExperienceLanguage(locale)];
   const hasMomentContent = momentMedia.length > 0 || (canPublishText && momentCaption.trim().length > 0);
   const [pendingMoments, setPendingMoments] = useState<EventMoment[]>([]);
   const [previewMedia, setPreviewMedia] = useState<EventMomentMedia | null>(null);
@@ -223,6 +230,9 @@ function EventDetailContent() {
     queryFn: () => token ? Events.getById(eventId as ID) : Events.getPublicById(eventId as ID),
     enabled: Boolean(eventId),
   });
+  // The existing durable media endpoint creates public URLs and rejects
+  // private/unlisted events. Do not invite a private-event audio upload.
+  const canPickAudio = canPublishText && Platform.OS !== 'web' && event?.isPublic === true && event.publicListable === true;
 
   const rsvpQuery = useQuery({
     queryKey: ['event-rsvps', normalizedPartyId ?? 'anonymous', eventId],
@@ -1158,16 +1168,29 @@ function EventDetailContent() {
     });
   }, []);
 
-  const pickMomentMedia = useCallback(async (mode: 'camera' | 'photos' | 'video') => {
+  const pickMomentMedia = useCallback(async (mode: 'camera' | 'photos' | 'video' | 'audio') => {
     if (!stillOwnsMoments()) return;
+    if (mode === 'audio' && !canPickAudio) return;
     const remaining = MAX_MOMENT_MEDIA_SELECTION - momentMedia.length;
     if (remaining <= 0) {
       Alert.alert('Galería completa', `Puedes publicar hasta ${MAX_MOMENT_MEDIA_SELECTION} archivos a la vez.`);
       return;
     }
 
-    const selected = await selectMomentMedia(mode, mode === 'photos' ? remaining : 1);
-    if (!stillOwnsMoments()) return;
+    const pickerEpoch = ++momentPickerEpoch.current;
+    let selected: DraftMomentMedia[];
+    try {
+      selected = mode === 'audio' ? await selectMomentAudio()
+        : await selectMomentMedia(mode, mode === 'photos' ? remaining : 1);
+    } catch (error) {
+      if (!stillOwnsMoments() || momentPickerEpoch.current !== pickerEpoch) return;
+      const message = error instanceof MomentAudioSelectionError
+        ? error.code === 'format' ? audioCopy.audioFormats : error.code === 'size' ? audioCopy.audioSize : audioCopy.audioFile
+        : audioCopy.audioPickerFailure;
+      Alert.alert(audioCopy.audioSelectionFailure, message);
+      return;
+    }
+    if (!stillOwnsMoments() || momentPickerEpoch.current !== pickerEpoch) return;
     if (selected.length === 0) return;
 
     setMomentMedia((current) => {
@@ -1175,7 +1198,7 @@ function EventDetailContent() {
       const additions = selected.filter((media) => !knownUris.has(media.uri));
       return [...current, ...additions].slice(0, MAX_MOMENT_MEDIA_SELECTION);
     });
-  }, [momentMedia.length, selectMomentMedia, stillOwnsMoments]);
+  }, [audioCopy, canPickAudio, momentMedia.length, selectMomentMedia, stillOwnsMoments]);
 
   const removeMomentMedia = useCallback((uri: string) => {
     setMomentMedia((current) => current.filter((media) => media.uri !== uri));
@@ -1183,6 +1206,7 @@ function EventDetailContent() {
 
   const handlePublishMoments = useCallback(() => {
     if (!eventId || !hasMomentContent || createMomentMutation.isPending || !stillOwnsMoments()) return;
+    momentPickerEpoch.current += 1;
     const mediaToPublish: DraftMomentMedia[] = momentMedia.length > 0 ? [...momentMedia]
       : [{ kind: 'text', uri: '', mimeType: 'text/plain' }];
 
@@ -1910,14 +1934,14 @@ function EventDetailContent() {
         visible={showMomentComposer}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowMomentComposer(false)}
+        onRequestClose={closeMomentComposer}
         accessibilityViewIsModal
       >
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <TouchableOpacity
               style={styles.modalHeaderAction}
-              onPress={() => setShowMomentComposer(false)}
+              onPress={closeMomentComposer}
               accessibilityRole="button"
               accessibilityLabel="Cerrar compositor de momento"
             >
@@ -1930,6 +1954,7 @@ function EventDetailContent() {
             <Text style={styles.modalMessage}>
               Elige hasta {MAX_MOMENT_MEDIA_SELECTION} fotos o agrega un video corto.
               {canPublishText ? ' También puedes escribir un recuerdo sin adjuntar archivos.' : ''}
+              {canPickAudio ? ' O elige un archivo de audio de hasta 25 MB.' : ''}
               {' Tu momento estará publicado cuando TDF confirme que se guardó.'}
             </Text>
 
@@ -1943,6 +1968,11 @@ function EventDetailContent() {
               <TouchableOpacity style={styles.secondaryActionButton} onPress={() => void pickMomentMedia('video')}>
                 <Text style={styles.secondaryActionButtonText}>Agregar video</Text>
               </TouchableOpacity>
+              {canPickAudio ? <TouchableOpacity style={styles.secondaryActionButton}
+                accessibilityRole="button" accessibilityLabel={audioCopy.addAudio}
+                onPress={() => void pickMomentMedia('audio')}>
+                <Text style={styles.secondaryActionButtonText}>{audioCopy.addAudio}</Text>
+              </TouchableOpacity> : null}
             </View>
 
             {momentMedia.length > 0 ? (
@@ -1969,8 +1999,8 @@ function EventDetailContent() {
                         />
                       ) : (
                         <View style={styles.selectedVideoThumbnail}>
-                          <MaterialCommunityIcons name="play-circle-outline" size={30} color="#f8fafc" />
-                          <Text style={styles.selectedVideoText}>Video</Text>
+                          <MaterialCommunityIcons name={media.kind === 'audio' ? 'music-note' : 'play-circle-outline'} size={30} color="#f8fafc" />
+                          <Text style={styles.selectedVideoText}>{media.kind === 'audio' ? media.fileName || 'Audio' : 'Video'}</Text>
                         </View>
                       )}
                       <TouchableOpacity
@@ -1985,6 +2015,10 @@ function EventDetailContent() {
                   ))}
                 </ScrollView>
               </View>
+            ) : null}
+
+            {momentMedia.some((media) => media.kind === 'audio') ? (
+              <Text style={styles.modalMessage}>{audioCopy.publicAudioNotice}</Text>
             ) : null}
 
             <View style={styles.inputGroup}>
@@ -2010,7 +2044,9 @@ function EventDetailContent() {
                 <Text style={styles.primaryButtonText}>
                   {createMomentMutation.isPending
                     ? 'Publicando…'
-                    : momentMedia.length > 1
+                    : momentMedia.some((media) => media.kind === 'audio')
+                      ? momentMedia.length > 1 ? audioCopy.publishPublicMoments : audioCopy.publishPublicAudio
+                      : momentMedia.length > 1
                       ? `Publicar ${momentMedia.length} momentos`
                       : 'Publicar momento'}
                 </Text>

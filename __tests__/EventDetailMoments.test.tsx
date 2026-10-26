@@ -2,6 +2,10 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import EventDetailScreen from '../app/eventDetail';
+import { getDocumentAsync, type DocumentPickerResult } from 'expo-document-picker';
+import { Alert } from 'react-native';
+
+jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
 
 let mockExtendedMoments = false;
 const mockMutate = jest.fn();
@@ -150,6 +154,10 @@ describe('EventDetail moments tab', () => {
 
   beforeEach(() => {
     mockExtendedMoments = false;
+    jest.mocked(getDocumentAsync).mockReset();
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.uploadMomentMedia.mockReset();
+    api.createMoment.mockReset();
     jest.clearAllMocks();
     mockMutationOptions.length = 0;
 
@@ -325,6 +333,123 @@ describe('EventDetail moments tab', () => {
     expect(screen.queryByText(/momento publicado/)).toBeNull();
     expect(api.uploadMomentMedia).not.toHaveBeenCalled();
     expect(require('@react-native-async-storage/async-storage').setItem).not.toHaveBeenCalled();
+  });
+
+  const audioAsset = { name: 'recuerdo.wav', uri: 'file:///cache/recuerdo.wav', mimeType: 'audio/wav', size: 200, lastModified: 0 };
+  const openAudioComposer = () => {
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByText('Compartir'));
+  };
+
+  it('keeps audio selection unavailable without an explicit compatible server', () => {
+    openAudioComposer();
+    expect(screen.queryByRole('button', { name: 'Agregar audio' })).toBeNull();
+    expect(getDocumentAsync).not.toHaveBeenCalled();
+  });
+
+  it('does not offer public file uploads for a private event even when the server supports audio', () => {
+    mockExtendedMoments = true;
+    const original = useQuery.getMockImplementation()!;
+    useQuery.mockImplementation((options) => {
+      const result = original(options);
+      return options.queryKey[0] === 'event' ? { ...result, data: { ...result.data, isPublic: false, publicListable: false } } : result;
+    });
+    openAudioComposer();
+    expect(screen.queryByRole('button', { name: 'Agregar audio' })).toBeNull();
+    expect(getDocumentAsync).not.toHaveBeenCalled();
+  });
+
+  it('selects cached audio and uploads it before asking for a persisted publication', async () => {
+    mockExtendedMoments = true;
+    jest.mocked(getDocumentAsync).mockResolvedValueOnce({ canceled: false, assets: [audioAsset] });
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.uploadMomentMedia.mockResolvedValueOnce('https://assets.persona.test/recuerdo.wav');
+    api.createMoment.mockResolvedValueOnce({ id: '77', eventId: '42', media: { kind: 'audio', uri: 'https://assets.persona.test/recuerdo.wav' } });
+    openAudioComposer();
+    fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+    await waitFor(() => expect(screen.getByText('recuerdo.wav')).toBeTruthy());
+    expect(api.uploadMomentMedia).not.toHaveBeenCalled();
+    expect(screen.getByText(/El archivo de audio tendrá un enlace público/)).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'El coro final');
+    fireEvent.press(screen.getByText('Publicar audio público'));
+    const submission = mockMutate.mock.calls[0][0];
+    const result = await mockMutationOptions[5].mutationFn!(submission);
+    expect(result).toEqual([expect.objectContaining({ status: 'fulfilled', source: 'remote' })]);
+    expect(api.uploadMomentMedia).toHaveBeenCalledWith('42', expect.objectContaining({ kind: 'audio', uri: audioAsset.uri, fileName: audioAsset.name }));
+    expect(api.createMoment).toHaveBeenCalledWith(expect.objectContaining({ caption: 'El coro final', media: expect.objectContaining({ kind: 'audio', uri: 'https://assets.persona.test/recuerdo.wav' }) }));
+    expect(api.uploadMomentMedia.mock.invocationCallOrder[0]).toBeLessThan(api.createMoment.mock.invocationCallOrder[0]);
+  });
+
+  it('returns a failed audio upload to the editor without publishing a shadow copy', async () => {
+    mockExtendedMoments = true;
+    jest.mocked(getDocumentAsync).mockResolvedValueOnce({ canceled: false, assets: [audioAsset] });
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.uploadMomentMedia.mockRejectedValueOnce(new Error('Network unavailable'));
+    openAudioComposer();
+    fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+    await waitFor(() => expect(screen.getByText('recuerdo.wav')).toBeTruthy());
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'Conservar audio');
+    fireEvent.press(screen.getByText('Publicar audio público'));
+    const submission = mockMutate.mock.calls[0][0];
+    const mutation = mockMutationOptions[5];
+    const result = await mutation.mutationFn!(submission);
+    act(() => mutation.onSuccess!(result, submission));
+    expect(screen.getByText('recuerdo.wav')).toBeTruthy();
+    expect(screen.getByDisplayValue('Conservar audio')).toBeTruthy();
+    expect(api.createMoment).not.toHaveBeenCalled();
+    expect(require('@react-native-async-storage/async-storage').setItem).not.toHaveBeenCalled();
+    expect(screen.queryByText(/momento publicado/)).toBeNull();
+  });
+
+  it('ignores cancellation and reports validation errors without clearing the caption', async () => {
+    mockExtendedMoments = true;
+    const alert = jest.spyOn(Alert, 'alert');
+    jest.mocked(getDocumentAsync).mockResolvedValueOnce({ canceled: true, assets: null });
+    openAudioComposer();
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'Mi recuerdo');
+    fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+    await waitFor(() => expect(getDocumentAsync).toHaveBeenCalledTimes(1));
+    expect(alert).not.toHaveBeenCalled();
+    jest.mocked(getDocumentAsync).mockResolvedValueOnce({ canceled: false, assets: [{ ...audioAsset, size: 26 * 1024 * 1024 }] });
+    fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('No pudimos agregar el audio', expect.stringContaining('25 MB')));
+    expect(screen.getByDisplayValue('Mi recuerdo')).toBeTruthy();
+    expect(mockMutate).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('discards a picker result after the editor is closed and reopened', async () => {
+    mockExtendedMoments = true;
+    let complete!: (result: DocumentPickerResult) => void;
+    jest.mocked(getDocumentAsync).mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
+    openAudioComposer();
+    fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+    await waitFor(() => expect(getDocumentAsync).toHaveBeenCalledTimes(1));
+    fireEvent.press(screen.getByLabelText('Cerrar compositor de momento'));
+    fireEvent.press(screen.getByText('Compartir'));
+    await act(async () => complete({ canceled: false, assets: [audioAsset] }));
+    expect(screen.queryByText('recuerdo.wav')).toBeNull();
+    expect(screen.queryByText('1 archivo listo')).toBeNull();
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('discards delayed audio selection after the authentication session changes', async () => {
+    mockExtendedMoments = true;
+    const client = require('../src/api/client');
+    const previous = client.getAuthToken();
+    client.setAuthToken('audio-first-account');
+    let complete!: (result: DocumentPickerResult) => void;
+    jest.mocked(getDocumentAsync).mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
+    try {
+      openAudioComposer();
+      fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+      await waitFor(() => expect(getDocumentAsync).toHaveBeenCalledTimes(1));
+      client.setAuthToken('audio-second-account');
+      await act(async () => complete({ canceled: false, assets: [audioAsset] }));
+      expect(screen.queryByText('recuerdo.wav')).toBeNull();
+      expect(mockMutate).not.toHaveBeenCalled();
+    } finally { client.setAuthToken(previous); }
   });
 
   it('shows the authoritative RSVP selection, separate counts, and submits the chosen state', async () => {

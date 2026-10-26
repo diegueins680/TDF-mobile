@@ -100,10 +100,12 @@ describe('AuthProvider', () => {
     jest.clearAllMocks();
 
     getAuthTokenMock.mockReturnValue(undefined);
+    setAuthTokenMock.mockReset();
     getSecureItemMock.mockResolvedValue(null);
     setSecureItemMock.mockResolvedValue();
     deleteSecureItemMock.mockResolvedValue();
     getLegacyItemMock.mockResolvedValue(null);
+    setLegacyItemMock.mockResolvedValue();
     removeLegacyItemMock.mockResolvedValue();
     getMock.mockResolvedValue({ partyId: 10 } as never);
   });
@@ -423,4 +425,152 @@ describe('AuthProvider', () => {
     expect(result.current.partyId).toBe('33');
     expect(getMock).not.toHaveBeenCalled();
   });
+  it('does not restore the old account after logout secure deletion fails and the provider restarts', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    let currentApiToken: string | undefined;
+    getAuthTokenMock.mockImplementation(() => currentApiToken);
+    setAuthTokenMock.mockImplementation((value) => { currentApiToken = value ?? undefined; });
+    getSecureItemMock.mockResolvedValue('Bearer retained-native-token');
+    const stored = new Map<string, string>();
+    getLegacyItemMock.mockImplementation(async (key) => stored.get(key) ?? null);
+    setLegacyItemMock.mockImplementation(async (key, value) => { stored.set(key, value); });
+    removeLegacyItemMock.mockImplementation(async (key) => { stored.delete(key); });
+    deleteSecureItemMock.mockRejectedValue(new Error('synthetic secure delete failure'));
+    getMock.mockResolvedValue({ partyId: 41 } as never);
+    const first = renderAuthProvider();
+    await waitFor(() => expect(first.result.current.partyId).toBe('41'));
+    act(() => { first.result.current.clearToken(); });
+    await waitFor(() => expect(first.result.current.token).toBeNull());
+    await waitFor(() => expect(deleteSecureItemMock).toHaveBeenCalled());
+    first.unmount();
+    const restarted = renderAuthProvider();
+    await waitFor(() => expect(restarted.result.current.loading).toBe(false));
+    expect(restarted.result.current.token).toBeNull();
+    expect(restarted.result.current.partyId).toBeNull();
+  });
+
+  it('does not restore stored credentials when the logout marker cannot be read', async () => {
+    getSecureItemMock.mockResolvedValue('Bearer retained-native-token');
+    getLegacyItemMock.mockImplementation(async (key) => {
+      if (key === 'tdf-auth-logout-intent-v1') throw new Error('synthetic marker read failure');
+      return null;
+    });
+    const { result } = renderAuthProvider();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.token).toBeNull();
+    expect(result.current.partyId).toBeNull();
+    expect(getMock).not.toHaveBeenCalled();
+  });
+
+  it('reports an unpersisted logout and blocks restoration in this process when all writes fail', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    getSecureItemMock.mockResolvedValue('Bearer retained-native-token');
+    const first = renderAuthProvider();
+    await waitFor(() => expect(first.result.current.partyId).toBe('10'));
+    setLegacyItemMock.mockRejectedValue(new Error('synthetic marker write failure'));
+    deleteSecureItemMock.mockRejectedValue(new Error('synthetic secure delete failure'));
+    removeLegacyItemMock.mockRejectedValue(new Error('synthetic legacy delete failure'));
+    let durable = true;
+    await act(async () => { durable = await first.result.current.clearTokenPersisted(); });
+    expect(durable).toBe(false);
+    first.unmount();
+    const restarted = renderAuthProvider();
+    await waitFor(() => expect(restarted.result.current.loading).toBe(false));
+    expect(restarted.result.current.token).toBeNull();
+    // Explicit new credentials recover; an unpersisted old account never wins.
+    setLegacyItemMock.mockResolvedValue();
+    setSecureItemMock.mockResolvedValue();
+    removeLegacyItemMock.mockResolvedValue();
+    act(() => { restarted.result.current.setToken('Bearer fresh-token', 20); });
+    await waitFor(() => expect(removeLegacyItemMock).toHaveBeenCalledWith('tdf-auth-logout-intent-v1'));
+    expect(restarted.result.current.partyId).toBe('20');
+  });
+
+  it('keeps a failed web credential deletion quarantined across remounts', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+    const stored = new Map([['tdf-auth-token', 'Bearer web-old-token']]);
+    getLegacyItemMock.mockImplementation(async (key) => stored.get(key) ?? null);
+    setLegacyItemMock.mockImplementation(async (key, value) => { stored.set(key, value); });
+    removeLegacyItemMock.mockImplementation(async (key) => {
+      if (key === 'tdf-auth-token') throw new Error('synthetic delete failure');
+      stored.delete(key);
+    });
+    const first = renderAuthProvider();
+    await waitFor(() => expect(first.result.current.partyId).toBe('10'));
+    await act(async () => { expect(await first.result.current.clearTokenPersisted()).toBe(true); });
+    expect(stored.get('tdf-auth-token')).toBe('Bearer web-old-token');
+    first.unmount();
+    const restarted = renderAuthProvider();
+    await waitFor(() => expect(restarted.result.current.loading).toBe(false));
+    expect(restarted.result.current.token).toBeNull();
+  });
+
+  it('keeps an unsuccessful credential replacement quarantined until a durable explicit login', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    const stored = new Map([['tdf-auth-logout-intent-v1', 'blocked']]);
+    let secure = 'Bearer old-token';
+    let apiToken: string | undefined;
+    getAuthTokenMock.mockImplementation(() => apiToken);
+    setAuthTokenMock.mockImplementation((value) => { apiToken = value ?? undefined; });
+    getSecureItemMock.mockImplementation(async () => secure);
+    getLegacyItemMock.mockImplementation(async (key) => stored.get(key) ?? null);
+    setLegacyItemMock.mockImplementation(async (key, value) => { stored.set(key, value); });
+    removeLegacyItemMock.mockImplementation(async (key) => { stored.delete(key); });
+    setSecureItemMock.mockRejectedValueOnce(new Error('synthetic credential write failure'));
+    getMock.mockResolvedValue({ partyId: 20 } as never);
+    const first = renderAuthProvider();
+    await waitFor(() => expect(first.result.current.loading).toBe(false));
+    expect(first.result.current.token).toBeNull();
+    act(() => { first.result.current.setToken('Bearer new-token', 20); });
+    await waitFor(() => expect(setSecureItemMock).toHaveBeenCalled());
+    expect(first.result.current.partyId).toBe('20');
+    first.unmount();
+    const restarted = renderAuthProvider();
+    await waitFor(() => expect(restarted.result.current.loading).toBe(false));
+    expect(restarted.result.current.token).toBeNull();
+    expect(secure).toBe('Bearer old-token');
+    setSecureItemMock.mockImplementation(async (_key, value) => { secure = value; });
+    act(() => { restarted.result.current.setToken('Bearer new-token', 20); });
+    await waitFor(() => expect(stored.has('tdf-auth-logout-intent-v1')).toBe(false));
+    restarted.unmount();
+    const durable = renderAuthProvider();
+    await waitFor(() => expect(durable.result.current.partyId).toBe('20'));
+    expect(durable.result.current.token).toBe('Bearer new-token');
+  });
+
+  it('orders an old token write before logout even when the provider remounts', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    const stored = new Map<string, string>();
+    const pending = createDeferred<void>();
+    let secure: string | null = null;
+    getSecureItemMock.mockImplementation(async () => secure);
+    setSecureItemMock.mockImplementation(async (_key, value) => { await pending.promise; secure = value; });
+    deleteSecureItemMock.mockImplementation(async () => { secure = null; });
+    getLegacyItemMock.mockImplementation(async (key) => stored.get(key) ?? null);
+    setLegacyItemMock.mockImplementation(async (key, value) => { stored.set(key, value); });
+    removeLegacyItemMock.mockImplementation(async (key) => { stored.delete(key); });
+    const first = renderAuthProvider();
+    await waitFor(() => expect(first.result.current.loading).toBe(false));
+    act(() => { first.result.current.setToken('Bearer queued-token', 10); });
+    await waitFor(() => expect(setSecureItemMock).toHaveBeenCalled());
+    let logout: Promise<boolean> | undefined;
+    act(() => { logout = first.result.current.clearTokenPersisted(); });
+    first.unmount();
+    const restarted = renderAuthProvider();
+    expect(restarted.result.current.loading).toBe(true);
+    await act(async () => { pending.resolve(); expect(await logout).toBe(true); });
+    await waitFor(() => expect(restarted.result.current.loading).toBe(false));
+    expect(restarted.result.current.token).toBeNull();
+    expect(secure).toBeNull();
+  });
+
+  it('treats an unrecognized nonempty logout marker as a restoration barrier', async () => {
+    getSecureItemMock.mockResolvedValue('Bearer retained-native-token');
+    getLegacyItemMock.mockImplementation(async (key) => key === 'tdf-auth-logout-intent-v1' ? 'truncated-marker' : null);
+    const { result } = renderAuthProvider();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.token).toBeNull();
+    expect(getMock).not.toHaveBeenCalled();
+  });
+
 });

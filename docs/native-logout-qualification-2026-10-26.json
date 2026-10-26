@@ -1,0 +1,67 @@
+{
+  "recordedAt": "2026-10-26T03:52:40.371596+00:00",
+  "status": "PARTIAL",
+  "implementation": "VERIFIED on local runtime/components; protected integration and native release pending.",
+  "baseline": "80d57fd70341e45f2a4f94dd2607f321ebfd0400",
+  "testedWorktreeWasDirty": true,
+  "runtimeFiles": {
+    "src/providers/AuthProvider.tsx": "d729252426b286a84a5a9f7c6a64b3cc43e33e4992ac430e75f0a602c388ef74",
+    "app/auth.tsx": "f305a352fb54fbe412becfe3d1fbc45c32eadc54735e3ae1fb4f693ea91e4030",
+    "src/localization/onboardingCopy.ts": "cae20ae52bbbd219f45ecdb7e243247d74d110f2e8c5d2d4cca45a8182435f11",
+    "__tests__/AuthProvider.test.tsx": "a3509a0926561b7b43eea2e77542a26b793c307b6ddf5cdeac22917e4d084819",
+    "__tests__/AuthScreen.test.tsx": "c41e8527e5713eef7458ae78a2c047079b34ed3edec4b19124fa85c7dda2250d"
+  },
+  "toolchain": {
+    "observedAt": "2026-10-26T03:42:31.046029+00:00",
+    "node": "v20.19.4",
+    "npmCiExitCode": 0,
+    "lockSha256": "f6693769eddfec57f75c62329e0d01c98c5f9e3bb073559aa8ced0eb8c8553d4",
+    "lockUnchanged": true,
+    "reusedDependencyLinksRetainedAt": "/private/tmp/tdf-mobile-logout-reused-deps-20261026"
+  },
+  "tests": {
+    "canonicalNode": "20.19.4",
+    "passed": 638,
+    "suites": 97,
+    "focusedCompatibilityPassed": 62,
+    "focusedCompatibilitySuites": 3,
+    "releaseCheck": "PASS",
+    "frozenOriginalNegative": "FAIL as expected: retained account restored after secure deletion failure. Exact candidate restored afterward.",
+    "signingGuards": "11 pass, 1 macOS codesign/plist error; same error reproduced on unchanged protected baseline. No skip/guard change."
+  },
+  "metro": {
+    "port": 19093,
+    "providerCalls": 0,
+    "deviceLaunches": 0,
+    "productionWrites": 0,
+    "status": "VERIFIED-Metro-start-only",
+    "offlineEnvironment": true,
+    "testAdapter": "Only port19093listen coerced to127.0.0.1; app source unchanged.",
+    "response": "packager-status:running",
+    "loopbackOnly": true,
+    "ownedProcessStopped": true
+  },
+  "earlierAttempts": [
+    "First npm command used original checkout without dependencies; retained as setup failure.",
+    "Initial Node24/reused patched dependency graph is historical, not canonical install.",
+    "First candidate exposed a Promise from formerly synchronous actions and broke three cache tests. Fixed with compatible void actions and separate confirmed-clear method.",
+    "First full run had an unchanged recovery timeout; later runs pass, cause not established.",
+    "First Metro flags were incompatible; second advertised localhost but bound wildcard. Final explicit test bind adapter preserves network isolation."
+  ],
+  "limits": [
+    "Stateful storage adapters and actual providers/components; not physical iOS/Android SecureStore.",
+    "No server revocation or global logout guarantee.",
+    "If every storage write fails, only current-process quarantine and honest retry are possible; cold restart remains unconfirmed.",
+    "No native signed artifact, store release, real Google call, production API mutation or root submodule update.",
+    "No full authorization or unbounded concurrency proof."
+  ],
+  "localArtifactLogDigests": {
+    "canonical-full": "c68276a05440930e8b198d81adf9884a6fb8eee875f9c5428463ff021006bdb6",
+    "canonical-release-check": "2d209cac3887f151b9fa2aa49d9afbed6cc143b656bfbf983cc0cfae1cb02d52",
+    "canonical-signing-guards": "60d33ef5878f223c9b4fa26d4de92ec3e853670fe043ad1061d2cbef0d4b0124",
+    "baseline-signing": "b4ebefdef28d45b8d643adee415112f7e6edb26bb80673174f5d83bd6166dafb",
+    "frozen-original-negative": "2ed31b3a2c1f6c972f9902bfdc69c8591136a916bdf24731ec57eb720832b676"
+  },
+  "productionWrites": 0,
+  "outboundMessages": 0
+}

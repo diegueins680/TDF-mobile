@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking } from 'react-native';
 
@@ -19,6 +19,7 @@ const mockPersistOnboardingIntent = jest.fn();
 const mockReadPendingOnboardingIntent = jest.fn(() => Promise.resolve(null));
 const mockUpdateOnboardingIntent = jest.fn();
 const mockIsCurrentAuthToken = jest.fn();
+let mockApiAuthToken: string | undefined;
 const mockOpenURL = jest.spyOn(Linking, 'openURL');
 let mockAuthConfig = {
   GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
@@ -35,7 +36,7 @@ jest.mock('../src/providers/AuthProvider', () => ({
     partyId: null,
     loading: false,
     setToken: mockSetToken,
-    clearToken: mockClearToken,
+    clearToken: mockClearToken, clearTokenPersisted: mockClearToken,
   })),
 }));
 
@@ -90,6 +91,7 @@ jest.mock('../src/api/onboarding', () => ({
 
 jest.mock('../src/api/client', () => ({
   ...jest.requireActual('../src/api/client'),
+  getAuthToken: () => mockApiAuthToken,
   isCurrentAuthToken: (...args: unknown[]) => mockIsCurrentAuthToken(...args),
 }));
 
@@ -131,6 +133,8 @@ describe('Auth screen', () => {
   beforeEach(() => {
   mockLocale = 'es';
     jest.clearAllMocks();
+    mockClearToken.mockResolvedValue(true);
+    mockApiAuthToken = undefined;
     mockStoredValues = new Map();
     jest.mocked(AsyncStorage.getItem).mockReset().mockImplementation(async (key) =>
       mockStoredValues.get(key) ?? null);
@@ -694,7 +698,7 @@ describe('Auth screen', () => {
       partyId: null,
       loading: true,
       setToken: mockSetToken,
-      clearToken: mockClearToken,
+      clearToken: mockClearToken, clearTokenPersisted: mockClearToken,
     });
 
     render(<AuthScreen />);
@@ -711,7 +715,7 @@ describe('Auth screen', () => {
       partyId: '99',
       loading: false,
       setToken: mockSetToken,
-      clearToken: mockClearToken,
+      clearToken: mockClearToken, clearTokenPersisted: mockClearToken,
     });
 
     render(<AuthScreen />);
@@ -726,5 +730,59 @@ describe('Auth screen', () => {
     expect(screen.getByText(/Sesión cerrada/i)).toBeTruthy();
     expect(screen.queryByTestId('loginButton')).toBeNull();
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
+  });
+
+  it('offers a retry when local sign-out cannot be persisted', async () => {
+    const provider = jest.mocked(require('../src/providers/AuthProvider').useAuth);
+    provider.mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });
+    mockClearToken.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const view = render(<AuthScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    await waitFor(() => expect(screen.getByText(/No pudimos confirmar el cierre guardado/)).toBeTruthy());
+    expect(screen.queryByText('Sesión cerrada en este dispositivo.')).toBeNull();
+    provider.mockReturnValue({ token: null, partyId: null, loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });
+    view.rerender(<AuthScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Reintentar cierre' }));
+    await waitFor(() => expect(screen.getByText('Sesión cerrada en este dispositivo.')).toBeTruthy());
+    expect(mockClearToken).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/No pudimos confirmar el cierre guardado/)).toBeNull();
+  });
+
+  it('waits for local persistence without waiting for Google provider cleanup', async () => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });
+    let resolvePersistence: (value: boolean) => void = () => undefined;
+    mockClearToken.mockImplementationOnce(() => new Promise<boolean>((resolve) => { resolvePersistence = resolve; }));
+    mockGoogleSignOut.mockImplementationOnce(() => new Promise(() => undefined));
+    render(<AuthScreen />);
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
+    fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cerrando sesión…' })).toBeTruthy());
+    expect(screen.queryByText('Sesión cerrada en este dispositivo.')).toBeNull();
+    await act(async () => { resolvePersistence(true); });
+    await waitFor(() => expect(screen.getByText('Sesión cerrada en este dispositivo.')).toBeTruthy());
+  });
+
+  it('does not overwrite a newer authenticated session with a late sign-out result', async () => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });
+    let resolvePersistence: (value: boolean) => void = () => undefined;
+    mockClearToken.mockImplementationOnce(() => new Promise<boolean>((resolve) => { resolvePersistence = resolve; }));
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    await waitFor(() => expect(mockClearToken).toHaveBeenCalled());
+    mockApiAuthToken = 'Bearer new-token';
+    await act(async () => { resolvePersistence(false); });
+    await waitFor(() => expect(screen.queryByText('Cerrando sesión…')).toBeNull());
+    expect(screen.queryByText(/No pudimos confirmar el cierre guardado/)).toBeNull();
+    expect(screen.queryByText('Sesión cerrada en este dispositivo.')).toBeNull();
+  });
+
+  it('explains unconfirmed local persistence in English', async () => {
+    mockLocale = 'en';
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });
+    mockClearToken.mockRejectedValueOnce(new Error('synthetic persistence failure'));
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(screen.getByText(/We could not confirm the saved sign-out/)).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Retry sign-out' })).toBeTruthy();
   });
 });

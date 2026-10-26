@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 
 import { InteractionBar } from '../features/interactions/InteractionBar';
 import { countMomentReactions } from '../lib/eventMoments';
+import { normalizePartyId } from '../lib/identity';
 import { eventExperienceLanguage, eventMomentCopy } from '../localization/eventExperienceCopy';
 import type { EventMoment, EventMomentMedia, EventMomentReactionOption } from '../types';
 
@@ -41,6 +42,9 @@ type EventMomentCardProps = {
   onCanonicalReactionPosted?: () => void;
   onConnectAuthor?: (partyId: string) => void;
   onOpenMedia?: (media: EventMomentMedia) => void;
+  onEditMoment?: (moment: EventMoment) => void;
+  onDeleteMoment?: (moment: EventMoment) => void;
+  managementDisabled?: boolean;
 };
 
 export function EventMomentCard({
@@ -64,12 +68,18 @@ export function EventMomentCard({
   onCanonicalReactionPosted,
   onConnectAuthor,
   onOpenMedia,
+  onEditMoment,
+  onDeleteMoment,
+  managementDisabled = false,
 }: EventMomentCardProps) {
   const language = eventExperienceLanguage(locale);
   const copy = eventMomentCopy[language];
   const [imageLoading, setImageLoading] = useState(moment.media.kind === 'image');
   const [imageFailed, setImageFailed] = useState(false);
   const totalReactions = countMomentReactions(moment);
+  const owner = normalizePartyId(currentPartyId);
+  const isOwnPublication = !pending && /^[1-9][0-9]*$/.test(moment.id)
+    && owner !== null && owner === normalizePartyId(moment.authorPartyId);
   const canConnect =
     !!moment.authorPartyId &&
     !!onConnectAuthor &&
@@ -110,6 +120,19 @@ export function EventMomentCard({
           </TouchableOpacity>
         ) : null}
       </View>
+
+      {isOwnPublication && (onEditMoment || onDeleteMoment) ? <View style={styles.authorActions}>
+        {onEditMoment && moment.updatedAt ? <TouchableOpacity onPress={() => onEditMoment(moment)}
+          disabled={managementDisabled} accessibilityRole="button" accessibilityLabel={copy.editMemory}
+          accessibilityState={{ disabled: managementDisabled }} style={[styles.connectButton, styles.authorActionButton]}>
+          <Text style={styles.connectButtonText}>{copy.editMemory}</Text>
+        </TouchableOpacity> : null}
+        {onDeleteMoment ? <TouchableOpacity onPress={() => onDeleteMoment(moment)}
+          disabled={managementDisabled} accessibilityRole="button" accessibilityLabel={copy.deleteMemory}
+          accessibilityState={{ disabled: managementDisabled }} style={[styles.connectButton, styles.authorActionButton]}>
+          <Text style={styles.deleteText}>{copy.deleteMemory}</Text>
+        </TouchableOpacity> : null}
+      </View> : null}
 
       {moment.media.kind !== 'text' ? <TouchableOpacity
         activeOpacity={onOpenMedia ? 0.85 : 1}
@@ -260,6 +283,9 @@ export function EventMomentCard({
 }
 
 const styles = StyleSheet.create({
+  authorActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  authorActionButton: { minHeight: 44, justifyContent: 'center' },
+  deleteText: { color: '#b91c1c', fontWeight: '600' },
   card: {
     gap: 12,
     backgroundColor: '#fff',

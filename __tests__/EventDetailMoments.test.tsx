@@ -4,10 +4,13 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import EventDetailScreen from '../app/eventDetail';
 import { getDocumentAsync, type DocumentPickerResult } from 'expo-document-picker';
 import { Alert } from 'react-native';
+import type { EventMoment } from '../src/types';
 
 jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
 
 let mockExtendedMoments = false;
+let mockMomentFeed: EventMoment[] | null = null;
+const mockSetQueryData = jest.fn();
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockCapture = jest.fn();
@@ -51,7 +54,7 @@ jest.mock('@tanstack/react-query', () => ({
     mockMutationOptions.push(options);
     return { mutate: mockMutate, isPending: false };
   }),
-  useQueryClient: jest.fn(() => ({ invalidateQueries: mockInvalidateQueries })),
+  useQueryClient: jest.fn(() => ({ invalidateQueries: mockInvalidateQueries, setQueryData: mockSetQueryData })),
 }));
 
 jest.mock('expo-router', () => ({
@@ -103,6 +106,8 @@ jest.mock('../src/api/events', () => ({
     getById: jest.fn(),
     supportsExtendedMoments: jest.fn(),
     createMoment: jest.fn(),
+    editMoment: jest.fn(),
+    deleteMoment: jest.fn(),
     uploadMomentMedia: jest.fn(),
     getPublicById: jest.fn(),
     getMyRSVP: jest.fn(),
@@ -154,12 +159,18 @@ describe('EventDetail moments tab', () => {
 
   beforeEach(() => {
     mockExtendedMoments = false;
+    mockMomentFeed = null;
     jest.mocked(getDocumentAsync).mockReset();
     const api = jest.mocked(require('../src/api/events').Events);
     api.uploadMomentMedia.mockReset();
     api.createMoment.mockReset();
+    api.editMoment.mockReset();
+    api.deleteMoment.mockReset();
     jest.clearAllMocks();
     mockMutationOptions.length = 0;
+    mockSetQueryData.mockImplementation((_key, update) => {
+      if (mockMomentFeed !== null) mockMomentFeed = typeof update === 'function' ? update(mockMomentFeed) : update;
+    });
 
     useQuery.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
       if (queryKey[0] === 'event') {
@@ -229,6 +240,8 @@ describe('EventDetail moments tab', () => {
       if (queryKey[0] === 'event-ticket-orders') {
         return { data: [], isLoading: false };
       }
+
+      if (queryKey[0] === 'event-moments' && mockMomentFeed !== null) return { data: mockMomentFeed, isLoading: false };
 
       if (queryKey[0] === 'event-moments') {
         return {
@@ -450,6 +463,132 @@ describe('EventDetail moments tab', () => {
       expect(screen.queryByText('recuerdo.wav')).toBeNull();
       expect(mockMutate).not.toHaveBeenCalled();
     } finally { client.setAuthToken(previous); }
+  });
+
+  const ownPublication: EventMoment = {
+    id: '77', eventId: '42', authorName: 'Cuco', authorPartyId: '7', caption: 'Mi recuerdo original',
+    media: { kind: 'text', uri: '', mimeType: 'text/plain' },
+    createdAt: '2026-10-26T08:00:00.123456Z', updatedAt: '2026-10-26T08:00:00.123456Z',
+    reactions: {}, comments: [],
+  };
+  const openOwnPublication = () => {
+    mockExtendedMoments = true; mockMomentFeed = [{ ...ownPublication }];
+    const view = render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    return view;
+  };
+
+  it('edits only after explicit confirmation and updates the feed from the acknowledged server record', async () => {
+    const api = jest.mocked(require('../src/api/events').Events);
+    const updated = { ...ownPublication, caption: 'Mi recuerdo corregido', updatedAt: '2026-10-26T08:01:00.654321Z' };
+    api.editMoment.mockResolvedValueOnce(updated);
+    openOwnPublication();
+    fireEvent.press(screen.getByRole('button', { name: 'Editar recuerdo' }));
+    fireEvent.changeText(screen.getByLabelText('Descripción del recuerdo'), updated.caption);
+    expect(api.editMoment).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(screen.getByText('Recuerdo actualizado en TDF.')).toBeTruthy());
+    expect(api.editMoment).toHaveBeenCalledWith(ownPublication, updated.caption);
+    expect(mockSetQueryData).toHaveBeenCalledWith(['event-moments', '42', 'party:7', 'remote'], expect.any(Function));
+    expect(mockMomentFeed).toEqual([updated]);
+    expect(screen.queryByLabelText('Descripción del recuerdo')).toBeNull();
+  });
+
+  it('preserves an edited caption after a conflict instead of overwriting the newer server version', async () => {
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.editMoment.mockRejectedValueOnce(Object.assign(new Error('Conflict'), { response: { status: 409 } }));
+    openOwnPublication();
+    fireEvent.press(screen.getByRole('button', { name: 'Editar recuerdo' }));
+    fireEvent.changeText(screen.getByLabelText('Descripción del recuerdo'), 'Mi cambio sin confirmar');
+    fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByDisplayValue('Mi cambio sin confirmar')).toBeTruthy();
+    expect(screen.getByText(/El recuerdo cambió/)).toBeTruthy();
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+    expect(mockMomentFeed).toEqual([ownPublication]);
+    expect(screen.queryByText('Recuerdo actualizado en TDF.')).toBeNull();
+  });
+
+  it('does not dispatch a captured save action after a synchronous credential change', async () => {
+    const client = require('../src/api/client'); const previous = client.getAuthToken();
+    client.setAuthToken('author-first-account');
+    try {
+      openOwnPublication();
+      fireEvent.press(screen.getByRole('button', { name: 'Editar recuerdo' }));
+      fireEvent.changeText(screen.getByLabelText('Descripción del recuerdo'), 'Cambio retirado');
+      const save = screen.getByRole('button', { name: 'Guardar cambios' });
+      client.setAuthToken('author-second-account');
+      fireEvent.press(save);
+      expect(require('../src/api/events').Events.editMoment).not.toHaveBeenCalled();
+      expect(mockSetQueryData).not.toHaveBeenCalled();
+    } finally { client.setAuthToken(previous); }
+  });
+
+  it('ignores a late edit acknowledgement after credentials rotate', async () => {
+    const client = require('../src/api/client'); const previous = client.getAuthToken();
+    const api = jest.mocked(require('../src/api/events').Events);
+    client.setAuthToken('author-first-account');
+    api.editMoment.mockImplementationOnce(async () => {
+      client.setAuthToken('author-replacement-account');
+      return { ...ownPublication, caption: 'Respuesta tardía', updatedAt: '2026-10-26T08:01:00Z' };
+    });
+    try {
+      openOwnPublication();
+      fireEvent.press(screen.getByRole('button', { name: 'Editar recuerdo' }));
+      fireEvent.changeText(screen.getByLabelText('Descripción del recuerdo'), 'Respuesta tardía');
+      fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+      await waitFor(() => expect(screen.queryByLabelText('Descripción del recuerdo')).toBeNull());
+      expect(mockSetQueryData).not.toHaveBeenCalled();
+      expect(screen.queryByText('Recuerdo actualizado en TDF.')).toBeNull();
+    } finally { client.setAuthToken(previous); }
+  });
+
+  it('requires deletion confirmation, warns about public files, and removes only after acknowledgement', async () => {
+    const api = jest.mocked(require('../src/api/events').Events);
+    let complete!: () => void;
+    api.deleteMoment.mockImplementationOnce(() => new Promise<void>((resolve) => { complete = resolve; }));
+    openOwnPublication();
+    fireEvent.press(screen.getByRole('button', { name: 'Eliminar recuerdo' }));
+    expect(screen.getByText(/archivos públicos y las copias externas/)).toBeTruthy();
+    expect(api.deleteMoment).not.toHaveBeenCalled();
+    const confirm = screen.getByRole('button', { name: 'Confirmar eliminación' });
+    act(() => { fireEvent.press(confirm); fireEvent.press(confirm); });
+    expect(api.deleteMoment).toHaveBeenCalledTimes(1);
+    expect(mockMomentFeed).toEqual([ownPublication]);
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+    await act(async () => complete());
+    await waitFor(() => expect(screen.getByText('Publicación eliminada del evento.')).toBeTruthy());
+    expect(mockMomentFeed).toEqual([]);
+  });
+
+  it('does not delete after cancellation or after the event screen retires', () => {
+    const view = openOwnPublication();
+    fireEvent.press(screen.getByRole('button', { name: 'Eliminar recuerdo' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Cancelar eliminación' }));
+    expect(require('../src/api/events').Events.deleteMoment).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole('button', { name: 'Eliminar recuerdo' }));
+    // Capture the rendered touch handler so retirement is checked even if an OS
+    // event queued before unmount invokes it after the dialog has disappeared.
+    let confirm = screen.getByRole('button', { name: 'Confirmar eliminación' });
+    while (typeof confirm.props.onPress !== 'function' && confirm.parent) confirm = confirm.parent;
+    const press = confirm.props.onPress;
+    expect(press).toEqual(expect.any(Function));
+    view.unmount();
+    act(() => press());
+    expect(require('../src/api/events').Events.deleteMoment).not.toHaveBeenCalled();
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+  });
+
+  it('retains the publication when deletion is not confirmed by the server', async () => {
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.deleteMoment.mockRejectedValueOnce(new Error('Network unavailable'));
+    openOwnPublication();
+    fireEvent.press(screen.getByRole('button', { name: 'Eliminar recuerdo' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Confirmar eliminación' }));
+    await waitFor(() => expect(screen.getByText('No pudimos confirmar la eliminación. Vuelve a cargar el evento antes de reintentar.')).toBeTruthy());
+    expect(mockMomentFeed).toEqual([ownPublication]);
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+    expect(screen.queryByText('Publicación eliminada del evento.')).toBeNull();
   });
 
   it('shows the authoritative RSVP selection, separate counts, and submits the chosen state', async () => {

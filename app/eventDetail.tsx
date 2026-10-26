@@ -88,6 +88,7 @@ import type {
 } from '../src/types';
 
 type EventDetailTab = 'details' | 'moments' | 'live';
+type MomentAuthorSelection = { moment: EventMoment; epoch: number; hasOwnership: () => boolean };
 type MomentSubmission = {
   caption: string;
   media: DraftMomentMedia[];
@@ -218,6 +219,27 @@ function EventDetailContent() {
   const [previewFailed, setPreviewFailed] = useState(false);
   const [momentPublishFeedback, setMomentPublishFeedback] = useState<MomentPublishFeedback | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [editingMoment, setEditingMoment] = useState<MomentAuthorSelection | null>(null);
+  const [deletingMoment, setDeletingMoment] = useState<MomentAuthorSelection | null>(null);
+  const [editedCaption, setEditedCaption] = useState('');
+  const [authorActionError, setAuthorActionError] = useState('');
+  const [authorActionPending, setAuthorActionPending] = useState(false);
+  const authorActionMounted = useRef(true);
+  const authorActionLock = useRef<symbol | null>(null);
+  const authorActionEpoch = useRef(0);
+  useEffect(() => {
+    authorActionMounted.current = true;
+    return () => { authorActionMounted.current = false; authorActionEpoch.current += 1; };
+  }, []);
+  useEffect(() => {
+    authorActionEpoch.current += 1;
+    authorActionLock.current = null;
+    setEditingMoment(null); setDeletingMoment(null); setEditedCaption(''); setAuthorActionError(''); setAuthorActionPending(false);
+  }, [eventId, normalizedPartyId, momentSessionVersion]);
+  const activeEdit = canPublishText && editingMoment?.hasOwnership()
+    && editingMoment.epoch === authorActionEpoch.current ? editingMoment : null;
+  const activeDelete = canPublishText && deletingMoment?.hasOwnership()
+    && deletingMoment.epoch === authorActionEpoch.current ? deletingMoment : null;
   const [selectedLiveArtistId, setSelectedLiveArtistId] = useState<string | null>(null);
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastDescription, setBroadcastDescription] = useState('');
@@ -1017,6 +1039,64 @@ function EventDetailContent() {
     },
   });
 
+  const ownsManagedMoment = useCallback((moment: EventMoment) => authorActionMounted.current
+    && canPublishText && stillOwnsMoments() && Boolean(currentActor.partyId)
+    && moment.authorPartyId === currentActor.partyId
+    && String(moment.eventId) === String(event?.id ?? eventId) && /^[1-9][0-9]*$/.test(moment.id),
+  [canPublishText, currentActor.partyId, event?.id, eventId, stillOwnsMoments]);
+
+  const performAuthorAction = useCallback(async (selection: MomentAuthorSelection, kind: 'edit' | 'delete', caption = '') => {
+    if (!selection.hasOwnership() || selection.epoch !== authorActionEpoch.current || authorActionLock.current) return;
+    const attempt = Symbol('moment-author-action');
+    authorActionLock.current = attempt; setAuthorActionPending(true); setAuthorActionError('');
+    try {
+      let changed: EventMoment | null = null;
+      if (kind === 'edit') changed = await Events.editMoment(selection.moment, caption);
+      else await Events.deleteMoment(selection.moment);
+      if (!selection.hasOwnership()) return;
+      qc.setQueryData<EventMoment[]>(momentsQueryKey, (current = []) => changed
+        ? current.map((moment) => moment.id === selection.moment.id ? changed : moment)
+        : current.filter((moment) => moment.id !== selection.moment.id));
+      void qc.invalidateQueries({ queryKey: momentsQueryKey });
+      void qc.invalidateQueries({ queryKey: ['interactions'] });
+      if (selection.epoch === authorActionEpoch.current) {
+        setEditingMoment(null); setDeletingMoment(null); setEditedCaption('');
+        setMomentPublishFeedback({ tone: 'success', text: kind === 'edit' ? audioCopy.memoryUpdated : audioCopy.memoryDeleted });
+      }
+    } catch (error) {
+      if (!selection.hasOwnership() || selection.epoch !== authorActionEpoch.current) return;
+      const status = (error as { response?: { status?: number } } | null)?.response?.status;
+      const message = status === 409 ? audioCopy.memoryConflict
+        : status && [401, 403, 404].includes(status) ? audioCopy.memoryUnavailable
+          : kind === 'edit' ? audioCopy.memoryNetworkFailure : audioCopy.memoryDeleteFailure;
+      setAuthorActionError(message);
+    } finally {
+      if (authorActionLock.current === attempt) {
+        authorActionLock.current = null;
+        if (authorActionMounted.current) setAuthorActionPending(false);
+      }
+    }
+  }, [audioCopy, momentsQueryKey, qc]);
+
+  const openMomentEditor = useCallback((moment: EventMoment) => {
+    if (!ownsManagedMoment(moment) || !moment.updatedAt || authorActionLock.current) return;
+    const epoch = ++authorActionEpoch.current;
+    setDeletingMoment(null);
+    setEditingMoment({ moment, epoch, hasOwnership: () => ownsManagedMoment(moment) });
+    setEditedCaption(moment.caption ?? ''); setAuthorActionError('');
+  }, [ownsManagedMoment]);
+  const closeAuthorDialog = useCallback(() => {
+    if (authorActionLock.current) return;
+    authorActionEpoch.current += 1;
+    setEditingMoment(null); setDeletingMoment(null); setEditedCaption(''); setAuthorActionError('');
+  }, []);
+  const openMomentDeletion = useCallback((moment: EventMoment) => {
+    if (!ownsManagedMoment(moment) || authorActionLock.current) return;
+    const epoch = ++authorActionEpoch.current;
+    setEditingMoment(null); setEditedCaption(''); setAuthorActionError('');
+    setDeletingMoment({ moment, epoch, hasOwnership: () => ownsManagedMoment(moment) });
+  }, [ownsManagedMoment]);
+
   const handleOpenTicketUrl = useCallback((ticketUrl?: string | null) => {
     if (ticketUrl) {
       Linking.openURL(ticketUrl).catch(() => {
@@ -1703,6 +1783,9 @@ function EventDetailContent() {
                       ); }}
                       onConnectAuthor={handleConnectAuthor}
                       onOpenMedia={handleOpenMomentMedia}
+                      onEditMoment={canPublishText ? openMomentEditor : undefined}
+                      onDeleteMoment={canPublishText ? openMomentDeletion : undefined}
+                      managementDisabled={authorActionPending}
                     />
                   ))}
                 </View>
@@ -2055,6 +2138,52 @@ function EventDetailContent() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      {activeEdit ? <Modal visible transparent animationType="slide" accessibilityViewIsModal onRequestClose={closeAuthorDialog}>
+        <SafeAreaView style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text accessibilityRole="header" style={styles.modalTitle}>{audioCopy.editMemory}</Text>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={audioCopy.cancelEdit}
+              disabled={authorActionPending} accessibilityState={{ disabled: authorActionPending }} onPress={closeAuthorDialog}>
+              <Text style={styles.modalClose}>{audioCopy.cancel}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <TextInput value={editedCaption} onChangeText={setEditedCaption} multiline maxLength={280}
+              editable={!authorActionPending} accessibilityLabel={audioCopy.editDescription} style={[styles.input, styles.inputMultiline]} />
+            {authorActionError ? <Text accessibilityRole="alert" style={styles.modalMessage}>{authorActionError}</Text> : null}
+            <TouchableOpacity accessibilityRole="button" style={[styles.primaryButton,
+              (authorActionPending || (activeEdit.moment.media.kind === 'text' && !editedCaption.trim())
+                || editedCaption.trim() === (activeEdit.moment.caption ?? '')) && styles.buttonDisabled]}
+              accessibilityState={{ disabled: authorActionPending || (activeEdit.moment.media.kind === 'text' && !editedCaption.trim()) || editedCaption.trim() === (activeEdit.moment.caption ?? '') }}
+              disabled={authorActionPending || (activeEdit.moment.media.kind === 'text' && !editedCaption.trim()) || editedCaption.trim() === (activeEdit.moment.caption ?? '')}
+              onPress={() => { void performAuthorAction(activeEdit, 'edit', editedCaption); }}>
+              <Text style={styles.primaryButtonText}>{authorActionPending ? audioCopy.saving : audioCopy.saveMemory}</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal> : null}
+
+      {activeDelete ? <Modal visible transparent animationType="slide" accessibilityViewIsModal onRequestClose={closeAuthorDialog}>
+        <SafeAreaView style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text accessibilityRole="header" style={styles.modalTitle}>{audioCopy.deleteMemory}</Text>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={audioCopy.cancelDeleteMemory}
+              disabled={authorActionPending} accessibilityState={{ disabled: authorActionPending }} onPress={closeAuthorDialog}>
+              <Text style={styles.modalClose}>{audioCopy.cancel}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalMessage}>{audioCopy.deleteMemoryBody}</Text>
+            {authorActionError ? <Text accessibilityRole="alert" style={styles.modalMessage}>{authorActionError}</Text> : null}
+            <TouchableOpacity accessibilityRole="button" disabled={authorActionPending}
+              accessibilityState={{ disabled: authorActionPending }} style={[styles.primaryButton, styles.destructiveButton, authorActionPending && styles.buttonDisabled]}
+              onPress={() => { void performAuthorAction(activeDelete, 'delete'); }}>
+              <Text style={styles.primaryButtonText}>{authorActionPending ? audioCopy.saving : audioCopy.confirmDeleteMemory}</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal> : null}
 
       <Modal
         visible={showInviteModal}
@@ -2715,6 +2844,7 @@ const styles = StyleSheet.create({
   primaryButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   primaryButtonText: { color: '#fff', fontWeight: '700' },
   buttonDisabled: { opacity: 0.6 },
+  destructiveButton: { backgroundColor: '#b91c1c' },
   momentMediaActions: {
     flexDirection: 'row',
     gap: 10,

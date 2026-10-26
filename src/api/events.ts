@@ -875,6 +875,34 @@ export const Events = {
     return mapMomentDto(dto, input.eventId);
   },
 
+  editMoment: async (moment: EventMoment, caption: string): Promise<EventMoment> => {
+    const eventId = confirmedId(moment.eventId);
+    const momentId = confirmedId(moment.id);
+    const version = persistedMomentVersion(moment.updatedAt);
+    const author = normalizeIdentityPartyId(moment.authorPartyId);
+    const text = caption.trim();
+    if (!eventId || !momentId || !version || !author || text.length > 280
+      || (moment.media.kind === 'text' && !text)) throw unconfirmedMomentAction();
+    const dto = confirmedMomentDto(await put<unknown>(
+      `/social-events/events/${eventId}/moments/${momentId}`,
+      { emeCaption: text, emeExpectedUpdatedAt: version },
+    ), eventId, momentId);
+    const result = mapMomentDto(dto, eventId);
+    if (!result.updatedAt || result.updatedAt === version || result.authorPartyId !== author
+      || (result.caption ?? '') !== text) throw unconfirmedMomentAction();
+    return result;
+  },
+
+  deleteMoment: async (moment: EventMoment): Promise<void> => {
+    const eventId = confirmedId(moment.eventId);
+    const momentId = confirmedId(moment.id);
+    if (!eventId || !momentId || !normalizeIdentityPartyId(moment.authorPartyId)) throw unconfirmedMomentAction();
+    const result = await del<unknown>(`/social-events/events/${eventId}/moments/${momentId}`, {
+      validateStatus: (status) => status === 204,
+    });
+    if (result !== undefined && result !== null && result !== '') throw unconfirmedMomentAction();
+  },
+
   reactToMoment: async (
     eventId: ID,
     momentId: string,
@@ -1320,6 +1348,15 @@ function confirmedId(value: unknown): string | null {
   return id && /^[1-9][0-9]*$/.test(id) ? id : null;
 }
 
+function persistedMomentVersion(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const version = value.trim();
+  // Date.toISOString() would discard PostgreSQL's microseconds and make every
+  // otherwise valid edit conflict. Validate without rewriting this token.
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(version)
+    && !Number.isNaN(Date.parse(version)) ? version : undefined;
+}
+
 function confirmedMomentDto(value: unknown, eventId: ID, momentId?: string): BackendMomentDTO {
   const row = confirmedRecord(value);
   const id = confirmedId(row.emId);
@@ -1370,6 +1407,7 @@ function mapMomentDto(dto: BackendMomentDTO, fallbackEventId: ID, index = 0): Ev
       durationMs: typeof dto.emMediaDurationMs === 'number' ? dto.emMediaDurationMs : null,
     },
     createdAt,
+    ...(persistedMomentVersion(dto.emUpdatedAt) ? { updatedAt: persistedMomentVersion(dto.emUpdatedAt) } : {}),
     reactions: mapMomentReactions(dto),
     comments,
   };

@@ -477,6 +477,8 @@ export type EventMoment = {
   caption?: string | null;
   media: EventMomentMedia;
   createdAt: string;
+  /** Exact server version, including sub-millisecond precision, for edits. */
+  updatedAt?: string;
   /** Canonical reaction-type UUID -> actor keys. */
   reactions: Record<string, string[]>;
   comments: EventMomentComment[];

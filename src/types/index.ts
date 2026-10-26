@@ -441,7 +441,7 @@ export type EventTicketPaymentIntent = {
   paymentSheet: EventTicketPaymentSheetParams | null;
 };
 
-export type EventMomentMediaKind = 'image' | 'video';
+export type EventMomentMediaKind = 'image' | 'video' | 'audio' | 'text';
 
 export type EventMomentReactionOption = {
   id: string;

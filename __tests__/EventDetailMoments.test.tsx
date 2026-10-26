@@ -22,6 +22,14 @@ const mockMutationOptions: Array<{
   onSuccess?: (result: unknown, variables: unknown) => void;
 }> = [];
 
+function publicationScope() {
+  const client = require('../src/api/client');
+  const version = client.getAuthSessionVersion();
+  return { eventId: '42', actor: { actorKey: 'party:7', partyId: '7', displayName: 'Cuco' },
+    preferRemote: true, queryKey: ['event-moments', '42', 'party:7', 'remote'],
+    stillOwns: () => client.getAuthSessionVersion() === version };
+}
+
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
   setItem: jest.fn(),
@@ -350,7 +358,7 @@ describe('EventDetail moments tab', () => {
     api.uploadMomentMedia.mockRejectedValue(new Error('Network unavailable'));
     render(<EventDetailScreen />);
     const mutation = mockMutationOptions[5];
-    const submission = { caption: 'Keep this draft', media: [{ kind: 'video', uri: 'file:///clip.mp4', mimeType: 'video/mp4' }], optimisticIds: ['pending-1'] };
+    const submission = { ...publicationScope(), caption: 'Keep this draft', media: [{ kind: 'video', uri: 'file:///clip.mp4', mimeType: 'video/mp4' }], optimisticIds: ['pending-1'] };
     const result = await mutation.mutationFn!(submission);
     expect(result).toEqual([{ index: 0, status: 'rejected', message: 'Network unavailable' }]);
     expect(api.createMoment).not.toHaveBeenCalled();
@@ -368,10 +376,61 @@ describe('EventDetail moments tab', () => {
     api.uploadMomentMedia.mockImplementationOnce(async () => { client.setAuthToken('second-synthetic-account'); return 'https://assets.persona.test/video.mp4'; });
     try {
       render(<EventDetailScreen />);
-      const result = await mockMutationOptions[5].mutationFn!({ caption: 'First account draft', media: [{ kind: 'video', uri: 'file:///clip.mp4', mimeType: 'video/mp4' }], optimisticIds: ['pending-switch'] });
+      const result = await mockMutationOptions[5].mutationFn!({ ...publicationScope(), caption: 'First account draft', media: [{ kind: 'video', uri: 'file:///clip.mp4', mimeType: 'video/mp4' }], optimisticIds: ['pending-switch'] });
       expect(result).toEqual([expect.objectContaining({ status: 'rejected', message: expect.stringContaining('Tu sesión cambió') })]);
       expect(api.createMoment).not.toHaveBeenCalled();
     } finally { client.setAuthToken(previous); }
+  });
+
+  it('revokes the rendered publish action before the replacement session rerenders', async () => {
+    const client = require('../src/api/client');
+    const picker = require('expo-image-picker');
+    const previous = client.getAuthToken();
+    client.setAuthToken('first-synthetic-account');
+    picker.launchImageLibraryAsync.mockResolvedValueOnce({ canceled: false, assets: [
+      { uri: 'file:///first-account.jpg', type: 'image', mimeType: 'image/jpeg', width: 20, height: 20 },
+    ] });
+    try {
+      render(<EventDetailScreen />);
+      fireEvent.press(screen.getByText('Momentos (1)'));
+      fireEvent.press(screen.getByText('Compartir'));
+      fireEvent.press(screen.getByText('Elegir fotos'));
+      await waitFor(() => expect(screen.getByText('1 archivo listo')).toBeTruthy());
+      const publish = screen.getByText('Publicar momento');
+      client.setAuthToken('second-synthetic-account');
+      fireEvent.press(publish);
+      expect(mockMutate).not.toHaveBeenCalled();
+    } finally { client.setAuthToken(previous); picker.launchImageLibraryAsync.mockReset(); }
+  });
+
+  it('does not let a late failure restore the retired caption over a new draft', async () => {
+    const client = require('../src/api/client');
+    const picker = require('expo-image-picker');
+    const previous = client.getAuthToken();
+    client.setAuthToken('first-synthetic-account');
+    picker.launchImageLibraryAsync.mockResolvedValueOnce({ canceled: false, assets: [
+      { uri: 'file:///first-account.jpg', type: 'image', mimeType: 'image/jpeg', width: 20, height: 20 },
+    ] });
+    try {
+      render(<EventDetailScreen />);
+      fireEvent.press(screen.getByText('Momentos (1)'));
+      fireEvent.press(screen.getByText('Compartir'));
+      fireEvent.press(screen.getByText('Elegir fotos'));
+      await waitFor(() => expect(screen.getByText('1 archivo listo')).toBeTruthy());
+      fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'First account draft');
+      const mutation = mockMutationOptions[5];
+      fireEvent.press(screen.getByText('Publicar momento'));
+      const submission = mockMutate.mock.calls[0][0];
+      expect(submission.stillOwns()).toBe(true);
+      client.setAuthToken('second-synthetic-account');
+      fireEvent.press(screen.getByText('Compartir'));
+      fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'New current draft');
+      act(() => mutation.onSuccess!([{ index: 0, status: 'rejected', message: 'Late network error' }], submission));
+      expect(screen.getByDisplayValue('New current draft')).toBeTruthy();
+      expect(screen.queryByDisplayValue('First account draft')).toBeNull();
+      client.setAuthToken('first-synthetic-account');
+      expect(submission.stillOwns()).toBe(false);
+    } finally { client.setAuthToken(previous); picker.launchImageLibraryAsync.mockReset(); }
   });
 
   it('adds several gallery photos with immediate thumbnails and one publish action', async () => {

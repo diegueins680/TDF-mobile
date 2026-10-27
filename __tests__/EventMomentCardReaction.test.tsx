@@ -109,3 +109,29 @@ describe('EventMomentCard reaction activation', () => {
     expect(screen.queryByText('Fuego')).toBeNull();
   });
 });
+
+
+describe('extended moment rendering', () => {
+  it.each(['es', 'en'])('shows written memories without a broken image or file action (%s)', (locale) => {
+    const open = jest.fn();
+    render(<EventMomentCard moment={{ ...moment, caption: 'El último coro', media: { kind: 'text', uri: '', mimeType: 'text/plain' } }}
+      locale={locale} currentActorKey="party:7" reactionOptions={[]} reactionUnavailableLabel="No reactions"
+      commentDraft="" onChangeComment={jest.fn()} onSubmitComment={jest.fn()} onToggleReaction={jest.fn()} onOpenMedia={open} />);
+    expect(screen.getByText('El último coro')).toBeTruthy();
+    expect(screen.queryByRole('image')).toBeNull();
+    expect(screen.queryByLabelText(/Abrir video|Open video/)).toBeNull();
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it.each([['es', 'Abrir audio de Andrea', 'Audio del evento'], ['en', 'Open audio by Andrea', 'Event audio']])(
+    'offers a named audio action with the correct media (%s)', (locale, label, title) => {
+      const open = jest.fn();
+      const media = { kind: 'audio' as const, uri: 'https://example.test/audio.mp3', mimeType: 'audio/mpeg' };
+      render(<EventMomentCard moment={{ ...moment, media }} locale={locale} currentActorKey="party:7" reactionOptions={[]}
+        reactionUnavailableLabel="No reactions" commentDraft="" onChangeComment={jest.fn()} onSubmitComment={jest.fn()}
+        onToggleReaction={jest.fn()} onOpenMedia={open} />);
+      expect(screen.getByText(title)).toBeTruthy();
+      fireEvent.press(screen.getByRole('button', { name: label }));
+      expect(open).toHaveBeenCalledWith(media);
+    });
+});

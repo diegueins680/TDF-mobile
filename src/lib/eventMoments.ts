@@ -17,8 +17,8 @@ const MAX_COMMENT_LENGTH = 500;
 const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const EventMomentMediaSchema = z.object({
-  kind: z.enum(['image', 'video']),
-  uri: z.string().trim().min(1),
+  kind: z.enum(['image', 'video', 'audio', 'text']),
+  uri: z.string().trim(),
   mimeType: z.string().trim().min(1),
   width: z.number().int().positive().nullable().optional(),
   height: z.number().int().positive().nullable().optional(),
@@ -130,6 +130,9 @@ const sanitizeMoment = (moment: unknown): EventMoment | null => {
   const eventId = normalizeEventId(parsed.data.eventId);
   const createdAt = normalizeTimestamp(parsed.data.createdAt);
   if (!eventId || !createdAt) return null;
+  if (parsed.data.media.kind === 'text'
+    ? parsed.data.media.uri !== '' || !normalizeText(parsed.data.caption)
+    : !parsed.data.media.uri) return null;
 
   return {
     id: parsed.data.id,
@@ -300,7 +303,10 @@ export async function createEventMoment(
   const mediaMimeType = normalizeText(input.media.mimeType);
   if (!eventId) throw new Error('Evento inválido para publicar un momento.');
   if (!authorName) throw new Error('Agrega un nombre para publicar tu momento.');
-  if (!mediaUri || !mediaMimeType) throw new Error('Selecciona una imagen o video válido.');
+  const isText = input.media.kind === 'text';
+  if (!mediaMimeType || (isText ? input.media.uri !== '' || !normalizeText(input.caption) : !mediaUri)) {
+    throw new Error('Agrega un recuerdo escrito o un archivo válido.');
+  }
 
   const caption = normalizeText(input.caption);
   if (caption && caption.length > MAX_CAPTION_LENGTH) {
@@ -316,7 +322,7 @@ export async function createEventMoment(
     caption,
     media: {
       kind: input.media.kind,
-      uri: mediaUri,
+      uri: mediaUri ?? '',
       mimeType: mediaMimeType,
       width: input.media.width ?? null,
       height: input.media.height ?? null,

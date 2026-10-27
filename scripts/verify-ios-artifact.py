@@ -15,7 +15,9 @@ def read_signed_entitlements(app):
     # Current codesign defaults to a human-readable summary, not a plist.
     result = subprocess.run(['codesign', '-d', '--entitlements', '-', '--xml', str(app)],
                             capture_output=True, check=True)
-    return plistlib.loads(result.stdout)
+    # Monterey's codesign emits a C-string terminator after the XML document.
+    # Accept that single terminator; any other trailing bytes must still fail.
+    return plistlib.loads(result.stdout.removesuffix(b'\x00'))
 
 
 def validate_interaction_release(entitlements, configs, updates):

@@ -1,8 +1,16 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import EventDetailScreen from '../app/eventDetail';
+import { getDocumentAsync, type DocumentPickerResult } from 'expo-document-picker';
+import { Alert } from 'react-native';
+import type { EventMoment } from '../src/types';
 
+jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
+
+let mockExtendedMoments = false;
+let mockMomentFeed: EventMoment[] | null = null;
+const mockSetQueryData = jest.fn();
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockCapture = jest.fn();
@@ -18,8 +26,17 @@ const mockRecordMomentReactionFirstValue = jest.fn<
   [unknown, string | null, () => boolean, { capture: typeof mockCapture }]
 >(async () => false);
 const mockMutationOptions: Array<{
+  mutationFn?: (variables: unknown) => Promise<unknown>;
   onSuccess?: (result: unknown, variables: unknown) => void;
 }> = [];
+
+function publicationScope() {
+  const client = require('../src/api/client');
+  const version = client.getAuthSessionVersion();
+  return { eventId: '42', actor: { actorKey: 'party:7', partyId: '7', displayName: 'Cuco' },
+    preferRemote: true, queryKey: ['event-moments', '42', 'party:7', 'remote'],
+    stillOwns: () => client.getAuthSessionVersion() === version };
+}
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
@@ -37,7 +54,7 @@ jest.mock('@tanstack/react-query', () => ({
     mockMutationOptions.push(options);
     return { mutate: mockMutate, isPending: false };
   }),
-  useQueryClient: jest.fn(() => ({ invalidateQueries: mockInvalidateQueries })),
+  useQueryClient: jest.fn(() => ({ invalidateQueries: mockInvalidateQueries, setQueryData: mockSetQueryData })),
 }));
 
 jest.mock('expo-router', () => ({
@@ -87,6 +104,11 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
 jest.mock('../src/api/events', () => ({
   Events: {
     getById: jest.fn(),
+    supportsExtendedMoments: jest.fn(),
+    createMoment: jest.fn(),
+    editMoment: jest.fn(),
+    deleteMoment: jest.fn(),
+    uploadMomentMedia: jest.fn(),
     getPublicById: jest.fn(),
     getMyRSVP: jest.fn(),
     getRSVPSummary: jest.fn(),
@@ -136,8 +158,19 @@ describe('EventDetail moments tab', () => {
   const imagePicker = jest.mocked(require('expo-image-picker'));
 
   beforeEach(() => {
+    mockExtendedMoments = false;
+    mockMomentFeed = null;
+    jest.mocked(getDocumentAsync).mockReset();
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.uploadMomentMedia.mockReset();
+    api.createMoment.mockReset();
+    api.editMoment.mockReset();
+    api.deleteMoment.mockReset();
     jest.clearAllMocks();
     mockMutationOptions.length = 0;
+    mockSetQueryData.mockImplementation((_key, update) => {
+      if (mockMomentFeed !== null) mockMomentFeed = typeof update === 'function' ? update(mockMomentFeed) : update;
+    });
 
     useQuery.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
       if (queryKey[0] === 'event') {
@@ -182,6 +215,8 @@ describe('EventDetail moments tab', () => {
         };
       }
 
+      if (queryKey[0] === 'event-moment-capability') return { data: mockExtendedMoments };
+
       if (queryKey[0] === 'event-rsvps') {
         return { data: { status: 'INTERESTED', showOnProfile: false }, isLoading: false };
       }
@@ -205,6 +240,8 @@ describe('EventDetail moments tab', () => {
       if (queryKey[0] === 'event-ticket-orders') {
         return { data: [], isLoading: false };
       }
+
+      if (queryKey[0] === 'event-moments' && mockMomentFeed !== null) return { data: mockMomentFeed, isLoading: false };
 
       if (queryKey[0] === 'event-moments') {
         return {
@@ -262,6 +299,296 @@ describe('EventDetail moments tab', () => {
 
       return { data: null, isLoading: false };
     });
+  });
+
+  it('publishes a written memory without a picker or an upload when the server supports it', async () => {
+    mockExtendedMoments = true;
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByText('Compartir'));
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'El último coro');
+    fireEvent.press(screen.getByText('Publicar momento'));
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    const submission = mockMutate.mock.calls[0][0];
+    expect(submission.media).toEqual([{ kind: 'text', uri: '', mimeType: 'text/plain' }]);
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.createMoment.mockResolvedValueOnce({ id: '77', eventId: '42', caption: 'El último coro' });
+    const result = await mockMutationOptions[5].mutationFn!(submission);
+    expect(result).toEqual([expect.objectContaining({ status: 'fulfilled', source: 'remote' })]);
+    expect(api.uploadMomentMedia).not.toHaveBeenCalled();
+    expect(api.createMoment).toHaveBeenCalledWith(expect.objectContaining({ caption: 'El último coro' }));
+  });
+
+  it('keeps text publication disabled on older servers or for blank text', () => {
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByText('Compartir'));
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'Recuerdo');
+    fireEvent.press(screen.getByText('Publicar momento'));
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('restores failed text to the editor without adding a fake file or a local publication', async () => {
+    mockExtendedMoments = true;
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.createMoment.mockRejectedValueOnce(new Error('Network unavailable'));
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByText('Compartir'));
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'Conservar este recuerdo');
+    fireEvent.press(screen.getByText('Publicar momento'));
+    const submission = mockMutate.mock.calls[0][0];
+    const mutation = mockMutationOptions[5];
+    const result = await mutation.mutationFn!(submission);
+    act(() => mutation.onSuccess!(result, submission));
+    expect(screen.getByDisplayValue('Conservar este recuerdo')).toBeTruthy();
+    expect(screen.queryByText('1 archivo listo')).toBeNull();
+    expect(screen.queryByText(/momento publicado/)).toBeNull();
+    expect(api.uploadMomentMedia).not.toHaveBeenCalled();
+    expect(require('@react-native-async-storage/async-storage').setItem).not.toHaveBeenCalled();
+  });
+
+  const audioAsset = { name: 'recuerdo.wav', uri: 'file:///cache/recuerdo.wav', mimeType: 'audio/wav', size: 200, lastModified: 0 };
+  const openAudioComposer = () => {
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByText('Compartir'));
+  };
+
+  it('keeps audio selection unavailable without an explicit compatible server', () => {
+    openAudioComposer();
+    expect(screen.queryByRole('button', { name: 'Agregar audio' })).toBeNull();
+    expect(getDocumentAsync).not.toHaveBeenCalled();
+  });
+
+  it('does not offer public file uploads for a private event even when the server supports audio', () => {
+    mockExtendedMoments = true;
+    const original = useQuery.getMockImplementation()!;
+    useQuery.mockImplementation((options) => {
+      const result = original(options);
+      return options.queryKey[0] === 'event' ? { ...result, data: { ...result.data, isPublic: false, publicListable: false } } : result;
+    });
+    openAudioComposer();
+    expect(screen.queryByRole('button', { name: 'Agregar audio' })).toBeNull();
+    expect(getDocumentAsync).not.toHaveBeenCalled();
+  });
+
+  it('selects cached audio and uploads it before asking for a persisted publication', async () => {
+    mockExtendedMoments = true;
+    jest.mocked(getDocumentAsync).mockResolvedValueOnce({ canceled: false, assets: [audioAsset] });
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.uploadMomentMedia.mockResolvedValueOnce('https://assets.persona.test/recuerdo.wav');
+    api.createMoment.mockResolvedValueOnce({ id: '77', eventId: '42', media: { kind: 'audio', uri: 'https://assets.persona.test/recuerdo.wav' } });
+    openAudioComposer();
+    fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+    await waitFor(() => expect(screen.getByText('recuerdo.wav')).toBeTruthy());
+    expect(api.uploadMomentMedia).not.toHaveBeenCalled();
+    expect(screen.getByText(/El archivo de audio tendrá un enlace público/)).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'El coro final');
+    fireEvent.press(screen.getByText('Publicar audio público'));
+    const submission = mockMutate.mock.calls[0][0];
+    const result = await mockMutationOptions[5].mutationFn!(submission);
+    expect(result).toEqual([expect.objectContaining({ status: 'fulfilled', source: 'remote' })]);
+    expect(api.uploadMomentMedia).toHaveBeenCalledWith('42', expect.objectContaining({ kind: 'audio', uri: audioAsset.uri, fileName: audioAsset.name }));
+    expect(api.createMoment).toHaveBeenCalledWith(expect.objectContaining({ caption: 'El coro final', media: expect.objectContaining({ kind: 'audio', uri: 'https://assets.persona.test/recuerdo.wav' }) }));
+    expect(api.uploadMomentMedia.mock.invocationCallOrder[0]).toBeLessThan(api.createMoment.mock.invocationCallOrder[0]);
+  });
+
+  it('returns a failed audio upload to the editor without publishing a shadow copy', async () => {
+    mockExtendedMoments = true;
+    jest.mocked(getDocumentAsync).mockResolvedValueOnce({ canceled: false, assets: [audioAsset] });
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.uploadMomentMedia.mockRejectedValueOnce(new Error('Network unavailable'));
+    openAudioComposer();
+    fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+    await waitFor(() => expect(screen.getByText('recuerdo.wav')).toBeTruthy());
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'Conservar audio');
+    fireEvent.press(screen.getByText('Publicar audio público'));
+    const submission = mockMutate.mock.calls[0][0];
+    const mutation = mockMutationOptions[5];
+    const result = await mutation.mutationFn!(submission);
+    act(() => mutation.onSuccess!(result, submission));
+    expect(screen.getByText('recuerdo.wav')).toBeTruthy();
+    expect(screen.getByDisplayValue('Conservar audio')).toBeTruthy();
+    expect(api.createMoment).not.toHaveBeenCalled();
+    expect(require('@react-native-async-storage/async-storage').setItem).not.toHaveBeenCalled();
+    expect(screen.queryByText(/momento publicado/)).toBeNull();
+  });
+
+  it('ignores cancellation and reports validation errors without clearing the caption', async () => {
+    mockExtendedMoments = true;
+    const alert = jest.spyOn(Alert, 'alert');
+    jest.mocked(getDocumentAsync).mockResolvedValueOnce({ canceled: true, assets: null });
+    openAudioComposer();
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'Mi recuerdo');
+    fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+    await waitFor(() => expect(getDocumentAsync).toHaveBeenCalledTimes(1));
+    expect(alert).not.toHaveBeenCalled();
+    jest.mocked(getDocumentAsync).mockResolvedValueOnce({ canceled: false, assets: [{ ...audioAsset, size: 26 * 1024 * 1024 }] });
+    fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('No pudimos agregar el audio', expect.stringContaining('25 MB')));
+    expect(screen.getByDisplayValue('Mi recuerdo')).toBeTruthy();
+    expect(mockMutate).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('discards a picker result after the editor is closed and reopened', async () => {
+    mockExtendedMoments = true;
+    let complete!: (result: DocumentPickerResult) => void;
+    jest.mocked(getDocumentAsync).mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
+    openAudioComposer();
+    fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+    await waitFor(() => expect(getDocumentAsync).toHaveBeenCalledTimes(1));
+    fireEvent.press(screen.getByLabelText('Cerrar compositor de momento'));
+    fireEvent.press(screen.getByText('Compartir'));
+    await act(async () => complete({ canceled: false, assets: [audioAsset] }));
+    expect(screen.queryByText('recuerdo.wav')).toBeNull();
+    expect(screen.queryByText('1 archivo listo')).toBeNull();
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('discards delayed audio selection after the authentication session changes', async () => {
+    mockExtendedMoments = true;
+    const client = require('../src/api/client');
+    const previous = client.getAuthToken();
+    client.setAuthToken('audio-first-account');
+    let complete!: (result: DocumentPickerResult) => void;
+    jest.mocked(getDocumentAsync).mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
+    try {
+      openAudioComposer();
+      fireEvent.press(screen.getByRole('button', { name: 'Agregar audio' }));
+      await waitFor(() => expect(getDocumentAsync).toHaveBeenCalledTimes(1));
+      client.setAuthToken('audio-second-account');
+      await act(async () => complete({ canceled: false, assets: [audioAsset] }));
+      expect(screen.queryByText('recuerdo.wav')).toBeNull();
+      expect(mockMutate).not.toHaveBeenCalled();
+    } finally { client.setAuthToken(previous); }
+  });
+
+  const ownPublication: EventMoment = {
+    id: '77', eventId: '42', authorName: 'Cuco', authorPartyId: '7', caption: 'Mi recuerdo original',
+    media: { kind: 'text', uri: '', mimeType: 'text/plain' },
+    createdAt: '2026-10-26T08:00:00.123456Z', updatedAt: '2026-10-26T08:00:00.123456Z',
+    reactions: {}, comments: [],
+  };
+  const openOwnPublication = () => {
+    mockExtendedMoments = true; mockMomentFeed = [{ ...ownPublication }];
+    const view = render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    return view;
+  };
+
+  it('edits only after explicit confirmation and updates the feed from the acknowledged server record', async () => {
+    const api = jest.mocked(require('../src/api/events').Events);
+    const updated = { ...ownPublication, caption: 'Mi recuerdo corregido', updatedAt: '2026-10-26T08:01:00.654321Z' };
+    api.editMoment.mockResolvedValueOnce(updated);
+    openOwnPublication();
+    fireEvent.press(screen.getByRole('button', { name: 'Editar recuerdo' }));
+    fireEvent.changeText(screen.getByLabelText('Descripción del recuerdo'), updated.caption);
+    expect(api.editMoment).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(screen.getByText('Recuerdo actualizado en TDF.')).toBeTruthy());
+    expect(api.editMoment).toHaveBeenCalledWith(ownPublication, updated.caption);
+    expect(mockSetQueryData).toHaveBeenCalledWith(['event-moments', '42', 'party:7', 'remote'], expect.any(Function));
+    expect(mockMomentFeed).toEqual([updated]);
+    expect(screen.queryByLabelText('Descripción del recuerdo')).toBeNull();
+  });
+
+  it('preserves an edited caption after a conflict instead of overwriting the newer server version', async () => {
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.editMoment.mockRejectedValueOnce(Object.assign(new Error('Conflict'), { response: { status: 409 } }));
+    openOwnPublication();
+    fireEvent.press(screen.getByRole('button', { name: 'Editar recuerdo' }));
+    fireEvent.changeText(screen.getByLabelText('Descripción del recuerdo'), 'Mi cambio sin confirmar');
+    fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByDisplayValue('Mi cambio sin confirmar')).toBeTruthy();
+    expect(screen.getByText(/El recuerdo cambió/)).toBeTruthy();
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+    expect(mockMomentFeed).toEqual([ownPublication]);
+    expect(screen.queryByText('Recuerdo actualizado en TDF.')).toBeNull();
+  });
+
+  it('does not dispatch a captured save action after a synchronous credential change', async () => {
+    const client = require('../src/api/client'); const previous = client.getAuthToken();
+    client.setAuthToken('author-first-account');
+    try {
+      openOwnPublication();
+      fireEvent.press(screen.getByRole('button', { name: 'Editar recuerdo' }));
+      fireEvent.changeText(screen.getByLabelText('Descripción del recuerdo'), 'Cambio retirado');
+      const save = screen.getByRole('button', { name: 'Guardar cambios' });
+      client.setAuthToken('author-second-account');
+      fireEvent.press(save);
+      expect(require('../src/api/events').Events.editMoment).not.toHaveBeenCalled();
+      expect(mockSetQueryData).not.toHaveBeenCalled();
+    } finally { client.setAuthToken(previous); }
+  });
+
+  it('ignores a late edit acknowledgement after credentials rotate', async () => {
+    const client = require('../src/api/client'); const previous = client.getAuthToken();
+    const api = jest.mocked(require('../src/api/events').Events);
+    client.setAuthToken('author-first-account');
+    api.editMoment.mockImplementationOnce(async () => {
+      client.setAuthToken('author-replacement-account');
+      return { ...ownPublication, caption: 'Respuesta tardía', updatedAt: '2026-10-26T08:01:00Z' };
+    });
+    try {
+      openOwnPublication();
+      fireEvent.press(screen.getByRole('button', { name: 'Editar recuerdo' }));
+      fireEvent.changeText(screen.getByLabelText('Descripción del recuerdo'), 'Respuesta tardía');
+      fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+      await waitFor(() => expect(screen.queryByLabelText('Descripción del recuerdo')).toBeNull());
+      expect(mockSetQueryData).not.toHaveBeenCalled();
+      expect(screen.queryByText('Recuerdo actualizado en TDF.')).toBeNull();
+    } finally { client.setAuthToken(previous); }
+  });
+
+  it('requires deletion confirmation, warns about public files, and removes only after acknowledgement', async () => {
+    const api = jest.mocked(require('../src/api/events').Events);
+    let complete!: () => void;
+    api.deleteMoment.mockImplementationOnce(() => new Promise<void>((resolve) => { complete = resolve; }));
+    openOwnPublication();
+    fireEvent.press(screen.getByRole('button', { name: 'Eliminar recuerdo' }));
+    expect(screen.getByText(/archivos públicos y las copias externas/)).toBeTruthy();
+    expect(api.deleteMoment).not.toHaveBeenCalled();
+    const confirm = screen.getByRole('button', { name: 'Confirmar eliminación' });
+    act(() => { fireEvent.press(confirm); fireEvent.press(confirm); });
+    expect(api.deleteMoment).toHaveBeenCalledTimes(1);
+    expect(mockMomentFeed).toEqual([ownPublication]);
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+    await act(async () => complete());
+    await waitFor(() => expect(screen.getByText('Publicación eliminada del evento.')).toBeTruthy());
+    expect(mockMomentFeed).toEqual([]);
+  });
+
+  it('does not delete after cancellation or after the event screen retires', () => {
+    const view = openOwnPublication();
+    fireEvent.press(screen.getByRole('button', { name: 'Eliminar recuerdo' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Cancelar eliminación' }));
+    expect(require('../src/api/events').Events.deleteMoment).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole('button', { name: 'Eliminar recuerdo' }));
+    // Capture the rendered touch handler so retirement is checked even if an OS
+    // event queued before unmount invokes it after the dialog has disappeared.
+    let confirm = screen.getByRole('button', { name: 'Confirmar eliminación' });
+    while (typeof confirm.props.onPress !== 'function' && confirm.parent) confirm = confirm.parent;
+    const press = confirm.props.onPress;
+    expect(press).toEqual(expect.any(Function));
+    view.unmount();
+    act(() => press());
+    expect(require('../src/api/events').Events.deleteMoment).not.toHaveBeenCalled();
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+  });
+
+  it('retains the publication when deletion is not confirmed by the server', async () => {
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.deleteMoment.mockRejectedValueOnce(new Error('Network unavailable'));
+    openOwnPublication();
+    fireEvent.press(screen.getByRole('button', { name: 'Eliminar recuerdo' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Confirmar eliminación' }));
+    await waitFor(() => expect(screen.getByText('No pudimos confirmar la eliminación. Vuelve a cargar el evento antes de reintentar.')).toBeTruthy());
+    expect(mockMomentFeed).toEqual([ownPublication]);
+    expect(mockSetQueryData).not.toHaveBeenCalled();
+    expect(screen.queryByText('Publicación eliminada del evento.')).toBeNull();
   });
 
   it('shows the authoritative RSVP selection, separate counts, and submits the chosen state', async () => {
@@ -339,6 +666,87 @@ describe('EventDetail moments tab', () => {
     ));
     const stillOwnsParty = mockRecordFirstValueCompletion.mock.calls[0][2] as () => boolean;
     expect(stillOwnsParty()).toBe(true);
+  });
+
+  it('keeps a failed authenticated upload in the editor without creating a shadow publication', async () => {
+    const api = jest.mocked(require('../src/api/events').Events);
+    const storage = jest.mocked(require('@react-native-async-storage/async-storage'));
+    api.uploadMomentMedia.mockRejectedValue(new Error('Network unavailable'));
+    render(<EventDetailScreen />);
+    const mutation = mockMutationOptions[5];
+    const submission = { ...publicationScope(), caption: 'Keep this draft', media: [{ kind: 'video', uri: 'file:///clip.mp4', mimeType: 'video/mp4' }], optimisticIds: ['pending-1'] };
+    const result = await mutation.mutationFn!(submission);
+    expect(result).toEqual([{ index: 0, status: 'rejected', message: 'Network unavailable' }]);
+    expect(api.createMoment).not.toHaveBeenCalled();
+    expect(storage.setItem).not.toHaveBeenCalled();
+    act(() => mutation.onSuccess!(result, submission));
+    await waitFor(() => expect(screen.getByDisplayValue('Keep this draft')).toBeTruthy());
+    expect(screen.queryByText(/momento publicado/)).toBeNull();
+  });
+
+  it('does not publish an uploaded draft under a different account', async () => {
+    const client = require('../src/api/client');
+    const previous = client.getAuthToken();
+    const api = jest.mocked(require('../src/api/events').Events);
+    client.setAuthToken('first-synthetic-account');
+    api.uploadMomentMedia.mockImplementationOnce(async () => { client.setAuthToken('second-synthetic-account'); return 'https://assets.persona.test/video.mp4'; });
+    try {
+      render(<EventDetailScreen />);
+      const result = await mockMutationOptions[5].mutationFn!({ ...publicationScope(), caption: 'First account draft', media: [{ kind: 'video', uri: 'file:///clip.mp4', mimeType: 'video/mp4' }], optimisticIds: ['pending-switch'] });
+      expect(result).toEqual([expect.objectContaining({ status: 'rejected', message: expect.stringContaining('Tu sesión cambió') })]);
+      expect(api.createMoment).not.toHaveBeenCalled();
+    } finally { client.setAuthToken(previous); }
+  });
+
+  it('revokes the rendered publish action before the replacement session rerenders', async () => {
+    const client = require('../src/api/client');
+    const picker = require('expo-image-picker');
+    const previous = client.getAuthToken();
+    client.setAuthToken('first-synthetic-account');
+    picker.launchImageLibraryAsync.mockResolvedValueOnce({ canceled: false, assets: [
+      { uri: 'file:///first-account.jpg', type: 'image', mimeType: 'image/jpeg', width: 20, height: 20 },
+    ] });
+    try {
+      render(<EventDetailScreen />);
+      fireEvent.press(screen.getByText('Momentos (1)'));
+      fireEvent.press(screen.getByText('Compartir'));
+      fireEvent.press(screen.getByText('Elegir fotos'));
+      await waitFor(() => expect(screen.getByText('1 archivo listo')).toBeTruthy());
+      const publish = screen.getByText('Publicar momento');
+      client.setAuthToken('second-synthetic-account');
+      fireEvent.press(publish);
+      expect(mockMutate).not.toHaveBeenCalled();
+    } finally { client.setAuthToken(previous); picker.launchImageLibraryAsync.mockReset(); }
+  });
+
+  it('does not let a late failure restore the retired caption over a new draft', async () => {
+    const client = require('../src/api/client');
+    const picker = require('expo-image-picker');
+    const previous = client.getAuthToken();
+    client.setAuthToken('first-synthetic-account');
+    picker.launchImageLibraryAsync.mockResolvedValueOnce({ canceled: false, assets: [
+      { uri: 'file:///first-account.jpg', type: 'image', mimeType: 'image/jpeg', width: 20, height: 20 },
+    ] });
+    try {
+      render(<EventDetailScreen />);
+      fireEvent.press(screen.getByText('Momentos (1)'));
+      fireEvent.press(screen.getByText('Compartir'));
+      fireEvent.press(screen.getByText('Elegir fotos'));
+      await waitFor(() => expect(screen.getByText('1 archivo listo')).toBeTruthy());
+      fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'First account draft');
+      const mutation = mockMutationOptions[5];
+      fireEvent.press(screen.getByText('Publicar momento'));
+      const submission = mockMutate.mock.calls[0][0];
+      expect(submission.stillOwns()).toBe(true);
+      client.setAuthToken('second-synthetic-account');
+      fireEvent.press(screen.getByText('Compartir'));
+      fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'New current draft');
+      act(() => mutation.onSuccess!([{ index: 0, status: 'rejected', message: 'Late network error' }], submission));
+      expect(screen.getByDisplayValue('New current draft')).toBeTruthy();
+      expect(screen.queryByDisplayValue('First account draft')).toBeNull();
+      client.setAuthToken('first-synthetic-account');
+      expect(submission.stillOwns()).toBe(false);
+    } finally { client.setAuthToken(previous); picker.launchImageLibraryAsync.mockReset(); }
   });
 
   it('adds several gallery photos with immediate thumbnails and one publish action', async () => {

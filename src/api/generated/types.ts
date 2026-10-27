@@ -1204,6 +1204,129 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/social-events/me/memory-invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read explicit internal memory invitation consent */
+        get: operations["getEventMemoryPreferences"];
+        /** Opt into or withdraw internal memory invitations */
+        put: operations["setEventMemoryPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/memory-invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read aggregate memory campaign metrics as current organizer */
+        get: operations["getEventMemoryCampaign"];
+        /** Enable or disable an organizer-owned campaign */
+        put: operations["setEventMemoryCampaign"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/memory-invitations/{deliveryId}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record an attributed event opening without granting access */
+        post: operations["openEventMemoryInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/moments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the currently authorized event moment feed */
+        get: operations["listSocialEventMoments"];
+        put?: never;
+        /** Publish an image video audio or text memory */
+        post: operations["createSocialEventMoment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/moments/{momentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Edit the description as the current author with optimistic concurrency */
+        put: operations["editSocialEventMoment"];
+        post?: never;
+        /** Delete the current author source and retire its interaction target */
+        delete: operations["deleteSocialEventMoment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/moments/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload a public raster image up to 10 MiB */
+        post: operations["uploadSocialEventMomentImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/moments/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload a public image up to 10 MiB or audio or video up to 25 MiB */
+        post: operations["uploadSocialEventMomentMedia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/social-events/events/{eventId}/moments/{momentId}/reactions": {
         parameters: {
             query?: never;
@@ -6823,6 +6946,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/social-events/events/{eventId}/ticket-orders/{orderId}/manual-payment/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a private transfer receipt as the event organizer or an administrator */
+        get: operations["getTicketManualPaymentReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/public/events/{eventId}/tickets": {
         parameters: {
             query?: never;
@@ -8759,6 +8899,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/music/purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List only the authenticated buyer's purchases */
+        get: operations["listMusicPurchases"];
+        put?: never;
+        /**
+         * Confirm an exact music offer and create or replay a purchase
+         * @description Requires music commerce enabled for the process and checkout environments. Confirm the displayed exact amount and currency. Current offer eligibility is checked again. One buyer/key binds one original request; an eligible replay with different bound inputs returns 409 without purchase effects. No payment provider is contacted by this operation. Music commerce remains experimental.
+         */
+        post: operations["createMusicPurchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/music/releases/{releaseId}/versions/{versionId}/validate": {
         parameters: {
             query?: never;
@@ -9099,6 +9260,7 @@ export interface components {
             /** @enum {string} */
             defaultSort: "newest" | "oldest" | "relevant";
             mentionedPeople?: components["schemas"]["InteractionAuthor"][];
+            sourceModeration?: components["schemas"]["EventMemorySourceControls"];
         };
         InteractionPage: {
             items: components["schemas"]["InteractionComment"][];
@@ -9227,6 +9389,67 @@ export interface components {
             reason: string;
             /** @enum {string} */
             decision: "reviewed" | "dismissed";
+        } | {
+            /** @enum {string} */
+            operation: "source.report";
+            reason: string;
+            expectedSourceRevision: string;
+        } | {
+            /** @enum {string} */
+            operation: "source.hide" | "source.remove" | "source.restore";
+            reason: string;
+            expectedVersion: number;
+            expectedSourceRevision: string;
+        } | {
+            /** @enum {string} */
+            operation: "source.report.resolve";
+            reason: string;
+            expectedVersion: number;
+            expectedSourceRevision: string;
+            /** @enum {string} */
+            decision: "reviewed" | "dismissed";
+        };
+        EventMemorySourceControls: {
+            supported: boolean;
+            eventId: string;
+            /** @enum {string} */
+            state: "visible" | "hidden" | "removed";
+            /** @description Opaque source revision; preserve exactly when submitting a command. */
+            sourceRevision: string;
+            canReport: boolean;
+            canHide: boolean;
+            canRestore: boolean;
+            canRemove: boolean;
+        };
+        EventMemorySourceReport: {
+            /** Format: uuid */
+            id: string;
+            entityKey: string;
+            eventId: string;
+            version: number;
+            source: components["schemas"]["EventMemorySourceControls"];
+            caption: string | null;
+            mediaType: string;
+            mediaUrl: string;
+            author: components["schemas"]["InteractionAuthor"] | null;
+            openReports: number;
+            reportsReferToEarlierContent: boolean;
+            reasons: string[];
+            audit: {
+                operation: string;
+                reason: string;
+                previousState: string | null;
+                newState: string;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+        };
+        EventMemorySourceReportPage: {
+            supported: boolean;
+            canReview: boolean;
+            items: components["schemas"]["EventMemorySourceReport"][];
+            /** Format: uuid */
+            nextCursor: string | null;
         };
         InteractionCommandRequest: {
             /** Format: uuid */
@@ -9239,6 +9462,8 @@ export interface components {
             /** Format: uuid */
             reactionTypeId?: string | null;
             version?: number;
+            /** @enum {string} */
+            state?: "visible" | "hidden" | "removed";
             replay?: boolean;
             reported?: boolean;
             mode?: string;
@@ -10536,11 +10761,23 @@ export interface components {
             /** @enum {string} */
             evidenceStatus: "awaiting_evidence" | "submitted" | "under_review" | "approved" | "rejected";
             customerReference?: string | null;
+            /** @description Whether the buyer attached a private receipt file. */
+            receiptAttached?: boolean;
             /** @description Staff reason, shown only after a rejection. */
             reviewNotes?: string | null;
         };
         PublicEventTicketBankTransferEvidenceRequest: {
             customerReference: string;
+            receipt?: components["schemas"]["TicketPaymentReceipt"];
+        };
+        TicketPaymentReceipt: {
+            /** @enum {string} */
+            contentType: "image/jpeg" | "image/png" | "application/pdf";
+            /**
+             * Format: byte
+             * @description Private receipt file
+             */
+            base64: string;
         };
         PublicEventTicketPaypalCaptureRequest: {
             paypalOrderId: string;
@@ -11488,7 +11725,7 @@ export interface components {
              * @description Fixed safe classification, not raw stored exception text
              * @enum {string}
              */
-            creReason: "closed_checkout_approval" | "scheduled_query_review" | "binding_mismatch" | "unknown_provider_state" | "unrecognized";
+            creReason: "closed_checkout_approval" | "scheduled_query_review" | "binding_mismatch" | "unknown_provider_state" | "music_paid_closed_order" | "unrecognized";
             /** Format: uuid */
             creCheckoutId: string | null;
             /** Format: uuid */
@@ -12005,6 +12242,54 @@ export interface components {
             workflowStateId?: string;
             sortOrder?: number;
             notes?: string | null;
+        };
+        EventMemoryPreference: {
+            /** @default false */
+            inApp: boolean;
+            supportsExtendedMoments: boolean;
+        };
+        EventMemoryCampaign: {
+            /** @default false */
+            enabled: boolean;
+            eventFinished: boolean;
+            dispatcherEnabled?: boolean;
+            candidates: number;
+            consented: number;
+            invitations: number;
+            reminders: number;
+            opened: number;
+            published: number;
+            moments: number;
+            uniqueAuthors: number;
+        };
+        /** @description Text requires a nonblank caption and absent or empty media URL. Other types require an absolute HTTPS media URL. Authenticated Party supplies authorship. */
+        EventMomentCreate: {
+            /** @deprecated */
+            emCreateAuthorName?: string;
+            emCreateCaption?: string;
+            emCreateMediaUrl?: string;
+            /** @enum {string} */
+            emCreateMediaType: "image" | "video" | "audio" | "text";
+            emCreateMediaWidth?: number;
+            emCreateMediaHeight?: number;
+            emCreateMediaDurationMs?: number;
+        };
+        EventMomentEdit: {
+            emeCaption: string;
+            /** Format: date-time */
+            emeExpectedUpdatedAt: string;
+        };
+        EventMomentUpload: {
+            eiuEventId: string;
+            eiuFileName: string;
+            eiuPath: string;
+            /** Format: uri */
+            eiuPublicUrl: string;
+            /**
+             * Format: uri
+             * @description Legacy alias for the public media URL
+             */
+            eiuImageUrl: string;
         };
         EventMomentReactionRequest: {
             /**
@@ -15096,6 +15381,48 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        /** @description Canonical decimal minor units in 0..9223372036854775807. No sign, leading zeros, fractional part or exponent. */
+        MusicMinorUnitsDecimal: string;
+        /** @description Canonical positive decimal minor units in 1..9223372036854775807. */
+        MusicPositiveMinorUnitsDecimal: string;
+        /** @description Exact nonnegative minor units. Legacy numeric values are emitted only in the interoperable integer range. Larger values are canonical decimal text; clients must not convert the whole amount to a binary64 number. */
+        MusicMinorUnits: number | components["schemas"]["MusicMinorUnitsDecimal"];
+        MusicPurchaseCreateInput: {
+            /** Format: uuid */
+            availabilityRuleId: string;
+            /** @description Declared country is trimmed and uppercased, then must contain two ASCII letters. It does not establish trusted territory eligibility. */
+            territoryCode: string;
+            /** @description Trimmed, nonempty accepted terms identifier, limited to 160 characters after trimming. */
+            termsVersion: string;
+            expectedAmountMinor: components["schemas"]["MusicPositiveMinorUnitsDecimal"];
+            /** @description Canonical ISO currency of the displayed offer; current music sales support USD only. */
+            expectedCurrency: string;
+        };
+        MusicPurchaseOrder: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            releaseVersionId: string;
+            /** Format: uuid */
+            availabilityRuleId: string;
+            /** @enum {string} */
+            state: "pending" | "awaiting_payment" | "paid" | "cancelled" | "refunded" | "chargeback";
+            grossMinor: components["schemas"]["MusicMinorUnits"];
+            discountMinor: components["schemas"]["MusicMinorUnits"];
+            taxMinor: components["schemas"]["MusicMinorUnits"];
+            feeMinor: components["schemas"]["MusicMinorUnits"];
+            netMinor: components["schemas"]["MusicMinorUnits"];
+            currency: string;
+            /** Format: uuid */
+            checkoutId: string | null;
+            providerReference: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            paidAt: string | null;
+            /** @description Included by the list operation. */
+            releaseTitle?: string;
+        };
         MusicPlaybackConflict: {
             /** @enum {string} */
             code: "playback_identity_conflict";
@@ -18069,6 +18396,8 @@ export interface operations {
             query?: {
                 cursor?: string;
                 limit?: number;
+                /** @description Opt into source-memory reports for one authorized event; absent preserves the comment inbox. */
+                sourceEvent?: string;
             };
             header?: never;
             path?: never;
@@ -18082,7 +18411,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InteractionPage"];
+                    "application/json": components["schemas"]["InteractionPage"] | components["schemas"]["EventMemorySourceReportPage"];
                 };
             };
             /** @description Invalid input */
@@ -20979,6 +21308,590 @@ export interface operations {
                 content?: never;
             };
             /** @description Profile is missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventMemoryPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful authorized operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventMemoryPreference"];
+                };
+            };
+            /** @description Invalid identifier or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unavailable or not authorized */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setEventMemoryPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": boolean;
+            };
+        };
+        responses: {
+            /** @description Successful authorized operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventMemoryPreference"];
+                };
+            };
+            /** @description Invalid identifier or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unavailable or not authorized */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventMemoryCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful authorized operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventMemoryCampaign"];
+                };
+            };
+            /** @description Invalid identifier or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unavailable or not authorized */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setEventMemoryCampaign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": boolean;
+            };
+        };
+        responses: {
+            /** @description Successful authorized operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventMemoryCampaign"];
+                };
+            };
+            /** @description Invalid identifier or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unavailable or not authorized */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    openEventMemoryInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                deliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful authorized operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        recorded: boolean;
+                    };
+                };
+            };
+            /** @description Invalid identifier or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unavailable or not authorized */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listSocialEventMoments: {
+        parameters: {
+            query?: {
+                /** @description Include audio and text. Legacy clients receive only image and video. */
+                extended?: boolean;
+            };
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful authorized operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventMoment"][];
+                };
+            };
+            /** @description Invalid identifier or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unavailable or not authorized */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createSocialEventMoment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventMomentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful authorized operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventMoment"];
+                };
+            };
+            /** @description Invalid identifier or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unavailable or not authorized */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    editSocialEventMoment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                momentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventMomentEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful authorized operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventMoment"];
+                };
+            };
+            /** @description Invalid identifier or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unavailable or not authorized */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteSocialEventMoment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                momentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful authorized operation */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid identifier or payload */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unavailable or not authorized */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    uploadSocialEventMomentImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Public file accepted with MIME extension and signature validation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventMomentUpload"];
+                };
+            };
+            /** @description Invalid type signature file name or size */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Public-file uploads unavailable for private events */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Parent event unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    uploadSocialEventMomentMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Public file accepted with MIME extension and signature validation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventMomentUpload"];
+                };
+            };
+            /** @description Invalid type signature file name or size */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Public-file uploads unavailable for private events */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Parent event unavailable */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -32558,6 +33471,52 @@ export interface operations {
             };
         };
     };
+    getTicketManualPaymentReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                orderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private JPG, PNG or PDF receipt */
+            200: {
+                headers: {
+                    /** @description Always no-store. */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketPaymentReceipt"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event management permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Order does not belong to this event or no receipt was attached */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getPublicEventTicketStorefront: {
         parameters: {
             query?: never;
@@ -36210,6 +37169,104 @@ export interface operations {
                 };
             };
             /** @description Music playback telemetry disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listMusicPurchases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Purchases, newest first; monetary values retain exact minor units */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MusicPurchaseOrder"][];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Music commerce is disabled in the applicable environment */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createMusicPurchase: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Trimmed key of 8–160 visible ASCII characters, scoped to this buyer. */
+                "Idempotency-Key": string;
+                /** @description Effective country is trusted only with the protected edge control enabled; otherwise it is unknown. */
+                "CF-IPCountry"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MusicPurchaseCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Original or matching replayed purchase in its current state */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MusicPurchaseOrder"];
+                };
+            };
+            /** @description Invalid key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No currently eligible offer or buyer billing identity */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Confirmed price or replay binding conflicts; no purchase effects */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Music commerce is disabled in the applicable environment */
             503: {
                 headers: {
                     [name: string]: unknown;

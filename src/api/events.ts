@@ -1,4 +1,5 @@
 import { del, get, post, put } from './client';
+import { Platform } from 'react-native';
 import type { components } from './generated/types';
 import type {
   ID,
@@ -386,9 +387,9 @@ const requireNonBlankText = (value: string | null | undefined, fieldName: string
   return normalized;
 };
 
-const normalizeMomentMediaKind = (value: string | null | undefined): 'image' | 'video' => {
+const normalizeMomentMediaKind = (value: string | null | undefined): EventMoment['media']['kind'] => {
   const normalized = value?.trim().toLowerCase();
-  return normalized === 'video' ? 'video' : 'image';
+  return normalized === 'video' || normalized === 'audio' || normalized === 'text' ? normalized : 'image';
 };
 
 const normalizeBackendVenueId = (value: ID | null | undefined): string | null => {
@@ -834,23 +835,72 @@ export const Events = {
   },
 
   // Event moments
+  supportsExtendedMoments: async (): Promise<boolean> => {
+    // Read capability only. This must never opt the account into invitations.
+    const value = await get<unknown>('/social-events/me/memory-invitations');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const row = value as Record<string, unknown>;
+    return typeof row.inApp === 'boolean' && row.supportsExtendedMoments === true;
+  },
+  uploadMomentMedia: async (eventId: ID, media: { uri: string; mimeType: string; fileName?: string | null; kind: 'image' | 'video' | 'audio' }): Promise<string> => {
+    const form = new FormData();
+    form.append('file', { uri: Platform.OS === 'ios' ? media.uri.replace('file://', '') : media.uri,
+      name: media.fileName || media.uri.split('/').pop() || (media.kind === 'image' ? 'memory.jpg' : media.kind === 'audio' ? 'memory.mp3' : 'memory.mp4'),
+      type: media.mimeType } as unknown as Blob);
+    // Images retain the existing endpoint for rolling backend compatibility.
+    // Video uses the same event-owned durable store after the backend upgrade.
+    const suffix = media.kind === 'image' ? 'image' : 'media';
+    const result = await post<{ eiuPublicUrl: string }>(`/social-events/events/${encodeURIComponent(String(eventId))}/moments/${suffix}`, form,
+      { headers: { 'Content-Type': 'multipart/form-data' } });
+    if (!/^https:\/\//i.test(result.eiuPublicUrl ?? '')) throw new Error('La subida no devolvió un enlace público válido. Conserva el borrador e inténtalo de nuevo.');
+    return result.eiuPublicUrl;
+  },
+
   listMoments: async (eventId: ID): Promise<EventMoment[]> => {
-    const list = await get<BackendMomentDTO[]>(`/social-events/events/${eventId}/moments`);
-    return list.map((dto, index) => mapMomentDto(dto, eventId, index));
+    const list = await get<unknown>(`/social-events/events/${eventId}/moments?extended`);
+    if (!Array.isArray(list)) throw unconfirmedMomentAction();
+    return list.map((dto) => mapMomentDto(confirmedMomentDto(dto, eventId), eventId));
   },
 
   createMoment: async (input: EventMomentCreateInput): Promise<EventMoment> => {
     const payload = {
-      emCreateAuthorName: input.authorName,
-      emCreateCaption: input.caption ?? null,
+      emCreateCaption: input.caption ?? undefined,
       emCreateMediaUrl: input.media.uri,
       emCreateMediaType: input.media.kind,
-      emCreateMediaWidth: input.media.width ?? null,
-      emCreateMediaHeight: input.media.height ?? null,
-      emCreateMediaDurationMs: input.media.durationMs ?? null,
+      emCreateMediaWidth: input.media.width ?? undefined,
+      emCreateMediaHeight: input.media.height ?? undefined,
+      emCreateMediaDurationMs: input.media.durationMs ?? undefined,
     };
-    const dto = await post<BackendMomentDTO>(`/social-events/events/${input.eventId}/moments`, payload);
+    const dto = confirmedMomentDto(await post<unknown>(`/social-events/events/${input.eventId}/moments`, payload), input.eventId);
     return mapMomentDto(dto, input.eventId);
+  },
+
+  editMoment: async (moment: EventMoment, caption: string): Promise<EventMoment> => {
+    const eventId = confirmedId(moment.eventId);
+    const momentId = confirmedId(moment.id);
+    const version = persistedMomentVersion(moment.updatedAt);
+    const author = normalizeIdentityPartyId(moment.authorPartyId);
+    const text = caption.trim();
+    if (!eventId || !momentId || !version || !author || text.length > 280
+      || (moment.media.kind === 'text' && !text)) throw unconfirmedMomentAction();
+    const dto = confirmedMomentDto(await put<unknown>(
+      `/social-events/events/${eventId}/moments/${momentId}`,
+      { emeCaption: text, emeExpectedUpdatedAt: version },
+    ), eventId, momentId);
+    const result = mapMomentDto(dto, eventId);
+    if (!result.updatedAt || result.updatedAt === version || result.authorPartyId !== author
+      || (result.caption ?? '') !== text) throw unconfirmedMomentAction();
+    return result;
+  },
+
+  deleteMoment: async (moment: EventMoment): Promise<void> => {
+    const eventId = confirmedId(moment.eventId);
+    const momentId = confirmedId(moment.id);
+    if (!eventId || !momentId || !normalizeIdentityPartyId(moment.authorPartyId)) throw unconfirmedMomentAction();
+    const result = await del<unknown>(`/social-events/events/${eventId}/moments/${momentId}`, {
+      validateStatus: (status) => status === 204,
+    });
+    if (result !== undefined && result !== null && result !== '') throw unconfirmedMomentAction();
   },
 
   reactToMoment: async (
@@ -859,24 +909,24 @@ export const Events = {
     reaction: EventMomentReactionOption,
     active?: boolean,
   ): Promise<EventMoment> => {
-    const dto = await post<BackendMomentDTO>(
+    const dto = confirmedMomentDto(await post<unknown>(
       `/social-events/events/${eventId}/moments/${encodeURIComponent(momentId)}/reactions`,
       {
         emrrReactionTypeId: requireCatalogUuid(reaction.id, 'emrrReactionTypeId'),
         emrrActive: active,
       },
-    );
+    ), eventId, momentId);
     return mapMomentDto(dto, eventId);
   },
 
   commentOnMoment: async (input: EventMomentCommentInput): Promise<EventMomentComment> => {
-    const dto = await post<BackendMomentCommentDTO>(
+    const dto = confirmedMomentCommentDto(await post<unknown>(
       `/social-events/events/${input.eventId}/moments/${encodeURIComponent(input.momentId)}/comments`,
       {
         emccAuthorName: input.authorName,
         emccBody: input.body,
       },
-    );
+    ), input.momentId);
     return mapMomentCommentDto(dto, input.momentId);
   }
 };
@@ -1264,7 +1314,14 @@ function mapMomentReactions(dto: BackendMomentDTO): EventMoment['reactions'] {
 }
 
 function inferMomentMimeType(kind: EventMoment['media']['kind'], mediaUrl: string): string {
+  if (kind === 'text') return 'text/plain';
   const normalizedUrl = mediaUrl.toLowerCase();
+  if (kind === 'audio') {
+    if (normalizedUrl.endsWith('.wav')) return 'audio/wav';
+    if (normalizedUrl.endsWith('.ogg')) return 'audio/ogg';
+    if (normalizedUrl.endsWith('.m4a')) return 'audio/mp4';
+    return 'audio/mpeg';
+  }
   if (kind === 'video') {
     if (normalizedUrl.endsWith('.mov')) return 'video/quicktime';
     if (normalizedUrl.endsWith('.webm')) return 'video/webm';
@@ -1275,6 +1332,54 @@ function inferMomentMimeType(kind: EventMoment['media']['kind'], mediaUrl: strin
   if (normalizedUrl.endsWith('.webp')) return 'image/webp';
   if (normalizedUrl.endsWith('.gif')) return 'image/gif';
   return 'image/jpeg';
+}
+
+const unconfirmedMomentAction = (): Error => new Error(
+  'No se pudo confirmar la acción. Revisa el evento antes de reintentar; tu borrador se conserva.',
+);
+
+function confirmedRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw unconfirmedMomentAction();
+  return value as Record<string, unknown>;
+}
+
+function confirmedId(value: unknown): string | null {
+  const id = typeof value === 'string' || typeof value === 'number' ? normalizeComparableId(value) : null;
+  return id && /^[1-9][0-9]*$/.test(id) ? id : null;
+}
+
+function persistedMomentVersion(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const version = value.trim();
+  // Date.toISOString() would discard PostgreSQL's microseconds and make every
+  // otherwise valid edit conflict. Validate without rewriting this token.
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(version)
+    && !Number.isNaN(Date.parse(version)) ? version : undefined;
+}
+
+function confirmedMomentDto(value: unknown, eventId: ID, momentId?: string): BackendMomentDTO {
+  const row = confirmedRecord(value);
+  const id = confirmedId(row.emId);
+  const validMedia = row.emMediaType === 'text'
+    ? row.emMediaUrl === '' && typeof row.emCaption === 'string'
+      && row.emCaption.trim().length > 0 && row.emCaption.trim().length <= 280
+    : typeof row.emMediaUrl === 'string' && (row.emMediaType === 'audio'
+      ? /^https:\/\//i.test(row.emMediaUrl)
+      : (row.emMediaType === 'image' || row.emMediaType === 'video') && row.emMediaUrl.trim().length > 0);
+  if (!id || (momentId !== undefined && id !== confirmedId(momentId))
+    || (row.emEventId != null && confirmedId(row.emEventId) !== confirmedId(eventId))
+    || typeof row.emAuthorName !== 'string' || !validMedia
+    || (row.emCaption != null && typeof row.emCaption !== 'string')) throw unconfirmedMomentAction();
+  return value as BackendMomentDTO;
+}
+
+function confirmedMomentCommentDto(value: unknown, momentId: string): BackendMomentCommentDTO {
+  const row = confirmedRecord(value);
+  if (!confirmedId(row.emcId)
+    || (row.emcMomentId != null && confirmedId(row.emcMomentId) !== confirmedId(momentId))
+    || typeof row.emcBody !== 'string' || !row.emcBody.trim()
+    || (row.emcAuthorName != null && typeof row.emcAuthorName !== 'string')) throw unconfirmedMomentAction();
+  return value as BackendMomentCommentDTO;
 }
 
 function mapMomentDto(dto: BackendMomentDTO, fallbackEventId: ID, index = 0): EventMoment {
@@ -1302,6 +1407,7 @@ function mapMomentDto(dto: BackendMomentDTO, fallbackEventId: ID, index = 0): Ev
       durationMs: typeof dto.emMediaDurationMs === 'number' ? dto.emMediaDurationMs : null,
     },
     createdAt,
+    ...(persistedMomentVersion(dto.emUpdatedAt) ? { updatedAt: persistedMomentVersion(dto.emUpdatedAt) } : {}),
     reactions: mapMomentReactions(dto),
     comments,
   };

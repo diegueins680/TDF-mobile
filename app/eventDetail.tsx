@@ -27,9 +27,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
+import { getAuthSessionVersion } from '../src/api/client';
 import { Artists } from '../src/api/artists';
 import { Social } from '../src/api/social';
-import { uploadMedia } from '../src/api/upload';
 import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard';
 import { EventMomentCard } from '../src/components/EventMomentCard';
 import { TicketPurchaseCard } from '../src/components/tickets/TicketPurchaseCard';
@@ -91,6 +91,11 @@ type MomentSubmission = {
   caption: string;
   media: DraftMomentMedia[];
   optimisticIds: string[];
+  eventId: ID;
+  actor: ReturnType<typeof buildMomentActor>;
+  preferRemote: boolean;
+  queryKey: readonly unknown[];
+  stillOwns: () => boolean;
 };
 type MomentPublishSuccess = {
   index: number;
@@ -131,6 +136,11 @@ const parsePositivePartyId = (value: string | null | undefined): number | null =
 };
 
 export default function EventDetailScreen() {
+  const { eventId } = useLocalSearchParams<{ eventId?: string | string[] }>();
+  return <EventDetailContent key={normalizeRouteParam(eventId) ?? 'missing'} />;
+}
+
+function EventDetailContent() {
   const params = useLocalSearchParams<{
     eventId?: string | string[];
     utm_source?: string | string[];
@@ -167,6 +177,10 @@ export default function EventDetailScreen() {
   const shouldPreferRemoteMoments = Boolean(token?.trim());
   const shouldPreferRemoteBroadcasts = Boolean(token?.trim());
   const ownsParty = usePartyOwnership(normalizedPartyId);
+  const momentSessionVersion = getAuthSessionVersion();
+  const stillOwnsMoments = useCallback(() => getAuthSessionVersion() === momentSessionVersion
+    && (!shouldPreferRemoteMoments || ownsParty(normalizedPartyId)),
+  [momentSessionVersion, normalizedPartyId, ownsParty, shouldPreferRemoteMoments]);
   const publisherSessionRef = useRef<LiveBroadcastPublisherSession | null>(null);
   const activeLiveBroadcastRef = useRef<ActiveLiveBroadcastRecord | null>(null);
 
@@ -630,7 +644,11 @@ export default function EventDetailScreen() {
 
   const createMomentMutation = useMutation({
     mutationFn: async (submission: MomentSubmission): Promise<MomentPublishOutcome[]> => {
-      if (!eventId) throw new Error('Event not found');
+      const { eventId, actor, preferRemote } = submission;
+      const assertOwner = () => {
+        if (!submission.stillOwns()) throw new Error('Tu sesión cambió. Vuelve al evento con la cuenta activa antes de publicar.');
+      };
+      assertOwner();
       if (submission.media.length === 0) {
         throw new Error('Selecciona una imagen o video antes de publicar.');
       }
@@ -646,38 +664,29 @@ export default function EventDetailScreen() {
 
           try {
             let mediaForMoment = originalMedia;
-            let preferRemote = shouldPreferRemoteMoments;
             const notices: string[] = [];
 
-            if (token?.trim()) {
+            assertOwner();
+            if (preferRemote) {
               const preparedMedia = await prepareMomentMediaForUpload(originalMedia);
-              try {
-                const mediaUri = await uploadMedia({
-                  uri: preparedMedia.uri,
-                  mimeType: preparedMedia.mimeType,
-                  fileName: preparedMedia.fileName ?? undefined,
-                  uploadLabel: preparedMedia.kind === 'video' ? 'video' : 'imagen',
-                });
-                mediaForMoment = { ...preparedMedia, uri: mediaUri };
-              } catch (error) {
-                preferRemote = false;
-                notices.push(
-                  error instanceof Error
-                    ? `${error.message} Guardamos ese momento solo en este dispositivo.`
-                    : 'Guardamos ese momento solo en este dispositivo.',
-                );
-              }
+              assertOwner();
+              // An upload failure keeps the draft in the editor. It must never
+              // become a locally saved item presented as a remote publication.
+              const mediaUri = await Events.uploadMomentMedia(eventId, preparedMedia);
+              mediaForMoment = { ...preparedMedia, uri: mediaUri };
             }
 
+            assertOwner();
             const result = await createMomentFeedItem({
               eventId,
-              authorName: currentActor.displayName,
-              authorPartyId: currentActor.partyId,
+              authorName: actor.displayName,
+              authorPartyId: actor.partyId,
               caption: submission.caption,
               media: mediaForMoment,
-            }, { preferRemote, storageScope: currentActor.actorKey });
+            }, { preferRemote, storageScope: actor.actorKey });
+            assertOwner();
 
-            if (result.source === 'local' && shouldPreferRemoteMoments && result.fallbackReason) {
+            if (result.source === 'local' && preferRemote && result.fallbackReason) {
               notices.push(result.fallbackReason);
             }
 
@@ -707,6 +716,7 @@ export default function EventDetailScreen() {
       return outcomes;
     },
     onSuccess: (outcomes, submission) => {
+      if (!submission.stillOwns()) return;
       const fulfilled = outcomes.filter((outcome): outcome is MomentPublishSuccess => outcome.status === 'fulfilled');
       const rejected = outcomes.filter((outcome): outcome is MomentPublishFailure => outcome.status === 'rejected');
       const submittedIds = new Set(submission.optimisticIds);
@@ -714,14 +724,14 @@ export default function EventDetailScreen() {
       setPendingMoments((current) => current.filter((moment) => !submittedIds.has(moment.id)));
 
       if (fulfilled.length > 0) {
-        qc.setQueryData<EventMoment[]>(momentsQueryKey, (current = []) => {
+        qc.setQueryData<EventMoment[]>(submission.queryKey, (current = []) => {
           const publishedIds = new Set(fulfilled.map((outcome) => outcome.moment.id));
           return [
             ...fulfilled.map((outcome) => outcome.moment),
             ...current.filter((moment) => !publishedIds.has(moment.id)),
           ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
         });
-        qc.invalidateQueries({ queryKey: ['event-moments', eventId] });
+        qc.invalidateQueries({ queryKey: ['event-moments', submission.eventId] });
       }
 
       if (rejected.length > 0) {
@@ -734,11 +744,11 @@ export default function EventDetailScreen() {
       const notices = [...new Set(fulfilled.flatMap((outcome) => outcome.notices))];
       const rejectedMessages = [...new Set(rejected.map((outcome) => outcome.message))];
       const summary = [
-        fulfilled.length > 0
-          ? `${fulfilled.length} ${fulfilled.length === 1 ? 'momento publicado' : 'momentos publicados'}.`
+        fulfilled.length > localCount
+          ? `${fulfilled.length - localCount} ${fulfilled.length - localCount === 1 ? 'momento publicado' : 'momentos publicados'}.`
           : null,
         localCount > 0
-          ? `${localCount} ${localCount === 1 ? 'quedó guardado' : 'quedaron guardados'} solo en este dispositivo.`
+          ? `${localCount} ${localCount === 1 ? 'borrador guardado' : 'borradores guardados'} solo en este dispositivo; no ${localCount === 1 ? 'está publicado' : 'están publicados'} en TDF.`
           : null,
         rejected.length > 0
           ? `${rejected.length} ${rejected.length === 1 ? 'archivo volvió' : 'archivos volvieron'} al editor para reintentar.`
@@ -753,6 +763,7 @@ export default function EventDetailScreen() {
       });
     },
     onError: (error, submission) => {
+      if (!submission.stillOwns()) return;
       const submittedIds = new Set(submission.optimisticIds);
       setPendingMoments((current) => current.filter((moment) => !submittedIds.has(moment.id)));
       setMomentMedia(submission.media);
@@ -1138,6 +1149,7 @@ export default function EventDetailScreen() {
   }, []);
 
   const pickMomentMedia = useCallback(async (mode: 'camera' | 'photos' | 'video') => {
+    if (!stillOwnsMoments()) return;
     const remaining = MAX_MOMENT_MEDIA_SELECTION - momentMedia.length;
     if (remaining <= 0) {
       Alert.alert('Galería completa', `Puedes publicar hasta ${MAX_MOMENT_MEDIA_SELECTION} archivos a la vez.`);
@@ -1145,6 +1157,7 @@ export default function EventDetailScreen() {
     }
 
     const selected = await selectMomentMedia(mode, mode === 'photos' ? remaining : 1);
+    if (!stillOwnsMoments()) return;
     if (selected.length === 0) return;
 
     setMomentMedia((current) => {
@@ -1152,14 +1165,14 @@ export default function EventDetailScreen() {
       const additions = selected.filter((media) => !knownUris.has(media.uri));
       return [...current, ...additions].slice(0, MAX_MOMENT_MEDIA_SELECTION);
     });
-  }, [momentMedia.length, selectMomentMedia]);
+  }, [momentMedia.length, selectMomentMedia, stillOwnsMoments]);
 
   const removeMomentMedia = useCallback((uri: string) => {
     setMomentMedia((current) => current.filter((media) => media.uri !== uri));
   }, []);
 
   const handlePublishMoments = useCallback(() => {
-    if (!eventId || momentMedia.length === 0 || createMomentMutation.isPending) return;
+    if (!eventId || momentMedia.length === 0 || createMomentMutation.isPending || !stillOwnsMoments()) return;
 
     const optimisticIds = momentMedia.map(() => createOptimisticMomentId());
     const now = Date.now();
@@ -1178,6 +1191,11 @@ export default function EventDetailScreen() {
       caption: momentCaption,
       media: [...momentMedia],
       optimisticIds,
+      eventId,
+      actor: currentActor,
+      preferRemote: shouldPreferRemoteMoments,
+      queryKey: momentsQueryKey,
+      stillOwns: stillOwnsMoments,
     };
 
     setPendingMoments((current) => [...optimisticMoments, ...current]);
@@ -1185,7 +1203,7 @@ export default function EventDetailScreen() {
     setMomentMedia([]);
     setShowMomentComposer(false);
     createMomentMutation.mutate(submission);
-  }, [createMomentMutation, currentActor, eventId, momentCaption, momentMedia]);
+  }, [createMomentMutation, currentActor, eventId, momentCaption, momentMedia, momentsQueryKey, shouldPreferRemoteMoments, stillOwnsMoments]);
 
   const handleCommentChange = useCallback((momentId: string, value: string) => {
     setCommentDrafts((current) => ({ ...current, [momentId]: value }));

@@ -1,6 +1,6 @@
 jest.mock('../src/api/client', () => ({ get: jest.fn(), post: jest.fn(), put: jest.fn(), del: jest.fn() }));
 import { Events } from '../src/api/events';
-import { post } from '../src/api/client';
+import { get, post, put } from '../src/api/client';
 
 const publication = { emId: '77', emEventId: '42', emMediaUrl: 'https://example.test/photo.jpg', emMediaType: 'image', emAuthorName: 'Server actor' };
 const draft = { eventId: '42', authorName: 'Client actor', media: { kind: 'image' as const, uri: publication.emMediaUrl, mimeType: 'image/jpeg' } };
@@ -28,7 +28,8 @@ it('uploads event images through the existing event-scoped endpoint and videos t
 it.each([
   '<html>Fallback</html>', null, {}, [],
   { ...publication, emId: undefined }, { ...publication, emId: '' },
-  { ...publication, emId: {} }, { ...publication, emEventId: '141' },
+  { ...publication, emId: {} }, { ...publication, emId: 'moment-local-fake' },
+  { ...publication, emId: '0' }, { ...publication, emId: '-7' }, { ...publication, emEventId: '141' },
   { ...publication, emMediaUrl: '' }, { ...publication, emMediaType: 'unknown' },
   { ...publication, emAuthorName: undefined }, { ...publication, emCaption: {} },
 ])('does not invent a remote publication from an unconfirmed response %#', async (value) => {
@@ -61,4 +62,66 @@ it('accepts a persisted legacy comment without an optional parent ID', async () 
   await expect(Events.commentOnMoment({ eventId: '42', momentId: '77', authorName: 'Ana', body: 'My memory' }))
     .resolves.toMatchObject({ id: '8', body: 'My memory' });
   expect(post).toHaveBeenLastCalledWith('/social-events/events/42/moments/77/comments', expect.objectContaining({ emccBody: 'My memory' }));
+});
+
+
+it.each([
+  [{ inApp: false, supportsExtendedMoments: true }, true],
+  [{ inApp: true, supportsExtendedMoments: false }, false],
+  [{ inApp: 'true', supportsExtendedMoments: true }, false],
+  [{ supportsExtendedMoments: true }, false],
+  ['<html>Fallback</html>', false], [null, false], [[], false],
+])('reads explicit server capability without opting into invitations %#', async (response, expected) => {
+  jest.mocked(get).mockResolvedValue(response);
+  await expect(Events.supportsExtendedMoments()).resolves.toBe(expected);
+  expect(get).toHaveBeenCalledWith('/social-events/me/memory-invitations');
+  expect(post).not.toHaveBeenCalled();
+  expect(put).not.toHaveBeenCalled();
+});
+
+it('propagates a missing capability endpoint instead of enabling unsupported text', async () => {
+  jest.mocked(get).mockRejectedValueOnce(new Error('404'));
+  await expect(Events.supportsExtendedMoments()).rejects.toThrow('404');
+});
+
+it('publishes text with an empty media URL and accepts only the persisted response', async () => {
+  const response = { ...publication, emMediaType: 'text', emMediaUrl: '', emCaption: 'El último coro' };
+  jest.mocked(post).mockResolvedValue(response);
+  await expect(Events.createMoment({ ...draft, caption: response.emCaption,
+    media: { kind: 'text', uri: '', mimeType: 'text/plain' } })).resolves.toMatchObject({
+      id: '77', caption: response.emCaption, media: { kind: 'text', uri: '', mimeType: 'text/plain' },
+    });
+  expect(post).toHaveBeenLastCalledWith('/social-events/events/42/moments', expect.objectContaining({
+    emCreateMediaType: 'text', emCreateMediaUrl: '', emCreateCaption: response.emCaption,
+  }));
+});
+
+it.each([
+  { emCaption: '' }, { emCaption: '  ' }, { emCaption: 'x'.repeat(281) },
+  { emMediaUrl: 'https://example.test/fake' }, { emEventId: '141' }, { emId: null },
+])('rejects malformed or cross-event text acknowledgement %#', async (invalid) => {
+  jest.mocked(post).mockResolvedValue({ ...publication, emMediaType: 'text', emMediaUrl: '', emCaption: 'Recuerdo', ...invalid });
+  await expect(Events.createMoment({ ...draft, caption: 'Recuerdo', media: { kind: 'text', uri: '', mimeType: 'text/plain' } }))
+    .rejects.toThrow('No se pudo confirmar');
+});
+
+it('reads audio and text through the extended feed without converting them to photos', async () => {
+  jest.mocked(get).mockResolvedValueOnce([
+    { ...publication, emMediaType: 'text', emMediaUrl: '', emCaption: 'Recuerdo' },
+    { ...publication, emId: '78', emMediaType: 'audio', emMediaUrl: 'https://example.test/clip.m4a' },
+  ]);
+  await expect(Events.listMoments('42')).resolves.toMatchObject([
+    { id: '77', media: { kind: 'text', uri: '', mimeType: 'text/plain' } },
+    { id: '78', media: { kind: 'audio', mimeType: 'audio/mp4' } },
+  ]);
+  expect(get).toHaveBeenLastCalledWith('/social-events/events/42/moments?extended');
+});
+
+it.each([
+  '<html>fallback</html>', [{ ...publication, emId: null }],
+  [{ ...publication, emEventId: '141' }],
+  [{ ...publication, emMediaType: 'audio', emMediaUrl: 'javascript:alert(1)' }],
+])('does not display fabricated or unsafe feed entries %#', async (response) => {
+  jest.mocked(get).mockResolvedValueOnce(response);
+  await expect(Events.listMoments('42')).rejects.toThrow('No se pudo confirmar');
 });

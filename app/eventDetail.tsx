@@ -197,6 +197,14 @@ function EventDetailContent() {
   const [showMomentComposer, setShowMomentComposer] = useState(false);
   const [momentCaption, setMomentCaption] = useState('');
   const [momentMedia, setMomentMedia] = useState<DraftMomentMedia[]>([]);
+  const extendedMomentsQuery = useQuery({
+    queryKey: ['event-moment-capability', normalizedPartyId, momentSessionVersion],
+    queryFn: () => Events.supportsExtendedMoments(),
+    enabled: Boolean(token && normalizedPartyId),
+    retry: false,
+  });
+  const canPublishText = shouldPreferRemoteMoments && extendedMomentsQuery.data === true;
+  const hasMomentContent = momentMedia.length > 0 || (canPublishText && momentCaption.trim().length > 0);
   const [pendingMoments, setPendingMoments] = useState<EventMoment[]>([]);
   const [previewMedia, setPreviewMedia] = useState<EventMomentMedia | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -667,12 +675,13 @@ function EventDetailContent() {
             const notices: string[] = [];
 
             assertOwner();
-            if (preferRemote) {
+            if (preferRemote && originalMedia.kind !== 'text') {
               const preparedMedia = await prepareMomentMediaForUpload(originalMedia);
               assertOwner();
+              if (preparedMedia.kind === 'text') throw new Error('Archivo inválido para subir.');
               // An upload failure keeps the draft in the editor. It must never
               // become a locally saved item presented as a remote publication.
-              const mediaUri = await Events.uploadMomentMedia(eventId, preparedMedia);
+              const mediaUri = await Events.uploadMomentMedia(eventId, { ...preparedMedia, kind: preparedMedia.kind });
               mediaForMoment = { ...preparedMedia, uri: mediaUri };
             }
 
@@ -735,7 +744,7 @@ function EventDetailContent() {
       }
 
       if (rejected.length > 0) {
-        setMomentMedia(rejected.map((outcome) => submission.media[outcome.index]));
+        setMomentMedia(rejected.map((outcome) => submission.media[outcome.index]).filter((media) => media.kind !== 'text'));
         setMomentCaption(submission.caption);
         setShowMomentComposer(true);
       }
@@ -766,7 +775,7 @@ function EventDetailContent() {
       if (!submission.stillOwns()) return;
       const submittedIds = new Set(submission.optimisticIds);
       setPendingMoments((current) => current.filter((moment) => !submittedIds.has(moment.id)));
-      setMomentMedia(submission.media);
+      setMomentMedia(submission.media.filter((media) => media.kind !== 'text'));
       setMomentCaption(submission.caption);
       setShowMomentComposer(true);
       const message = error instanceof Error ? error.message : 'No pudimos publicar tu momento.';
@@ -1007,6 +1016,7 @@ function EventDetailContent() {
   }, []);
 
   const handleOpenMomentMedia = useCallback((media: EventMomentMedia) => {
+    if (media.kind === 'text') return;
     if (media.kind === 'image') {
       setPreviewFailed(false);
       setPreviewLoading(true);
@@ -1172,11 +1182,13 @@ function EventDetailContent() {
   }, []);
 
   const handlePublishMoments = useCallback(() => {
-    if (!eventId || momentMedia.length === 0 || createMomentMutation.isPending || !stillOwnsMoments()) return;
+    if (!eventId || !hasMomentContent || createMomentMutation.isPending || !stillOwnsMoments()) return;
+    const mediaToPublish: DraftMomentMedia[] = momentMedia.length > 0 ? [...momentMedia]
+      : [{ kind: 'text', uri: '', mimeType: 'text/plain' }];
 
-    const optimisticIds = momentMedia.map(() => createOptimisticMomentId());
+    const optimisticIds = mediaToPublish.map(() => createOptimisticMomentId());
     const now = Date.now();
-    const optimisticMoments = momentMedia.map<EventMoment>((media, index) => ({
+    const optimisticMoments = mediaToPublish.map<EventMoment>((media, index) => ({
       id: optimisticIds[index],
       eventId,
       authorName: currentActor.displayName,
@@ -1189,7 +1201,7 @@ function EventDetailContent() {
     })).reverse();
     const submission: MomentSubmission = {
       caption: momentCaption,
-      media: [...momentMedia],
+      media: mediaToPublish,
       optimisticIds,
       eventId,
       actor: currentActor,
@@ -1203,7 +1215,7 @@ function EventDetailContent() {
     setMomentMedia([]);
     setShowMomentComposer(false);
     createMomentMutation.mutate(submission);
-  }, [createMomentMutation, currentActor, eventId, momentCaption, momentMedia, momentsQueryKey, shouldPreferRemoteMoments, stillOwnsMoments]);
+  }, [createMomentMutation, currentActor, eventId, hasMomentContent, momentCaption, momentMedia, momentsQueryKey, shouldPreferRemoteMoments, stillOwnsMoments]);
 
   const handleCommentChange = useCallback((momentId: string, value: string) => {
     setCommentDrafts((current) => ({ ...current, [momentId]: value }));
@@ -1608,7 +1620,7 @@ function EventDetailContent() {
                     <View key={`highlight-${moment.id}`} style={styles.highlightCard}>
                       <Text style={styles.highlightAuthor}>{moment.authorName}</Text>
                       <Text style={styles.highlightCaption} numberOfLines={2}>
-                        {moment.caption ?? (moment.media.kind === 'video' ? 'Video destacado del evento' : 'Foto destacada del evento')}
+                        {moment.caption ?? (moment.media.kind === 'video' ? 'Video destacado del evento' : moment.media.kind === 'audio' ? 'Audio destacado del evento' : 'Foto destacada del evento')}
                       </Text>
                       <Text style={styles.highlightMeta}>
                         {countMomentReactions(moment)} reacciones · {moment.comments.length} comentarios
@@ -1916,8 +1928,9 @@ function EventDetailContent() {
           </View>
           <View style={styles.modalContent}>
             <Text style={styles.modalMessage}>
-              Elige hasta {MAX_MOMENT_MEDIA_SELECTION} fotos o agrega un video corto. Verás cada archivo en el feed de
-              inmediato mientras se optimiza y publica en segundo plano.
+              Elige hasta {MAX_MOMENT_MEDIA_SELECTION} fotos o agrega un video corto.
+              {canPublishText ? ' También puedes escribir un recuerdo sin adjuntar archivos.' : ''}
+              {' Tu momento estará publicado cuando TDF confirme que se guardó.'}
             </Text>
 
             <View style={styles.momentMediaActions}>
@@ -1987,12 +2000,12 @@ function EventDetailContent() {
               <TouchableOpacity
                 style={[
                   styles.primaryButton,
-                  (momentMedia.length === 0 || createMomentMutation.isPending) && styles.buttonDisabled,
+                  (!hasMomentContent || createMomentMutation.isPending) && styles.buttonDisabled,
                 ]}
                 onPress={handlePublishMoments}
-                disabled={momentMedia.length === 0 || createMomentMutation.isPending}
+                disabled={!hasMomentContent || createMomentMutation.isPending}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: momentMedia.length === 0 || createMomentMutation.isPending }}
+                accessibilityState={{ disabled: !hasMomentContent || createMomentMutation.isPending }}
               >
                 <Text style={styles.primaryButtonText}>
                   {createMomentMutation.isPending

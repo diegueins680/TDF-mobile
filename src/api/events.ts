@@ -387,9 +387,9 @@ const requireNonBlankText = (value: string | null | undefined, fieldName: string
   return normalized;
 };
 
-const normalizeMomentMediaKind = (value: string | null | undefined): 'image' | 'video' => {
+const normalizeMomentMediaKind = (value: string | null | undefined): EventMoment['media']['kind'] => {
   const normalized = value?.trim().toLowerCase();
-  return normalized === 'video' ? 'video' : 'image';
+  return normalized === 'video' || normalized === 'audio' || normalized === 'text' ? normalized : 'image';
 };
 
 const normalizeBackendVenueId = (value: ID | null | undefined): string | null => {
@@ -835,10 +835,17 @@ export const Events = {
   },
 
   // Event moments
-  uploadMomentMedia: async (eventId: ID, media: { uri: string; mimeType: string; fileName?: string | null; kind: 'image' | 'video' }): Promise<string> => {
+  supportsExtendedMoments: async (): Promise<boolean> => {
+    // Read capability only. This must never opt the account into invitations.
+    const value = await get<unknown>('/social-events/me/memory-invitations');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const row = value as Record<string, unknown>;
+    return typeof row.inApp === 'boolean' && row.supportsExtendedMoments === true;
+  },
+  uploadMomentMedia: async (eventId: ID, media: { uri: string; mimeType: string; fileName?: string | null; kind: 'image' | 'video' | 'audio' }): Promise<string> => {
     const form = new FormData();
     form.append('file', { uri: Platform.OS === 'ios' ? media.uri.replace('file://', '') : media.uri,
-      name: media.fileName || media.uri.split('/').pop() || (media.kind === 'image' ? 'memory.jpg' : 'memory.mp4'),
+      name: media.fileName || media.uri.split('/').pop() || (media.kind === 'image' ? 'memory.jpg' : media.kind === 'audio' ? 'memory.mp3' : 'memory.mp4'),
       type: media.mimeType } as unknown as Blob);
     // Images retain the existing endpoint for rolling backend compatibility.
     // Video uses the same event-owned durable store after the backend upgrade.
@@ -850,8 +857,9 @@ export const Events = {
   },
 
   listMoments: async (eventId: ID): Promise<EventMoment[]> => {
-    const list = await get<BackendMomentDTO[]>(`/social-events/events/${eventId}/moments`);
-    return list.map((dto, index) => mapMomentDto(dto, eventId, index));
+    const list = await get<unknown>(`/social-events/events/${eventId}/moments?extended`);
+    if (!Array.isArray(list)) throw unconfirmedMomentAction();
+    return list.map((dto) => mapMomentDto(confirmedMomentDto(dto, eventId), eventId));
   },
 
   createMoment: async (input: EventMomentCreateInput): Promise<EventMoment> => {
@@ -1278,7 +1286,14 @@ function mapMomentReactions(dto: BackendMomentDTO): EventMoment['reactions'] {
 }
 
 function inferMomentMimeType(kind: EventMoment['media']['kind'], mediaUrl: string): string {
+  if (kind === 'text') return 'text/plain';
   const normalizedUrl = mediaUrl.toLowerCase();
+  if (kind === 'audio') {
+    if (normalizedUrl.endsWith('.wav')) return 'audio/wav';
+    if (normalizedUrl.endsWith('.ogg')) return 'audio/ogg';
+    if (normalizedUrl.endsWith('.m4a')) return 'audio/mp4';
+    return 'audio/mpeg';
+  }
   if (kind === 'video') {
     if (normalizedUrl.endsWith('.mov')) return 'video/quicktime';
     if (normalizedUrl.endsWith('.webm')) return 'video/webm';
@@ -1301,16 +1316,22 @@ function confirmedRecord(value: unknown): Record<string, unknown> {
 }
 
 function confirmedId(value: unknown): string | null {
-  return typeof value === 'string' || typeof value === 'number' ? normalizeComparableId(value) : null;
+  const id = typeof value === 'string' || typeof value === 'number' ? normalizeComparableId(value) : null;
+  return id && /^[1-9][0-9]*$/.test(id) ? id : null;
 }
 
 function confirmedMomentDto(value: unknown, eventId: ID, momentId?: string): BackendMomentDTO {
   const row = confirmedRecord(value);
   const id = confirmedId(row.emId);
+  const validMedia = row.emMediaType === 'text'
+    ? row.emMediaUrl === '' && typeof row.emCaption === 'string'
+      && row.emCaption.trim().length > 0 && row.emCaption.trim().length <= 280
+    : typeof row.emMediaUrl === 'string' && (row.emMediaType === 'audio'
+      ? /^https:\/\//i.test(row.emMediaUrl)
+      : (row.emMediaType === 'image' || row.emMediaType === 'video') && row.emMediaUrl.trim().length > 0);
   if (!id || (momentId !== undefined && id !== confirmedId(momentId))
     || (row.emEventId != null && confirmedId(row.emEventId) !== confirmedId(eventId))
-    || typeof row.emAuthorName !== 'string' || typeof row.emMediaUrl !== 'string' || !row.emMediaUrl.trim()
-    || (row.emMediaType !== 'image' && row.emMediaType !== 'video')
+    || typeof row.emAuthorName !== 'string' || !validMedia
     || (row.emCaption != null && typeof row.emCaption !== 'string')) throw unconfirmedMomentAction();
   return value as BackendMomentDTO;
 }

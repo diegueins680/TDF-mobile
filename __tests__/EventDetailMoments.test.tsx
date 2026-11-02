@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 
 import EventDetailScreen from '../app/eventDetail';
 
+let mockExtendedMoments = false;
 const mockMutate = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockCapture = jest.fn();
@@ -96,6 +97,7 @@ jest.mock('../src/providers/UserSettingsProvider', () => ({
 jest.mock('../src/api/events', () => ({
   Events: {
     getById: jest.fn(),
+    supportsExtendedMoments: jest.fn(),
     createMoment: jest.fn(),
     uploadMomentMedia: jest.fn(),
     getPublicById: jest.fn(),
@@ -147,6 +149,7 @@ describe('EventDetail moments tab', () => {
   const imagePicker = jest.mocked(require('expo-image-picker'));
 
   beforeEach(() => {
+    mockExtendedMoments = false;
     jest.clearAllMocks();
     mockMutationOptions.length = 0;
 
@@ -192,6 +195,8 @@ describe('EventDetail moments tab', () => {
           isError: false,
         };
       }
+
+      if (queryKey[0] === 'event-moment-capability') return { data: mockExtendedMoments };
 
       if (queryKey[0] === 'event-rsvps') {
         return { data: { status: 'INTERESTED', showOnProfile: false }, isLoading: false };
@@ -273,6 +278,53 @@ describe('EventDetail moments tab', () => {
 
       return { data: null, isLoading: false };
     });
+  });
+
+  it('publishes a written memory without a picker or an upload when the server supports it', async () => {
+    mockExtendedMoments = true;
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByText('Compartir'));
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'El último coro');
+    fireEvent.press(screen.getByText('Publicar momento'));
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    const submission = mockMutate.mock.calls[0][0];
+    expect(submission.media).toEqual([{ kind: 'text', uri: '', mimeType: 'text/plain' }]);
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.createMoment.mockResolvedValueOnce({ id: '77', eventId: '42', caption: 'El último coro' });
+    const result = await mockMutationOptions[5].mutationFn!(submission);
+    expect(result).toEqual([expect.objectContaining({ status: 'fulfilled', source: 'remote' })]);
+    expect(api.uploadMomentMedia).not.toHaveBeenCalled();
+    expect(api.createMoment).toHaveBeenCalledWith(expect.objectContaining({ caption: 'El último coro' }));
+  });
+
+  it('keeps text publication disabled on older servers or for blank text', () => {
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByText('Compartir'));
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'Recuerdo');
+    fireEvent.press(screen.getByText('Publicar momento'));
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('restores failed text to the editor without adding a fake file or a local publication', async () => {
+    mockExtendedMoments = true;
+    const api = jest.mocked(require('../src/api/events').Events);
+    api.createMoment.mockRejectedValueOnce(new Error('Network unavailable'));
+    render(<EventDetailScreen />);
+    fireEvent.press(screen.getByText('Momentos (1)'));
+    fireEvent.press(screen.getByText('Compartir'));
+    fireEvent.changeText(screen.getByLabelText('Descripción del momento'), 'Conservar este recuerdo');
+    fireEvent.press(screen.getByText('Publicar momento'));
+    const submission = mockMutate.mock.calls[0][0];
+    const mutation = mockMutationOptions[5];
+    const result = await mutation.mutationFn!(submission);
+    act(() => mutation.onSuccess!(result, submission));
+    expect(screen.getByDisplayValue('Conservar este recuerdo')).toBeTruthy();
+    expect(screen.queryByText('1 archivo listo')).toBeNull();
+    expect(screen.queryByText(/momento publicado/)).toBeNull();
+    expect(api.uploadMomentMedia).not.toHaveBeenCalled();
+    expect(require('@react-native-async-storage/async-storage').setItem).not.toHaveBeenCalled();
   });
 
   it('shows the authoritative RSVP selection, separate counts, and submits the chosen state', async () => {

@@ -111,7 +111,7 @@ export function EventMomentCard({
         ) : null}
       </View>
 
-      <TouchableOpacity
+      {moment.media.kind !== 'text' ? <TouchableOpacity
         activeOpacity={onOpenMedia ? 0.85 : 1}
         disabled={!onOpenMedia}
         onPress={() => onOpenMedia?.(moment.media)}
@@ -119,7 +119,7 @@ export function EventMomentCard({
         accessibilityLabel={
           moment.media.kind === 'image'
             ? copy.viewPhoto(moment.authorName)
-            : copy.openVideo(moment.authorName)
+            : moment.media.kind === 'audio' ? copy.openAudio(moment.authorName) : copy.openVideo(moment.authorName)
         }
       >
         {moment.media.kind === 'image' ? (
@@ -161,13 +161,13 @@ export function EventMomentCard({
           </View>
         ) : (
           <View style={styles.videoBox}>
-            <MaterialCommunityIcons name="play-circle-outline" size={40} color="#f8fafc" />
-            <Text style={styles.videoTitle}>{copy.eventVideo}</Text>
-            <Text style={styles.videoMeta}>{formatDuration(moment.media.durationMs, copy.shortVideo)}</Text>
+            <MaterialCommunityIcons name={moment.media.kind === 'audio' ? 'music-note' : 'play-circle-outline'} size={40} color="#f8fafc" />
+            <Text style={styles.videoTitle}>{moment.media.kind === 'audio' ? copy.eventAudio : copy.eventVideo}</Text>
+            <Text style={styles.videoMeta}>{formatDuration(moment.media.durationMs, moment.media.kind === 'audio' ? copy.shortAudio : copy.shortVideo)}</Text>
             {onOpenMedia ? <Text style={styles.videoHint}>{copy.tapToOpen}</Text> : null}
           </View>
         )}
-      </TouchableOpacity>
+      </TouchableOpacity> : null}
 
       {moment.caption ? <Text style={styles.caption}>{moment.caption}</Text> : null}
 

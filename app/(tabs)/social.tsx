@@ -273,7 +273,9 @@ export default function SocialScreen() {
                 const followed = followedArtistIds.has(artist.apArtistId);
                 return (
                   <View key={String(artist.apArtistId)} style={[styles.discoveryRow, { borderColor: colors.borderSubtle }]}>
-                    <Text style={[styles.itemTitle, styles.discoveryName, { color: colors.textPrimary }]}>{artist.apDisplayName}</Text>
+                    <TouchableOpacity accessibilityRole="link" accessibilityLabel={`Ver videos de ${artist.apDisplayName}`} onPress={() => router.push({ pathname: '/artistPublic', params: { slugOrId: String(artist.apArtistId) } })} style={styles.discoveryName}>
+                      <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{artist.apDisplayName}</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }, followed && styles.buttonDisabled]}
                       onPress={() => effectivePartyId && artistFollowMutation.mutate({ artist, ownerPartyId: effectivePartyId, stillOwnsSession: captureSession() })}

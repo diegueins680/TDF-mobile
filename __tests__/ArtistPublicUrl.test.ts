@@ -8,6 +8,8 @@ describe('canonical public artist identity and playback route', () => {
     expect(safeInternalRoute('/artistPublic?slugOrId=520')).toBe('/artistPublic?slugOrId=520');
     expect(mobileDeepLinkTarget('https://www.tdfrecords.net/a/rojo?utm_source=instagram', '/')).toBe('/artistPublic?slugOrId=rojo&utm_source=instagram');
     expect(mobileDeepLinkTarget('tdf://artista/rojo?slugOrId=other', '/')).toBe('/artistPublic?slugOrId=rojo');
+    expect(artistPublicUrl('rojo', { video: 'youtube:uRNyIMLiqU8', utm_source: 'instagram', token: 'private-value', slugOrId: 'other' })).toBe('https://www.tdfrecords.net/a/rojo?video=youtube%3AuRNyIMLiqU8&utm_source=instagram');
+    expect(artistPublicUrl('rojo', { video: 'a'.repeat(201) })).toBeNull();
   });
   it.each(['../private', 'https://evil.test', '//evil.test', 'rojo?other=1', ''])('rejects a substituted profile %s', value => expect(artistPublicUrl(value)).toBeNull());
   it('keeps native top-level navigation on the TDF HTTPS origin', () => {

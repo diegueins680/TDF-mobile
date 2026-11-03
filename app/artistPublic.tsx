@@ -6,8 +6,8 @@ import { artistPublicUrl } from '../src/lib/artistPublicUrl';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 
 export default function ArtistPublicScreen() {
-  const { slugOrId } = useLocalSearchParams<{ slugOrId?: string | string[] }>();
-  const url = artistPublicUrl(slugOrId);
+  const params = useLocalSearchParams<{ slugOrId?: string | string[]; video?: string | string[] }>();
+  const url = artistPublicUrl(params.slugOrId, params);
   const router = useRouter();
   const { colors } = useAppTheme();
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>

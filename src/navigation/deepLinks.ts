@@ -81,7 +81,7 @@ const logicalPathForUrl = (parsed: URL): string | null => {
     return [parsed.hostname, ...parsed.pathname.split('/')].filter(Boolean).join('/');
   }
   if (scheme === 'https' && ['www.tdfrecords.net', 'tdfrecords.net', 'tdf-app.pages.dev'].includes(parsed.hostname)
-    && parsed.pathname.startsWith('/conversacion/')) return parsed.pathname.slice(1);
+    && (parsed.pathname.startsWith('/conversacion/') || /^\/(?:a|artista)\//.test(parsed.pathname))) return parsed.pathname.slice(1);
   if (DEVELOPMENT_SCHEMES.has(scheme)) {
     const segments = parsed.pathname.split('/').filter(Boolean);
     const routeMarker = segments.indexOf('--');
@@ -136,6 +136,10 @@ export function mobileDeepLinkTarget(url: string, currentPathname: string): stri
     const segments = logicalPath.split('/').filter(Boolean).map(decodeRouteSegment);
     if (segments.some((segment) => segment === null)) return null;
     const safeSegments = segments as string[];
+
+    if (['a', 'artista'].includes(safeSegments[0]) && safeSegments.length === 2 && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,119}$/.test(safeSegments[1])) {
+      return appendQuery(`/artistPublic?slugOrId=${encodeURIComponent(safeSegments[1])}`, parsed.searchParams, new Set(['slugOrId']));
+    }
 
     if (safeSegments[0] === 'conversacion' && safeSegments.length === 3 && ['comment', 'target'].includes(safeSegments[1])
       && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(safeSegments[2])) {

@@ -13,6 +13,47 @@ concurrency:
   group: interaction-simulator-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  lockfile-proposal:
+    # Dependency maintenance only: never substitutes for the unchanged deployment/build gate below.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --include=dev
+      - name: Resolve proposed lockfile with pinned CocoaPods and verify deployment mode
+        working-directory: ios
+        run: |
+          gem install cocoapods --version 1.16.2 --user-install --no-document
+          gem install json --version 2.18.0 --user-install --no-document
+          ruby -e 'gem "json", "2.18.0"; gem "cocoapods", "1.16.2"; load Gem.bin_path("cocoapods", "pod", "1.16.2")' -- install --no-repo-update
+          cp Podfile.lock "$RUNNER_TEMP/Podfile.lock"
+          ruby -e 'gem "json", "2.18.0"; gem "cocoapods", "1.16.2"; load Gem.bin_path("cocoapods", "pod", "1.16.2")' -- install --deployment
+          cmp Podfile.lock "$RUNNER_TEMP/Podfile.lock"
+      - name: Record immutable source and dependency inputs
+        run: |
+          git rev-parse HEAD > "$RUNNER_TEMP/native-lock-source.txt"
+          shasum -a 256 package.json package-lock.json ios/Podfile ios/Podfile.lock > "$RUNNER_TEMP/native-lock-inputs.sha256"
+          git diff -- ios/Podfile.lock > "$RUNNER_TEMP/Podfile.lock.patch"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: native-lockfile-proposal-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/Podfile.lock
+            ${{ runner.temp }}/Podfile.lock.patch
+            ${{ runner.temp }}/native-lock-source.txt
+            ${{ runner.temp }}/native-lock-inputs.sha256
+          if-no-files-found: error
+          retention-days: 3
   simulator:
     runs-on: macos-15
     timeout-minutes: 75

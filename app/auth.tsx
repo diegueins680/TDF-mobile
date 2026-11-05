@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 
 import { loginRequest, googleLoginRequest, signupRequest, requestPasswordReset } from '../src/api/auth';
-import { isCurrentAuthToken } from '../src/api/client';
+import { getAuthToken, isCurrentAuthToken } from '../src/api/client';
 import { API_BASE } from '../src/lib/api';
 import {
   GOOGLE_IOS_CLIENT_ID,
@@ -85,7 +85,7 @@ export default function AuthScreen() {
     intent?: string | string[];
     roles?: string | string[];
   }>();
-  const { token, loading, setToken, clearToken } = useAuth();
+  const { token, loading, setToken, clearTokenPersisted } = useAuth();
   const analytics = useAnalytics();
   const { locale, getCatalogItems, setRegionalPreferences } = useUserSettings();
   const language = onboardingLanguage(locale);
@@ -126,6 +126,15 @@ export default function AuthScreen() {
   const [googleSigninModule, setGoogleSigninModule] = useState<NativeGoogleSigninModule | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [isClearingSession, setIsClearingSession] = useState(false);
+  const [logoutPersistenceFailed, setLogoutPersistenceFailed] = useState(false);
+  const clearingSessionRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  useEffect(() => { if (token) setLogoutPersistenceFailed(false); }, [token]);
 
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [isForgotPasswordSubmitting, setIsForgotPasswordSubmitting] = useState(false);
@@ -165,7 +174,7 @@ export default function AuthScreen() {
     Boolean(googleSigninModule) &&
     Boolean(GOOGLE_WEB_CLIENT_ID) &&
     (Platform.OS !== 'ios' || Boolean(GOOGLE_IOS_URL_SCHEME));
-  const showLoginActions = !loading && !hasToken;
+  const showLoginActions = !loading && !hasToken && !isClearingSession;
   const showGoogleLogin = showLoginActions && isGoogleLoginAvailable;
 
   const chooseLanguage = (code: 'es' | 'en') => {
@@ -472,19 +481,28 @@ export default function AuthScreen() {
   };
 
   const handleClearSession = async () => {
+    if (clearingSessionRef.current) return;
+    clearingSessionRef.current = true;
+    setIsClearingSession(true);
     setErrorMessage(null);
-    setFeedbackMessage(copy.sessionClosed);
-
-    if (Platform.OS !== 'web' && googleSigninModule) {
-      try {
-        await googleSigninModule.GoogleSignin.signOut();
-      } catch {
-        // Ignore sign out failures so local session can still be cleared.
-      }
-    }
-
-    clearToken();
+    setFeedbackMessage(null);
+    const persistence = clearTokenPersisted();
     setPassword('');
+    if (Platform.OS !== 'web' && googleSigninModule) {
+      // Provider cleanup must not delay clearing the local account.
+      void Promise.resolve().then(() => googleSigninModule.GoogleSignin.signOut()).catch(() => undefined);
+    }
+    try {
+      const durable = await persistence;
+      if (!mountedRef.current || getAuthToken()) return;
+      setLogoutPersistenceFailed(!durable);
+      if (durable) setFeedbackMessage(copy.sessionClosed);
+    } catch {
+      if (mountedRef.current && !getAuthToken()) setLogoutPersistenceFailed(true);
+    } finally {
+      clearingSessionRef.current = false;
+      if (mountedRef.current) setIsClearingSession(false);
+    }
   };
 
   const handleForgotPassword = async () => {
@@ -950,16 +968,23 @@ export default function AuthScreen() {
                     {feedbackMessage}
                   </Text>
                 ) : null}
+                {logoutPersistenceFailed ? (
+                  <Text style={styles.errorText} accessibilityLiveRegion="polite">
+                    {copy.sessionStorageUnconfirmed}
+                  </Text>
+                ) : null}
                 <TouchableOpacity
-                  style={[styles.ghostButton, !hasToken && styles.buttonDisabled]}
+                  style={[styles.ghostButton, (isClearingSession || (!hasToken && !logoutPersistenceFailed)) && styles.buttonDisabled]}
                   onPress={() => {
                     void handleClearSession();
                   }}
-                  disabled={!hasToken}
+                  disabled={isClearingSession || (!hasToken && !logoutPersistenceFailed)}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: !hasToken }}
+                  accessibilityState={{ disabled: isClearingSession || (!hasToken && !logoutPersistenceFailed) }}
                 >
-                  <Text style={styles.ghostButtonText}>{copy.signOut}</Text>
+                  <Text style={styles.ghostButtonText}>
+                    {isClearingSession ? copy.signingOut : logoutPersistenceFailed ? copy.retrySignOut : copy.signOut}
+                  </Text>
                 </TouchableOpacity>
               </>
             )}

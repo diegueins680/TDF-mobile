@@ -21,3 +21,38 @@ Final session repair also binds reconciliation to the rendered AuthProvider cred
 After root #414 merged as fdac8e765, Mobile main gained reviewed tester-feedback #127 and generated compatibility #128/#130. This candidate normally merges protected main2b31ed1 and #130, preserving the tester UI and the `/app` registry entry while regenerating API types from current root main. Those API bytes exactly match approved cd3f664; the registry adds the reviewed future `/app` discovery entry from root #479 while retaining the technical payment return. Combined release checks and91Jest suites/590tests pass. Existing rootmain remains pinned at cd3f664 until the coupled successor is approved and merged.
 
 Mobile main subsequently integrated independently approved feedback-category repair #131 as `7a1fca3696dada4263c70716c70b763e492807cc`. This candidate retains it through a normal merge, including the native general-comment classification and submitted-category regressions. Root #479 has now merged as `5efd7ff31d55c1eb5b66b2f7710ea4ef87328727`, pinning #131 source `147ec8bc4ad4150eaab1ad410aa1803822075697`; all approved #414 payment ancestry remains. The older validation counts above describe their respective checkpoints. Current-head results are recorded in the PR and audit; Datadog authorization and release/device prerequisites remain unresolved.
+
+## Local sign-out persistence — 2026-10-26
+
+The AuthProvider from protected main `80d57fd` restored the previous account on
+remount when secure-token deletion failed. A regression using the actual provider
+and stateful storage adapters reproduces this; it does not simulate a real device
+or prove that this storage failure occurred in production.
+
+An identity-free `tdf-auth-logout-intent-v1` marker now blocks restoration from
+secure or legacy storage. An unreadable or malformed marker also blocks restore.
+Credential writes remain ordered across provider remounts. A successful new
+credential write and legacy cleanup must precede removing the marker; failed
+replacement never authorizes restoring the older credential.
+
+Existing `setToken` and `clearToken` actions retain their synchronous return
+contract and cache/session-epoch behavior. `clearTokenPersisted` separately reports
+whether the marker or credential erasure was acknowledged. Auth clears locally
+before waiting, Google cleanup cannot delay it, and Spanish/English UI provides
+an explicit retry instead of reporting success when persistence is unconfirmed.
+The marker contains no account identifier or credential.
+
+This is local sign-out, not server-token revocation. If both storage systems
+reject every write, the current process stays quarantined but a cold-process
+restart cannot be guaranteed safe; the UI requires retry before closing. Hung OS
+storage calls, physical-device behavior, signed builds and provider behavior
+remain separate validation prerequisites. No signing guard, API contract,
+dependency, root submodule pin or release approval is changed.
+
+Qualification: Node `.nvmrc` 20.19.4 and exact-lockfile `npm ci`; all 638 tests in
+97 suites and `release:check` pass. Metro `/status` passes offline with an explicit
+test-only loopback bind adapter and no device launch. The original source fails
+the retained-account regression; cache-isolation tests retain their original
+synchronous action contract. The unchanged macOS codesign/plist test fails on
+both this candidate and protected baseline; this is not an iOS release pass.
+See `docs/native-logout-qualification-2026-10-26.json` for scoped evidence.

@@ -4180,10 +4180,14 @@ export interface paths {
         put?: never;
         /**
          * Exchange Google Drive OAuth code
-         * @description Exchanges a Google OAuth code (PKCE) for Drive tokens.
+         * @description Stores delegated Google credentials encrypted on the server and returns an owner-bound opaque TDFConnection handle. Provider access and refresh tokens are never returned. Legacy browser tokens require new consent.
          */
         post: operations["exchangeDriveToken"];
-        delete?: never;
+        /**
+         * Disconnect personal Google Drive
+         * @description Erases this account's encrypted delegated credential. In-flight refreshes cannot restore it. Existing external files remain in the user's provider account. Provider-wide OAuth revocation is separately managed in Google permissions.
+         */
+        delete: operations["disconnectDrive"];
         options?: never;
         head?: never;
         patch?: never;
@@ -28003,6 +28007,31 @@ export interface operations {
             };
             /** @description Google OAuth error */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    disconnectDrive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personal connection erased */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,4 +1,5 @@
-import { render, waitFor, cleanup } from '@testing-library/react-native';
+import { render, waitFor, cleanup, fireEvent } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NotificationScreen from '../../app/notifications';
 const mockGet = jest.fn();
@@ -53,4 +54,22 @@ it('does not resolve legacy recipient identity or mark missing notifications as 
   await waitFor(() => expect(view.getByText('The specific destination is unavailable or its original reference was not retained.')).toBeTruthy()); expect(mockGet).not.toHaveBeenCalled();
   view.unmount(); client.clear(); mockNotification.mockRejectedValue(new Error('401')); mockRead.mockClear(); const denied = screen();
   await waitFor(() => expect(denied.getByText('The specific destination is unavailable or its original reference was not retained.')).toBeTruthy()); expect(mockRead).not.toHaveBeenCalled();
+});
+
+it('opens the exact agreement on the canonical web origin without accepting or deciding it', async () => {
+  const agreement = '123e4567-e89b-12d3-a456-426614174000';
+  const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+  try {
+    mockNotification.mockResolvedValue({ ...row, nType: 'event.agreement.updated', nTargetType: 'event_agreement', nTargetId: 17, nTargetKey: agreement, nBody: 'https://untrusted.invalid' });
+    const view = screen();
+    await waitFor(() => expect(view.getByText('Open on TDF web')).toBeTruthy());
+    fireEvent.press(view.getByText('Open on TDF web'));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(`https://www.tdfrecords.net/social/eventos/17/acuerdos?agreement=${agreement}`);
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockDecide).not.toHaveBeenCalled();
+    expect(mockCancel).not.toHaveBeenCalled();
+  } finally {
+    open.mockRestore();
+  }
 });

@@ -9,6 +9,7 @@ import subprocess
 import sys
 import shutil
 import tempfile
+from xml.parsers.expat import ExpatError
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('signing', Path(__file__).parents[1] / 'ios-signing.py')
@@ -20,6 +21,16 @@ artifact = importlib.util.module_from_spec(artifact_spec)
 artifact_spec.loader.exec_module(artifact)
 
 class SigningContract(unittest.TestCase):
+    def test_codesign_accepts_one_xml_terminator_but_rejects_trailing_payload(self):
+        expected = {'application-identifier': '83J23NPXG7.com.tdfrecords.app'}
+        xml = plistlib.dumps(expected)
+        with patch.object(artifact.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, stdout=xml + b'\x00')):
+            self.assertEqual(artifact.read_signed_entitlements('/synthetic/Test.app'), expected)
+        for suffix in (b'\x00extra', b'\x00\x00'):
+            with self.subTest(suffix=suffix), patch.object(artifact.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, stdout=xml + suffix)):
+                with self.assertRaises(ExpatError):
+                    artifact.read_signed_entitlements('/synthetic/Test.app')
+
     def test_codesign_requests_machine_readable_entitlements(self):
         expected = {'application-identifier': '83J23NPXG7.com.tdfrecords.app'}
         def codesign(command, **kwargs):

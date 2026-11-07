@@ -9,6 +9,7 @@ import subprocess
 import sys
 import shutil
 import tempfile
+from xml.parsers.expat import ExpatError
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('signing', Path(__file__).parents[1] / 'ios-signing.py')
@@ -27,6 +28,28 @@ class SigningContract(unittest.TestCase):
             self.assertTrue(kwargs['check'])
             return subprocess.CompletedProcess(command, 0, stdout=output)
         with patch.object(artifact.subprocess, 'run', side_effect=codesign):
+            self.assertEqual(artifact.read_signed_entitlements('/synthetic/Test.app'), expected)
+
+    def test_xml_codesign_accepts_exactly_one_terminal_nul_frame(self):
+        expected = {'com.apple.security.get-task-allow': True}
+        result = subprocess.CompletedProcess(['codesign'], 0, stdout=plistlib.dumps(expected) + b'\x00')
+        with patch.object(artifact.subprocess, 'run', return_value=result):
+            self.assertEqual(artifact.read_signed_entitlements('/synthetic/Test.app'), expected)
+
+    def test_xml_codesign_rejects_malformed_interior_nul_and_extra_frames(self):
+        xml = plistlib.dumps({'com.apple.security.get-task-allow': True})
+        for output in (xml + b'\x00\x00', xml.replace(b'<dict>', b'<dict>\x00'),
+                       xml + b'garbage', xml + b'\x00garbage', b'<?xml version="1.0"?><plist><dict>'):
+            with self.subTest(output=output):
+                result = subprocess.CompletedProcess(['codesign'], 0, stdout=output)
+                with patch.object(artifact.subprocess, 'run', return_value=result), self.assertRaises(ExpatError):
+                    artifact.read_signed_entitlements('/synthetic/Test.app')
+
+    def test_binary_codesign_plist_handling_is_unchanged(self):
+        expected = {'com.apple.security.get-task-allow': True}
+        result = subprocess.CompletedProcess(['codesign'], 0,
+            stdout=plistlib.dumps(expected, fmt=plistlib.FMT_BINARY))
+        with patch.object(artifact.subprocess, 'run', return_value=result):
             self.assertEqual(artifact.read_signed_entitlements('/synthetic/Test.app'), expected)
 
     @unittest.skipUnless(sys.platform == 'darwin', 'codesign requires macOS')

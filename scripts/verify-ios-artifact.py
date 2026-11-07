@@ -15,7 +15,12 @@ def read_signed_entitlements(app):
     # Current codesign defaults to a human-readable summary, not a plist.
     result = subprocess.run(['codesign', '-d', '--entitlements', '-', '--xml', str(app)],
                             capture_output=True, check=True)
-    return plistlib.loads(result.stdout)
+    output = result.stdout
+    # Older codesign emits XML with one C-string terminator; do not sanitize
+    # malformed XML, interior NULs, extra frames, or binary plist bytes.
+    if output.startswith(b'<?xml') and output.endswith(b'\x00'):
+        output = output[:-1]
+    return plistlib.loads(output)
 
 
 def validate_interaction_release(entitlements, configs, updates):

@@ -24,3 +24,11 @@ describe('notification entry point identities', () => {
     expect(notificationTargetPath({ ...row, nTargetType: 'artist' })).toBeNull();
   });
 });
+
+it('routes a chat notice to the exact web conversation without trusting arbitrary URLs', () => {
+  const row = { nId: 1, nType: 'chat.message', nTitle: 'Nuevo mensaje', nBody: '', nIsRead: false, nCreatedAt: '', nTargetType: 'chat_thread', nTargetKey: '42' };
+  expect(notificationTargetPath(row)).toBe('/chat?threadId=42');
+  for (const nTargetKey of ['0', '-1', '1.2', '9007199254740992', 'https://evil.example', '42?partyId=5']) {
+    expect(notificationTargetPath({ ...row, nTargetKey })).toBeNull();
+  }
+});

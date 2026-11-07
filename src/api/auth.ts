@@ -8,27 +8,7 @@ type GoogleLoginRequestDTO = components['schemas']['GoogleLoginRequest'];
 type SignupRequestDTO = components['schemas']['SignupRequest'];
 export type LoginResponseDTO = components['schemas']['LoginResponse'];
 
-/**
- * Hand-written against the `POST /login/apple` contract added by the parent repository
- * (tdf-app "Sign in with Apple" backend change). Replace with the generated schema once the
- * OpenAPI document that ships it is pinned here via `npm run generate:api`.
- */
-export type AppleLoginRequestDTO = {
-  /** `credential.identityToken` returned by expo-apple-authentication. */
-  identityToken: string;
-  /** The raw nonce whose SHA-256 hex digest was passed to Apple as `nonce`. */
-  nonce?: string;
-  /** Only present on the first authorization; Apple omits the name afterwards. */
-  fullName?: { givenName?: string; familyName?: string };
-  /** Must be explicitly true, with current terms acceptance, to create an account for an unbound Apple subject. */
-  createNewAccount?: boolean;
-  /** Explicitly connect the verified Apple identity using the existing TDF account credentials. */
-  linkAccount?: LoginRequestDTO;
-  marketingOptIn?: boolean;
-  termsAccepted?: boolean;
-  termsVersion?: string;
-  onboardingIntent?: components['schemas']['OnboardingIntent'];
-};
+export type AppleLoginRequestDTO = components['schemas']['AppleLoginRequest'];
 
 const readErrorMessage = (error: unknown, fallback: string) => {
   if (axios.isAxiosError(error)) {

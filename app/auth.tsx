@@ -30,7 +30,7 @@ import {
   GOOGLE_WEB_CLIENT_ID
 } from '../src/lib/authConfig';
 import { loadNativeGoogleSignin, type NativeGoogleSigninModule } from '../src/lib/nativeGoogleSignin';
-import { loadNativeAppleAuthentication, type NativeAppleAuthenticationModule } from '../src/lib/nativeAppleAuthentication';
+import { isAppleSignInEnabled, loadNativeAppleAuthentication, type NativeAppleAuthenticationModule } from '../src/lib/nativeAppleAuthentication';
 import {
   createAppleSignInNonce,
   isAppleSignInCancellation,
@@ -186,7 +186,7 @@ export default function AuthScreen() {
     (Platform.OS !== 'ios' || Boolean(GOOGLE_IOS_URL_SCHEME));
   const showLoginActions = !loading && !hasToken;
   const showGoogleLogin = showLoginActions && isGoogleLoginAvailable;
-  const showAppleLogin = showLoginActions && Platform.OS === 'ios' && appleAuthModule !== null;
+  const showAppleLogin = showLoginActions && isAppleSignInEnabled() && Platform.OS === 'ios' && appleAuthModule !== null;
   const showSocialLogin = (showGoogleLogin || showAppleLogin) && (mode !== 'signup' || termsAccepted);
 
   const chooseLanguage = (code: 'es' | 'en') => {
@@ -257,7 +257,7 @@ export default function AuthScreen() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== 'ios') return;
+    if (!isAppleSignInEnabled() || Platform.OS !== 'ios') return;
 
     let active = true;
 
@@ -526,7 +526,7 @@ export default function AuthScreen() {
     setErrorMessage(null);
     setFeedbackMessage(null);
 
-    if (!showAppleLogin || !appleAuthModule) {
+    if (!isAppleSignInEnabled() || !showAppleLogin || !appleAuthModule) {
       setErrorMessage(copy.appleUnavailable);
       return;
     }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking, Platform, Text, TouchableOpacity } from 'react-native';
 
@@ -116,6 +116,7 @@ jest.mock('../src/lib/nativeGoogleSignin', () => ({
 }));
 
 jest.mock('../src/lib/nativeAppleAuthentication', () => ({
+  ...jest.requireActual('../src/lib/nativeAppleAuthentication'),
   loadNativeAppleAuthentication: () => mockLoadNativeAppleAuthentication(),
 }));
 
@@ -162,9 +163,16 @@ jest.mock('expo-router', () => ({
 }));
 
 const AuthScreen = require('../app/auth').default;
+const originalAppleRollout = process.env.EXPO_PUBLIC_APPLE_SIGN_IN_ENABLED;
+afterAll(() => {
+  if (originalAppleRollout === undefined) delete process.env.EXPO_PUBLIC_APPLE_SIGN_IN_ENABLED;
+  else process.env.EXPO_PUBLIC_APPLE_SIGN_IN_ENABLED = originalAppleRollout;
+});
 
 describe('Auth screen', () => {
   beforeEach(() => {
+    // Original provider assertions exercise the explicitly enabled workflow.
+    process.env.EXPO_PUBLIC_APPLE_SIGN_IN_ENABLED = 'true';
   mockLocale = 'es';
     jest.clearAllMocks();
     mockStoredValues = new Map();
@@ -788,6 +796,18 @@ describe('Auth screen', () => {
         setToken: mockSetToken,
         clearToken: mockClearToken,
       });
+    });
+
+    it.each([undefined, 'false', 'TRUE', '1'])('does not load or offer Apple when rollout is %s', async (value) => {
+      if (value === undefined) delete process.env.EXPO_PUBLIC_APPLE_SIGN_IN_ENABLED;
+      else process.env.EXPO_PUBLIC_APPLE_SIGN_IN_ENABLED = value;
+      render(<AuthScreen />);
+      await act(async () => {});
+      expect(mockLoadNativeAppleAuthentication).not.toHaveBeenCalled();
+      expect(mockAppleIsAvailable).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('appleSignInButton')).toBeNull();
+      expect(mockAppleSignIn).not.toHaveBeenCalled();
+      expect(mockAppleLoginRequest).not.toHaveBeenCalled();
     });
 
     const appleCredential = {

@@ -16,10 +16,13 @@ export type NativeAppleAuthenticationModule = Pick<
   | 'AppleAuthenticationScope'
 >;
 
+// Public build-time rollout switch; only the literal enabled value admits this optional flow.
+export const isAppleSignInEnabled = (): boolean => process.env.EXPO_PUBLIC_APPLE_SIGN_IN_ENABLED === 'true';
+
 let cachedModule: NativeAppleAuthenticationModule | null | undefined;
 
 export async function loadNativeAppleAuthentication(): Promise<NativeAppleAuthenticationModule | null> {
-  if (Platform.OS !== 'ios') return null;
+  if (!isAppleSignInEnabled() || Platform.OS !== 'ios') return null;
   if (cachedModule !== undefined) return cachedModule;
 
   try {

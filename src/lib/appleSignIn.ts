@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import type { components } from '../api/generated/types';
 
 export type AppleSignInNonce = {
   /** Random value sent to the TDF backend so it can verify the token was minted for this request. */
@@ -7,10 +8,7 @@ export type AppleSignInNonce = {
   hashedNonce: string;
 };
 
-export type AppleSignInFullName = {
-  givenName?: string;
-  familyName?: string;
-};
+export type AppleSignInFullName = NonNullable<components['schemas']['AppleLoginRequest']['fullName']>;
 
 const APPLE_NONCE_BYTE_LENGTH = 32;
 

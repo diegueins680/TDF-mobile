@@ -1,9 +1,9 @@
 {
   "name": "decode-uri-component",
-  "version": "0.5.0-tdf.1",
+  "version": "0.5.1-tdf.1",
   "private": true,
   "main": "index.cjs",
   "dependencies": {
-    "decode-uri-component-upstream": "npm:decode-uri-component@0.5.0"
+    "decode-uri-component-upstream": "npm:decode-uri-component@0.5.1"
   }
 }

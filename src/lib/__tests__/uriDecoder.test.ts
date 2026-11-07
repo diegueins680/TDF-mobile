@@ -93,3 +93,72 @@ describe('SYS-URI-DECODE-001 compatible patched URI decoding', () => {
     });
   });
 });
+
+const previousUpstream = (jest.requireActual(
+  '../../../scripts/fixtures/decode-uri-component-0.5.0/index.js',
+) as { default: Decoder }).default;
+
+function distinctRunInput(count: number) {
+  let input = '';
+  let expected = '';
+  for (let index = 0; index < count; index++) {
+    const high = Math.floor(index / 256);
+    const low = index % 256;
+    input += `%${high.toString(16).padStart(2, '0')}%${low.toString(16).padStart(2, '0')}x`;
+    expected += `${String.fromCharCode(high, low)}x`;
+  }
+  return { input: `${input}%zz`, expected: `${expected}%zz` };
+}
+
+function observeReplacementWork(decoder: Decoder, input: string) {
+  const descriptor = Object.getOwnPropertyDescriptor(String.prototype, 'replace');
+  if (!descriptor) throw new Error('Native String.replace descriptor unavailable');
+  const nativeReplace = String.prototype.replace;
+  let receiverCodeUnits = 0;
+  Object.defineProperty(String.prototype, 'replace', {
+    ...descriptor,
+    value: function (this: string, ...args: unknown[]) {
+      receiverCodeUnits += String(this).length;
+      return Reflect.apply(nativeReplace, this, args) as string;
+    },
+  });
+  try {
+    return { result: decoder(input), receiverCodeUnits: () => receiverCodeUnits };
+  } finally {
+    Object.defineProperty(String.prototype, 'replace', descriptor);
+  }
+}
+
+function checkDistinctRunBudget(decoder: Decoder, count: number) {
+  const { input, expected } = distinctRunInput(count);
+  const observed = observeReplacementWork(decoder, input);
+  if (observed.result !== expected) throw new Error('Distinct-run decoding changed');
+  if (observed.receiverCodeUnits() === 0 || observed.receiverCodeUnits() > 4 * input.length) {
+    throw new Error('Distinct-run replacement budget exceeded');
+  }
+}
+
+describe('GHSA-qr28-fpjm-wq7f finite replacement-work regression', () => {
+  test.each([32, 64])('bounds replacement receiver work for %i distinct runs', count => {
+    checkDistinctRunBudget(decode, count);
+  });
+
+  test('negative control: unchanged upstream 0.5.0 violates the same replacement-work budget', () => {
+    expect(() => checkDistinctRunBudget(previousUpstream, 32)).toThrow('Distinct-run replacement budget exceeded');
+  });
+
+  test.each([
+    ['%25C2%zz', '%C2%zz'],
+    ['%25%41%zz', '%A%zz'],
+    ['%25%34%31x%41%zz', '%41xA%zz'],
+  ])('decodes one level without rescanning produced percent text: %j', (input, expected) => {
+    expect(decode(input)).toBe(expected);
+  });
+
+  test.each([
+    ['%FE%FF%zz', '\uFFFD\uFFFD%zz'],
+    ['%C2%zz', '\uFFFD%zz'],
+  ])('retains BOM and truncated-byte fallback semantics: %j', (input, expected) => {
+    expect(decode(input)).toBe(expected);
+  });
+});

@@ -56,6 +56,7 @@
     "decode-uri-component": "file:./vendor/decode-uri-component",
     "decode-uri-component-upstream": "npm:decode-uri-component@0.5.1",
     "expo": "~54.0.37",
+    "expo-apple-authentication": "~8.0.8",
     "expo-application": "~7.0.8",
     "expo-camera": "~17.0.10",
     "expo-clipboard": "~8.0.8",

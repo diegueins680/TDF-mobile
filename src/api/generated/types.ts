@@ -17148,9 +17148,10 @@ export interface components {
             durationMs: number | null;
             sources: components["schemas"]["MusicTrackSearchSource"][];
         };
+        /** @enum {string} */
+        MusicMediaSourceKind: "asset" | "legacy";
         MusicMediaHealth: {
-            /** @enum {string} */
-            sourceKind: "asset" | "legacy";
+            sourceKind: components["schemas"]["MusicMediaSourceKind"];
             sourceId: string;
             sourceVersion: string;
             /** Format: int64 */
@@ -39437,14 +39438,20 @@ export interface operations {
     };
     listOwnMusicMediaHealth: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                /** @description Last returned source kind; must be paired with afterId */
+                afterKind?: components["schemas"]["MusicMediaSourceKind"];
+                /** @description Last returned source ID; must be paired with afterKind */
+                afterId?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description At most 500 current owner/team sources; administrators may inspect all sources */
+            /** @description One bounded page of current owner/team sources; administrators may traverse all sources. Stable source-kind/ID ordering; pass the last returned identity as cursor when the page fills the requested limit. Every page rechecks current permission. A page sequence is not a database snapshot. */
             200: {
                 headers: {
                     "Cache-Control"?: string;
@@ -39453,6 +39460,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MusicMediaHealth"][];
                 };
+            };
+            /** @description Invalid limit, incomplete cursor or unsupported source kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Authentication required */
             401: {
@@ -39468,7 +39482,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                sourceKind: "asset" | "legacy";
+                sourceKind: components["schemas"]["MusicMediaSourceKind"];
                 sourceId: string;
             };
             cookie?: never;

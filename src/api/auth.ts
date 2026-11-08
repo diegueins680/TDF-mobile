@@ -8,6 +8,8 @@ type GoogleLoginRequestDTO = components['schemas']['GoogleLoginRequest'];
 type SignupRequestDTO = components['schemas']['SignupRequest'];
 export type LoginResponseDTO = components['schemas']['LoginResponse'];
 
+export type AppleLoginRequestDTO = components['schemas']['AppleLoginRequest'];
+
 const readErrorMessage = (error: unknown, fallback: string) => {
   if (axios.isAxiosError(error)) {
     const responseData = error.response?.data;
@@ -49,6 +51,15 @@ export async function googleLoginRequest(payload: GoogleLoginRequestDTO): Promis
     return response.data;
   } catch (error) {
     throw new Error(readErrorMessage(error, 'No pudimos iniciar sesión con Google.'));
+  }
+}
+
+export async function appleLoginRequest(payload: AppleLoginRequestDTO): Promise<LoginResponseDTO> {
+  try {
+    const response = await http.post<LoginResponseDTO>('/login/apple', payload);
+    return response.data;
+  } catch (error) {
+    throw new Error(readErrorMessage(error, 'No pudimos iniciar sesión con Apple.'));
   }
 }
 

@@ -32,3 +32,25 @@ it('routes a chat notice to the exact web conversation without trusting arbitrar
     expect(notificationTargetPath({ ...row, nTargetKey })).toBeNull();
   }
 });
+
+describe('event agreement notification destinations', () => {
+  const row = { nId: 3, nType: 'event.agreement.updated', nTitle: 'Synthetic agreement', nBody: 'https://untrusted.invalid', nIsRead: false, nCreatedAt: '', nTargetType: 'event_agreement', nTargetId: 17 };
+  const agreement = '123e4567-e89b-12d3-a456-426614174000';
+
+  it('retains the typed event and exact agreement identity on the canonical web path', () => {
+    expect(notificationTargetPath({ ...row, nTargetKey: agreement })).toBe(`/social/eventos/17/acuerdos?agreement=${agreement}`);
+    expect(notificationTargetPath(row)).toBe('/social/eventos/17/acuerdos');
+  });
+
+  it('never forms a destination from an unsafe event identity', () => {
+    for (const nTargetId of [0, -1, 1.2, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, null]) {
+      expect(notificationTargetPath({ ...row, nTargetId, nTargetKey: agreement })).toBeNull();
+    }
+  });
+
+  it('falls back to the event overview without reflecting malformed agreement keys or text', () => {
+    for (const nTargetKey of ['', 'https://untrusted.invalid', `${agreement}?partyId=9`, '../other', '17']) {
+      expect(notificationTargetPath({ ...row, nTargetKey })).toBe('/social/eventos/17/acuerdos');
+    }
+  });
+});

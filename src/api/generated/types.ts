@@ -112,6 +112,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/music/artists/{artistPartyId}/featured-track": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the artist's currently public featured track reference
+         * @description Requires music_releases.public. Rechecks artist membership, published context and current public asset authorization for canonical recordings. Unavailable references are omitted. No signed URL or media grant is returned.
+         */
+        get: operations["getArtistFeaturedTrack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/music/me/featured-track": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the authenticated artist's saved preference, including unavailable references */
+        get: operations["getOwnArtistFeaturedTrack"];
+        /**
+         * Select or clear the authenticated artist's featured track
+         * @description artistPartyId must match the authenticated Party even for an administrator. Only a currently public recording or legacy release belonging to that artist can be selected. Null or omitted source fields clear the preference. Saving does not publish a recording, grant media access or interrupt playback. Concurrent writes use the last successful server write.
+         */
+        put: operations["setOwnArtistFeaturedTrack"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/artists/video-campaigns": {
         parameters: {
             query?: never;
@@ -1847,6 +1888,63 @@ export interface paths {
          * @description Requires current password proof and an explicit username or active bearer token identifying the credential. Atomically revokes the Party's interactive sessions and issues a replacement. Service tokens retain their separate policy.
          */
         post: operations["changePasswordV1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/event-watch/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange operator-provisioned credentials for a short-lived service token
+         * @description Purpose-specific JSON exchange, not an OAuth token endpoint. No interactive cookies or administrative role grants. Secrets and returned bearer values must never be logged.
+         */
+        post: operations["exchangeEventWatchCredentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/event-watch/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List at most 500 candidates owned by this service client */
+        get: operations["listEventWatchCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/event-watch/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Atomically save and optionally materialize a source-backed event candidate
+         * @description Client owns its provider/run namespace. Server overrides candidate provider, run ID and source ID. Publication requires a separate operator grant and existing publication checks. Materialization failure rolls back all writes. Existing event targets require both the current curator and current service namespace; shared audit identity grants no cross-client authority. Replays preserve manual event edits. A changed curator must use a new run key. No pilot approval or general administration is exposed.
+         */
+        put: operations["importEventWatchCandidate"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7587,6 +7685,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/domo/quotes/{quoteId}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the bound cancellation refund
+         * @description Strict administrators with current authenticated session and admin module access. Refund requester cannot approve or execute their own request. Outstanding obligations close only after exact verified completion; retries never issue another refund POST. Manual receipt confirmation requires a reviewer distinct from its recorder and the requester.
+         */
+        get: operations["getDomoRefund"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/domo/quotes/{quoteId}/refund/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve independently without contacting the provider
+         * @description Strict administrators with current authenticated session and admin module access. Refund requester cannot approve or execute their own request. Outstanding obligations close only after exact verified completion; retries never issue another refund POST. Manual receipt confirmation requires a reviewer distinct from its recorder and the requester.
+         */
+        post: operations["approveDomoRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/domo/quotes/{quoteId}/refund/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim one execution permit; automatic PayPal POST or manual handoff
+         * @description Strict administrators with current authenticated session and admin module access. Refund requester cannot approve or execute their own request. Outstanding obligations close only after exact verified completion; retries never issue another refund POST. Manual receipt confirmation requires a reviewer distinct from its recorder and the requester.
+         */
+        post: operations["executeDomoRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/domo/quotes/{quoteId}/refund/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Query a known PayPal refund; exact completion alone settles the obligation
+         * @description Strict administrators with current authenticated session and admin module access. Refund requester cannot approve or execute their own request. Outstanding obligations close only after exact verified completion; retries never issue another refund POST. Manual receipt confirmation requires a reviewer distinct from its recorder and the requester.
+         */
+        post: operations["reconcileDomoRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/domo/quotes/{quoteId}/refund/manual-evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record immutable evidence of a manual refund without completing it
+         * @description Strict administrators with current authenticated session and admin module access. Refund requester cannot approve or execute their own request. Outstanding obligations close only after exact verified completion; retries never issue another refund POST. Manual receipt confirmation requires a reviewer distinct from its recorder and the requester.
+         */
+        post: operations["recordDomoManualRefundEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/domo/quotes/{quoteId}/refund/confirm-manual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Independently verify the recorded receipt and post the canonical refund
+         * @description Strict administrators with current authenticated session and admin module access. Refund requester cannot approve or execute their own request. Outstanding obligations close only after exact verified completion; retries never issue another refund POST. Manual receipt confirmation requires a reviewer distinct from its recorder and the requester.
+         */
+        post: operations["confirmDomoManualRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/domo/quotes/{quoteId}/refund/provider-reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record an operator-discovered PayPal refund ID for exact authenticated readback
+         * @description Current strict administrator distinct from the requester. A query candidate is not evidence of returned money. The original processing fence and existing provider identity are retained; this route never issues a refund POST.
+         */
+        post: operations["bindDomoRefundProviderReference"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fans/me/notifications": {
         parameters: {
             query?: never;
@@ -9329,6 +9567,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/social-events/events/{eventId}/workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getEventWorkspace"];
+        put?: never;
+        post: operations["mutateEventWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/workspace/plan.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadEventPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/workspace/agreements/{agreementId}/{version}/document.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadEventAgreement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/workspace/agreements/{agreementId}/acceptance.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadEventAgreementAcceptance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/music/legacy/{sourceId}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPublicLegacyMediaAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/music/media-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listOwnMusicMediaHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/music/media-health/{sourceKind}/{sourceId}/revalidate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revalidateOwnMusicMedia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -9408,6 +9758,26 @@ export interface components {
             defaultDestination: "tdf" | "google_drive" | null;
             /** Format: int64 */
             revision: number;
+        };
+        ArtistFeaturedTrack: {
+            /** Format: int64 */
+            artistPartyId: number;
+            /** Format: uuid */
+            recordingId: string | null;
+            /** Format: int64 */
+            legacyReleaseId: number | null;
+            /** @description Current public reference eligibility; actual decoding is validated by the player. */
+            available: boolean;
+            /** Format: date-time */
+            updatedAt: string | null;
+        };
+        MusicArtistFeaturedTrackRequest: {
+            /** Format: int64 */
+            artistPartyId: number;
+            /** Format: uuid */
+            recordingId?: string | null;
+            /** Format: int64 */
+            legacyReleaseId?: number | null;
         };
         InvoiceLineDTO: {
             /** Format: int64 */
@@ -11003,7 +11373,7 @@ export interface components {
             refundDueMinor: number;
             currency: string;
             /** @enum {string} */
-            refundStatus: "none" | "awaiting_operator" | "requested";
+            refundStatus: "none" | "awaiting_operator" | "requested" | "approved" | "processing" | "succeeded" | "failed" | "cancelled";
             /** @description True when the quote was cancelled earlier and the stored record is returned */
             alreadyCancelled: boolean;
         };
@@ -11011,6 +11381,19 @@ export interface components {
             /** @enum {string} */
             canceller: "customer" | "tdf";
             note?: string;
+        };
+        DomoRefundProviderReference: {
+            providerRefundId: string;
+        };
+        DomoManualRefundEvidence: {
+            externalReference: string;
+            /** @description Secure internal reference to the actual receipt; never a credential or raw bank document */
+            evidenceReference: string;
+            /** Format: int64 */
+            amountMinor: number;
+            currency: string;
+            /** Format: date-time */
+            occurredAt: string;
         };
         PublicDomoQuoteLine: {
             code: string;
@@ -11062,6 +11445,7 @@ export interface components {
             termsAcceptedAt?: string | null;
             /** Format: date-time */
             depositPaidAt?: string | null;
+            cancellation?: components["schemas"]["PublicDomoCancellation"] | null;
             paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet")[];
         };
         PublicDomoPaypalCaptureRequest: {
@@ -15960,6 +16344,156 @@ export interface components {
              */
             token: string;
         };
+        EventPlanContent: {
+            title: string;
+            overview: string;
+            currency: string;
+            activities: {
+                title: string;
+                start: string;
+                end: string;
+                responsible: string;
+                notes: string;
+            }[];
+            budget: {
+                label: string;
+                /** Format: int64 */
+                amountCents: number | null;
+                basis: string;
+            }[];
+            /** Format: int64 */
+            budgetCapCents: number | null;
+            deliverables: string[];
+            pending: string[];
+        };
+        EventPlanVersion: {
+            /** Format: int64 */
+            event_id: number;
+            /** Format: int64 */
+            revision: number;
+            /** Format: int64 */
+            recipient_party_id: number;
+            content: components["schemas"]["EventPlanContent"];
+            document_hash: string;
+            /** Format: int64 */
+            created_by: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        EventAgreementDraft: {
+            title: string;
+            body: string;
+            recipientLegalName: string;
+            pendingFields: string[];
+        };
+        EventAgreementVersion: {
+            /** Format: int64 */
+            version: number;
+            content: {
+                title: string;
+                body: string;
+                recipientLegalName: string;
+                pendingFields: string[];
+                plan: components["schemas"]["EventPlanVersion"];
+            };
+            document_hash: string;
+            /** Format: int64 */
+            approved_by: number | null;
+            /** Format: date-time */
+            approved_at: string | null;
+            /** Format: date-time */
+            sent_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        EventWorkspaceAction: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            version: number;
+            /** Format: int64 */
+            actor_party_id: number;
+            action: string;
+            comment: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        EventAgreementAcceptance: {
+            /** Format: int64 */
+            version: number;
+            /** Format: int64 */
+            accepted_by: number;
+            accepted_name: string;
+            /** Format: date-time */
+            accepted_at: string;
+            document_hash: string;
+        } | null;
+        EventAgreement: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            recipient_party_id: number;
+            /** Format: int64 */
+            current_version: number;
+            /** @enum {string} */
+            state: "draft" | "sent" | "changes_requested" | "accepted" | "rejected" | "withdrawn";
+            /** Format: uuid */
+            parent_id: string | null;
+            versions: components["schemas"]["EventAgreementVersion"][];
+            actions: components["schemas"]["EventWorkspaceAction"][];
+            acceptance: components["schemas"]["EventAgreementAcceptance"];
+        };
+        /** @description Version-bound command. A repeated requestId replays the same intent; conflicting reuse returns 409. Approval and sending require a complete scope, full integer-cent budget and exact documented cap. Accept requires the authenticated designated recipient and the current approved/sent version; no external email delivery is performed. */
+        EventWorkspaceCommand: {
+            /** Format: uuid */
+            requestId: string;
+            /** @enum {string} */
+            action: "plan.save" | "plan.comment" | "agreement.create" | "agreement.revise" | "agreement.approve" | "agreement.send" | "agreement.withdraw" | "agreement.comment" | "agreement.request_changes" | "agreement.reject" | "agreement.accept";
+            version: number;
+            /** Format: uuid */
+            agreementId?: string;
+            hash?: string;
+            recipientPartyId?: string;
+            /** Format: uuid */
+            parentId?: string;
+            content?: components["schemas"]["EventPlanContent"] | components["schemas"]["EventAgreementDraft"];
+            comment?: string;
+            acceptedName?: string;
+            consent?: boolean;
+        } & ({
+            /** @enum {string} */
+            action?: "plan.save";
+            content: components["schemas"]["EventPlanContent"];
+        } | {
+            /** @enum {string} */
+            action?: "plan.comment";
+        } | {
+            /** @enum {string} */
+            action?: "agreement.create";
+            content: components["schemas"]["EventAgreementDraft"];
+        } | {
+            /** @enum {string} */
+            action?: "agreement.revise";
+            content: components["schemas"]["EventAgreementDraft"];
+        } | {
+            /** @enum {string} */
+            action?: "agreement.approve" | "agreement.send" | "agreement.withdraw" | "agreement.reject";
+        } | {
+            /** @enum {string} */
+            action?: "agreement.comment" | "agreement.request_changes";
+        } | {
+            /** @enum {string} */
+            action?: "agreement.accept";
+            /** @enum {boolean} */
+            consent: true;
+        });
+        EventWorkspaceSnapshot: {
+            eventId: string;
+            owner: boolean;
+            plan: components["schemas"]["EventPlanVersion"] | null;
+            agreements: components["schemas"]["EventAgreement"][];
+            planComments: components["schemas"]["EventWorkspaceAction"][];
+        };
         SocialV2Me: {
             discoverable: boolean;
             personalized: boolean;
@@ -16933,6 +17467,22 @@ export interface components {
             durationMs: number | null;
             sources: components["schemas"]["MusicTrackSearchSource"][];
         };
+        /** @enum {string} */
+        MusicMediaSourceKind: "asset" | "legacy";
+        MusicMediaHealth: {
+            sourceKind: components["schemas"]["MusicMediaSourceKind"];
+            sourceId: string;
+            sourceVersion: string;
+            /** Format: int64 */
+            artistPartyId: number;
+            /** @enum {string} */
+            status: "pending" | "valid" | "temporary" | "invalid";
+            reason: string | null;
+            /** Format: date-time */
+            checkedAt: string | null;
+            /** Format: date-time */
+            nextCheckAt: string;
+        };
     };
     responses: {
         /** @description Not found or not publicly eligible */
@@ -17477,6 +18027,134 @@ export interface operations {
             };
             /** @description Required database or email delivery unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getArtistFeaturedTrack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artistPartyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current reference or the default catalogue order */
+            200: {
+                headers: {
+                    /** @description private, no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistFeaturedTrack"];
+                };
+            };
+            /** @description Invalid artist identifier */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Public music disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getOwnArtistFeaturedTrack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated owner's preference; never another Party's */
+            200: {
+                headers: {
+                    /** @description private, no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistFeaturedTrack"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Public music disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setOwnArtistFeaturedTrack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MusicArtistFeaturedTrackRequest"];
+            };
+        };
+        responses: {
+            /** @description Authoritative saved preference */
+            200: {
+                headers: {
+                    /** @description private, no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtistFeaturedTrack"];
+                };
+            };
+            /** @description Invalid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request belongs to another authenticated Party */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Public music disabled */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23913,6 +24591,162 @@ export interface operations {
             };
             /** @description Transaction failed; no credential or session changes committed */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exchangeEventWatchCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    grant_type: "client_credentials";
+                    client_id: string;
+                    client_secret: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A token valid for at most 900 seconds */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    Pragma?: "no-cache";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        access_token: string;
+                        /** @enum {string} */
+                        token_type: "Bearer";
+                        expires_in: number;
+                        scope: string;
+                    };
+                };
+            };
+            /** @description Invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service schema or database unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listEventWatchCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Client-scoped candidates, newest verification first */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    Pragma?: "no-cache";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventResearchCandidate"][];
+                };
+            };
+            /** @description Invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service schema or database unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    importEventWatchCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    runKey: string;
+                    candidate: components["schemas"]["EventResearchCandidateWrite"];
+                    materialize: boolean;
+                    publish: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Committed candidate and optional event link */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    Pragma?: "no-cache";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        candidateRecord: components["schemas"]["EventResearchCandidate"];
+                        eventLink: components["schemas"]["EventResearchMaterialization"] | null;
+                    };
+                };
+            };
+            /** @description Invalid candidate or run key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Publication */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Research */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service schema or database unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -35837,6 +36671,497 @@ export interface operations {
             };
         };
     };
+    getDomoRefund: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Immutable canonical UUID of the Domo quote runtime. */
+                quoteId: components["parameters"]["PublicDomoQuoteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current refund state; processing does not mean money returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Invalid quote identifier or evidence */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session revoked or expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict administrator or module access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing independent approval or inconsistent binding */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider query quota exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider outcome unverified; keep the same refund ID */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Qualified capabilities or configuration disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    approveDomoRefund: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Immutable canonical UUID of the Domo quote runtime. */
+                quoteId: components["parameters"]["PublicDomoQuoteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current refund state; processing does not mean money returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Invalid quote identifier or evidence */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session revoked or expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict administrator or module access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing independent approval or inconsistent binding */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider query quota exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider outcome unverified; keep the same refund ID */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Qualified capabilities or configuration disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    executeDomoRefund: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Immutable canonical UUID of the Domo quote runtime. */
+                quoteId: components["parameters"]["PublicDomoQuoteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current refund state; processing does not mean money returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Invalid quote identifier or evidence */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session revoked or expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict administrator or module access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing independent approval or inconsistent binding */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider query quota exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider outcome unverified; keep the same refund ID */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Qualified capabilities or configuration disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reconcileDomoRefund: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Immutable canonical UUID of the Domo quote runtime. */
+                quoteId: components["parameters"]["PublicDomoQuoteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current refund state; processing does not mean money returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Invalid quote identifier or evidence */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session revoked or expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict administrator or module access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing independent approval or inconsistent binding */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider query quota exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider outcome unverified; keep the same refund ID */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Qualified capabilities or configuration disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    recordDomoManualRefundEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Immutable canonical UUID of the Domo quote runtime. */
+                quoteId: components["parameters"]["PublicDomoQuoteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DomoManualRefundEvidence"];
+            };
+        };
+        responses: {
+            /** @description Current refund state; processing does not mean money returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Invalid quote identifier or evidence */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session revoked or expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict administrator or module access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing independent approval or inconsistent binding */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider query quota exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider outcome unverified; keep the same refund ID */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Qualified capabilities or configuration disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirmDomoManualRefund: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Immutable canonical UUID of the Domo quote runtime. */
+                quoteId: components["parameters"]["PublicDomoQuoteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current refund state; processing does not mean money returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Invalid quote identifier or evidence */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session revoked or expired */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict administrator or module access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing independent approval or inconsistent binding */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider query quota exhausted */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider outcome unverified; keep the same refund ID */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Qualified capabilities or configuration disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bindDomoRefundProviderReference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Immutable canonical UUID of the Domo quote runtime. */
+                quoteId: components["parameters"]["PublicDomoQuoteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DomoRefundProviderReference"];
+            };
+        };
+        responses: {
+            /** @description Current processing refund and its immutable query candidate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Malformed identifier */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Strict administrator and Admin module access required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Provider identity */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listNotifications: {
         parameters: {
             query?: {
@@ -39165,6 +40490,458 @@ export interface operations {
             };
             /** @description Persisted automatic assignment policy is unavailable or inconsistent */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private account-scoped workspace snapshot */
+            200: {
+                headers: {
+                    /** @description private, no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventWorkspaceSnapshot"];
+                };
+            };
+            /** @description Malformed or overposted command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event organizer or designated recipient required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No accessible document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, incomplete scope or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Migration or document generation temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mutateEventWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventWorkspaceCommand"];
+            };
+        };
+        responses: {
+            /** @description Private account-scoped workspace snapshot */
+            200: {
+                headers: {
+                    /** @description private, no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventWorkspaceSnapshot"];
+                };
+            };
+            /** @description Malformed or overposted command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event organizer or designated recipient required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No accessible document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, incomplete scope or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Migration or document generation temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    downloadEventPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private PDF of the exact document or accepted version and annex */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Malformed or overposted command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event organizer or designated recipient required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No accessible document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, incomplete scope or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Migration or document generation temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    downloadEventAgreement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+                agreementId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private PDF of the exact document or accepted version and annex */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Malformed or overposted command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event organizer or designated recipient required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No accessible document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, incomplete scope or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Migration or document generation temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    downloadEventAgreementAcceptance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+                agreementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private PDF of the exact document or accepted version and annex */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Malformed or overposted command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event organizer or designated recipient required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No accessible document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, incomplete scope or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Migration or document generation temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPublicLegacyMediaAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current public source; private files keep their existing access controls */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        url: string;
+                        mediaType: string;
+                        sourceVersion: string;
+                    };
+                };
+            };
+            /** @description Missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listOwnMusicMediaHealth: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description Last returned source kind; must be paired with afterId */
+                afterKind?: components["schemas"]["MusicMediaSourceKind"];
+                /** @description Last returned source ID; must be paired with afterKind */
+                afterId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One bounded page of current owner/team sources; administrators may traverse all sources. Stable source-kind/ID ordering; pass the last returned identity as cursor when the page fills the requested limit. Every page rechecks current permission. A page sequence is not a database snapshot. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MusicMediaHealth"][];
+                };
+            };
+            /** @description Invalid limit, incomplete cursor or unsupported source kind */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revalidateOwnMusicMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sourceKind: components["schemas"]["MusicMediaSourceKind"];
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revalidation queued without clearing an existing invalid verdict */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        queued: boolean;
+                    };
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source missing or caller cannot manage its artist */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

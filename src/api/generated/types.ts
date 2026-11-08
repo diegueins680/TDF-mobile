@@ -1883,6 +1883,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/login/apple": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login with Apple
+         * @description Verifies a Sign in with Apple identity token (RS256 against Apple's published keys, issuer, configured audiences, lifetime and nonce), sets a session cookie, and issues a session. Creates a Customer/Fan account only with explicit createNewAccount and current terms acceptance; otherwise it links with existing credentials or refuses.
+         */
+        post: operations["loginWithApple"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/signup": {
         parameters: {
             query?: never;
@@ -4217,10 +4237,14 @@ export interface paths {
         put?: never;
         /**
          * Exchange Google Drive OAuth code
-         * @description Exchanges a Google OAuth code (PKCE) for Drive tokens.
+         * @description Stores delegated Google credentials encrypted on the server and returns an owner-bound opaque TDFConnection handle. Provider access and refresh tokens are never returned. Legacy browser tokens require new consent.
          */
         post: operations["exchangeDriveToken"];
-        delete?: never;
+        /**
+         * Disconnect personal Google Drive
+         * @description Erases this account's encrypted delegated credential. In-flight refreshes cannot restore it. Existing external files remain in the user's provider account. Provider-wide OAuth revocation is separately managed in Google permissions.
+         */
+        delete: operations["disconnectDrive"];
         options?: never;
         head?: never;
         patch?: never;
@@ -13390,6 +13414,28 @@ export interface components {
             /** @description Account terms acceptance when Google is used from signup. */
             termsAccepted?: boolean;
             /** @description Version of the account terms accepted during Google signup. */
+            termsVersion?: string;
+            onboardingIntent?: components["schemas"]["OnboardingIntent"];
+        };
+        AppleLoginRequest: {
+            /** @description Apple identity token (JWT) returned by AuthenticationServices */
+            identityToken: string;
+            /** @description Raw nonce the client generated; the token carries its SHA-256 hex digest. Required when the token contains a nonce. */
+            nonce?: string;
+            /** @description Only sent by Apple on the first authorization; used for the display name when creating an account. */
+            fullName?: {
+                givenName?: string;
+                familyName?: string;
+            };
+            /** @description Must be explicitly true, with current terms acceptance, to create a new account for an unbound Apple subject. Omission never creates an account. */
+            createNewAccount?: boolean;
+            /** @description Explicitly connect the verified Apple identity using the existing TDF account credentials. No account or permission is merged. */
+            linkAccount?: components["schemas"]["LoginRequest"];
+            /** @description Optional consent to receive TDF product and marketing updates when creating an account. */
+            marketingOptIn?: boolean;
+            /** @description Account terms acceptance when Apple is used from signup. */
+            termsAccepted?: boolean;
+            /** @description Version of the account terms accepted during Apple signup. */
             termsVersion?: string;
             onboardingIntent?: components["schemas"]["OnboardingIntent"];
         };
@@ -24246,6 +24292,46 @@ export interface operations {
             };
         };
     };
+    loginWithApple: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppleLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Authenticated successfully */
+            200: {
+                headers: {
+                    /** @description Session cookie for browser-based clients. */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Invalid or expired Apple token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sign in with Apple is not configured */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     signup: {
         parameters: {
             query?: never;
@@ -28502,6 +28588,31 @@ export interface operations {
             };
             /** @description Google OAuth error */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    disconnectDrive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personal connection erased */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -10,7 +10,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.1016946267087-p40em8ihkugloistpfnjt7es94mguhgv"
         }
-      ]
+      ],
+      ["./plugins/withIosTeamId"]
     ],
     "extra": {
       "apiBase": "http://localhost:8080",
@@ -50,6 +51,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.tdfrecords.app",
+      "appleTeamId": "83J23NPXG7",
       "supportsTablet": false,
       "config": {
         "usesNonExemptEncryption": false

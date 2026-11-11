@@ -53,7 +53,7 @@ export default function Bookings() {
 
   const renderEmpty = useCallback(() => (
     <View style={{ padding: 20 }}>
-      <Text>No bookings</Text>
+      <Text>No tienes reservas.</Text>
     </View>
   ), []);
 

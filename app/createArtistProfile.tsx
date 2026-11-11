@@ -56,11 +56,11 @@ export default function CreateArtistProfileScreen() {
         qc.invalidateQueries({ queryKey: ['user-artist-profile', effectivePartyId] });
       }
       analytics.capture('artist_profile_saved', { platform: 'mobile', action: 'create' });
-      Alert.alert('Success', 'Artist profile created!');
+      Alert.alert('Perfil creado', 'Tu perfil de artista ya está publicado.');
       router.back();
     },
     onError: (err: Error) => {
-      Alert.alert('Error', err.message || 'Failed to create artist profile');
+      Alert.alert('No pudimos crear el perfil', err.message || 'Inténtalo de nuevo.');
     }
   });
 
@@ -73,11 +73,11 @@ export default function CreateArtistProfileScreen() {
 
   const handleCreateProfile = useCallback(async () => {
     if (!name.trim()) {
-      Alert.alert('Validation', 'Artist name is required');
+      Alert.alert('Falta el nombre', 'Escribe tu nombre de artista.');
       return;
     }
     if (!effectivePartyId) {
-      Alert.alert('Validation', 'Sign in before creating an artist profile.');
+      Alert.alert('Inicia sesión', 'Inicia sesión antes de crear un perfil de artista.');
       return;
     }
 
@@ -96,16 +96,16 @@ export default function CreateArtistProfileScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Create Artist Profile</Text>
+        <Text style={styles.title}>Crear perfil de artista</Text>
         <Text style={styles.identityText}>
-          {effectivePartyId ? 'Connected identity' : 'Sign in to connect your identity'}
+          {effectivePartyId ? 'Se publicará con tu cuenta.' : 'Inicia sesión para publicar tu perfil.'}
         </Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Artist Name *</Text>
+          <Text style={styles.label}>Nombre de artista *</Text>
           <TextInput
             ref={nameRef}
-            placeholder="Your artist name"
+            placeholder="Tu nombre artístico"
             value={name}
             onChangeText={(text) => { setName(text); setIsDirty(true); }}
             style={styles.input}
@@ -120,7 +120,7 @@ export default function CreateArtistProfileScreen() {
           <Text style={styles.label}>Bio</Text>
           <TextInput
             ref={bioRef}
-            placeholder="Tell us about your music..."
+            placeholder="Cuéntanos sobre tu música…"
             value={bio}
             onChangeText={(text) => { setBio(text); setIsDirty(true); }}
             style={[styles.input, styles.inputMultiline]}
@@ -134,7 +134,7 @@ export default function CreateArtistProfileScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Image URL</Text>
+          <Text style={styles.label}>Enlace a una imagen</Text>
           <TextInput
             ref={imageUrlRef}
             placeholder="https://..."
@@ -149,7 +149,7 @@ export default function CreateArtistProfileScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Genres</Text>
+          <Text style={styles.label}>Géneros</Text>
           <View style={styles.genreGrid}>
             {genreOptions.map(genre => (
               <TouchableOpacity
@@ -174,10 +174,10 @@ export default function CreateArtistProfileScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Instagram Handle</Text>
+          <Text style={styles.label}>Usuario de Instagram</Text>
           <TextInput
             ref={instagramRef}
-            placeholder="@username"
+            placeholder="@usuario"
             value={instagramHandle}
             onChangeText={(text) => { setInstagramHandle(text); setIsDirty(true); }}
             style={styles.input}
@@ -190,7 +190,7 @@ export default function CreateArtistProfileScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Spotify URL</Text>
+          <Text style={styles.label}>Enlace de Spotify</Text>
           <TextInput
             ref={spotifyRef}
             placeholder="https://open.spotify.com/artist/..."
@@ -210,7 +210,7 @@ export default function CreateArtistProfileScreen() {
           {createMutation.isPending ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.createButtonText}>Create Profile</Text>
+            <Text style={styles.createButtonText}>Crear perfil</Text>
           )}
         </TouchableOpacity>
       </ScrollView>

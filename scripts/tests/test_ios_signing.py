@@ -40,6 +40,28 @@ class SigningContract(unittest.TestCase):
         with patch.object(artifact.subprocess, 'run', side_effect=codesign):
             self.assertEqual(artifact.read_signed_entitlements('/synthetic/Test.app'), expected)
 
+    def test_xml_codesign_accepts_exactly_one_terminal_nul_frame(self):
+        expected = {'com.apple.security.get-task-allow': True}
+        result = subprocess.CompletedProcess(['codesign'], 0, stdout=plistlib.dumps(expected) + b'\x00')
+        with patch.object(artifact.subprocess, 'run', return_value=result):
+            self.assertEqual(artifact.read_signed_entitlements('/synthetic/Test.app'), expected)
+
+    def test_xml_codesign_rejects_malformed_interior_nul_and_extra_frames(self):
+        xml = plistlib.dumps({'com.apple.security.get-task-allow': True})
+        for output in (xml + b'\x00\x00', xml.replace(b'<dict>', b'<dict>\x00'),
+                       xml + b'garbage', xml + b'\x00garbage', b'<?xml version="1.0"?><plist><dict>'):
+            with self.subTest(output=output):
+                result = subprocess.CompletedProcess(['codesign'], 0, stdout=output)
+                with patch.object(artifact.subprocess, 'run', return_value=result), self.assertRaises(ExpatError):
+                    artifact.read_signed_entitlements('/synthetic/Test.app')
+
+    def test_binary_codesign_plist_handling_is_unchanged(self):
+        expected = {'com.apple.security.get-task-allow': True}
+        result = subprocess.CompletedProcess(['codesign'], 0,
+            stdout=plistlib.dumps(expected, fmt=plistlib.FMT_BINARY))
+        with patch.object(artifact.subprocess, 'run', return_value=result):
+            self.assertEqual(artifact.read_signed_entitlements('/synthetic/Test.app'), expected)
+
     @unittest.skipUnless(sys.platform == 'darwin', 'codesign requires macOS')
     def test_actual_codesign_output_is_a_plist(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -54,7 +76,7 @@ class SigningContract(unittest.TestCase):
 
     def setUp(self):
         self.now = datetime.datetime(2026, 9, 18, tzinfo=datetime.timezone.utc)
-        self.profile = {'ExpirationDate': datetime.datetime(2027, 1, 1), 'TeamIdentifier': ['83J23NPXG7'], 'Entitlements': {'application-identifier': '83J23NPXG7.com.tdfrecords.app', 'get-task-allow': False, 'com.apple.developer.associated-domains': ['*']}, 'UUID': 'ebc7d007-b938-45ff-af73-8ffd86b4c546', 'DeveloperCertificates': [b'fixture']}
+        self.profile = {'ExpirationDate': datetime.datetime(2027, 1, 1), 'TeamIdentifier': ['83J23NPXG7'], 'Entitlements': {'application-identifier': '83J23NPXG7.com.tdfrecords.app', 'get-task-allow': False, 'com.apple.developer.associated-domains': ['*'], 'com.apple.developer.applesignin': ['Default']}, 'UUID': 'ebc7d007-b938-45ff-af73-8ffd86b4c546', 'DeveloperCertificates': [b'fixture']}
 
     def test_current_app_store_profile(self):
         self.assertEqual(signing.validate_profile(self.profile, self.now), self.profile['UUID'])
@@ -72,6 +94,11 @@ class SigningContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Associated Domains'):
             signing.validate_profile(self.profile, self.now)
 
+    def test_rejects_profile_without_sign_in_with_apple_capability(self):
+        self.profile['Entitlements'].pop('com.apple.developer.applesignin')
+        with self.assertRaisesRegex(ValueError, 'Sign in with Apple'):
+            signing.validate_profile(self.profile, self.now)
+
     def test_rejects_debug_entitlement(self):
         self.profile['Entitlements']['get-task-allow'] = True
         with self.assertRaises(ValueError):
@@ -86,13 +113,16 @@ class SigningContract(unittest.TestCase):
 
     def test_signed_artifact_requires_current_api_and_both_verified_hosts(self):
         entitlements = {'application-identifier': '83J23NPXG7.com.tdfrecords.app',
-                        'com.apple.developer.associated-domains': ['applinks:www.tdfrecords.net', 'applinks:tdf-app.pages.dev']}
+                        'com.apple.developer.associated-domains': ['applinks:www.tdfrecords.net', 'applinks:tdf-app.pages.dev'],
+                        'com.apple.developer.applesignin': ['Default']}
         runtime = json.loads((Path(__file__).parents[2] / 'app.json').read_text())['expo']['runtimeVersion']
         updates = {'EXUpdatesRuntimeVersion': runtime}
         configs = [{'runtimeVersion': runtime, 'extra': {'apiBase': 'https://api.tdfrecords.net'}}]
         artifact.validate_interaction_release(entitlements, configs, updates)
         for bad in ({}, {**entitlements, 'application-identifier': 'ANOTHER.app'},
-                    {**entitlements, 'com.apple.developer.associated-domains': ['applinks:tdfrecords.net']}):
+                    {**entitlements, 'com.apple.developer.associated-domains': ['applinks:tdfrecords.net']},
+                    {k: v for k, v in entitlements.items() if k != 'com.apple.developer.applesignin'},
+                    {**entitlements, 'com.apple.developer.applesignin': []}):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 artifact.validate_interaction_release(bad, configs, updates)
         for bad in ([], [{}], [{'extra': {'apiBase': 'https://tdf-hq.fly.dev'}}],

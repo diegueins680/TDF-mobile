@@ -15,9 +15,12 @@ def read_signed_entitlements(app):
     # Current codesign defaults to a human-readable summary, not a plist.
     result = subprocess.run(['codesign', '-d', '--entitlements', '-', '--xml', str(app)],
                             capture_output=True, check=True)
-    # Monterey's codesign emits a C-string terminator after the XML document.
-    # Accept that single terminator; any other trailing bytes must still fail.
-    return plistlib.loads(result.stdout.removesuffix(b'\x00'))
+    output = result.stdout
+    # Older codesign emits XML with one C-string terminator; do not sanitize
+    # malformed XML, interior NULs, extra frames, or binary plist bytes.
+    if output.startswith(b'<?xml') and output.endswith(b'\x00'):
+        output = output[:-1]
+    return plistlib.loads(output)
 
 
 def validate_interaction_release(entitlements, configs, updates):
@@ -29,6 +32,8 @@ def validate_interaction_release(entitlements, configs, updates):
         raise ValueError('Wrong signed application identifier')
     if set(entitlements.get('com.apple.developer.associated-domains', [])) != required:
         raise ValueError('Signed universal-link domains do not match the deployed hosts')
+    if entitlements.get('com.apple.developer.applesignin') != ['Default']:
+        raise ValueError('Signed build is missing the Sign in with Apple entitlement (App Store guideline 4.8)')
     if not configs or any(c.get('extra', {}).get('apiBase') != 'https://api.tdfrecords.net' for c in configs):
         raise ValueError('Wrong production API in embedded Expo config')
 

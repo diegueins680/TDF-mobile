@@ -2,7 +2,7 @@ import { eventExperienceLanguage, savedEventCopy } from '../src/localization/eve
 import { FeedbackEntry } from '../src/feedback/FeedbackEntry';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, FlatList, TextInput, Alert, Image, Share
+  View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, FlatList, TextInput, Alert, Image, Share, Linking
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,7 +29,7 @@ import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
 export default function UserProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { token, partyId, session } = useAuth();
+  const { token, partyId, session, clearToken } = useAuth();
   const analytics = useAnalytics();
   const ownsParty = usePartyOwnership(partyId);
   const {
@@ -719,7 +719,7 @@ export default function UserProfileScreen() {
               <ActivityIndicator size="large" color="#2563eb" />
             ) : savedEvents.length > 0 ? (
               <>
-                <Text style={styles.sectionTitle}>Saved events ({savedEvents.length})</Text>
+                <Text style={styles.sectionTitle}>Eventos guardados ({savedEvents.length})</Text>
                 <FlatList
                   data={savedEvents}
                   renderItem={({ item }) => renderEventItem(item, true)}
@@ -735,6 +735,29 @@ export default function UserProfileScreen() {
           </View>
         )}
       <FeedbackEntry />
+        {token ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Cuenta</Text>
+            <TouchableOpacity
+              style={styles.accountRow}
+              accessibilityRole="button"
+              onPress={() => Alert.alert('¿Cerrar sesión?', undefined, [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Cerrar sesión', style: 'destructive', onPress: () => { clearToken(); router.replace('/auth'); } },
+              ])}
+            >
+              <Text style={styles.accountRowText}>Cerrar sesión</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.accountRow}
+              accessibilityRole="link"
+              accessibilityHint="Abre la página de eliminación de cuenta en el navegador"
+              onPress={() => { void Linking.openURL('https://www.tdfrecords.net/cuenta/eliminar'); }}
+            >
+              <Text style={[styles.accountRowText, styles.accountRowDanger]}>Eliminar mi cuenta</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -791,6 +814,9 @@ const styles = StyleSheet.create({
   legacyImportTitle: { color: '#92400e', fontSize: 14, fontWeight: '700', marginBottom: 6 },
   legacyImportText: { color: '#78350f', fontSize: 12, lineHeight: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 12 },
+  accountRow: { minHeight: 48, justifyContent: 'center' },
+  accountRowText: { fontSize: 16, color: '#1a1a1a' },
+  accountRowDanger: { color: '#b91c1c' },
   sectionContent: { fontSize: 13, lineHeight: 20, color: '#666', marginBottom: 12 },
   genresContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   genreTag: { backgroundColor: '#e0e7ff', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },

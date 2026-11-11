@@ -15,6 +15,15 @@ import { DirectoryPreviewImage } from './DirectoryPreviewImage';
 type DetailValue = Record<string, unknown>;
 
 const textValue = (value: unknown): string | undefined => typeof value === 'string' ? value : undefined;
+// Event times arrive as ISO text; show them the way a person reads a date.
+const dateValue = (value: unknown): string | undefined => {
+  const text = textValue(value);
+  if (!text) return undefined;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime())
+    ? text
+    : parsed.toLocaleString('es', { weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+};
 const arrayValue = (value: unknown): DetailValue[] => Array.isArray(value) ? value.filter((item): item is DetailValue => Boolean(item) && typeof item === 'object') : [];
 
 const loadDetail = async (kind: DirectoryEntityType, identifier: string): Promise<DetailValue> => {
@@ -92,8 +101,8 @@ export function DirectoryPublicDetailScreen({ kind, identifier }: { kind: Direct
       ['Ciudad', textValue(location?.city) ?? textValue(locations[0]?.city)],
       ['Experiencia', textValue(data.experience)],
       ['Créditos', textValue(data.creditsSummary)],
-      ['Inicio', textValue(data.startTime) ?? textValue(data.startsAt)],
-      ['Fin', textValue(data.endTime) ?? textValue(data.endsAt)],
+      ['Inicio', dateValue(data.startTime) ?? dateValue(data.startsAt)],
+      ['Fin', dateValue(data.endTime) ?? dateValue(data.endsAt)],
       ['Vence', textValue(data.expiresAt)],
     ];
     return values.filter((entry): entry is [string, string] => Boolean(entry[1]));
@@ -180,6 +189,16 @@ export function DirectoryPublicDetailScreen({ kind, identifier }: { kind: Direct
         <Text style={[styles.kind, { color: colors.actionPrimary }]}>{kind.toUpperCase()}</Text>
         <Text accessibilityRole="header" style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
         {previewImageUrl ? <DirectoryPreviewImage kind={kind} imageUrl={previewImageUrl} label={title} /> : null}
+        {/* The directory summary has no tickets or attendance; the full event does. */}
+        {kind === 'event' && /^[1-9]\d*$/.test(id) ? (
+          <Pressable
+            accessibilityRole="button"
+            style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }]}
+            onPress={() => router.push({ pathname: '/eventDetail', params: { eventId: id } })}
+          >
+            <Text style={{ color: colors.actionPrimaryContrast, fontWeight: '800' }}>Ver evento y entradas</Text>
+          </Pressable>
+        ) : null}
         {sourceProfileSlug ? (
           <Pressable
             accessibilityRole="link"

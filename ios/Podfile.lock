@@ -2680,7 +2680,7 @@ SPEC CHECKSUMS:
   EXUpdates: dca805b4aa04f48a5b1e5d8bcdc572b20c9ddd5f
   EXUpdatesInterface: 5adf50cb41e079c861da6d9b4b954c3db9a50734
   FBLazyVector: e95a291ad2dadb88e42b06e0c5fb8262de53ec12
-  GoogleSignIn: e449a40a92e9f2eea56e98b5214d13725dc5a00a
+  GoogleSignIn: 476a90b19668644a619caf79bd373f9f75a783ac
   GoogleUtilities: 4f2618a4a1e762a1ee134a1e2323bba9843e06da
   GTMAppAuth: 9566e1a3451fd6967b58188fa15286fb6ae7914f
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6

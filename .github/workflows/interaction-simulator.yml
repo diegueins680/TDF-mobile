@@ -1,19 +1,47 @@
 name: Interaction simulator build
+# Runs on every pull request so `simulator` can be a required status check.
+# The `changes` job decides whether the expensive macOS build is needed; when
+# it is not, `simulator` is skipped, which GitHub counts as a passing check.
 on:
   pull_request:
-    paths:
-      - '.github/workflows/interaction-simulator.yml'
-      - 'src/features/interactions/**'
-      - 'ios/**'
-      - 'package-lock.json'
   workflow_dispatch:
 permissions:
   contents: read
+  pull-requests: read
 concurrency:
   group: interaction-simulator-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.detect.outputs.run }}
+    steps:
+      - id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          run=true
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            # Fail open: if the file list cannot be read, build anyway.
+            if files=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files?per_page=100" --jq '.[] | .filename, (.previous_filename // empty)'); then
+              count=$(printf '%s\n' "$files" | grep -c . || true)
+              # The API lists at most 3000 files; treat a truncated list as relevant.
+              if [ "$count" -lt 3000 ] && ! printf '%s\n' "$files" | grep -qE '^(\.github/workflows/interaction-simulator\.yml$|src/features/interactions/|ios/|package-lock\.json$)'; then
+                run=false
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "Simulator build needed: $run"
   simulator:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: macos-15
     timeout-minutes: 75
     env:

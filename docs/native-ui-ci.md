@@ -61,3 +61,9 @@ workspace there is no Android SDK/KVM or connected Mac, so native compile/runtim
 compatibility (including Detox instrumentation and accessibility attributes) must
 be checked in the first hosted run. Do not weaken synchronization or ignore failed
 assertions to obtain a green result.
+
+### iOS harness semantics
+
+React Native Fabric represents `accessibilityState.disabled` through the iOS `notEnabled` accessibility trait; UIView `enabled` is not the submission state. The iOS smoke matches that trait.
+
+The credential reset case terminates and starts the process, then sends `tdf://auth` with Detox `device.openURL`. Expo Router uses Expo Linking’s native URL callback on iOS; the Detox launch-option override alone did not populate that registry in the observed run. This verifies form state after a process restart and URL delivery to the running app. It does not qualify a real external cold-start link; that remains a separate device check. No credential submission or backend login occurs.

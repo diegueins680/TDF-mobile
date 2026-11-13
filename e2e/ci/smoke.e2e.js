@@ -9,6 +9,14 @@ describe('Isolated native UI smoke', () => {
   });
 
   async function expectSubmissionEnabled(enabled) {
+    await expect(element(by.id('loginButton'))).toExist();
+    if (device.getPlatform() === 'ios') {
+      // Fabric exposes accessibilityState.disabled as a trait, not UIControl.enabled.
+      const disabledButton = element(by.id('loginButton').and(by.traits(['notEnabled'])));
+      if (enabled) await expect(disabledButton).not.toExist();
+      else await expect(disabledButton).toExist();
+      return;
+    }
     const attributes = await element(by.id('loginButton')).getAttributes();
     if ('elements' in attributes) throw new Error('loginButton must match exactly one element');
     assert(attributes.enabled).toBe(enabled);
@@ -45,7 +53,10 @@ describe('Isolated native UI smoke', () => {
     await element(by.id('usernameInput')).replaceText('ui-fixture-not-an-account');
     await element(by.id('passwordInput')).replaceText('synthetic-not-a-secret');
     await device.terminateApp();
-    await device.launchApp({ newInstance: true, url: 'tdf://auth' });
+    await device.launchApp({ newInstance: true });
+    // Expo Linking consumes the native URL callback, not Detox's launch-option override.
+    // This checks process-restart form state plus an explicit URL event, not external cold links.
+    await device.openURL({ url: 'tdf://auth' });
     await waitFor(element(by.id('usernameInput'))).toBeVisible().withTimeout(15000);
     await expect(element(by.id('usernameInput'))).toHaveText('');
     await expect(element(by.id('passwordInput'))).toHaveText('');

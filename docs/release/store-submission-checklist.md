@@ -21,10 +21,11 @@
 3. Capture fresh App Store and Google Play screenshots from the release candidate build.
 4. Verify the published support and legal pages are reachable and match the store listing URLs.
 5. Prepare App Review and Play Console test credentials or token-based reviewer instructions.
-6. Enter the recorded App Store Connect review contact card: `Diego Saa` / `0984755301` / `cuco.saa@gmail.com`.
+6. Verify the existing App Store Connect review contact card directly in the authorized console; do not copy personal contact details into public release evidence.
 7. Run `npm run release:check`, `npm run doctor`, and `npm test`.
-8. Run `npm run build:ios:production` and `npm run build:android:production`.
-9. Submit through EAS or the store consoles after build verification.
+8. Follow the [current store runbook](../store-publish-runbook.md): verify unused numbers in both stores, then dispatch main with explicit `build_number` / `version_code`.
+9. Qualify and upload the exact artifact from that run; never select a GitHub artifact with EAS `--latest`. Record processing, testing availability and review separately.
+10. Complete physical-device qualification and verify production eligibility and rollout scope before manual production release.
 
 ## External blockers that still require humans
 

@@ -5,7 +5,7 @@ describe('Isolated native UI smoke', () => {
   beforeEach(async () => {
     if (device.getPlatform() === 'ios') await device.clearKeychain();
     await device.launchApp({ delete: true, newInstance: true });
-    await waitFor(element(by.id('onboardingPanel'))).toBeVisible().withTimeout(30000);
+    await waitFor(element(by.id('onboardingScroll'))).toBeVisible().withTimeout(30000);
   });
 
   async function expectSubmissionEnabled(enabled) {
@@ -15,9 +15,11 @@ describe('Isolated native UI smoke', () => {
   }
 
   async function openLogin() {
-    await waitFor(element(by.id('goToLoginButton'))).toBeVisible()
+    // The historical goToLoginButton ID belongs to Create account.
+    const login = element(by.label(/^(Ya tengo cuenta|I already have an account)$/));
+    await waitFor(login).toBeVisible()
       .whileElement(by.id('onboardingScroll')).scroll(200, 'down');
-    await element(by.id('goToLoginButton')).tap();
+    await login.tap();
     await waitFor(element(by.id('usernameInput'))).toBeVisible().withTimeout(15000);
   }
 

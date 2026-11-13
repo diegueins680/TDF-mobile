@@ -101,8 +101,8 @@ def main():
             logcat = subprocess.Popen(['adb', '-s', 'emulator-5554', 'logcat', '-v', 'threadtime'],
                                      stdout=(out / 'logcat.log').open('w'), stderr=subprocess.STDOUT)
         with (out / 'detox.log').open('w') as log:
-            subprocess.run(['node_modules/.bin/detox', 'test', '--config-path', 'e2e/ci/detox.config.js',
-                            '--configuration', 'ci.' + args.platform, '--headless'],
+            subprocess.run(['node_modules/.bin/detox', 'test', '--config-path', './e2e/ci/detox.config.js',
+                            '--configuration', 'ci.' + args.platform, '--headless', '--loglevel', 'verbose'],
                            check=True, timeout=900, env=env, stdout=log, stderr=subprocess.STDOUT)
         result = json.loads((out / 'jest.json').read_text())
         check_results(result)
@@ -112,6 +112,15 @@ def main():
         receipt['error'] = str(error)
         raise
     finally:
+        # Capture even when beforeEach fails before Detox's screenshot hook.
+        if owned_device:
+            try:
+                snapshot = subprocess.run(['xcrun', 'simctl', 'io', owned_device,
+                    'screenshot', str(out / 'final-screen.png')], timeout=30,
+                    check=False, capture_output=True, text=True)
+                receipt['final_screenshot_exit'] = snapshot.returncode
+            except (subprocess.SubprocessError, OSError) as error:
+                receipt['final_screenshot_error'] = str(error)
         (out / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
         if logcat:
             logcat.terminate()

@@ -30,6 +30,14 @@ jobs:
           persist-credentials: false
       - name: Initialize UI evidence as not run
         run: python3 scripts/run-native-ui-smoke.py android --initialize --evidence "$RUNNER_TEMP/tdf-ui-android"
+      - name: Require existing KVM access before building
+        run: |
+          if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+            echo "::error::KVM is unavailable to this runner; native UI was not executed."
+            id
+            ls -l /dev/kvm || true
+            exit 1
+          fi
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .nvmrc
@@ -67,7 +75,8 @@ jobs:
           retention-days: 3
       - name: Install emulator image using existing runner licenses
         run: |
-          test -r /dev/kvm && test -w /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
           test -s "$ANDROID_HOME/licenses/android-sdk-license"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'emulator' 'system-images;android-36;default;x86_64' </dev/null
       - name: Boot Android and execute isolated UI smoke

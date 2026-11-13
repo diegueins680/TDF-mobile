@@ -32,7 +32,7 @@ jobs:
             if files=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files?per_page=100" --jq '.[] | .filename, (.previous_filename // empty)'); then
               count=$(printf '%s\n' "$files" | grep -c . || true)
               # The API lists at most 3000 files; treat a truncated list as relevant.
-              if [ "$count" -lt 3000 ] && ! printf '%s\n' "$files" | grep -qE '^(\.github/workflows/interaction-simulator\.yml$|src/features/interactions/|ios/|package-lock\.json$)'; then
+              if [ "$count" -lt 3000 ] && ! printf '%s\n' "$files" | grep -qE '^(\.github/workflows/interaction-simulator\.yml$|src/|app/|ios/|package-lock\.json$|e2e/ci/|scripts/run-native-ui-smoke\.py$)'; then
                 run=false
               fi
             fi
@@ -41,7 +41,7 @@ jobs:
           echo "Simulator build needed: $run"
   simulator:
     needs: changes
-    if: needs.changes.outputs.run == 'true'
+    if: needs.changes.outputs.run == 'true' && github.event.repository.private == false
     runs-on: macos-15
     timeout-minutes: 75
     env:
@@ -55,6 +55,8 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - name: Initialize UI evidence as not run
+        run: python3 scripts/run-native-ui-smoke.py ios --initialize --evidence "$RUNNER_TEMP/tdf-ui-ios"
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .nvmrc
@@ -100,4 +102,18 @@ jobs:
         with:
           name: interaction-simulator-build-log
           path: ${{ runner.temp }}/tdf-interaction-xcode.log
+          retention-days: 3
+      - name: Install simulator control helper
+        run: brew install wix/brew/applesimutils
+      - name: Boot iOS and execute isolated UI smoke
+        env:
+          TDF_UI_APP: ${{ runner.temp }}/tdf-interactions/Build/Products/Release-iphonesimulator/TDFRecords.app
+        run: python3 scripts/run-native-ui-smoke.py ios --evidence "$RUNNER_TEMP/tdf-ui-ios"
+      - name: Retain iOS UI evidence including failures
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: native-ui-ios-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tdf-ui-ios
+          if-no-files-found: error
           retention-days: 3

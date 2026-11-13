@@ -1,0 +1,58 @@
+{
+  "observedAt": "2026-10-26T06:47:57.399174+00:00",
+  "base": "7000df1da934aa467e443ad267c0a8caa1e9cb72",
+  "branch": "feat/event-moment-text-20261026",
+  "scope": "Local synthetic automated tests and offline Android JavaScript bundle; no physical device, signing, store release or production feature verification",
+  "runtime": "Node20.19.4",
+  "sourceSha256": {
+    "__tests__/EventDetailMoments.test.tsx": "bc083e857eb032678cf0800e2248182f019c7bdcd6de241f0e9e270e72d81516",
+    "__tests__/EventMomentCardReaction.test.tsx": "060e01425cdd059d670eaa71e6d8ee07a149198ac433405062207c17c818d463",
+    "__tests__/eventMomentWirePayload.test.ts": "d89ec1eafdac9c57b2fc118dba39c34691d0b03d9846712628c46660f58d43af",
+    "__tests__/eventMoments.test.ts": "0ad78db9f8368ad4c903e4b9b4d003b8827308fba83374af7606a12b6688558a",
+    "app/eventDetail.tsx": "31484dfb062175f1819a1d47170ebe961e9ee29a004d75d709ef6b2fddd6808a",
+    "src/api/events.ts": "45cfcc601a18f924ff538c3a3e372af92629cbf2c2000978348bb65af385d7e3",
+    "src/components/EventMomentCard.tsx": "6e76bb7b0c7eee411b76b847277db2fed38ea1535ad07fb95f89f7d1d0aa3e42",
+    "src/lib/eventMoments.ts": "83756539930c4a2ed93b7550ef5f7d6e28c8a0e7e6ad4ecb0800e09d494a0b55",
+    "src/localization/eventExperienceCopy.ts": "dc4aed10ed87894db96b20d025aaac0984b6abc89944a9cd81ded621a759ba54",
+    "src/types/index.ts": "9da589caebcc308a0d552d6f337b5c4cee542eb3b0063f812c8faa21a051562b"
+  },
+  "jest": {
+    "suitesPassed": 98,
+    "testsPassed": 684
+  },
+  "releaseChecks": "PASS: assets, lint, typecheck, release configuration, Expo public configuration",
+  "metro": "npm run start -- --offline --port 8117 started successfully",
+  "androidBundle": {
+    "sha256": "0808fa2c2e078e544e91f1352f2ff1c23bb961ac6b8bf584d29b79cd28fa43bc",
+    "bytes": 5767705,
+    "sourceMapSources": 2433,
+    "exactSourcesContent": {
+      "app/eventDetail.tsx": "31484dfb062175f1819a1d47170ebe961e9ee29a004d75d709ef6b2fddd6808a",
+      "src/api/events.ts": "45cfcc601a18f924ff538c3a3e372af92629cbf2c2000978348bb65af385d7e3",
+      "src/components/EventMomentCard.tsx": "6e76bb7b0c7eee411b76b847277db2fed38ea1535ad07fb95f89f7d1d0aa3e42",
+      "src/lib/eventMoments.ts": "83756539930c4a2ed93b7550ef5f7d6e28c8a0e7e6ad4ecb0800e09d494a0b55",
+      "src/localization/eventExperienceCopy.ts": "dc4aed10ed87894db96b20d025aaac0984b6abc89944a9cd81ded621a759ba54"
+    }
+  },
+  "logSha256": {
+    "tdf-mobile-text-full-v2.log": "b46feaadec160e90505fd6d7faef25cfbf3681b97785f63a616140e17e6181ba",
+    "tdf-mobile-text-release-v2.log": "2d209cac3887f151b9fa2aa49d9afbed6cc143b656bfbf983cc0cfae1cb02d52",
+    "tdf-mobile-text-metro-v2.log": "d88a7ab009beb813207bd35d561cfb756f69e84ce94753971ec2865bc08277d3",
+    "tdf-mobile-text-targeted-v1.log": "439bc55f733069636845b71a1ba26c1283bfada6db3046139a10a67fc9421a36",
+    "tdf-mobile-text-types-v1.log": "66ca8ed10d5f44f7c39e6ca794274b673885df8055f2fe038588d4434d2d386e",
+    "tdf-mobile-text-metro-v1.log": "eac1973011d144d7b446830df70ba8c0737791a98365a31abb0f411b0b945849"
+  },
+  "retainedFailedAttempts": [
+    "Initial typecheck rejected a broad media union; upload now receives the narrowed kind explicitly.",
+    "Initial Expo invocation combined incompatible --offline and --localhost flags; corrected invocation uses --offline alone."
+  ],
+  "limitations": [
+    "No native audio file picker or recording added. Audio is readable and opens via the device handler.",
+    "New text composer remains disabled on old/malformed/unavailable server capability. A capability read never updates invitation preferences.",
+    "No new dependencies or generated-contract changes.",
+    "Backend deployment and parent Mobile review chain remain prerequisites."
+  ],
+  "realProviderCalls": 0,
+  "realInvitationsSent": 0,
+  "productionWritten": false
+}

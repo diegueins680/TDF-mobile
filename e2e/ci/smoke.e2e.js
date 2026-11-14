@@ -1,5 +1,9 @@
 const { device, element, by, waitFor, expect } = require('detox');
 const { expect: assert } = require('@jest/globals');
+const { execFileSync } = require('node:child_process');
+const { writeFileSync } = require('node:fs');
+const path = require('node:path');
+let accessibilitySnapshot = 0;
 // UI-only smoke: no provider consent, backend login or production data.
 describe('Isolated native UI smoke', () => {
   beforeEach(async () => {
@@ -19,14 +23,34 @@ describe('Isolated native UI smoke', () => {
       else await expect(disabledButton).toExist();
       return;
     }
-    const attributes = await element(by.id('loginButton')).getAttributes();
-    if ('elements' in attributes) throw new Error('loginButton must match exactly one element');
-    assert(attributes.enabled).toBe(enabled);
+    // RN maps accessibilityState.disabled to AccessibilityNodeInfo, not View.isEnabled.
+    // Read that native state and retain the exact hierarchy used by the assertion.
+    const evidence = process.env.TDF_UI_EVIDENCE;
+    if (!evidence) throw new Error('TDF_UI_EVIDENCE is required');
+    const remote = '/data/local/tmp/tdf-login-accessibility.xml';
+    const adb = (...args) => execFileSync('adb', ['-s', device.id, ...args], {
+      encoding: 'utf8', timeout: 15000,
+    });
+    assert(device.id).toBe('emulator-5554');
+    adb('shell', 'rm', '-f', remote);
+    adb('shell', 'uiautomator', 'dump', remote);
+    const xml = adb('exec-out', 'cat', remote);
+    writeFileSync(path.join(evidence, `android-accessibility-${++accessibilitySnapshot}.xml`), xml);
+    const nodes = (xml.match(/<node\b[^>]*>/g) || [])
+      .filter(node => /\bresource-id="loginButton"/.test(node));
+    assert(nodes).toHaveLength(1);
+    const state = nodes[0].match(/\benabled="(true|false)"/);
+    assert(state).not.toBeNull();
+    assert(state[1]).toBe(String(enabled));
   }
 
   async function openLogin() {
     // The historical goToLoginButton ID belongs to Create account.
-    const login = element(by.label(/^(Ya tengo cuenta|I already have an account)$/));
+    const label = by.label(/^(Ya tengo cuenta|I already have an account)$/);
+    // Android matches both the accessible button and its TextView child by label.
+    const login = element(device.getPlatform() === 'android'
+      ? label.and(by.type('com.facebook.react.views.view.ReactViewGroup'))
+      : label);
     await waitFor(login).toBeVisible()
       .whileElement(by.id('onboardingScroll')).scroll(200, 'down');
     await login.tap();

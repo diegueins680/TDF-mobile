@@ -13363,6 +13363,8 @@ export interface components {
             readonly currency: string;
             /** @example Europe/Berlin */
             timezone: string;
+            /** @description Whether timezone comes from persisted account preferences. Missing in older server responses. */
+            readonly timezoneSaved?: boolean;
             /**
              * Format: uuid
              * @description Canonical persisted country identity selected by the user.

@@ -25,6 +25,8 @@ import { useAuth } from '../src/providers/AuthProvider';
 import { canonicalEventUrl, eventShareMessage } from '../src/lib/eventSharing';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
+import { useToast } from '../src/hooks/useToast';
+import { Toast } from '../src/components/Toast';
 
 export default function UserProfileScreen() {
   const router = useRouter();
@@ -49,6 +51,8 @@ export default function UserProfileScreen() {
   const countries = useMemo(() => getCatalogItems('countries'), [getCatalogItems]);
   const localeOptions = useMemo(() => getCatalogItems('locales'), [getCatalogItems]);
   const currencyOptions = useMemo(() => getCatalogItems('currencies'), [getCatalogItems]);
+  const toast = useToast();
+  const showToast = toast.show;
   const [activeTab, setActiveTab] = useState<'artist' | 'events' | 'saved' | 'activity'>('artist');
   const displayName = session?.displayName ?? null;
   const [draftTimezone, setDraftTimezone] = useState(timezone);
@@ -164,7 +168,7 @@ export default function UserProfileScreen() {
     mutationFn: (eventId: ID) => Events.deleteRSVP(eventId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['event-rsvp-feed', partyId] });
-      Alert.alert(locale.startsWith('en') ? 'Done' : savedCopy.readyTitle, locale.startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
+      showToast(locale.startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
     },
     onError: () => Alert.alert('Error', locale.startsWith('en') ? 'Could not remove your RSVP.' : 'No pudimos eliminar tu RSVP.'),
   });
@@ -181,7 +185,7 @@ export default function UserProfileScreen() {
       if (copyOnly) {
         await Clipboard.setStringAsync(url);
         analytics.capture('event_link_copied', { platform: 'mobile', event_id: String(item.eventId), method, origin: 'profile_feed' });
-        Alert.alert(locale.startsWith('en') ? 'Link copied' : 'Enlace copiado');
+        showToast(locale.startsWith('en') ? 'Link copied' : 'Enlace copiado');
         return;
       }
       const result = await Share.share({
@@ -202,7 +206,7 @@ export default function UserProfileScreen() {
       analytics.capture('event_share_failed', { platform: 'mobile', event_id: String(item.eventId), method, origin: 'profile_feed' });
       Alert.alert(locale.startsWith('en') ? 'Could not share' : 'No pudimos compartir');
     }
-  }, [analytics, locale]);
+  }, [analytics, locale, showToast]);
   const legacyImportMutation = useMutation({
     mutationFn: ({ ownerPartyId }: { ownerPartyId: string }) =>
       importLegacySavedEvents(
@@ -278,8 +282,8 @@ export default function UserProfileScreen() {
       return;
     }
     setRegionalPreferences({ timezone: draftTimezone, countryId: draftCountryId || null });
-    Alert.alert(savedCopy.saved, 'Actualizamos tus preferencias regionales.');
-  }, [countrySearch, draftCountryId, draftTimezone, setRegionalPreferences, savedCopy]);
+    showToast('Actualizamos tus preferencias regionales.');
+  }, [countrySearch, draftCountryId, draftTimezone, setRegionalPreferences, showToast]);
 
   const headerName = displayName || 'Tu perfil';
   const headerSubtitle = partyId ? 'Sesión conectada' : 'Inicia sesión para usar RSVP e invitaciones';
@@ -759,6 +763,7 @@ export default function UserProfileScreen() {
           </View>
         ) : null}
       </ScrollView>
+      <Toast opacity={toast.opacity} message={toast.message} />
     </SafeAreaView>
   );
 }

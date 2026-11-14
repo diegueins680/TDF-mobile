@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity } from 'react-native';
+import { Alert, View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createBooking, listBookings } from '../../src/api/bookings';
 import { loadServiceOfferingSnapshot } from '../../src/lib/serviceCatalogSnapshot';
@@ -25,17 +25,29 @@ export default function Bookings() {
   const sorted = useMemo(() => [...items].sort((a, b) => a.start.localeCompare(b.start)), [items]);
 
   const createQuickSession = useCallback(() => {
-    const now = new Date();
-    const start = now.toISOString();
     if (!defaultService) return;
     const durationMinutes = defaultService.scDefaultDurationMinutes ?? 60;
-    const end = new Date(now.getTime() + durationMinutes * 60 * 1000).toISOString();
-    m.mutate({
-      title: defaultService.scName,
-      start,
-      end,
-      serviceOfferingId: defaultService.scId,
-    });
+    // One tap used to create a real booking starting immediately; name what
+    // will be created and let the person back out.
+    Alert.alert(
+      `¿Reservar ${defaultService.scName} ahora?`,
+      `Se creará una reserva que empieza en este momento y dura ${durationMinutes} minutos.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Reservar ahora',
+          onPress: () => {
+            const now = new Date();
+            m.mutate({
+              title: defaultService.scName,
+              start: now.toISOString(),
+              end: new Date(now.getTime() + durationMinutes * 60 * 1000).toISOString(),
+              serviceOfferingId: defaultService.scId,
+            });
+          },
+        },
+      ],
+    );
   }, [defaultService, m]);
 
   const renderItem = useCallback(({ item }: { item: Booking }) => (
@@ -53,7 +65,7 @@ export default function Bookings() {
 
   const renderEmpty = useCallback(() => (
     <View style={{ padding: 20 }}>
-      <Text>No bookings</Text>
+      <Text>No tienes reservas.</Text>
     </View>
   ), []);
 

@@ -248,10 +248,12 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
     });
   });
 
-  it('prefills delivery data and updates quantity and total with an accessible stepper', async () => {
+  it('asks for no delivery data on paid tickets and updates quantity and total with an accessible stepper', async () => {
     render(<TicketCheckoutScreen />);
 
-    expect(await screen.findByDisplayValue('ana@example.com')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Pagar/i })).toBeTruthy();
+    expect(screen.queryByDisplayValue('ana@example.com')).toBeNull();
+    expect(screen.queryByText('Datos de entrega')).toBeNull();
     expect(screen.getByRole('radio', { name: /General.*25/i }).props.accessibilityState).toMatchObject({ selected: true });
 
     fireEvent.press(screen.getByRole('button', { name: 'Agregar una entrada' }));
@@ -270,12 +272,13 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
       .toMatchObject({ selected: true, disabled: false });
   });
 
-  it('shows an inline email error before creating an order', async () => {
+  it('shows an inline email error before creating a free order', async () => {
+    mockTierPriceCents = 0;
     render(<TicketCheckoutScreen />);
     const email = await screen.findByDisplayValue('ana@example.com');
     fireEvent.changeText(email, 'correo-invalido');
 
-    fireEvent.press(screen.getByRole('button', { name: /Pagar/i }));
+    fireEvent.press(screen.getByRole('button', { name: /Confirmar .* gratis/i }));
 
     expect(await screen.findByText('Ingresa un correo válido.')).toBeTruthy();
     expect(mockCreatePaymentSheet).not.toHaveBeenCalled();
@@ -402,7 +405,7 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
     };
     render(<TicketCheckoutScreen />);
 
-    await screen.findByDisplayValue('ana@example.com');
+    await screen.findByRole('button', { name: /Pagar/i });
     expect(screen.getByRole('button', { name: 'Términos de las entradas' })).toBeTruthy();
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.getByText('Aceptarás estos términos en el checkout seguro antes de pagar.')).toBeTruthy();
@@ -411,7 +414,7 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
   it('opens the canonical web checkout for paid tickets without forwarding customer PII', async () => {
     render(<TicketCheckoutScreen />);
 
-    await screen.findByDisplayValue('ana@example.com');
+    await screen.findByRole('button', { name: /Pagar/i });
     fireEvent.press(screen.getByRole('button', { name: 'Agregar una entrada' }));
     fireEvent.press(screen.getByRole('button', { name: /Pagar/i }));
 
@@ -429,8 +432,7 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
     jest.mocked(Linking.canOpenURL).mockResolvedValue(false);
     render(<TicketCheckoutScreen />);
 
-    await screen.findByDisplayValue('ana@example.com');
-    fireEvent.press(screen.getByRole('button', { name: /Pagar/i }));
+    fireEvent.press(await screen.findByRole('button', { name: /Pagar/i }));
 
     expect(await screen.findByText('No pudimos completar la compra')).toBeTruthy();
     expect(screen.getByText('No pudimos abrir el checkout seguro de TDF Records.')).toBeTruthy();
@@ -441,13 +443,12 @@ describe('MOB-PER-02-TICKET-IDEMPOTENCY: ticket checkout', () => {
   it('keeps promo entry in the canonical checkout and out of the redirect URL', async () => {
     render(<TicketCheckoutScreen />);
 
-    await screen.findByDisplayValue('ana@example.com');
-    fireEvent.press(screen.getByText('¿Tienes un código promocional?'));
-    fireEvent.changeText(screen.getByLabelText('Código promocional'), 'invitado');
-    fireEvent.press(screen.getByRole('button', { name: /Validar código promocional/i }));
+    const pay = await screen.findByRole('button', { name: /Pagar/i });
+    expect(screen.queryByText('¿Tienes un código promocional?')).toBeNull();
+    fireEvent.press(pay);
 
     await waitFor(() => expect(Linking.openURL).toHaveBeenCalledTimes(1));
-    expect(jest.mocked(Linking.openURL).mock.calls[0][0]).not.toContain('INVITADO');
+    expect(jest.mocked(Linking.openURL).mock.calls[0][0]).not.toMatch(/promo/i);
     expect(mockCreatePaymentSheet).not.toHaveBeenCalled();
   });
 

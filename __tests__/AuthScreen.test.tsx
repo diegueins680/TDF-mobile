@@ -364,7 +364,7 @@ describe('Auth screen', () => {
 
     expect(emailInput).toBeTruthy();
     expect(passwordInput.props.accessibilityHint).toBe(
-      'Usa al menos 8 caracteres y como máximo 72 bytes UTF-8, sin caracteres de control ni formato oculto.',
+      'Usa al menos 8 caracteres y no más de 72 (los acentos y emojis cuentan como varios).',
     );
 
     fireEvent.changeText(emailInput, 'correo-invalido');
@@ -372,7 +372,7 @@ describe('Auth screen', () => {
 
     expect(screen.getByText('Ingresa un correo electrónico válido.').props.accessibilityRole).toBe('alert');
     expect(screen.getByText(
-      'Usa al menos 8 caracteres y como máximo 72 bytes UTF-8, sin caracteres de control ni formato oculto.',
+      'Usa al menos 8 caracteres y no más de 72 (los acentos y emojis cuentan como varios).',
     ).props.accessibilityRole).toBe('alert');
   });
 
@@ -761,6 +761,22 @@ describe('Auth screen', () => {
     expect(screen.getByText(/Cargando sesión guardada…/i)).toBeTruthy();
     expect(screen.queryByTestId('loginButton')).toBeNull();
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
+  });
+
+  it('shows no session status card to someone who is signed out', async () => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({
+      token: null,
+      partyId: null,
+      loading: false,
+      setToken: mockSetToken,
+      clearToken: mockClearToken,
+    });
+
+    render(<AuthScreen />);
+
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
+    expect(screen.queryByText(/Estado de sesión/i)).toBeNull();
+    expect(screen.queryByText(/Cerrar sesión/i)).toBeNull();
   });
 
   it('clears the current session', async () => {

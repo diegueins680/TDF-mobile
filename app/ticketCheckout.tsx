@@ -185,7 +185,8 @@ export default function TicketCheckoutScreen() {
     ? Math.min(ticketTierAvailability(selectedTier), MAX_TICKETS_PER_ORDER)
     : 1;
   const totalCents = selectedTier ? selectedTier.priceCents * quantity : 0;
-  const hasPromoCode = Boolean(promoCode.trim());
+  const paidTierSelected = (selectedTier?.priceCents ?? 0) > 0;
+  const hasPromoCode = !paidTierSelected && Boolean(promoCode.trim());
   const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
   const activeOrderCount = orders.filter((order) =>
     ['paid', 'pending'].includes(order.status.toLowerCase()),
@@ -244,7 +245,7 @@ export default function TicketCheckoutScreen() {
       if (!eventId) throw new Error('No encontramos este evento.');
       if (!partyId || !token?.trim()) throw new Error('Vuelve a iniciar sesión para comprar.');
       if (!selectedTier) throw new Error('Selecciona una entrada disponible.');
-      if (!isValidTicketEmail(buyerEmail)) throw new Error('Ingresa un correo válido.');
+      if (selectedTier.priceCents === 0 && !isValidTicketEmail(buyerEmail)) throw new Error('Ingresa un correo válido.');
       if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > maxQuantity) {
         throw new Error('La cantidad seleccionada ya no está disponible.');
       }
@@ -367,7 +368,7 @@ export default function TicketCheckoutScreen() {
   const handlePurchase = useCallback(() => {
     setEmailTouched(true);
     setFeedback(null);
-    if (!isValidTicketEmail(buyerEmail)) return;
+    if (!paidTierSelected && !isValidTicketEmail(buyerEmail)) return;
     analytics.capture('ticket_checkout_started', {
       event_id: eventId,
       tier_id: selectedTier?.id,
@@ -375,7 +376,7 @@ export default function TicketCheckoutScreen() {
       amount_cents: totalCents,
     });
     purchaseMutation.mutate();
-  }, [analytics, buyerEmail, eventId, purchaseMutation, quantity, selectedTier?.id, totalCents]);
+  }, [analytics, buyerEmail, eventId, paidTierSelected, purchaseMutation, quantity, selectedTier?.id, totalCents]);
 
   const handleSelectTier = useCallback((tier: EventTicketTier) => {
     if (!isTicketTierOnSale(tier) || purchaseMutation.isPending) return;
@@ -711,6 +712,14 @@ export default function TicketCheckoutScreen() {
                     >
                       <Text style={styles.accountButtonText}>Volver a ingresar</Text>
                     </TouchableOpacity>
+                  </View>
+                ) : paidTierSelected ? (
+                  // Paid tickets finish on the TDF Records checkout page, which asks
+                  // for these details itself; asking here would make people type them twice.
+                  <View style={styles.section}>
+                    <Text style={styles.helperText}>
+                      En el siguiente paso completas tus datos y eliges cómo pagar en la página de TDF Records.
+                    </Text>
                   </View>
                 ) : (
                   <View style={styles.section}>

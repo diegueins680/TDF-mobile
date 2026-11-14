@@ -1,16 +1,16 @@
 import { Animated, Text, StyleSheet } from 'react-native';
-import type { RefObject } from 'react';
 
 interface ToastProps {
   opacity: Animated.Value;
-  messageRef: RefObject<string>;
+  message: string;
 }
 
-export function Toast({ opacity, messageRef }: ToastProps) {
+export function Toast({ opacity, message }: ToastProps) {
+  if (!message) return null;
   return (
-    <Animated.View style={[styles.container, { opacity }]}>
-      <Text style={styles.text} accessibilityLiveRegion="polite">
-        {messageRef.current}
+    <Animated.View pointerEvents="none" style={[styles.container, { opacity }]}>
+      <Text style={styles.text} accessibilityLiveRegion="polite" testID="toast-message">
+        {message}
       </Text>
     </Animated.View>
   );
@@ -22,15 +22,18 @@ const styles = StyleSheet.create({
     bottom: 80,
     left: 20,
     right: 20,
-    backgroundColor: '#333',
+    backgroundColor: '#1f2937',
     borderRadius: 8,
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     alignItems: 'center',
     zIndex: 9999,
+    elevation: 6,
   },
   text: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 15,
+    lineHeight: 20,
     textAlign: 'center',
   },
 });

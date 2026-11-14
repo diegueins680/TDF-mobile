@@ -1092,7 +1092,8 @@ export default function AuthScreen() {
             </View>
           ) : null}
 
-          <View style={styles.card}>
+          {/* Only someone already signed in needs the session state and the way out. */}
+          {(loading || hasToken || feedbackMessage) ? <View style={styles.card}>
             <Text style={styles.label}>{copy.sessionStatus}</Text>
             {loading ? (
               <View style={styles.loadingRow}>
@@ -1122,7 +1123,7 @@ export default function AuthScreen() {
                 </TouchableOpacity>
               </>
             )}
-          </View>
+          </View> : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

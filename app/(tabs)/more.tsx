@@ -67,6 +67,7 @@ export default function FeatureExplorerScreen() {
   const { colors } = useAppTheme();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
+  const [showLocked, setShowLocked] = useState(false);
   const preferencesQuery = useQuery({
     queryKey: ['navigation-preferences'],
     queryFn: listNavigationPreferences,
@@ -108,9 +109,18 @@ export default function FeatureExplorerScreen() {
     });
   }, [featureFlags, modules, query, roles, token]);
 
+  // Locked rows outnumber usable ones for most accounts. They stay reachable
+  // (search, or the disclosure under the list) without padding the default menu.
+  const lockedCount = useMemo(() => decisions.filter((decision) => decision.state === 'locked').length, [decisions]);
+  const lockedFolded = query.trim().length === 0 && !showLocked && lockedCount > 0;
+  const visibleDecisions = useMemo(
+    () => lockedFolded ? decisions.filter((decision) => decision.state !== 'locked') : decisions,
+    [decisions, lockedFolded],
+  );
+
   const sections = useMemo<FeatureSection[]>(() => {
     const byGroup = new Map<string, FeatureAccessDecision[]>();
-    decisions.forEach((decision) => {
+    visibleDecisions.forEach((decision) => {
       const key = decision.feature.navigationGroup ?? 'other';
       byGroup.set(key, [...(byGroup.get(key) ?? []), decision]);
     });
@@ -125,7 +135,7 @@ export default function FeatureExplorerScreen() {
       });
       return data.length > 0 ? [{ title: groupLabel(group.id, locale), data }] : [];
     });
-  }, [decisions, locale, preferenceMap]);
+  }, [visibleDecisions, locale, preferenceMap]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -199,8 +209,8 @@ export default function FeatureExplorerScreen() {
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           {locale.startsWith('en')
-            ? 'Your authorized features, web tools, and access requests.'
-            : 'Tus funciones autorizadas, herramientas web y solicitudes de acceso.'}
+            ? 'Everything your account can use.'
+            : 'Todo lo que tu cuenta puede usar.'}
         </Text>
         <TextInput
           accessibilityLabel={locale.startsWith('en') ? 'Search features' : 'Buscar funciones'}
@@ -213,7 +223,7 @@ export default function FeatureExplorerScreen() {
           value={query}
         />
         <Text accessibilityLiveRegion="polite" style={styles.srSummary}>
-          {decisions.length} {locale.startsWith('en') ? 'feature results' : 'resultados de funciones'}
+          {visibleDecisions.length} {locale.startsWith('en') ? 'feature results' : 'resultados de funciones'}
         </Text>
       </View>
       <SectionList
@@ -245,7 +255,7 @@ export default function FeatureExplorerScreen() {
                 <View style={styles.rowText}>
                   <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>{featureLabel(feature, locale)}</Text>
                   <Text numberOfLines={2} style={[styles.rowDescription, { color: colors.textSecondary }]}>
-                    {locked ? (locale.startsWith('en') ? 'Access required · Request it internally' : 'Requiere acceso · Solicítalo internamente') : feature.description[locale.startsWith('en') ? 'en' : 'es']}
+                    {locked ? (locale.startsWith('en') ? 'Needs access · Tap to request it' : 'Requiere acceso · Toca para solicitarlo') : feature.description[locale.startsWith('en') ? 'en' : 'es']}
                   </Text>
                 </View>
                 <MaterialCommunityIcons name={locked ? 'lock-outline' : 'chevron-right'} size={22} color={colors.textSecondary} />
@@ -263,9 +273,27 @@ export default function FeatureExplorerScreen() {
             </View>
           );
         }}
-        ListEmptyComponent={(
+        ListFooterComponent={lockedFolded ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityHint={locale.startsWith('en') ? 'Shows features you can request access to' : 'Muestra las funciones para las que puedes pedir acceso'}
+            onPress={() => {
+              setShowLocked(true);
+              analytics.capture('locked_features_revealed', { platform: 'mobile', locked_count: lockedCount });
+            }}
+            style={[styles.lockedToggle, { borderColor: colors.border }]}
+          >
+            <MaterialCommunityIcons name="lock-outline" size={20} color={colors.textSecondary} />
+            <Text style={[styles.lockedToggleText, { color: colors.textSecondary }]}>
+              {locale.startsWith('en')
+                ? `Show ${lockedCount} more that need access`
+                : `Ver ${lockedCount} más que requieren acceso`}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+        ListEmptyComponent={lockedFolded ? null : (
           <Text accessibilityLiveRegion="polite" style={[styles.empty, { color: colors.textSecondary }]}>
-            {locale.startsWith('en') ? 'No safe feature results.' : 'No hay resultados de funciones seguras.'}
+            {locale.startsWith('en') ? 'Nothing matches that search.' : 'Nada coincide con esa búsqueda.'}
           </Text>
         )}
       />
@@ -289,5 +317,7 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   rowLabel: { fontSize: 16, fontWeight: '700' },
   rowDescription: { fontSize: 13, lineHeight: 18 },
+  lockedToggle: { minHeight: 48, marginTop: 12, borderWidth: 1, borderRadius: 12, borderStyle: 'dashed', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  lockedToggleText: { fontSize: 15, fontWeight: '600' },
   empty: { paddingVertical: 40, textAlign: 'center', fontSize: 15 },
 });

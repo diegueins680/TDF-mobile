@@ -30,6 +30,17 @@ jobs:
           persist-credentials: false
       - name: Initialize UI evidence as not run
         run: python3 scripts/run-native-ui-smoke.py android --initialize --evidence "$RUNNER_TEMP/tdf-ui-android"
+      - name: Grant temporary KVM access to the hosted runner
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test -c /dev/kvm
+          command -v getfacl
+          command -v setfacl
+          getfacl -p /dev/kvm > "$RUNNER_TEMP/tdf-kvm-original.acl"
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
       - name: Require existing KVM access before building
         run: |
           if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
@@ -89,3 +100,10 @@ jobs:
           path: ${{ runner.temp }}/tdf-ui-android
           if-no-files-found: error
           retention-days: 3
+      - name: Restore original KVM permissions
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -s "$RUNNER_TEMP/tdf-kvm-original.acl" ]; then
+            sudo setfacl --restore="$RUNNER_TEMP/tdf-kvm-original.acl"
+          fi

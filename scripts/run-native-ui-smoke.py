@@ -73,6 +73,10 @@ def main():
                 raise ValueError('KVM is unavailable; do not change permissions or use paid fallback')
             sdk = Path(env['ANDROID_HOME'])
             emulator_bin = str(sdk / 'emulator/emulator')
+            adb = str(sdk / 'platform-tools/adb')
+            env['PATH'] = str(sdk / 'platform-tools') + os.pathsep + env.get('PATH', '')
+            # Start the same SDK server before emulator registration; keep diagnostics.
+            (out / 'adb-server.log').write_text(run([adb, 'start-server'], env=env) + '\n')
             run([emulator_bin, '-accel-check'])
             image = 'system-images;android-36;default;x86_64'
             receipt['device'] = {'avd': 'tdf-ci', 'image': image, 'serial': 'emulator-5554'}
@@ -90,15 +94,16 @@ def main():
                 if emulator.poll() is not None:
                     raise RuntimeError('Emulator exited before boot')
                 try:
-                    if run(['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'sys.boot_completed'], timeout=10) == '1':
+                    if run([adb, '-s', 'emulator-5554', 'shell', 'getprop', 'sys.boot_completed'], timeout=10, env=env) == '1':
                         break
-                except (subprocess.SubprocessError, OSError):
-                    pass
+                except (subprocess.SubprocessError, OSError) as error:
+                    with (out / 'boot-probe.log').open('a') as probe:
+                        probe.write(str(error) + '\n' + str(getattr(error, 'output', '')) + '\n')
                 time.sleep(2)
             else:
                 raise TimeoutError('Android did not boot in 240 seconds')
-            run(['adb', '-s', 'emulator-5554', 'reverse', 'tcp:18128', 'tcp:18128'])
-            logcat = subprocess.Popen(['adb', '-s', 'emulator-5554', 'logcat', '-v', 'threadtime'],
+            run([adb, '-s', 'emulator-5554', 'reverse', 'tcp:18128', 'tcp:18128'])
+            logcat = subprocess.Popen([adb, '-s', 'emulator-5554', 'logcat', '-v', 'threadtime'],
                                      stdout=(out / 'logcat.log').open('w'), stderr=subprocess.STDOUT)
         with (out / 'detox.log').open('w') as log:
             subprocess.run(['node_modules/.bin/detox', 'test', '--config-path', './e2e/ci/detox.config.js',

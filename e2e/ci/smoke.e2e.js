@@ -3,7 +3,9 @@ const { expect: assert } = require('@jest/globals');
 // UI-only smoke: no provider consent, backend login or production data.
 describe('Isolated native UI smoke', () => {
   beforeEach(async () => {
-    if (device.getPlatform() === 'ios') await device.clearKeychain();
+    // The runner creates a fresh simulator per run; these tests never submit credentials.
+    // clearKeychain unloads securityd and destabilized SpringBoard on iOS 26.2.
+    // Reinstall app data between cases without disrupting system security services.
     await device.launchApp({ delete: true, newInstance: true });
     await waitFor(element(by.id('onboardingScroll'))).toBeVisible().withTimeout(30000);
   });

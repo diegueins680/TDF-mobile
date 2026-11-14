@@ -24,6 +24,7 @@ jobs:
       EXPO_PUBLIC_API_BASE: http://127.0.0.1:18128
       EXPO_PUBLIC_UPLOAD_URL: http://127.0.0.1:18128/drive/upload
       NODE_ENV: production
+      ANDROID_AVD_HOME: ${{ runner.temp }}/tdf-ci-avd
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -89,6 +90,7 @@ jobs:
           test -r /dev/kvm
           test -w /dev/kvm
           test -s "$ANDROID_HOME/licenses/android-sdk-license"
+          mkdir -p "$ANDROID_AVD_HOME"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'emulator' 'system-images;android-36;default;x86_64' </dev/null
       - name: Boot Android and execute isolated UI smoke
         run: python3 scripts/run-native-ui-smoke.py android --evidence "$RUNNER_TEMP/tdf-ui-android"

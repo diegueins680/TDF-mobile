@@ -66,7 +66,12 @@ and public release are separate states; record each independently.
    configuration. Recheck screenshots, age/content rating, privacy/data safety,
    account deletion, review contact and working reviewer instructions. Confirm the
    public legal/support pages are reachable and accurately describe the candidate.
-5. Use existing signing environments and credentials. Stop for any new purchase,
+5. iOS: the signed workflow builds with `EXPO_PUBLIC_APPLE_SIGN_IN_ENABLED=true`
+   (App Store guideline 4.8). The `ios-release` provisioning profile must carry the
+   Sign in with Apple capability; the signing step fails before archiving if the
+   stored `TDF_IOS_PROVISIONING_PROFILE` predates that capability. Regenerate the
+   profile in the Apple Developer portal and update the secret first.
+6. Use existing signing environments and credentials. Stop for any new purchase,
    agreement or access/security change requiring separate authorization.
 
 ## Build, qualify and submit

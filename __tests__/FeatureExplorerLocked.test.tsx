@@ -14,8 +14,9 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: jest.fn(() => ({ setQueryData: jest.fn() })),
 }));
 jest.mock('../src/analytics/AnalyticsProvider', () => ({ useAnalytics: () => ({ capture: mockCapture }) }));
+let mockAuth: { token: string; roles: string[]; modules: string[]; featureFlags: string[]; loading: boolean } = { token: 'Bearer fan', roles: ['Fan'], modules: [], featureFlags: [], loading: false };
 jest.mock('../src/providers/AuthProvider', () => ({
-  useAuth: () => ({ token: 'Bearer fan', roles: ['Fan'], modules: [], featureFlags: [], loading: false }),
+  useAuth: () => mockAuth,
 }));
 jest.mock('../src/providers/UserSettingsProvider', () => ({ useUserSettings: () => ({ locale: 'es-EC' }) }));
 jest.mock('../src/theme/ThemeProvider', () => ({
@@ -59,5 +60,22 @@ describe('Explore for an account with locked features', () => {
 
     expect(screen.queryByText(/más que requieren acceso$/)).toBeNull();
     expect(lockedRows().length).toBeGreaterThan(0);
+  });
+
+  it('opens Crear from the top of Explorar for an account that can start something', () => {
+    // Every account may post a classified or create an event, so a fan sees the entry.
+    render(<FeatureExplorerScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Crear algo nuevo' }));
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/create');
+  });
+
+  it('leaves the entry out when no quick-create action can be started', () => {
+    mockAuth = { token: '', roles: [], modules: [], featureFlags: [], loading: false };
+    try {
+      render(<FeatureExplorerScreen />);
+      expect(screen.queryByTestId('exploreCreateEntry')).toBeNull();
+    } finally {
+      mockAuth = { token: 'Bearer fan', roles: ['Fan'], modules: [], featureFlags: [], loading: false };
+    }
   });
 });

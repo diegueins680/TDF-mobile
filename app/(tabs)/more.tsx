@@ -20,6 +20,7 @@ import {
   resolveMobileDestination,
   searchFeatures,
   type FeatureAccessDecision,
+  type FeatureAction,
   type MobileFeature,
 } from '../../src/features/featureRegistry';
 import { mobileFeatureGroups, mobileFeatureRegistry } from '../../src/features/generatedFeatureRegistry';
@@ -63,6 +64,10 @@ export default function FeatureExplorerScreen() {
   const router = useRouter();
   const analytics = useAnalytics();
   const { token, roles, modules, featureFlags, loading } = useAuth();
+  // Only accounts with at least one quick-create action they may start see the entry.
+  const canCreate = useMemo(() => mobileFeatureRegistry.some((feature) => feature.quickCreate
+    && evaluateFeatureAccess(feature, { authenticated: Boolean(token), roles, modules, featureFlags },
+      feature.quickCreate.action as FeatureAction).state === 'allowed'), [featureFlags, modules, roles, token]);
   const { locale } = useUserSettings();
   const { colors } = useAppTheme();
   const queryClient = useQueryClient();
@@ -222,6 +227,19 @@ export default function FeatureExplorerScreen() {
           style={[styles.search, { borderColor: colors.border, color: colors.textPrimary, backgroundColor: colors.surface }]}
           value={query}
         />
+        {canCreate ? (
+          <TouchableOpacity
+            testID="exploreCreateEntry"
+            accessibilityRole="button"
+            onPress={() => router.push('/(tabs)/create' as Href)}
+            style={[styles.createEntry, { borderColor: colors.actionPrimary, backgroundColor: colors.surface }]}
+          >
+            <MaterialCommunityIcons name="plus-circle-outline" size={22} color={colors.actionPrimary} />
+            <Text style={[styles.createEntryText, { color: colors.actionPrimary }]}>
+              {locale.startsWith('en') ? 'Create something new' : 'Crear algo nuevo'}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
         <Text accessibilityLiveRegion="polite" style={styles.srSummary}>
           {visibleDecisions.length} {locale.startsWith('en') ? 'feature results' : 'resultados de funciones'}
         </Text>
@@ -305,6 +323,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   loader: { flex: 1 },
   heading: { paddingHorizontal: 18, paddingTop: 18, gap: 8 },
+  createEntry: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, borderWidth: 1, borderRadius: 12 },
+  createEntryText: { fontSize: 15, fontWeight: '700' },
   title: { fontSize: 28, fontWeight: '800' },
   subtitle: { fontSize: 14, lineHeight: 20 },
   search: { minHeight: 48, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, fontSize: 16, marginTop: 4 },

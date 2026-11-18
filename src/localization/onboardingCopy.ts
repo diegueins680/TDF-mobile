@@ -7,6 +7,7 @@ export const onboardingCopy = {
     proofBody: 'Explora eventos, guarda tus favoritos y sigue artistas. Te mostraremos el resto cuando lo necesites.',
     create: 'Crear cuenta',
     login: 'Ya tengo cuenta',
+    exploreGuest: 'Explorar sin cuenta',
   },
   en: {
     kicker: 'TDF Records',
@@ -16,6 +17,7 @@ export const onboardingCopy = {
     proofBody: 'Browse events, save favorites, and follow artists. We will introduce the rest when you need it.',
     create: 'Create account',
     login: 'I already have an account',
+    exploreGuest: 'Explore without an account',
   },
 } as const;
 

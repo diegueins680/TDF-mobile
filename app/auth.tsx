@@ -1105,7 +1105,7 @@ export default function AuthScreen() {
           ) : null}
 
           {/* Only someone already signed in needs the session state and the way out. */}
-          {(loading || hasToken || feedbackMessage) ? <View style={styles.card}>
+          {(loading || hasToken || feedbackMessage || isClearingSession || logoutPersistenceFailed) ? <View style={styles.card}>
             <Text style={styles.label}>{copy.sessionStatus}</Text>
             {loading ? (
               <View style={styles.loadingRow}>

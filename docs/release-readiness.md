@@ -1,5 +1,15 @@
 # Release Readiness — Go / No-Go
 
+## Current publication checkpoint — 2026-11-13
+
+Production readiness is **not established**. Use the [current store runbook](store-publish-runbook.md)
+for verified source/CI evidence, signed-build history and outstanding console/device gates.
+The sections below are historical evidence for their named source, date and environment;
+old PASS labels or waived simulator prerequisites do not qualify a current store release.
+Physical-device Google login remains required before production. Store review state,
+unused build numbers, final candidate artifacts and Play production eligibility need
+fresh verification. Do not recreate credentials from the historical blocker table.
+
 ## UX audit checkpoint — 2026-09-18
 
 Follow-up: a regression reproduced a pending artist follow applying twice after

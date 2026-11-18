@@ -131,7 +131,7 @@ for (const check of releaseIdentityChecks) {
 const otaRuntime = JSON.parse(readRepoFile('app.json')).expo.runtimeVersion;
 const iosRuntime = readRepoFile('ios/TDFRecords/Supporting/Expo.plist').match(/<key>EXUpdatesRuntimeVersion<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
 const androidRuntime = readRepoFile('android/app/src/main/res/values/strings.xml').match(/name="expo_runtime_version"[^>]*>([^<]+)</)?.[1];
-if (typeof otaRuntime !== 'string' || ['1.0.0', '1.0.1'].includes(otaRuntime) || otaRuntime !== iosRuntime || otaRuntime !== androidRuntime) {
+if (typeof otaRuntime !== 'string' || ['1.0.0', '1.0.1', '1.0.1-interactions.1'].includes(otaRuntime) || otaRuntime !== iosRuntime || otaRuntime !== androidRuntime) {
   errors.push('The interaction OTA runtime must be isolated from legacy binaries and identical in Expo/iOS/Android.');
 }
 

@@ -1,0 +1,17 @@
+// Applied only to the disposable interaction APK; never to store workflows.
+repositories {
+    maven { url uri("${rootDir}/../node_modules/detox/Detox-android") }
+}
+def detoxVersion = new groovy.json.JsonSlurper().parse(
+    file("${rootDir}/../node_modules/detox/package.json")).version
+android {
+    defaultConfig { testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner' }
+    testBuildType 'release'
+    sourceSets { androidTest.java.srcDirs += ["${rootDir}/../e2e/ci/android"] }
+}
+dependencies {
+    androidTestImplementation("com.wix:detox:${detoxVersion}")
+    androidTestImplementation('androidx.test:runner:1.6.2')
+    androidTestImplementation('androidx.test:rules:1.6.1')
+    androidTestImplementation('androidx.test.ext:junit:1.2.1')
+}

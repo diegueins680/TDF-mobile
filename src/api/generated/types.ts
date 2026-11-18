@@ -18141,6 +18141,19 @@ export interface components {
                 "application/json": components["schemas"]["ApiError"];
             };
         };
+        /** @description The persisted result identifier */
+        Receipt: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    id: string;
+                    kind?: string;
+                };
+            };
+        };
     };
     parameters: {
         /** @description Defaults to authenticated party; another party requires strict administrator access */
@@ -18199,6 +18212,7 @@ export interface components {
         TargetId: string;
         "parameters-TargetKind": components["schemas"]["ExperienceReviewTargetKind"];
         "parameters-TargetId": string;
+        Project: string;
     };
     requestBodies: never;
     headers: never;

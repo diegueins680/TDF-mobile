@@ -1,4 +1,4 @@
-import { eventExperienceLanguage, savedEventCopy } from '../src/localization/eventExperienceCopy';
+import { eventExperienceLanguage, eventMomentCopy, savedEventCopy } from '../src/localization/eventExperienceCopy';
 import { InteractionBar } from '../src/features/interactions/InteractionBar';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -42,6 +42,7 @@ import {
   listFeaturedMoments,
 } from '../src/lib/eventMoments';
 import { countLiveBroadcasts } from '../src/lib/liveBroadcasts';
+import { MomentAudioSelectionError, selectMomentAudio } from '../src/lib/momentAudio';
 import {
   MAX_MOMENT_MEDIA_SELECTION,
   prepareMomentMediaForUpload,
@@ -87,6 +88,7 @@ import type {
 } from '../src/types';
 
 type EventDetailTab = 'details' | 'moments' | 'live';
+type MomentAuthorSelection = { moment: EventMoment; epoch: number; hasOwnership: () => boolean };
 type MomentSubmission = {
   caption: string;
   media: DraftMomentMedia[];
@@ -197,12 +199,47 @@ function EventDetailContent() {
   const [showMomentComposer, setShowMomentComposer] = useState(false);
   const [momentCaption, setMomentCaption] = useState('');
   const [momentMedia, setMomentMedia] = useState<DraftMomentMedia[]>([]);
+  const momentPickerEpoch = useRef(0);
+  const closeMomentComposer = useCallback(() => {
+    momentPickerEpoch.current += 1;
+    setShowMomentComposer(false);
+  }, []);
+  const extendedMomentsQuery = useQuery({
+    queryKey: ['event-moment-capability', normalizedPartyId, momentSessionVersion],
+    queryFn: () => Events.supportsExtendedMoments(),
+    enabled: Boolean(token && normalizedPartyId),
+    retry: false,
+  });
+  const canPublishText = shouldPreferRemoteMoments && extendedMomentsQuery.data === true;
+  const audioCopy = eventMomentCopy[eventExperienceLanguage(locale)];
+  const hasMomentContent = momentMedia.length > 0 || (canPublishText && momentCaption.trim().length > 0);
   const [pendingMoments, setPendingMoments] = useState<EventMoment[]>([]);
   const [previewMedia, setPreviewMedia] = useState<EventMomentMedia | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [momentPublishFeedback, setMomentPublishFeedback] = useState<MomentPublishFeedback | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [editingMoment, setEditingMoment] = useState<MomentAuthorSelection | null>(null);
+  const [deletingMoment, setDeletingMoment] = useState<MomentAuthorSelection | null>(null);
+  const [editedCaption, setEditedCaption] = useState('');
+  const [authorActionError, setAuthorActionError] = useState('');
+  const [authorActionPending, setAuthorActionPending] = useState(false);
+  const authorActionMounted = useRef(true);
+  const authorActionLock = useRef<symbol | null>(null);
+  const authorActionEpoch = useRef(0);
+  useEffect(() => {
+    authorActionMounted.current = true;
+    return () => { authorActionMounted.current = false; authorActionEpoch.current += 1; };
+  }, []);
+  useEffect(() => {
+    authorActionEpoch.current += 1;
+    authorActionLock.current = null;
+    setEditingMoment(null); setDeletingMoment(null); setEditedCaption(''); setAuthorActionError(''); setAuthorActionPending(false);
+  }, [eventId, normalizedPartyId, momentSessionVersion]);
+  const activeEdit = canPublishText && editingMoment?.hasOwnership()
+    && editingMoment.epoch === authorActionEpoch.current ? editingMoment : null;
+  const activeDelete = canPublishText && deletingMoment?.hasOwnership()
+    && deletingMoment.epoch === authorActionEpoch.current ? deletingMoment : null;
   const [selectedLiveArtistId, setSelectedLiveArtistId] = useState<string | null>(null);
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastDescription, setBroadcastDescription] = useState('');
@@ -215,6 +252,9 @@ function EventDetailContent() {
     queryFn: () => token ? Events.getById(eventId as ID) : Events.getPublicById(eventId as ID),
     enabled: Boolean(eventId),
   });
+  // The existing durable media endpoint creates public URLs and rejects
+  // private/unlisted events. Do not invite a private-event audio upload.
+  const canPickAudio = canPublishText && Platform.OS !== 'web' && event?.isPublic === true && event.publicListable === true;
 
   const rsvpQuery = useQuery({
     queryKey: ['event-rsvps', normalizedPartyId ?? 'anonymous', eventId],
@@ -667,12 +707,13 @@ function EventDetailContent() {
             const notices: string[] = [];
 
             assertOwner();
-            if (preferRemote) {
+            if (preferRemote && originalMedia.kind !== 'text') {
               const preparedMedia = await prepareMomentMediaForUpload(originalMedia);
               assertOwner();
+              if (preparedMedia.kind === 'text') throw new Error('Archivo inválido para subir.');
               // An upload failure keeps the draft in the editor. It must never
               // become a locally saved item presented as a remote publication.
-              const mediaUri = await Events.uploadMomentMedia(eventId, preparedMedia);
+              const mediaUri = await Events.uploadMomentMedia(eventId, { ...preparedMedia, kind: preparedMedia.kind });
               mediaForMoment = { ...preparedMedia, uri: mediaUri };
             }
 
@@ -735,7 +776,7 @@ function EventDetailContent() {
       }
 
       if (rejected.length > 0) {
-        setMomentMedia(rejected.map((outcome) => submission.media[outcome.index]));
+        setMomentMedia(rejected.map((outcome) => submission.media[outcome.index]).filter((media) => media.kind !== 'text'));
         setMomentCaption(submission.caption);
         setShowMomentComposer(true);
       }
@@ -766,7 +807,7 @@ function EventDetailContent() {
       if (!submission.stillOwns()) return;
       const submittedIds = new Set(submission.optimisticIds);
       setPendingMoments((current) => current.filter((moment) => !submittedIds.has(moment.id)));
-      setMomentMedia(submission.media);
+      setMomentMedia(submission.media.filter((media) => media.kind !== 'text'));
       setMomentCaption(submission.caption);
       setShowMomentComposer(true);
       const message = error instanceof Error ? error.message : 'No pudimos publicar tu momento.';
@@ -998,6 +1039,64 @@ function EventDetailContent() {
     },
   });
 
+  const ownsManagedMoment = useCallback((moment: EventMoment) => authorActionMounted.current
+    && canPublishText && stillOwnsMoments() && Boolean(currentActor.partyId)
+    && moment.authorPartyId === currentActor.partyId
+    && String(moment.eventId) === String(event?.id ?? eventId) && /^[1-9][0-9]*$/.test(moment.id),
+  [canPublishText, currentActor.partyId, event?.id, eventId, stillOwnsMoments]);
+
+  const performAuthorAction = useCallback(async (selection: MomentAuthorSelection, kind: 'edit' | 'delete', caption = '') => {
+    if (!selection.hasOwnership() || selection.epoch !== authorActionEpoch.current || authorActionLock.current) return;
+    const attempt = Symbol('moment-author-action');
+    authorActionLock.current = attempt; setAuthorActionPending(true); setAuthorActionError('');
+    try {
+      let changed: EventMoment | null = null;
+      if (kind === 'edit') changed = await Events.editMoment(selection.moment, caption);
+      else await Events.deleteMoment(selection.moment);
+      if (!selection.hasOwnership()) return;
+      qc.setQueryData<EventMoment[]>(momentsQueryKey, (current = []) => changed
+        ? current.map((moment) => moment.id === selection.moment.id ? changed : moment)
+        : current.filter((moment) => moment.id !== selection.moment.id));
+      void qc.invalidateQueries({ queryKey: momentsQueryKey });
+      void qc.invalidateQueries({ queryKey: ['interactions'] });
+      if (selection.epoch === authorActionEpoch.current) {
+        setEditingMoment(null); setDeletingMoment(null); setEditedCaption('');
+        setMomentPublishFeedback({ tone: 'success', text: kind === 'edit' ? audioCopy.memoryUpdated : audioCopy.memoryDeleted });
+      }
+    } catch (error) {
+      if (!selection.hasOwnership() || selection.epoch !== authorActionEpoch.current) return;
+      const status = (error as { response?: { status?: number } } | null)?.response?.status;
+      const message = status === 409 ? audioCopy.memoryConflict
+        : status && [401, 403, 404].includes(status) ? audioCopy.memoryUnavailable
+          : kind === 'edit' ? audioCopy.memoryNetworkFailure : audioCopy.memoryDeleteFailure;
+      setAuthorActionError(message);
+    } finally {
+      if (authorActionLock.current === attempt) {
+        authorActionLock.current = null;
+        if (authorActionMounted.current) setAuthorActionPending(false);
+      }
+    }
+  }, [audioCopy, momentsQueryKey, qc]);
+
+  const openMomentEditor = useCallback((moment: EventMoment) => {
+    if (!ownsManagedMoment(moment) || !moment.updatedAt || authorActionLock.current) return;
+    const epoch = ++authorActionEpoch.current;
+    setDeletingMoment(null);
+    setEditingMoment({ moment, epoch, hasOwnership: () => ownsManagedMoment(moment) });
+    setEditedCaption(moment.caption ?? ''); setAuthorActionError('');
+  }, [ownsManagedMoment]);
+  const closeAuthorDialog = useCallback(() => {
+    if (authorActionLock.current) return;
+    authorActionEpoch.current += 1;
+    setEditingMoment(null); setDeletingMoment(null); setEditedCaption(''); setAuthorActionError('');
+  }, []);
+  const openMomentDeletion = useCallback((moment: EventMoment) => {
+    if (!ownsManagedMoment(moment) || authorActionLock.current) return;
+    const epoch = ++authorActionEpoch.current;
+    setEditingMoment(null); setEditedCaption(''); setAuthorActionError('');
+    setDeletingMoment({ moment, epoch, hasOwnership: () => ownsManagedMoment(moment) });
+  }, [ownsManagedMoment]);
+
   const handleOpenTicketUrl = useCallback((ticketUrl?: string | null) => {
     if (ticketUrl) {
       Linking.openURL(ticketUrl).catch(() => {
@@ -1007,6 +1106,7 @@ function EventDetailContent() {
   }, []);
 
   const handleOpenMomentMedia = useCallback((media: EventMomentMedia) => {
+    if (media.kind === 'text') return;
     if (media.kind === 'image') {
       setPreviewFailed(false);
       setPreviewLoading(true);
@@ -1148,16 +1248,29 @@ function EventDetailContent() {
     });
   }, []);
 
-  const pickMomentMedia = useCallback(async (mode: 'camera' | 'photos' | 'video') => {
+  const pickMomentMedia = useCallback(async (mode: 'camera' | 'photos' | 'video' | 'audio') => {
     if (!stillOwnsMoments()) return;
+    if (mode === 'audio' && !canPickAudio) return;
     const remaining = MAX_MOMENT_MEDIA_SELECTION - momentMedia.length;
     if (remaining <= 0) {
       Alert.alert('Galería completa', `Puedes publicar hasta ${MAX_MOMENT_MEDIA_SELECTION} archivos a la vez.`);
       return;
     }
 
-    const selected = await selectMomentMedia(mode, mode === 'photos' ? remaining : 1);
-    if (!stillOwnsMoments()) return;
+    const pickerEpoch = ++momentPickerEpoch.current;
+    let selected: DraftMomentMedia[];
+    try {
+      selected = mode === 'audio' ? await selectMomentAudio()
+        : await selectMomentMedia(mode, mode === 'photos' ? remaining : 1);
+    } catch (error) {
+      if (!stillOwnsMoments() || momentPickerEpoch.current !== pickerEpoch) return;
+      const message = error instanceof MomentAudioSelectionError
+        ? error.code === 'format' ? audioCopy.audioFormats : error.code === 'size' ? audioCopy.audioSize : audioCopy.audioFile
+        : audioCopy.audioPickerFailure;
+      Alert.alert(audioCopy.audioSelectionFailure, message);
+      return;
+    }
+    if (!stillOwnsMoments() || momentPickerEpoch.current !== pickerEpoch) return;
     if (selected.length === 0) return;
 
     setMomentMedia((current) => {
@@ -1165,18 +1278,21 @@ function EventDetailContent() {
       const additions = selected.filter((media) => !knownUris.has(media.uri));
       return [...current, ...additions].slice(0, MAX_MOMENT_MEDIA_SELECTION);
     });
-  }, [momentMedia.length, selectMomentMedia, stillOwnsMoments]);
+  }, [audioCopy, canPickAudio, momentMedia.length, selectMomentMedia, stillOwnsMoments]);
 
   const removeMomentMedia = useCallback((uri: string) => {
     setMomentMedia((current) => current.filter((media) => media.uri !== uri));
   }, []);
 
   const handlePublishMoments = useCallback(() => {
-    if (!eventId || momentMedia.length === 0 || createMomentMutation.isPending || !stillOwnsMoments()) return;
+    if (!eventId || !hasMomentContent || createMomentMutation.isPending || !stillOwnsMoments()) return;
+    momentPickerEpoch.current += 1;
+    const mediaToPublish: DraftMomentMedia[] = momentMedia.length > 0 ? [...momentMedia]
+      : [{ kind: 'text', uri: '', mimeType: 'text/plain' }];
 
-    const optimisticIds = momentMedia.map(() => createOptimisticMomentId());
+    const optimisticIds = mediaToPublish.map(() => createOptimisticMomentId());
     const now = Date.now();
-    const optimisticMoments = momentMedia.map<EventMoment>((media, index) => ({
+    const optimisticMoments = mediaToPublish.map<EventMoment>((media, index) => ({
       id: optimisticIds[index],
       eventId,
       authorName: currentActor.displayName,
@@ -1189,7 +1305,7 @@ function EventDetailContent() {
     })).reverse();
     const submission: MomentSubmission = {
       caption: momentCaption,
-      media: [...momentMedia],
+      media: mediaToPublish,
       optimisticIds,
       eventId,
       actor: currentActor,
@@ -1203,7 +1319,7 @@ function EventDetailContent() {
     setMomentMedia([]);
     setShowMomentComposer(false);
     createMomentMutation.mutate(submission);
-  }, [createMomentMutation, currentActor, eventId, momentCaption, momentMedia, momentsQueryKey, shouldPreferRemoteMoments, stillOwnsMoments]);
+  }, [createMomentMutation, currentActor, eventId, hasMomentContent, momentCaption, momentMedia, momentsQueryKey, shouldPreferRemoteMoments, stillOwnsMoments]);
 
   const handleCommentChange = useCallback((momentId: string, value: string) => {
     setCommentDrafts((current) => ({ ...current, [momentId]: value }));
@@ -1608,7 +1724,7 @@ function EventDetailContent() {
                     <View key={`highlight-${moment.id}`} style={styles.highlightCard}>
                       <Text style={styles.highlightAuthor}>{moment.authorName}</Text>
                       <Text style={styles.highlightCaption} numberOfLines={2}>
-                        {moment.caption ?? (moment.media.kind === 'video' ? 'Video destacado del evento' : 'Foto destacada del evento')}
+                        {moment.caption ?? (moment.media.kind === 'video' ? 'Video destacado del evento' : moment.media.kind === 'audio' ? 'Audio destacado del evento' : 'Foto destacada del evento')}
                       </Text>
                       <Text style={styles.highlightMeta}>
                         {countMomentReactions(moment)} reacciones · {moment.comments.length} comentarios
@@ -1667,6 +1783,9 @@ function EventDetailContent() {
                       ); }}
                       onConnectAuthor={handleConnectAuthor}
                       onOpenMedia={handleOpenMomentMedia}
+                      onEditMoment={canPublishText ? openMomentEditor : undefined}
+                      onDeleteMoment={canPublishText ? openMomentDeletion : undefined}
+                      managementDisabled={authorActionPending}
                     />
                   ))}
                 </View>
@@ -1898,14 +2017,14 @@ function EventDetailContent() {
         visible={showMomentComposer}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowMomentComposer(false)}
+        onRequestClose={closeMomentComposer}
         accessibilityViewIsModal
       >
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <TouchableOpacity
               style={styles.modalHeaderAction}
-              onPress={() => setShowMomentComposer(false)}
+              onPress={closeMomentComposer}
               accessibilityRole="button"
               accessibilityLabel="Cerrar compositor de momento"
             >
@@ -1916,8 +2035,10 @@ function EventDetailContent() {
           </View>
           <View style={styles.modalContent}>
             <Text style={styles.modalMessage}>
-              Elige hasta {MAX_MOMENT_MEDIA_SELECTION} fotos o agrega un video corto. Verás cada archivo en el feed de
-              inmediato mientras se optimiza y publica en segundo plano.
+              Elige hasta {MAX_MOMENT_MEDIA_SELECTION} fotos o agrega un video corto.
+              {canPublishText ? ' También puedes escribir un recuerdo sin adjuntar archivos.' : ''}
+              {canPickAudio ? ' O elige un archivo de audio de hasta 25 MB.' : ''}
+              {' Tu momento estará publicado cuando TDF confirme que se guardó.'}
             </Text>
 
             <View style={styles.momentMediaActions}>
@@ -1930,6 +2051,11 @@ function EventDetailContent() {
               <TouchableOpacity style={styles.secondaryActionButton} onPress={() => void pickMomentMedia('video')}>
                 <Text style={styles.secondaryActionButtonText}>Agregar video</Text>
               </TouchableOpacity>
+              {canPickAudio ? <TouchableOpacity style={styles.secondaryActionButton}
+                accessibilityRole="button" accessibilityLabel={audioCopy.addAudio}
+                onPress={() => void pickMomentMedia('audio')}>
+                <Text style={styles.secondaryActionButtonText}>{audioCopy.addAudio}</Text>
+              </TouchableOpacity> : null}
             </View>
 
             {momentMedia.length > 0 ? (
@@ -1956,8 +2082,8 @@ function EventDetailContent() {
                         />
                       ) : (
                         <View style={styles.selectedVideoThumbnail}>
-                          <MaterialCommunityIcons name="play-circle-outline" size={30} color="#f8fafc" />
-                          <Text style={styles.selectedVideoText}>Video</Text>
+                          <MaterialCommunityIcons name={media.kind === 'audio' ? 'music-note' : 'play-circle-outline'} size={30} color="#f8fafc" />
+                          <Text style={styles.selectedVideoText}>{media.kind === 'audio' ? media.fileName || 'Audio' : 'Video'}</Text>
                         </View>
                       )}
                       <TouchableOpacity
@@ -1974,6 +2100,10 @@ function EventDetailContent() {
               </View>
             ) : null}
 
+            {momentMedia.some((media) => media.kind === 'audio') ? (
+              <Text style={styles.modalMessage}>{audioCopy.publicAudioNotice}</Text>
+            ) : null}
+
             <View style={styles.inputGroup}>
               <TextInput
                 placeholder="Agrega contexto, lineup o una vibra rápida"
@@ -1987,17 +2117,19 @@ function EventDetailContent() {
               <TouchableOpacity
                 style={[
                   styles.primaryButton,
-                  (momentMedia.length === 0 || createMomentMutation.isPending) && styles.buttonDisabled,
+                  (!hasMomentContent || createMomentMutation.isPending) && styles.buttonDisabled,
                 ]}
                 onPress={handlePublishMoments}
-                disabled={momentMedia.length === 0 || createMomentMutation.isPending}
+                disabled={!hasMomentContent || createMomentMutation.isPending}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: momentMedia.length === 0 || createMomentMutation.isPending }}
+                accessibilityState={{ disabled: !hasMomentContent || createMomentMutation.isPending }}
               >
                 <Text style={styles.primaryButtonText}>
                   {createMomentMutation.isPending
                     ? 'Publicando…'
-                    : momentMedia.length > 1
+                    : momentMedia.some((media) => media.kind === 'audio')
+                      ? momentMedia.length > 1 ? audioCopy.publishPublicMoments : audioCopy.publishPublicAudio
+                      : momentMedia.length > 1
                       ? `Publicar ${momentMedia.length} momentos`
                       : 'Publicar momento'}
                 </Text>
@@ -2006,6 +2138,52 @@ function EventDetailContent() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      {activeEdit ? <Modal visible transparent animationType="slide" accessibilityViewIsModal onRequestClose={closeAuthorDialog}>
+        <SafeAreaView style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text accessibilityRole="header" style={styles.modalTitle}>{audioCopy.editMemory}</Text>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={audioCopy.cancelEdit} style={styles.modalHeaderAction}
+              disabled={authorActionPending} accessibilityState={{ disabled: authorActionPending }} onPress={closeAuthorDialog}>
+              <Text style={styles.modalClose}>{audioCopy.cancel}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <TextInput value={editedCaption} onChangeText={setEditedCaption} multiline maxLength={280}
+              editable={!authorActionPending} accessibilityLabel={audioCopy.editDescription} style={[styles.input, styles.inputMultiline]} />
+            {authorActionError ? <Text accessibilityRole="alert" style={styles.modalMessage}>{authorActionError}</Text> : null}
+            <TouchableOpacity accessibilityRole="button" style={[styles.primaryButton,
+              (authorActionPending || (activeEdit.moment.media.kind === 'text' && !editedCaption.trim())
+                || editedCaption.trim() === (activeEdit.moment.caption ?? '')) && styles.buttonDisabled]}
+              accessibilityState={{ disabled: authorActionPending || (activeEdit.moment.media.kind === 'text' && !editedCaption.trim()) || editedCaption.trim() === (activeEdit.moment.caption ?? '') }}
+              disabled={authorActionPending || (activeEdit.moment.media.kind === 'text' && !editedCaption.trim()) || editedCaption.trim() === (activeEdit.moment.caption ?? '')}
+              onPress={() => { void performAuthorAction(activeEdit, 'edit', editedCaption); }}>
+              <Text style={styles.primaryButtonText}>{authorActionPending ? audioCopy.saving : audioCopy.saveMemory}</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal> : null}
+
+      {activeDelete ? <Modal visible transparent animationType="slide" accessibilityViewIsModal onRequestClose={closeAuthorDialog}>
+        <SafeAreaView style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text accessibilityRole="header" style={styles.modalTitle}>{audioCopy.deleteMemory}</Text>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={audioCopy.cancelDeleteMemory} style={styles.modalHeaderAction}
+              disabled={authorActionPending} accessibilityState={{ disabled: authorActionPending }} onPress={closeAuthorDialog}>
+              <Text style={styles.modalClose}>{audioCopy.cancel}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalMessage}>{audioCopy.deleteMemoryBody}</Text>
+            {authorActionError ? <Text accessibilityRole="alert" style={styles.modalMessage}>{authorActionError}</Text> : null}
+            <TouchableOpacity accessibilityRole="button" disabled={authorActionPending}
+              accessibilityState={{ disabled: authorActionPending }} style={[styles.primaryButton, styles.destructiveButton, authorActionPending && styles.buttonDisabled]}
+              onPress={() => { void performAuthorAction(activeDelete, 'delete'); }}>
+              <Text style={styles.primaryButtonText}>{authorActionPending ? audioCopy.saving : audioCopy.confirmDeleteMemory}</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal> : null}
 
       <Modal
         visible={showInviteModal}
@@ -2666,6 +2844,7 @@ const styles = StyleSheet.create({
   primaryButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   primaryButtonText: { color: '#fff', fontWeight: '700' },
   buttonDisabled: { opacity: 0.6 },
+  destructiveButton: { backgroundColor: '#b91c1c' },
   momentMediaActions: {
     flexDirection: 'row',
     gap: 10,

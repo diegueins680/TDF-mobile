@@ -43,6 +43,17 @@ describe('event moments storage', () => {
     });
   });
 
+  it('keeps written drafts private to their Party and rejects blank text', async () => {
+    const draft = { eventId: '42', authorName: 'Ana', caption: 'Recuerdo escrito',
+      media: { kind: 'text' as const, uri: '', mimeType: 'text/plain' } };
+    const saved = await createEventMoment(draft, 'party:7');
+    expect(saved.id).toMatch(/^moment-/);
+    await expect(listEventMoments('42', 'party:7')).resolves.toEqual([saved]);
+    await expect(listEventMoments('42', 'party:8')).resolves.toEqual([]);
+    await expect(createEventMoment({ ...draft, caption: '  ' }, 'party:7')).rejects.toThrow();
+    await expect(listEventMoments('42', 'party:7')).resolves.toEqual([saved]);
+  });
+
   it('creates a moment and keeps the newest first', async () => {
     const first = await createEventMoment({
       eventId: '0012',

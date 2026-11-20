@@ -10,6 +10,7 @@ import { useAuth } from '../src/providers/AuthProvider';
 import { useAppTheme } from '../src/theme/ThemeProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { AccessRequestDetail } from '../src/notifications/AccessRequestDetail';
+import { PushPermissionPrompt } from '../src/notifications/PushPermissionPrompt';
 
 function FollowerProfile({ id }: { id: number }) {
   const { partyId } = useAuth();
@@ -50,6 +51,7 @@ export default function NotificationScreen() {
   const path = notification && notificationTargetPath(notification);
   return <ScrollView contentContainerStyle={{ padding: 24, gap: 16, backgroundColor: colors.canvas, flexGrow: 1 }}>
     <Text accessibilityRole="header" style={{ color: colors.textPrimary, fontSize: 22 }}>{notification?.nTitle ?? (english ? 'Notification' : 'Notificación')}</Text>
+    <PushPermissionPrompt locale={locale} />
     {query.isPending && id && <ActivityIndicator />}
     {read.isError && <Text accessibilityRole="alert" style={{ color: colors.danger }}>{english ? 'Could not mark as read. Reopen to retry.' : 'No se pudo marcar como leída. Vuelve a abrirla para reintentar.'}</Text>}
     {notification?.nTargetType === 'party_profile' && targetId ? <FollowerProfile id={Number(targetId)} />

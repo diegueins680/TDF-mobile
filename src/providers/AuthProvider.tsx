@@ -5,6 +5,7 @@ import axios from 'axios';
 import { AppState, Platform } from 'react-native';
 
 import { setAuthToken, getAuthToken, get, normalizeAuthToken } from '../api/client';
+import { revokePushRegistration } from '../notifications/pushSubscriptions';
 
 export type AuthSessionSnapshot = {
   partyId: string | null;
@@ -415,8 +416,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const setToken = useCallback<AuthContextValue['setToken']>((next, nextPartyId, nextSession) => {
     void updateToken(next, nextPartyId, nextSession);
   }, [updateToken]);
-  const clearToken = useCallback(() => setToken(null), [setToken]);
-  const clearTokenPersisted = useCallback(() => updateToken(null), [updateToken]);
+  // Logout revokes this device's push token with the still-valid session first.
+  // The revoke is bounded and never throws, so logout always proceeds.
+  const clearToken = useCallback(() => {
+    const current = appliedTokenRef.current;
+    // The request is started with the captured credential before clearing.
+    if (current) void revokePushRegistration(current).catch(() => undefined);
+    setToken(null);
+  }, [setToken]);
+  const clearTokenPersisted = useCallback(async () => {
+    const current = appliedTokenRef.current;
+    if (current) await revokePushRegistration(current).catch(() => undefined);
+    return updateToken(null);
+  }, [updateToken]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

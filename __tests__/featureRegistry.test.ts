@@ -36,6 +36,26 @@ const expoRouteForFile = (filename: string): string => {
 };
 
 describe('mobile feature registry', () => {
+  it('keeps event agreement review contextual, authenticated and on the web', () => {
+    const feature = getFeatureById('social.event.agreements');
+    expect(feature).toMatchObject({
+      parentId: 'social.event.detail',
+      webRoute: '/social/eventos/:eventId/acuerdos',
+      routeType: 'contextual',
+      requiredAuth: 'authenticated',
+      globalMenu: false,
+      favoriteEligible: false,
+      pinEligible: false,
+      permissions: {
+        view: { recordScope: 'event-owner-or-designated-recipient' },
+        submit: { recordScope: 'event-owner-or-designated-recipient' },
+        export: { recordScope: 'event-owner-or-designated-recipient' },
+      },
+      mobilePresentation: { kind: 'web-only', destination: null },
+    });
+    expect(evaluateFeatureAccess(feature!, { authenticated: false }, 'view').reason).toBe('authentication');
+  });
+
   it('opens account deletion on the canonical web origin and requires an authenticated account', () => {
     const feature = getFeatureById('account.deletion')!;
     expect(resolveMobileDestination(feature)).toEqual({ kind: 'web', value: 'https://www.tdfrecords.net/cuenta/eliminar' });

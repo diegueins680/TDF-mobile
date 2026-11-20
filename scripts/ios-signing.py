@@ -27,6 +27,8 @@ def validate_profile(profile, now=None):
     domains = entitlements.get('com.apple.developer.associated-domains', [])
     if '*' not in domains and not {'applinks:www.tdfrecords.net', 'applinks:tdf-app.pages.dev'}.issubset(domains):
         raise ValueError('The distribution profile must enable Associated Domains before building')
+    if not entitlements.get('com.apple.developer.applesignin'):
+        raise ValueError('The distribution profile must enable Sign in with Apple before building')
     if entitlements.get('get-task-allow') or profile.get('ProvisionedDevices') or profile.get('ProvisionsAllDevices'):
         raise ValueError('An App Store distribution profile is required')
     if not re.fullmatch(r'[A-Fa-f0-9-]{36}', profile['UUID']):

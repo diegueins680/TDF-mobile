@@ -4,6 +4,166 @@
  */
 
 export interface paths {
+    "/productions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return projects with member-filtered tasks, immutable audio review history and current schedule */
+        get: operations["listProductions"];
+        put?: never;
+        /** Create a private production and reverse-schedule its songs from a template */
+        post: operations["createProduction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/productions/{project}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply one project-scoped transition under the project transaction lock */
+        post: operations["updateProduction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/productions/{project}/versions/{version}/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read private audio for this exact version */
+        get: operations["readProductionAudio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-crm/events/{eventId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        /** Read the current event-scoped CRM */
+        get: operations["getEventCrm"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-crm/events/{eventId}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Execute an idempotent event-authorized command */
+        post: operations["commandEventCrm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-crm/events/{eventId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        /** Export only currently authorized event data */
+        get: operations["exportEventCrm"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-crm/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview or atomically accept an account-bound one-use invitation */
+        post: operations["actionEventCrmInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-crm/email/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a thirty-minute proof to the authenticated account email */
+        post: operations["requestEventCrmEmailProof"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/event-crm/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify the current account email with a single-use proof */
+        post: operations["confirmEventCrmEmailProof"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/music/artists/{artistPartyId}/featured-track": {
         parameters: {
             query?: never;
@@ -1803,6 +1963,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations/event-watch/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange operator-provisioned credentials for a short-lived service token
+         * @description Purpose-specific JSON exchange, not an OAuth token endpoint. No interactive cookies or administrative role grants. Secrets and returned bearer values must never be logged.
+         */
+        post: operations["exchangeEventWatchCredentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/event-watch/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List at most 500 candidates owned by this service client */
+        get: operations["listEventWatchCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/event-watch/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Atomically save and optionally materialize a source-backed event candidate
+         * @description Client owns its provider/run namespace. Server overrides candidate provider, run ID and source ID. Publication requires a separate operator grant and existing publication checks. Materialization failure rolls back all writes. Existing event targets require both the current curator and current service namespace; shared audit identity grants no cross-client authority. Replays preserve manual event edits. A changed curator must use a new run key. No pilot approval or general administration is exposed.
+         */
+        put: operations["importEventWatchCandidate"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/login": {
         parameters: {
             query?: never;
@@ -3263,6 +3480,91 @@ export interface paths {
         patch: operations["updateLabelProjectNote"];
         trace?: never;
     };
+    "/studio-submissions/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start or resume a batch using the unlisted invitation */
+        post: operations["createStudioPhotoBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/studio-submissions/upload/{position}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit one photo using the invitation as a bearer token */
+        post: operations["uploadStudioSubmissionPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/studio-submissions/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read status using one private batch receipt */
+        post: operations["getStudioPhotoBatchStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/studio-submissions/images/{id}/{size}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an approved JPEG currently visible in the published gallery */
+        get: operations["getPublishedStudioPhoto"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cms/admin/studio-submissions/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manage invitations and review private photos as an administrator or webmaster */
+        post: operations["manageStudioSubmissions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cms/content": {
         parameters: {
             query?: never;
@@ -4221,7 +4523,7 @@ export interface paths {
         put?: never;
         /**
          * Refresh Google Drive access token
-         * @description Resolves the authenticated owner-bound TDFConnection handle; refreshes provider credentials inside the encrypted server vault when required. Raw Google refresh tokens are rejected.
+         * @description Refreshes a Google Drive access token using a refresh token.
          */
         post: operations["refreshDriveToken"];
         delete?: never;
@@ -9619,6 +9921,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/social-events/events/{eventId}/workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getEventWorkspace"];
+        put?: never;
+        post: operations["mutateEventWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/workspace/plan.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadEventPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/workspace/agreements/{agreementId}/{version}/document.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadEventAgreement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/workspace/agreements/{agreementId}/acceptance.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadEventAgreementAcceptance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/music/legacy/{sourceId}/access": {
         parameters: {
             query?: never;
@@ -11434,7 +11800,7 @@ export interface components {
             /** Format: date-time */
             depositPaidAt?: string | null;
             cancellation?: components["schemas"]["PublicDomoCancellation"] | null;
-            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet" | "payphone_card")[];
+            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet")[];
         };
         PublicDomoPaypalCaptureRequest: {
             paypalOrderId: string;
@@ -11566,7 +11932,7 @@ export interface components {
             /** Format: date-time */
             holdExpiresAt: string;
             quote: components["schemas"]["PublicEventTicketQuote"];
-            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet" | "payphone_card" | "bank_transfer")[];
+            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet" | "bank_transfer")[];
             /** @description Empty until fulfillment issues tickets after verified payment. */
             tickets: components["schemas"]["PublicEventTicket"][];
             /** @description Present only after the buyer selected bank transfer. */
@@ -11769,7 +12135,7 @@ export interface components {
             holdExpiresAt: string;
             quote: components["schemas"]["PublicBookingQuote"];
             /** @description Rails both configured and enabled for this immutable checkout. Empty means no online payment action may be shown. */
-            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet" | "payphone_card" | "bank_transfer")[];
+            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet" | "bank_transfer")[];
             manualPayment: components["schemas"]["PublicBookingManualPayment"] | null;
         };
         PublicBookingManualPaymentCreate: {
@@ -15101,7 +15467,7 @@ export interface components {
             /** Format: date-time */
             holdExpiresAt: string | null;
             quote: components["schemas"]["CourseCheckoutQuote"] | null;
-            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet" | "payphone_card")[];
+            paymentMethods: ("datafast" | "paypal" | "placetopay_card" | "placetopay_bank_redirect" | "placetopay_deuna_qr" | "payphone_wallet")[];
             checkoutAvailable: boolean;
         };
         CoursePaypalCaptureRequest: {
@@ -15123,7 +15489,6 @@ export interface components {
         DriveTokenRefreshRequest: {
             refreshToken: string;
         };
-        /** @description Nonsecret TDFConnection descriptor. accessToken and refreshToken contain the same opaque owner-bound handle; neither contains a provider credential. */
         DriveTokenResponse: {
             accessToken: string;
             refreshToken?: string | null;
@@ -16354,6 +16719,156 @@ export interface components {
              * @description Returned only at issuance; only its SHA-256 digest is stored.
              */
             token: string;
+        };
+        EventPlanContent: {
+            title: string;
+            overview: string;
+            currency: string;
+            activities: {
+                title: string;
+                start: string;
+                end: string;
+                responsible: string;
+                notes: string;
+            }[];
+            budget: {
+                label: string;
+                /** Format: int64 */
+                amountCents: number | null;
+                basis: string;
+            }[];
+            /** Format: int64 */
+            budgetCapCents: number | null;
+            deliverables: string[];
+            pending: string[];
+        };
+        EventPlanVersion: {
+            /** Format: int64 */
+            event_id: number;
+            /** Format: int64 */
+            revision: number;
+            /** Format: int64 */
+            recipient_party_id: number;
+            content: components["schemas"]["EventPlanContent"];
+            document_hash: string;
+            /** Format: int64 */
+            created_by: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        EventAgreementDraft: {
+            title: string;
+            body: string;
+            recipientLegalName: string;
+            pendingFields: string[];
+        };
+        EventAgreementVersion: {
+            /** Format: int64 */
+            version: number;
+            content: {
+                title: string;
+                body: string;
+                recipientLegalName: string;
+                pendingFields: string[];
+                plan: components["schemas"]["EventPlanVersion"];
+            };
+            document_hash: string;
+            /** Format: int64 */
+            approved_by: number | null;
+            /** Format: date-time */
+            approved_at: string | null;
+            /** Format: date-time */
+            sent_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        EventWorkspaceAction: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            version: number;
+            /** Format: int64 */
+            actor_party_id: number;
+            action: string;
+            comment: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        EventAgreementAcceptance: {
+            /** Format: int64 */
+            version: number;
+            /** Format: int64 */
+            accepted_by: number;
+            accepted_name: string;
+            /** Format: date-time */
+            accepted_at: string;
+            document_hash: string;
+        } | null;
+        EventAgreement: {
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            recipient_party_id: number;
+            /** Format: int64 */
+            current_version: number;
+            /** @enum {string} */
+            state: "draft" | "sent" | "changes_requested" | "accepted" | "rejected" | "withdrawn";
+            /** Format: uuid */
+            parent_id: string | null;
+            versions: components["schemas"]["EventAgreementVersion"][];
+            actions: components["schemas"]["EventWorkspaceAction"][];
+            acceptance: components["schemas"]["EventAgreementAcceptance"];
+        };
+        /** @description Version-bound command. A repeated requestId replays the same intent; conflicting reuse returns 409. Approval and sending require a complete scope, full integer-cent budget and exact documented cap. Accept requires the authenticated designated recipient and the current approved/sent version; no external email delivery is performed. */
+        EventWorkspaceCommand: {
+            /** Format: uuid */
+            requestId: string;
+            /** @enum {string} */
+            action: "plan.save" | "plan.comment" | "agreement.create" | "agreement.revise" | "agreement.approve" | "agreement.send" | "agreement.withdraw" | "agreement.comment" | "agreement.request_changes" | "agreement.reject" | "agreement.accept";
+            version: number;
+            /** Format: uuid */
+            agreementId?: string;
+            hash?: string;
+            recipientPartyId?: string;
+            /** Format: uuid */
+            parentId?: string;
+            content?: components["schemas"]["EventPlanContent"] | components["schemas"]["EventAgreementDraft"];
+            comment?: string;
+            acceptedName?: string;
+            consent?: boolean;
+        } & ({
+            /** @enum {string} */
+            action?: "plan.save";
+            content: components["schemas"]["EventPlanContent"];
+        } | {
+            /** @enum {string} */
+            action?: "plan.comment";
+        } | {
+            /** @enum {string} */
+            action?: "agreement.create";
+            content: components["schemas"]["EventAgreementDraft"];
+        } | {
+            /** @enum {string} */
+            action?: "agreement.revise";
+            content: components["schemas"]["EventAgreementDraft"];
+        } | {
+            /** @enum {string} */
+            action?: "agreement.approve" | "agreement.send" | "agreement.withdraw" | "agreement.reject";
+        } | {
+            /** @enum {string} */
+            action?: "agreement.comment" | "agreement.request_changes";
+        } | {
+            /** @enum {string} */
+            action?: "agreement.accept";
+            /** @enum {boolean} */
+            consent: true;
+        });
+        EventWorkspaceSnapshot: {
+            eventId: string;
+            owner: boolean;
+            plan: components["schemas"]["EventPlanVersion"] | null;
+            agreements: components["schemas"]["EventAgreement"][];
+            planComments: components["schemas"]["EventWorkspaceAction"][];
         };
         SocialV2Me: {
             discoverable: boolean;
@@ -17728,6 +18243,19 @@ export interface components {
                 "application/json": components["schemas"]["ApiError"];
             };
         };
+        /** @description The persisted result identifier */
+        Receipt: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    id: string;
+                    kind?: string;
+                };
+            };
+        };
     };
     parameters: {
         /** @description Defaults to authenticated party; another party requires strict administrator access */
@@ -17786,6 +18314,7 @@ export interface components {
         TargetId: string;
         "parameters-TargetKind": components["schemas"]["ExperienceReviewTargetKind"];
         "parameters-TargetId": string;
+        Project: string;
     };
     requestBodies: never;
     headers: never;
@@ -17793,6 +18322,657 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listProductions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Client projections contain only expressly shared versions and their tasks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Active TDF session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createProduction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                    /** @enum {string} */
+                    format: "Sencillo" | "EP" | "Álbum";
+                    /** Format: date */
+                    delivery: string;
+                    songs: {
+                        title?: string;
+                        /** Format: uuid */
+                        track?: string;
+                    }[];
+                    template: {
+                        name: string;
+                        days: number;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Receipt"];
+            /** @description Invalid template or song */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Active TDF session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateProduction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    op: "invite" | "task" | "edit" | "dependency" | "block" | "progress" | "publish" | "feedback" | "propose" | "backplan" | "confirm";
+                    /** Format: uuid */
+                    task?: string;
+                    /** @description Required except for version feedback and proposal confirmation */
+                    revision?: number;
+                    /** Format: uuid */
+                    version?: string;
+                    /** @enum {string} */
+                    kind?: "comment" | "changes" | "approve";
+                    /**
+                     * Format: uuid
+                     * @description Idempotency key for the exact version and feedback payload
+                     */
+                    request?: string;
+                    /**
+                     * Format: uuid
+                     * @description Completed private TDF audio owned by the authenticated uploader
+                     */
+                    file?: string;
+                    /** Format: uuid */
+                    proposal?: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Receipt"];
+            /** @description Invalid transition input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Active TDF session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project role or assignment does not allow the transition */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project or version unavailable to this account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale plan */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readProductionAudio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: components["parameters"]["Project"];
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Immutable file bytes, private cache disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Active TDF session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No visible version at this project path */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventCrm: {
+        parameters: {
+            query?: {
+                stage?: "interested" | "contacted" | "reserved" | "paid" | "closed_lost";
+                responsibleId?: number;
+                overdue?: boolean;
+            };
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private authorized result. Shape depends on the selected command; see docs/events/event-crm.md and the runtime-validated web projection. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Invalid request or unavailable invitation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current role forbids this operation */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event or authorized resource unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, conflict or expired canonical order */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email verification rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Required database or email delivery unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    commandEventCrm: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    operation: "recipient.lookup" | "invitation.create" | "invitation.revoke" | "membership.revoke" | "lead.create" | "lead.update" | "import.preview" | "import.confirm" | "task.save" | "task.assign" | "transport.confirm" | "waitlist.join" | "manual.submit" | "manual.review";
+                } & {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Private authorized result. Shape depends on the selected command; see docs/events/event-crm.md and the runtime-validated web projection. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Invalid request or unavailable invitation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current role forbids this operation */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event or authorized resource unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, conflict or expired canonical order */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email verification rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Required database or email delivery unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exportEventCrm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private authorized result. Shape depends on the selected command; see docs/events/event-crm.md and the runtime-validated web projection. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Invalid request or unavailable invitation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current role forbids this operation */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event or authorized resource unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, conflict or expired canonical order */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email verification rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Required database or email delivery unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    actionEventCrmInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    accept: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Private authorized result. Shape depends on the selected command; see docs/events/event-crm.md and the runtime-validated web projection. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Invalid request or unavailable invitation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current role forbids this operation */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event or authorized resource unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, conflict or expired canonical order */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email verification rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Required database or email delivery unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    requestEventCrmEmailProof: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private authorized result. Shape depends on the selected command; see docs/events/event-crm.md and the runtime-validated web projection. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Invalid request or unavailable invitation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current role forbids this operation */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event or authorized resource unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, conflict or expired canonical order */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email verification rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Required database or email delivery unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirmEventCrmEmailProof: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Private authorized result. Shape depends on the selected command; see docs/events/event-crm.md and the runtime-validated web projection. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Invalid request or unavailable invitation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current role forbids this operation */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event or authorized resource unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, conflict or expired canonical order */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email verification rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Required database or email delivery unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getArtistFeaturedTrack: {
         parameters: {
             query?: never;
@@ -24410,6 +25590,162 @@ export interface operations {
             };
         };
     };
+    exchangeEventWatchCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    grant_type: "client_credentials";
+                    client_id: string;
+                    client_secret: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A token valid for at most 900 seconds */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    Pragma?: "no-cache";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        access_token: string;
+                        /** @enum {string} */
+                        token_type: "Bearer";
+                        expires_in: number;
+                        scope: string;
+                    };
+                };
+            };
+            /** @description Invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service schema or database unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listEventWatchCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Client-scoped candidates, newest verification first */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    Pragma?: "no-cache";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventResearchCandidate"][];
+                };
+            };
+            /** @description Invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service schema or database unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    importEventWatchCandidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    runKey: string;
+                    candidate: components["schemas"]["EventResearchCandidateWrite"];
+                    materialize: boolean;
+                    publish: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Committed candidate and optional event link */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    Pragma?: "no-cache";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        candidateRecord: components["schemas"]["EventResearchCandidate"];
+                        eventLink: components["schemas"]["EventResearchMaterialization"] | null;
+                    };
+                };
+            };
+            /** @description Invalid candidate or run key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Publication */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Research */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service schema or database unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -26950,6 +28286,246 @@ export interface operations {
             };
             /** @description The note was already deactivated. */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createStudioPhotoBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    /** Format: uuid */
+                    receipt: string;
+                    credit?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Batch is ready */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invitation disabled or replaced */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hourly batch quota reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    uploadStudioSubmissionPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: uuid */
+                    receipt: string;
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Received or matched to an existing photo in this batch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        duplicate?: boolean;
+                    };
+                };
+            };
+            /** @description Invitation disabled or replaced */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Position conflict or storage quota reached */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description File too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid image */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry later */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getStudioPhotoBatchStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    receipt: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Status rows for this receipt in contributor order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        position?: number;
+                        name?: string;
+                        /** @enum {string} */
+                        state?: "pending" | "accepted" | "rejected" | "expired";
+                    }[];
+                };
+            };
+        };
+    };
+    getPublishedStudioPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                size: "small" | "large";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Optimized, correctly oriented image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description Photo is unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    manageStudioSubmissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: "link" | "replace" | "disable" | "queue" | "preview" | "review";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uuid
+                     * @description Photo to preview
+                     */
+                    id?: string;
+                    ids?: string[];
+                    /** @enum {string} */
+                    state?: "accepted" | "rejected";
+                };
+            };
+        };
+        responses: {
+            /** @description Invitation, queue, private JPEG preview, or review confirmation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        token?: string | null;
+                        /** Format: byte */
+                        jpeg?: string;
+                    } | {
+                        /** Format: uuid */
+                        id?: string;
+                        batch?: number;
+                        position?: number;
+                        name?: string;
+                        credit?: string;
+                        /** @enum {string} */
+                        state?: "pending" | "accepted";
+                    }[];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Staff role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Review decision conflicts with an existing decision */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -40577,6 +42153,343 @@ export interface operations {
                 content?: never;
             };
             /** @description Persisted automatic assignment policy is unavailable or inconsistent */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEventWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private account-scoped workspace snapshot */
+            200: {
+                headers: {
+                    /** @description private, no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventWorkspaceSnapshot"];
+                };
+            };
+            /** @description Malformed or overposted command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event organizer or designated recipient required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No accessible document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, incomplete scope or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Migration or document generation temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mutateEventWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventWorkspaceCommand"];
+            };
+        };
+        responses: {
+            /** @description Private account-scoped workspace snapshot */
+            200: {
+                headers: {
+                    /** @description private, no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventWorkspaceSnapshot"];
+                };
+            };
+            /** @description Malformed or overposted command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event organizer or designated recipient required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No accessible document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, incomplete scope or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Migration or document generation temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    downloadEventPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private PDF of the exact document or accepted version and annex */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Malformed or overposted command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event organizer or designated recipient required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No accessible document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, incomplete scope or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Migration or document generation temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    downloadEventAgreement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+                agreementId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private PDF of the exact document or accepted version and annex */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Malformed or overposted command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event organizer or designated recipient required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No accessible document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, incomplete scope or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Migration or document generation temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    downloadEventAgreementAcceptance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: number;
+                agreementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private PDF of the exact document or accepted version and annex */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Malformed or overposted command */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Current authenticated session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event organizer or designated recipient required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No accessible document */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version, incomplete scope or invalid transition */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Migration or document generation temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

@@ -2,7 +2,7 @@ import { eventExperienceLanguage, savedEventCopy } from '../src/localization/eve
 import { FeedbackEntry } from '../src/feedback/FeedbackEntry';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, FlatList, TextInput, Alert, Image, Share
+  View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, FlatList, TextInput, Alert, Image, Share, Linking
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,11 +25,13 @@ import { useAuth } from '../src/providers/AuthProvider';
 import { canonicalEventUrl, eventShareMessage } from '../src/lib/eventSharing';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
+import { useToast } from '../src/hooks/useToast';
+import { Toast } from '../src/components/Toast';
 
 export default function UserProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { token, partyId, session } = useAuth();
+  const { token, partyId, session, clearToken } = useAuth();
   const analytics = useAnalytics();
   const ownsParty = usePartyOwnership(partyId);
   const {
@@ -49,6 +51,8 @@ export default function UserProfileScreen() {
   const countries = useMemo(() => getCatalogItems('countries'), [getCatalogItems]);
   const localeOptions = useMemo(() => getCatalogItems('locales'), [getCatalogItems]);
   const currencyOptions = useMemo(() => getCatalogItems('currencies'), [getCatalogItems]);
+  const toast = useToast();
+  const showToast = toast.show;
   const [activeTab, setActiveTab] = useState<'artist' | 'events' | 'saved' | 'activity'>('artist');
   const displayName = session?.displayName ?? null;
   const [draftTimezone, setDraftTimezone] = useState(timezone);
@@ -164,7 +168,7 @@ export default function UserProfileScreen() {
     mutationFn: (eventId: ID) => Events.deleteRSVP(eventId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['event-rsvp-feed', partyId] });
-      Alert.alert(locale.startsWith('en') ? 'Done' : savedCopy.readyTitle, locale.startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
+      showToast(locale.startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
     },
     onError: () => Alert.alert('Error', locale.startsWith('en') ? 'Could not remove your RSVP.' : 'No pudimos eliminar tu RSVP.'),
   });
@@ -181,7 +185,7 @@ export default function UserProfileScreen() {
       if (copyOnly) {
         await Clipboard.setStringAsync(url);
         analytics.capture('event_link_copied', { platform: 'mobile', event_id: String(item.eventId), method, origin: 'profile_feed' });
-        Alert.alert(locale.startsWith('en') ? 'Link copied' : 'Enlace copiado');
+        showToast(locale.startsWith('en') ? 'Link copied' : 'Enlace copiado');
         return;
       }
       const result = await Share.share({
@@ -202,7 +206,7 @@ export default function UserProfileScreen() {
       analytics.capture('event_share_failed', { platform: 'mobile', event_id: String(item.eventId), method, origin: 'profile_feed' });
       Alert.alert(locale.startsWith('en') ? 'Could not share' : 'No pudimos compartir');
     }
-  }, [analytics, locale]);
+  }, [analytics, locale, showToast]);
   const legacyImportMutation = useMutation({
     mutationFn: ({ ownerPartyId }: { ownerPartyId: string }) =>
       importLegacySavedEvents(
@@ -278,8 +282,8 @@ export default function UserProfileScreen() {
       return;
     }
     setRegionalPreferences({ timezone: draftTimezone, countryId: draftCountryId || null });
-    Alert.alert(savedCopy.saved, 'Actualizamos tus preferencias regionales.');
-  }, [countrySearch, draftCountryId, draftTimezone, setRegionalPreferences, savedCopy]);
+    showToast('Actualizamos tus preferencias regionales.');
+  }, [countrySearch, draftCountryId, draftTimezone, setRegionalPreferences, showToast]);
 
   const headerName = displayName || 'Tu perfil';
   const headerSubtitle = partyId ? 'Sesión conectada' : 'Inicia sesión para usar RSVP e invitaciones';
@@ -719,7 +723,7 @@ export default function UserProfileScreen() {
               <ActivityIndicator size="large" color="#2563eb" />
             ) : savedEvents.length > 0 ? (
               <>
-                <Text style={styles.sectionTitle}>Saved events ({savedEvents.length})</Text>
+                <Text style={styles.sectionTitle}>Eventos guardados ({savedEvents.length})</Text>
                 <FlatList
                   data={savedEvents}
                   renderItem={({ item }) => renderEventItem(item, true)}
@@ -735,7 +739,31 @@ export default function UserProfileScreen() {
           </View>
         )}
       <FeedbackEntry />
+        {token ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Cuenta</Text>
+            <TouchableOpacity
+              style={styles.accountRow}
+              accessibilityRole="button"
+              onPress={() => Alert.alert('¿Cerrar sesión?', undefined, [
+                { text: 'Cancelar', style: 'cancel' },
+                { text: 'Cerrar sesión', style: 'destructive', onPress: () => { clearToken(); router.replace('/auth'); } },
+              ])}
+            >
+              <Text style={styles.accountRowText}>Cerrar sesión</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.accountRow}
+              accessibilityRole="link"
+              accessibilityHint="Abre la página de eliminación de cuenta en el navegador"
+              onPress={() => { void Linking.openURL('https://www.tdfrecords.net/cuenta/eliminar'); }}
+            >
+              <Text style={[styles.accountRowText, styles.accountRowDanger]}>Eliminar mi cuenta</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </ScrollView>
+      <Toast opacity={toast.opacity} message={toast.message} />
     </SafeAreaView>
   );
 }
@@ -791,6 +819,9 @@ const styles = StyleSheet.create({
   legacyImportTitle: { color: '#92400e', fontSize: 14, fontWeight: '700', marginBottom: 6 },
   legacyImportText: { color: '#78350f', fontSize: 12, lineHeight: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 12 },
+  accountRow: { minHeight: 48, justifyContent: 'center' },
+  accountRowText: { fontSize: 16, color: '#1a1a1a' },
+  accountRowDanger: { color: '#b91c1c' },
   sectionContent: { fontSize: 13, lineHeight: 20, color: '#666', marginBottom: 12 },
   genresContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   genreTag: { backgroundColor: '#e0e7ff', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },

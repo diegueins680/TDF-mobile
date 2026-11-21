@@ -120,14 +120,14 @@ export default function AuthScreen() {
   const [appleConnectionRequired, setAppleConnectionRequired] = useState(false);
   useEffect(() => { setAppleConnectionRequired(false); }, [mode]);
   const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [selectedIntent, setSelectedIntent] = useState<OnboardingIntent>(initialIntent);
+  // The six-option question is for people whose entry point did not already say why they came.
+  const [showIntentQuestion, setShowIntentQuestion] = useState(!requestedIntent);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [policyError, setPolicyError] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const lastNameInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const forgotPasswordEmailInputRef = useRef<TextInput>(null);
@@ -219,6 +219,7 @@ export default function AuthScreen() {
       const entryIntent = restoredIntent ?? DEFAULT_ONBOARDING_INTENT;
       if (!active) return;
       setSelectedIntent(entryIntent);
+      if (restoredIntent) setShowIntentQuestion(false);
       analytics.capture('auth_mode_viewed', {
         platform: 'mobile',
         mode: requestedMode === 'signup' ? 'signup' : 'login',
@@ -352,7 +353,8 @@ export default function AuthScreen() {
     try {
       const session = await signupRequest({
         firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        // The form asks for one name, as the web signup does; the contract field stays.
+        lastName: '',
         email: signupEmail.trim().toLowerCase(),
         password,
         marketingOptIn,
@@ -730,25 +732,6 @@ export default function AuthScreen() {
                       maxLength={80}
                       returnKeyType="next"
                       blurOnSubmit={false}
-                      onSubmitEditing={() => lastNameInputRef.current?.focus()}
-                    />
-                    <FormField
-                      ref={lastNameInputRef}
-                      label={copy.lastName}
-                      optional
-                      containerStyle={styles.nameField}
-                      value={lastName}
-                      onChangeText={(value) => {
-                        setLastName(value);
-                        setErrorMessage(null);
-                      }}
-                      placeholder={copy.lastNamePlaceholder}
-                      autoCapitalize="words"
-                      autoComplete="family-name"
-                      textContentType="familyName"
-                      maxLength={80}
-                      returnKeyType="next"
-                      blurOnSubmit={false}
                       onSubmitEditing={() => emailInputRef.current?.focus()}
                     />
                   </View>
@@ -832,6 +815,16 @@ export default function AuthScreen() {
 
               {mode === 'signup' ? (
                 <>
+                  {!showIntentQuestion ? (
+                    <TouchableOpacity
+                      style={styles.inlineControl}
+                      onPress={() => setShowIntentQuestion(true)}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: false }}
+                    >
+                      <Text style={styles.inlineControlText}>{copy.intentChange}</Text>
+                    </TouchableOpacity>
+                  ) : (
                   <View style={styles.intentSelectorContainer}>
                     <Text style={[styles.label, { color: colors.textPrimary }]}>{copy.intentTitle}</Text>
                     <Text style={styles.intentHint}>{copy.intentHint}</Text>
@@ -864,6 +857,7 @@ export default function AuthScreen() {
                       ))}
                     </View>
                   </View>
+                  )}
 
                   <TouchableOpacity
                     testID="termsCheckbox"
@@ -1110,7 +1104,8 @@ export default function AuthScreen() {
             </View>
           ) : null}
 
-          <View style={styles.card}>
+          {/* Only someone already signed in needs the session state and the way out. */}
+          {(loading || hasToken || feedbackMessage || isClearingSession || logoutPersistenceFailed) ? <View style={styles.card}>
             <Text style={styles.label}>{copy.sessionStatus}</Text>
             {loading ? (
               <View style={styles.loadingRow}>
@@ -1147,7 +1142,7 @@ export default function AuthScreen() {
                 </TouchableOpacity>
               </>
             )}
-          </View>
+          </View> : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

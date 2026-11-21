@@ -76,6 +76,8 @@ import { ScreenErrorBoundary } from '../src/components/ScreenErrorBoundary';
 import { recordFirstValueCompletion } from '../src/lib/firstValueCompletion';
 import { recordMomentReactionFirstValue } from '../src/lib/momentReactionFirstValue';
 import { usePartyOwnership } from '../src/hooks/usePartyOwnership';
+import { useToast } from '../src/hooks/useToast';
+import { Toast } from '../src/components/Toast';
 import type {
   EventLiveBroadcast,
   EventLiveBroadcastQuality,
@@ -186,7 +188,10 @@ function EventDetailContent() {
   const publisherSessionRef = useRef<LiveBroadcastPublisherSession | null>(null);
   const activeLiveBroadcastRef = useRef<ActiveLiveBroadcastRecord | null>(null);
 
+  const toast = useToast();
+  const showToast = toast.show;
   const [activeTab, setActiveTab] = useState<EventDetailTab>('details');
+  const [showBroadcastStudio, setShowBroadcastStudio] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>('NONE');
   const [showRsvpOnProfile, setShowRsvpOnProfile] = useState(true);
   const resumedRsvpNonce = useRef<string | null>(null);
@@ -414,10 +419,7 @@ function EventDetailContent() {
       if (mode === 'copy') {
         await Clipboard.setStringAsync(url);
         analytics.capture('event_link_copied', { platform: 'mobile', event_id: eventId, method: 'copy' });
-        Alert.alert(
-          locale.toLowerCase().startsWith('en') ? 'Link copied' : 'Enlace copiado',
-          locale.toLowerCase().startsWith('en') ? 'The public event link is ready to paste.' : 'El enlace público del evento está listo para pegar.',
-        );
+        showToast(locale.toLowerCase().startsWith('en') ? 'Link copied' : 'Enlace copiado');
         return;
       }
       const result = await Share.share({
@@ -436,7 +438,7 @@ function EventDetailContent() {
         error instanceof Error ? error.message : (locale.toLowerCase().startsWith('en') ? 'Try again.' : 'Inténtalo nuevamente.'),
       );
     }
-  }, [analytics, event, eventId, locale, rsvpStatus, timezone]);
+  }, [analytics, event, eventId, locale, rsvpStatus, showToast, timezone]);
 
   useEffect(() => {
     const source = Array.isArray(params.utm_source) ? params.utm_source[0] : params.utm_source;
@@ -538,7 +540,7 @@ function EventDetailContent() {
           ],
         );
       } else {
-        Alert.alert(locale.toLowerCase().startsWith('en') ? 'Done' : savedCopy.readyTitle, locale.toLowerCase().startsWith('en') ? "Your RSVP is now Can't go." : 'Marcaste que no irás.');
+        showToast(locale.toLowerCase().startsWith('en') ? "Your RSVP is now Can't go." : 'Marcaste que no irás.');
       }
     },
     onError: (err) => {
@@ -563,7 +565,7 @@ function EventDetailContent() {
       qc.invalidateQueries({ queryKey: ['event-rsvp-summary', eventId] });
       qc.invalidateQueries({ queryKey: ['event-rsvp-feed'] });
       analytics.capture('event_rsvp_deleted', { platform: 'mobile', event_id: eventId });
-      Alert.alert(locale.toLowerCase().startsWith('en') ? 'Done' : savedCopy.readyTitle, locale.toLowerCase().startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
+      showToast(locale.toLowerCase().startsWith('en') ? 'Your RSVP was removed.' : 'Eliminamos tu RSVP.');
     },
     onError: (error) => Alert.alert('Error', error instanceof Error ? error.message : 'No pudimos eliminar tu RSVP.'),
     onSettled: () => {
@@ -624,7 +626,7 @@ function EventDetailContent() {
       setInviteMessage('');
       qc.invalidateQueries({ queryKey: ['event-invitations', eventId] });
       setShowInviteModal(false);
-      Alert.alert(savedCopy.readyTitle, 'Invitación enviada');
+      showToast('Invitación enviada');
     },
     onError: (err) => {
       const msg = err instanceof Error ? err.message : 'No pudimos enviar la invitación';
@@ -669,12 +671,15 @@ function EventDetailContent() {
           analytics,
         );
       }
-      Alert.alert(
-        serverAcknowledged ? savedCopy.readyTitle : 'Cambio pendiente de sincronización',
-        serverAcknowledged
-          ? (saved ? 'Evento guardado en tu cuenta.' : savedCopy.removedSuccess)
-          : 'Lo guardamos en este dispositivo y lo sincronizaremos con tu cuenta cuando vuelva la conexión.',
-      );
+      if (serverAcknowledged) {
+        showToast(saved ? 'Evento guardado en tu cuenta.' : savedCopy.removedSuccess);
+      } else {
+        // Not a plain success: the person must know the account does not have it yet.
+        Alert.alert(
+          'Cambio pendiente de sincronización',
+          'Lo guardamos en este dispositivo y lo sincronizaremos con tu cuenta cuando vuelva la conexión.',
+        );
+      }
     },
     onError: (_error, { ownerPartyId }) => {
       if (!ownsParty(ownerPartyId)) return;
@@ -876,7 +881,7 @@ function EventDetailContent() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['social-friends'] });
       qc.invalidateQueries({ queryKey: ['social-suggestions'] });
-      Alert.alert(savedCopy.readyTitle, 'Agregaste este contacto a tu red.');
+      showToast('Agregaste este contacto a tu red.');
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'No pudimos crear la conexión.';
@@ -1031,7 +1036,7 @@ function EventDetailContent() {
     onSuccess: () => {
       setActiveBroadcastId(null);
       qc.invalidateQueries({ queryKey: ['event-live-broadcasts', eventId] });
-      Alert.alert(savedCopy.readyTitle, 'Transmisión finalizada.');
+      showToast('Transmisión finalizada.');
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'No pudimos finalizar la transmisión.';
@@ -1469,7 +1474,7 @@ function EventDetailContent() {
             onPress={() => setActiveTab('moments')}
           >
             <Text style={[styles.tabButtonText, activeTab === 'moments' && styles.tabButtonTextActive]}>
-              Momentos ({momentCount})
+              {momentCount > 0 ? `Momentos (${momentCount})` : 'Momentos'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -1477,7 +1482,7 @@ function EventDetailContent() {
             onPress={() => setActiveTab('live')}
           >
             <Text style={[styles.tabButtonText, activeTab === 'live' && styles.tabButtonTextActive]}>
-              En Vivo ({liveBroadcastCount})
+              {liveBroadcastCount > 0 ? `En Vivo (${liveBroadcastCount})` : 'En Vivo'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1795,142 +1800,6 @@ function EventDetailContent() {
         ) : (
           <>
             <View style={styles.section}>
-              <View style={styles.liveHero}>
-                <View style={styles.liveHeroHeader}>
-                  <View style={styles.liveHeroTitleRow}>
-                    <MaterialCommunityIcons name="broadcast" size={20} color="#dc2626" />
-                    <Text style={styles.liveHeroTitle}>Fanclub en vivo</Text>
-                  </View>
-                  {hasLivePublisher ? (
-                    <View style={styles.liveNowBadge}>
-                      <Text style={styles.liveNowBadgeText}>Transmitiendo</Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                {livePreviewUrl ? (
-                  <RTCView
-                    streamURL={livePreviewUrl}
-                    objectFit="cover"
-                    mirror={false}
-                    style={styles.livePreview}
-                  />
-                ) : (
-                  <View style={styles.livePreviewPlaceholder}>
-                    <MaterialCommunityIcons name="video-wireless-outline" size={34} color="#fecaca" />
-                    <Text style={styles.livePreviewText}>Vista previa al iniciar</Text>
-                  </View>
-                )}
-
-                <Text style={styles.liveHeroMeta}>
-                  Transmites como {currentActor.displayName}
-                  {selectedLiveArtist ? ` para ${selectedLiveArtist.name}` : ''}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Fanclub</Text>
-              {!token?.trim() ? (
-                <Text style={styles.helperText}>Inicia sesión para transmitir al fanclub.</Text>
-              ) : null}
-              {!currentActor.partyId ? (
-                <Text style={styles.helperText}>Tu sesión necesita una identidad vinculada para transmitir.</Text>
-              ) : null}
-              {eventArtists.length === 0 ? (
-                <Text style={styles.text}>Este evento todavía no tiene artistas asociados.</Text>
-              ) : followedLiveArtistIdsQuery.isLoading ? (
-                <ActivityIndicator color="#2563eb" />
-              ) : followedLiveArtists.length === 0 ? (
-                <Text style={styles.text}>Sigue a un artista del lineup para transmitir a su fanclub.</Text>
-              ) : (
-                <View style={styles.liveArtistChips}>
-                  {followedLiveArtists.map((artist) => {
-                    const active = String(artist.id) === String(selectedLiveArtist?.id);
-                    return (
-                      <TouchableOpacity
-                        key={String(artist.id)}
-                        style={[styles.liveArtistChip, active && styles.liveArtistChipActive]}
-                        onPress={() => setSelectedLiveArtistId(String(artist.id))}
-                        disabled={hasLivePublisher || startLiveBroadcastMutation.isPending}
-                      >
-                        <Text style={[styles.liveArtistChipText, active && styles.liveArtistChipTextActive]}>
-                          {artist.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Estudio</Text>
-              <View style={styles.inputGroup}>
-                <TextInput
-                  placeholder="Título"
-                  value={broadcastTitle}
-                  onChangeText={setBroadcastTitle}
-                  style={styles.input}
-                  maxLength={80}
-                  editable={!hasLivePublisher && !startLiveBroadcastMutation.isPending}
-                />
-                <TextInput
-                  placeholder="Descripción opcional"
-                  value={broadcastDescription}
-                  onChangeText={setBroadcastDescription}
-                  style={[styles.input, styles.inputMultiline]}
-                  multiline
-                  maxLength={280}
-                  editable={!hasLivePublisher && !startLiveBroadcastMutation.isPending}
-                />
-                <View style={styles.liveQualityRow}>
-                  {LIVE_QUALITY_OPTIONS.map((quality) => {
-                    const active = broadcastQuality === quality;
-                    return (
-                      <TouchableOpacity
-                        key={quality}
-                        style={[styles.liveQualityButton, active && styles.liveQualityButtonActive]}
-                        onPress={() => setBroadcastQuality(quality)}
-                        disabled={hasLivePublisher || startLiveBroadcastMutation.isPending}
-                      >
-                        <Text style={[styles.liveQualityText, active && styles.liveQualityTextActive]}>
-                          {quality}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                {hasLivePublisher && activeBroadcast ? (
-                  <TouchableOpacity
-                    style={[styles.liveEndButton, endLiveBroadcastMutation.isPending && styles.buttonDisabled]}
-                    onPress={() => handleEndBroadcast(activeBroadcast)}
-                    disabled={endLiveBroadcastMutation.isPending}
-                  >
-                    <MaterialCommunityIcons name="stop-circle-outline" size={18} color="#fff" />
-                    <Text style={styles.liveEndButtonText}>
-                      {endLiveBroadcastMutation.isPending ? 'Cerrando...' : 'Terminar transmisión'}
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={[
-                      styles.liveStartButton,
-                      !canStartLiveBroadcast && styles.buttonDisabled,
-                    ]}
-                    onPress={() => startLiveBroadcastMutation.mutate()}
-                    disabled={!canStartLiveBroadcast}
-                  >
-                    <MaterialCommunityIcons name="broadcast" size={18} color="#fff" />
-                    <Text style={styles.liveStartButtonText}>
-                      {startLiveBroadcastMutation.isPending ? 'Iniciando...' : 'Iniciar en vivo'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.section}>
               <Text style={styles.label}>Transmisiones</Text>
               {liveBroadcastsQuery.isLoading ? (
                 <ActivityIndicator color="#2563eb" />
@@ -1957,6 +1826,157 @@ function EventDetailContent() {
                 </View>
               )}
             </View>
+            {showBroadcastStudio || hasLivePublisher ? (
+              <>
+              <View style={styles.section}>
+                <View style={styles.liveHero}>
+                  <View style={styles.liveHeroHeader}>
+                    <View style={styles.liveHeroTitleRow}>
+                      <MaterialCommunityIcons name="broadcast" size={20} color="#dc2626" />
+                      <Text style={styles.liveHeroTitle}>Fanclub en vivo</Text>
+                    </View>
+                    {hasLivePublisher ? (
+                      <View style={styles.liveNowBadge}>
+                        <Text style={styles.liveNowBadgeText}>Transmitiendo</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {livePreviewUrl ? (
+                    <RTCView
+                      streamURL={livePreviewUrl}
+                      objectFit="cover"
+                      mirror={false}
+                      style={styles.livePreview}
+                    />
+                  ) : (
+                    <View style={styles.livePreviewPlaceholder}>
+                      <MaterialCommunityIcons name="video-wireless-outline" size={34} color="#fecaca" />
+                      <Text style={styles.livePreviewText}>Vista previa al iniciar</Text>
+                    </View>
+                  )}
+
+                  <Text style={styles.liveHeroMeta}>
+                    Transmites como {currentActor.displayName}
+                    {selectedLiveArtist ? ` para ${selectedLiveArtist.name}` : ''}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.label}>Fanclub</Text>
+                {!token?.trim() ? (
+                  <Text style={styles.helperText}>Inicia sesión para transmitir al fanclub.</Text>
+                ) : null}
+                {!currentActor.partyId ? (
+                  <Text style={styles.helperText}>Tu sesión necesita una identidad vinculada para transmitir.</Text>
+                ) : null}
+                {eventArtists.length === 0 ? (
+                  <Text style={styles.text}>Este evento todavía no tiene artistas asociados.</Text>
+                ) : followedLiveArtistIdsQuery.isLoading ? (
+                  <ActivityIndicator color="#2563eb" />
+                ) : followedLiveArtists.length === 0 ? (
+                  <Text style={styles.text}>Sigue a un artista del lineup para transmitir a su fanclub.</Text>
+                ) : (
+                  <View style={styles.liveArtistChips}>
+                    {followedLiveArtists.map((artist) => {
+                      const active = String(artist.id) === String(selectedLiveArtist?.id);
+                      return (
+                        <TouchableOpacity
+                          key={String(artist.id)}
+                          style={[styles.liveArtistChip, active && styles.liveArtistChipActive]}
+                          onPress={() => setSelectedLiveArtistId(String(artist.id))}
+                          disabled={hasLivePublisher || startLiveBroadcastMutation.isPending}
+                        >
+                          <Text style={[styles.liveArtistChipText, active && styles.liveArtistChipTextActive]}>
+                            {artist.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.label}>Tu transmisión</Text>
+                <View style={styles.inputGroup}>
+                  <TextInput
+                    placeholder="Título"
+                    value={broadcastTitle}
+                    onChangeText={setBroadcastTitle}
+                    style={styles.input}
+                    maxLength={80}
+                    editable={!hasLivePublisher && !startLiveBroadcastMutation.isPending}
+                  />
+                  <TextInput
+                    placeholder="Descripción opcional"
+                    value={broadcastDescription}
+                    onChangeText={setBroadcastDescription}
+                    style={[styles.input, styles.inputMultiline]}
+                    multiline
+                    maxLength={280}
+                    editable={!hasLivePublisher && !startLiveBroadcastMutation.isPending}
+                  />
+                  <View style={styles.liveQualityRow}>
+                    {LIVE_QUALITY_OPTIONS.map((quality) => {
+                      const active = broadcastQuality === quality;
+                      return (
+                        <TouchableOpacity
+                          key={quality}
+                          style={[styles.liveQualityButton, active && styles.liveQualityButtonActive]}
+                          onPress={() => setBroadcastQuality(quality)}
+                          disabled={hasLivePublisher || startLiveBroadcastMutation.isPending}
+                        >
+                          <Text style={[styles.liveQualityText, active && styles.liveQualityTextActive]}>
+                            {quality}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {hasLivePublisher && activeBroadcast ? (
+                    <TouchableOpacity
+                      style={[styles.liveEndButton, endLiveBroadcastMutation.isPending && styles.buttonDisabled]}
+                      onPress={() => handleEndBroadcast(activeBroadcast)}
+                      disabled={endLiveBroadcastMutation.isPending}
+                    >
+                      <MaterialCommunityIcons name="stop-circle-outline" size={18} color="#fff" />
+                      <Text style={styles.liveEndButtonText}>
+                        {endLiveBroadcastMutation.isPending ? 'Cerrando...' : 'Terminar transmisión'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.liveStartButton,
+                        !canStartLiveBroadcast && styles.buttonDisabled,
+                      ]}
+                      onPress={() => startLiveBroadcastMutation.mutate()}
+                      disabled={!canStartLiveBroadcast}
+                    >
+                      <MaterialCommunityIcons name="broadcast" size={18} color="#fff" />
+                      <Text style={styles.liveStartButtonText}>
+                        {startLiveBroadcastMutation.isPending ? 'Iniciando...' : 'Iniciar en vivo'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              </>
+            ) : (
+              <View style={styles.section}>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => setShowBroadcastStudio(true)}
+                  accessibilityRole="button"
+                  accessibilityHint="Muestra las opciones para salir en vivo para un fanclub"
+                >
+                  <Text style={[styles.secondaryButtonText, styles.broadcastDisclosureText]}>Transmitir desde este evento</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -2271,6 +2291,7 @@ function EventDetailContent() {
           </View>
         </SafeAreaView>
       </Modal>
+      <Toast opacity={toast.opacity} message={toast.message} />
     </SafeAreaView>
     </ScreenErrorBoundary>
   );
@@ -2923,5 +2944,6 @@ const styles = StyleSheet.create({
   invitationActions: { flexDirection: 'row', gap: 6 },
   secondaryButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#eef2ff' },
   secondaryButtonText: { color: '#1e3a8a', fontWeight: '700', fontSize: 12 },
+  broadcastDisclosureText: { fontSize: 15, textAlign: 'center', paddingVertical: 6 },
   error: { fontSize: 14, color: '#dc2626' },
 });

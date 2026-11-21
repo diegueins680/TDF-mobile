@@ -240,18 +240,18 @@ export default function CreateEventScreen() {
       return;
     }
     if (artistIds.length === 0) {
-      Alert.alert('Validation', 'Please select at least one artist');
+      Alert.alert('Validación', 'Selecciona al menos un artista');
       return;
     }
     if (parsedEnd && parsedStart >= parsedEnd) {
-      Alert.alert('Validation', 'End time must be after start time');
+      Alert.alert('Validación', 'La hora de fin debe ser posterior a la de inicio');
       return;
     }
 
     const trimmedPrice = ticketPrice.trim();
     const parsedPrice = trimmedPrice ? Number(trimmedPrice) : undefined;
     if (trimmedPrice && !Number.isFinite(parsedPrice)) {
-      Alert.alert('Validation', 'Ticket price must be a valid number');
+      Alert.alert('Validación', 'El precio de entrada debe ser un número');
       return;
     }
     if (typeof parsedPrice === 'number' && parsedPrice < 0) {

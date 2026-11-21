@@ -368,7 +368,7 @@ describe('Auth screen', () => {
 
     expect(emailInput).toBeTruthy();
     expect(passwordInput.props.accessibilityHint).toBe(
-      'Usa al menos 8 caracteres y como máximo 72 bytes UTF-8, sin caracteres de control ni formato oculto.',
+      'Usa al menos 8 caracteres y no más de 72 (los acentos y emojis cuentan como varios).',
     );
 
     fireEvent.changeText(emailInput, 'correo-invalido');
@@ -376,7 +376,7 @@ describe('Auth screen', () => {
 
     expect(screen.getByText('Ingresa un correo electrónico válido.').props.accessibilityRole).toBe('alert');
     expect(screen.getByText(
-      'Usa al menos 8 caracteres y como máximo 72 bytes UTF-8, sin caracteres de control ni formato oculto.',
+      'Usa al menos 8 caracteres y no más de 72 (los acentos y emojis cuentan como varios).',
     ).props.accessibilityRole).toBe('alert');
   });
 
@@ -437,7 +437,7 @@ describe('Auth screen', () => {
     render(<AuthScreen />);
     fireEvent.press(screen.getByText('Crear cuenta'));
     fireEvent.changeText(screen.getByPlaceholderText('Tu nombre'), 'Ana');
-    fireEvent.changeText(screen.getByPlaceholderText('Tu apellido'), 'Paz');
+    expect(screen.queryByPlaceholderText('Tu apellido')).toBeNull();
     fireEvent.changeText(screen.getByPlaceholderText('tu@correo.com'), 'ANA@example.com');
     fireEvent.changeText(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password-seguro');
     fireEvent.press(screen.getByTestId('termsCheckbox'));
@@ -445,7 +445,7 @@ describe('Auth screen', () => {
 
     await waitFor(() => expect(mockSignupRequest).toHaveBeenCalledWith({
       firstName: 'Ana',
-      lastName: 'Paz',
+      lastName: '',
       email: 'ana@example.com',
       password: 'password-seguro',
       marketingOptIn: false,
@@ -476,15 +476,27 @@ describe('Auth screen', () => {
     expect(mockReplace).toHaveBeenCalledWith('/createArtistProfile');
   });
 
+  it('skips the intention question when the entry point already gave the reason', async () => {
+    mockSearchParams = { mode: 'signup', intent: 'events' };
+    render(<AuthScreen />);
+    expect(screen.queryByText('¿Qué quieres hacer primero?')).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Buscar prácticas' })).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'Vengo por otra cosa' }));
+    expect(screen.getByText('¿Qué quieres hacer primero?')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Buscar prácticas' })).toBeTruthy();
+  });
+
   it('restores an interrupted signup intent from bounded local storage', async () => {
     mockSearchParams = { mode: 'signup' };
     mockReadPendingOnboardingIntent.mockResolvedValueOnce('artist_profile');
     mockSignupRequest.mockResolvedValue({ token: 'token', partyId: 92, roles: ['Customer'], modules: [] });
     render(<AuthScreen />);
 
-    await waitFor(() => expect(
+    // A known reason for coming keeps the question folded; it opens on request with that reason selected.
+    fireEvent.press(await screen.findByRole('button', { name: 'Vengo por otra cosa' }));
+    expect(
       screen.getByRole('radio', { name: 'Crear perfil de artista' }).props.accessibilityState,
-    ).toEqual({ selected: true }));
+    ).toEqual({ selected: true });
     fireEvent.changeText(screen.getByPlaceholderText('Tu nombre'), 'Lina');
     fireEvent.changeText(screen.getByPlaceholderText('tu@correo.com'), 'lina@example.com');
     fireEvent.changeText(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password-seguro');
@@ -765,6 +777,22 @@ describe('Auth screen', () => {
     expect(screen.getByText(/Cargando sesión guardada…/i)).toBeTruthy();
     expect(screen.queryByTestId('loginButton')).toBeNull();
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
+  });
+
+  it('shows no session status card to someone who is signed out', async () => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({
+      token: null,
+      partyId: null,
+      loading: false,
+      setToken: mockSetToken,
+      clearToken: mockClearToken,
+    });
+
+    render(<AuthScreen />);
+
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
+    expect(screen.queryByText(/Estado de sesión/i)).toBeNull();
+    expect(screen.queryByText(/Cerrar sesión/i)).toBeNull();
   });
 
   it('clears the current session', async () => {

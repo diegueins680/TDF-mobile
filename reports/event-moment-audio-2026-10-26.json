@@ -1,0 +1,98 @@
+{
+  "observedAt": "2026-10-26T07:38:03.436103+00:00",
+  "scope": "Local synthetic tests, autolinking and JS bundle only; native compiled artifact still pending",
+  "base": "f5197c69ca1eeddbb7664b1c6b87f9c192548e6d",
+  "branch": "feat/event-moment-audio-20261026",
+  "node": "20.19.4",
+  "sourceSha256": {
+    "__tests__/EventDetailMoments.test.tsx": "be9abb17fb820489a72db3ac48b4caec977521a804139c1d52b2b8a1605e86ac",
+    "__tests__/eventMomentWirePayload.test.ts": "ad22cd61cca220e564ae3846e245c5e765f821d1ae54dc5978d186fb4c3730b4",
+    "android/app/src/main/res/values/strings.xml": "decd8498a975098d8c1d9a800b76847aafc98255e50a7dc580197eda837959d8",
+    "app.json": "2e310200ca0c24ce3193ef421f657cfa5f6a9922d55ec452cfd786dcd735edc2",
+    "app/eventDetail.tsx": "191c604b02de29f2d08053e95fe80a95638a95a4d677204af372d30e36ee1efc",
+    "ios/Podfile.lock": "4c3761da3aded4142ed1c8f5fd10f5c88a2437eb2e969d432967ab679fa76730",
+    "ios/TDFRecords/Supporting/Expo.plist": "2430643bb2470060140178e068fce590b2cff93c23b15e83afc7e82a509c4a9d",
+    "package-lock.json": "3f04f09418710ce19242ba7aa175fd31c759139f0cd0d68639d12fb9b4414871",
+    "package.json": "80a17d2fe3861fae5c7063223466d74e7424d9a30a2e468e703785bda0dc9be4",
+    "scripts/release-check.mjs": "b27a4a3dffcbfb1a87acbd3a2bda9069185d45e75e1899946e270b2851499f9f",
+    "scripts/tests/test_ios_signing.py": "f5c3237506bbc55e4af5f4eaba65e0ff4a7fcf4a80241cea63c32955982924ea",
+    "scripts/verify-ios-artifact.py": "4bf68ed53a2d1ff3d787b454bd237e53c345743c90c574d240dcb3a1cb76d06c",
+    "src/localization/eventExperienceCopy.ts": "e9afbefb8a56b5caa79f87a9888abc8e0530a90973988e1cfcab9e043db722b4",
+    "src/lib/momentAudio.ts": "aa2446832a3683d3894fe321ee1096be631c800ae61ede5bb85b7691ba8659c5",
+    "__tests__/momentAudio.test.ts": "a58d50d38a38bd355eeec514f879bc307d5039e3d1564c4bcc80479974ad74b2",
+    "scripts/tests/test_audio_runtime.py": "55afc947e7eba3d9425c4fa70bf15706930ff26bfa223cbe9398dfdd233d594c"
+  },
+  "newDependency": {
+    "package": "expo-document-picker",
+    "version": "14.0.8",
+    "sdk": "54.0.37",
+    "sdkRecommended": "~14.0.8",
+    "reason": "System document selection is needed to choose existing audio files; ImagePicker cannot select audio. Reuses the existing API/media store.",
+    "lockChange": "Exactly one dependency added; no existing npm resolution changed."
+  },
+  "nativeRuntime": "1.0.1-interactions-audio.1",
+  "jest": {
+    "suites": 99,
+    "tests": 722,
+    "status": "PASS"
+  },
+  "releaseChecks": "PASS",
+  "artifactGuards": {
+    "tests": 14,
+    "passed": 14,
+    "skipped": 0,
+    "actualMacCodesignFixture": true,
+    "oldRuntimeNegativeControl": "PASS"
+  },
+  "nativeLock": {
+    "newPod": "ExpoDocumentPicker (14.0.8)",
+    "sandboxJsonSha1": "7cd9e71a0f66fb19eb0a586d6f26eee1284692e0",
+    "checksumToolchain": "CocoaPods1.16.2/JSON2.18.0, actual sandbox pretty JSON; matched existing ExpoCrypto/EASClient lock checksums",
+    "previousLockObjects": "All preserved exactly; only four document-picker entries added",
+    "fullPodInstall": "NOT RUN locally: Xcode unavailable; requires hosted macOS build"
+  },
+  "autolinking": {
+    "apple": {
+      "package": "expo-document-picker",
+      "version": "14.0.8",
+      "nativeModule": [
+        "DocumentPickerModule"
+      ]
+    },
+    "android": {
+      "package": "expo-document-picker",
+      "version": "14.0.8",
+      "nativeModule": [
+        "expo.modules.documentpicker.DocumentPickerModule"
+      ]
+    }
+  },
+  "androidJsBundle": {
+    "bytes": 5290765,
+    "sha256": "8bdd1ffb640d8c3a9011831f2d15327dc6ae3dad0ccef81c79f479585965f23f",
+    "sourcesContentExact": {
+      "app/eventDetail.tsx": "191c604b02de29f2d08053e95fe80a95638a95a4d677204af372d30e36ee1efc",
+      "src/lib/momentAudio.ts": "aa2446832a3683d3894fe321ee1096be631c800ae61ede5bb85b7691ba8659c5",
+      "src/localization/eventExperienceCopy.ts": "e9afbefb8a56b5caa79f87a9888abc8e0530a90973988e1cfcab9e043db722b4"
+    },
+    "documentPickerJsIncluded": true
+  },
+  "logSha256": {
+    "tdf-mobile-audio-full-v2.log": "2a72811bfbfadf80e1934dfc8d34bfb71906962fd829527656a564318987586e",
+    "tdf-mobile-audio-release-v4.log": "5c900062b26307bf3dd8cafa98bc560013acad617743445e071bf5338c9dc191",
+    "tdf-mobile-audio-artifact-guards-v3.log": "ebc078650cef3469e0115e8d98ad1ab8ea4237eb860fb86b6569b4f082604af2",
+    "tdf-mobile-audio-pod-checksum-v2.log": "7f7d6a2746045ba92924678b4017dcc8f38b4fb6cfcc16adc511a4bfa81b558a",
+    "tdf-mobile-audio-metro-v2.log": "9f3360e53c4a017f189a4698db046f76c500fca3621963c27d57f987d8191967"
+  },
+  "retainedFailedAttempts": [
+    "Initial lint rejected control-code regex; explicit character checks replaced it.",
+    "Initial Jest dynamic import failed; action-scoped Metro require uses the standard loader.",
+    "Initial wire harness assumed RN getParts on the host FormData; now verifies the append contract.",
+    "First pod checksum compared the Ruby source file; actual sandbox JSON matches two prior locked pods.",
+    "Actual Monterey codesign output ended in one NUL byte; parser normalizes only that byte and rejects other trailing payload.",
+    "Private Ruby setup first used the wrong configure cwd; corrected outside the repository."
+  ],
+  "productionWritten": false,
+  "realInvitationsSent": 0,
+  "nativeDeviceOrStoreRelease": "NOT VERIFIED"
+}

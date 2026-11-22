@@ -11,6 +11,13 @@ import { Artists } from '../src/api/artists';
 import { normalizeRouteParam } from '../src/lib/routeParams';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
+import { t } from '../src/i18n';
+import { resolveTaxonomyLanguage } from '../src/features/taxonomyFilters/taxonomyFilterModel';
+import {
+  GenreSuggestionModal,
+  MyGenreSuggestions,
+  type ReadyGenre,
+} from '../src/features/taxonomyFilters/GenreSuggestionModal';
 
 export default function EditArtistProfileScreen() {
   const { artistId: rawArtistId } = useLocalSearchParams<{ artistId?: string | string[] }>();
@@ -18,8 +25,9 @@ export default function EditArtistProfileScreen() {
   const qc = useQueryClient();
   const analytics = useAnalytics();
   const artistId = normalizeRouteParam(rawArtistId);
-  const { getCatalogItems, catalogSyncing } = useUserSettings();
+  const { getCatalogItems, catalogSyncing, locale } = useUserSettings();
   const genreOptions = getCatalogItems('genres');
+  const language = resolveTaxonomyLanguage(locale);
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -28,6 +36,10 @@ export default function EditArtistProfileScreen() {
   const [instagramHandle, setInstagramHandle] = useState('');
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [showGenreSelect, setShowGenreSelect] = useState(false);
+  const [showGenreSuggestion, setShowGenreSuggestion] = useState(false);
+  // TAX-GENRE-SUGGESTION-001: genres added through a suggestion (new, or an
+  // existing match) may not be in the synced catalog yet.
+  const [readyGenres, setReadyGenres] = useState<ReadyGenre[]>([]);
 
   const nameRef = useRef<TextInput>(null);
   const bioRef = useRef<TextInput>(null);
@@ -92,12 +104,18 @@ export default function EditArtistProfileScreen() {
     setIsDirty(true);
   }, []);
 
+  const handleGenreReady = useCallback((genre: ReadyGenre) => {
+    setReadyGenres(prev => (prev.some(item => item.id === genre.id) ? prev : [...prev, genre]));
+    setSelectedGenreIds(prev => (prev.includes(genre.id) ? prev : [...prev, genre.id]));
+    setIsDirty(true);
+  }, []);
+
   const handleUpdateProfile = useCallback(async () => {
     if (!name.trim()) {
       Alert.alert('Validación', 'El nombre artístico es obligatorio');
       return;
     }
-    const activeGenreIds = new Set(genreOptions.map((genre) => genre.id));
+    const activeGenreIds = new Set([...genreOptions.map((genre) => genre.id), ...readyGenres.map((genre) => genre.id)]);
     const unavailableGenreIds = selectedGenreIds.filter((genreId) => !activeGenreIds.has(genreId));
     if (unavailableGenreIds.length > 0) {
       Alert.alert(
@@ -115,7 +133,7 @@ export default function EditArtistProfileScreen() {
       instagramHandle: instagramHandle.trim() || null,
       spotifyUrl: spotifyUrl.trim() || null
     });
-  }, [name, bio, imageUrl, selectedGenreIds, genreOptions, instagramHandle, spotifyUrl, updateMutation]);
+  }, [name, bio, imageUrl, selectedGenreIds, genreOptions, readyGenres, instagramHandle, spotifyUrl, updateMutation]);
 
   if (!artistId) {
     return (
@@ -261,7 +279,8 @@ export default function EditArtistProfileScreen() {
 
           <View style={styles.selectedGenresContainer}>
             {selectedGenreIds.map((genreId, idx) => {
-              const activeGenre = genreOptions.find((genre) => genre.id === genreId);
+              const activeGenre = genreOptions.find((genre) => genre.id === genreId)
+                ?? readyGenres.find((genre) => genre.id === genreId);
               const historicalName = artistQuery.data?.genres?.[idx];
               return (
               <View key={genreId} style={styles.selectedGenreTag}>
@@ -272,6 +291,22 @@ export default function EditArtistProfileScreen() {
               );
             })}
           </View>
+
+          <TouchableOpacity
+            style={styles.suggestGenreButton}
+            onPress={() => setShowGenreSuggestion(true)}
+            accessibilityRole="button"
+            accessibilityLabel={t('taxonomy.genre.suggest', undefined, language)}
+          >
+            <Text style={styles.suggestGenreButtonText}>{t('taxonomy.genre.suggest', undefined, language)}</Text>
+          </TouchableOpacity>
+          <MyGenreSuggestions language={language} />
+          <GenreSuggestionModal
+            visible={showGenreSuggestion}
+            onClose={() => setShowGenreSuggestion(false)}
+            onGenreReady={handleGenreReady}
+            language={language}
+          />
         </View>
 
         <View style={styles.field}>
@@ -351,6 +386,8 @@ const styles = StyleSheet.create({
   selectedGenreTag: { backgroundColor: '#e0e7ff', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
   selectedGenreText: { fontSize: 12, fontWeight: '600', color: '#2563eb' },
   catalogStatus: { marginTop: 8, color: '#6b7280', fontSize: 13 },
+  suggestGenreButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', marginTop: 8, paddingHorizontal: 4 },
+  suggestGenreButtonText: { color: '#2563eb', fontSize: 14, fontWeight: '700' },
   updateButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 16 },
   updateButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' }
 });

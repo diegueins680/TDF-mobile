@@ -36,6 +36,18 @@ describe('mobile deep-link routing', () => {
     );
   });
 
+  it('keeps repeated language-independent taxonomy filters on directory and events links', () => {
+    const quito = '44444444-4444-4444-8444-444444444444';
+    const bogota = '55555555-5555-4555-8555-555555555555';
+    const rock = '66666666-6666-4666-8666-666666666666';
+    expect(mobileDeepLinkTarget(`tdf://directory?f.city=${quito}&f.city=${bogota}&f.genre=${rock}&f.scope=local`, '/')).toBe(
+      `/(tabs)/directory?f.city=${quito}&f.city=${bogota}&f.genre=${rock}&f.scope=local`,
+    );
+    expect(mobileDeepLinkTarget(`tdf://events?f.country=${quito}&f.genre=${rock}`, '/')).toBe(
+      `/(tabs)/events?f.country=${quito}&f.genre=${rock}`,
+    );
+  });
+
   it('supports Expo development links only after their explicit route marker', () => {
     expect(mobileDeepLinkTarget('exp://127.0.0.1:8081/--/artist/9', '/')).toBe(
       '/artistDetail?artistId=9',

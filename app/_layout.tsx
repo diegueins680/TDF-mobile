@@ -1,5 +1,6 @@
 import { recordMobileSession } from '../src/feedback/participation';
 import { useNotificationResponses } from '../src/navigation/useNotificationResponses';
+import { usePushRegistration } from '../src/notifications/usePushRegistration';
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   Redirect,
@@ -32,6 +33,7 @@ function RootNavigator() {
     return () => subscription.remove();
   }, []);
   useNotificationResponses();
+  usePushRegistration();
   useLegacyDeepLinks();
   const { colorScheme } = useAppTheme();
   const analytics = useAnalytics();

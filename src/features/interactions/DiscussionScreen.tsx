@@ -8,6 +8,7 @@ import * as Clipboard from 'expo-clipboard';
 import { Interactions } from '../../api/interactions';
 import type { InteractionCommand, InteractionComment, InteractionDestination, InteractionPage, InteractionSort } from '../../api/interactions';
 import { useAuth } from '../../providers/AuthProvider';
+import { PushPermissionPrompt } from '../../notifications/PushPermissionPrompt';
 import { useAppTheme } from '../../theme/ThemeProvider';
 import { getAnalyticsClient } from '../../analytics/posthog';
 import { DiscussionControls } from './DiscussionControls';
@@ -123,6 +124,7 @@ function Discussion({ destination }: { destination: InteractionDestination }) {
   if (summary.isError) return <SafeAreaView style={{ flex: 1, padding: 24, backgroundColor: colors.canvas }}><Text accessibilityRole="alert" style={{ color: colors.textPrimary }}>Tus permisos cambiaron o la conversación no está disponible.</Text></SafeAreaView>;
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}>
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <PushPermissionPrompt style={{ marginHorizontal: 16, marginTop: 8 }} />
       <View ref={viewport} testID="discussion-viewport" style={{ flex: 1 }} onTouchStart={() => { anchoring.current = false; }}>
       <FlatList ref={list} data={comments.isError || context.isError ? [] : items} keyExtractor={(comment) => comment.id} keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 16, gap: 8 }} onLayout={() => setListReady(true)}

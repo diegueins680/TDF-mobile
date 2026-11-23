@@ -1043,6 +1043,17 @@ describe('Auth screen', () => {
     }
   });
 
+  it.each([
+    ['pending', 'Cerrando sesión…'],
+    ['failed', 'Reintentar cierre'],
+    ['complete', 'Sesión cerrada en este dispositivo.'],
+  ])('restores the provider sign-out state %s after the auth screen remounts', (logoutState, text) => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: null, partyId: null, loading: false, setToken: mockSetToken, clearTokenPersisted: mockClearToken, logoutState });
+    render(<AuthScreen />);
+    expect(screen.getByText(text)).toBeTruthy();
+    if (logoutState === 'pending') expect(screen.queryByTestId('loginButton')).toBeNull();
+  });
+
   it('offers a retry when local sign-out cannot be persisted', async () => {
     const provider = jest.mocked(require('../src/providers/AuthProvider').useAuth);
     provider.mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });

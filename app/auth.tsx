@@ -101,7 +101,7 @@ export default function AuthScreen() {
     roles?: string | string[];
     confirmSignOut?: string | string[];
   }>();
-  const { token, loading, setToken, clearTokenPersisted } = useAuth();
+  const { token, loading, setToken, clearTokenPersisted, logoutState } = useAuth();
   const analytics = useAnalytics();
   const { locale, getCatalogItems, setRegionalPreferences } = useUserSettings();
   const language = onboardingLanguage(locale);
@@ -174,6 +174,9 @@ export default function AuthScreen() {
   };
 
   const hasToken = Boolean(token?.trim());
+  const signingOut = isClearingSession || logoutState === 'pending';
+  const signOutFailed = logoutPersistenceFailed || logoutState === 'failed';
+  const sessionFeedback = logoutState === 'complete' ? copy.sessionClosed : feedbackMessage;
   const canSubmitPassword = username.trim().length > 0 && password.length > 0 && !isPasswordSubmitting;
   const canSubmitForgotPassword =
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotPasswordEmail.trim()) && !isForgotPasswordSubmitting;
@@ -195,7 +198,7 @@ export default function AuthScreen() {
     Boolean(googleSigninModule) &&
     Boolean(GOOGLE_WEB_CLIENT_ID) &&
     (Platform.OS !== 'ios' || Boolean(GOOGLE_IOS_URL_SCHEME));
-  const showLoginActions = !loading && !hasToken && !isClearingSession;
+  const showLoginActions = !loading && !hasToken && !signingOut;
   const showGoogleLogin = showLoginActions && isGoogleLoginAvailable;
   const showAppleLogin = showLoginActions && isAppleSignInEnabled() && Platform.OS === 'ios' && appleAuthModule !== null;
   const showSocialLogin = (showGoogleLogin || showAppleLogin) && (mode !== 'signup' || termsAccepted);
@@ -1119,7 +1122,7 @@ export default function AuthScreen() {
           ) : null}
 
           {/* Only someone already signed in needs the session state and the way out. */}
-          {(loading || hasToken || feedbackMessage || isClearingSession || logoutPersistenceFailed) ? <View style={styles.card}>
+          {(loading || hasToken || sessionFeedback || signingOut || signOutFailed) ? <View style={styles.card}>
             <Text style={styles.label}>{copy.sessionStatus}</Text>
             {loading ? (
               <View style={styles.loadingRow}>
@@ -1131,27 +1134,27 @@ export default function AuthScreen() {
                 <Text style={styles.statusText}>
                   {copy.session}: {hasToken ? copy.sessionActive : copy.sessionInactive}
                 </Text>
-                {feedbackMessage ? (
+                {sessionFeedback ? (
                   <Text style={styles.successText} accessibilityLiveRegion="polite">
-                    {feedbackMessage}
+                    {sessionFeedback}
                   </Text>
                 ) : null}
-                {logoutPersistenceFailed ? (
+                {signOutFailed ? (
                   <Text style={styles.errorText} accessibilityLiveRegion="polite">
                     {copy.sessionStorageUnconfirmed}
                   </Text>
                 ) : null}
                 <TouchableOpacity
-                  style={[styles.ghostButton, (isClearingSession || (!hasToken && !logoutPersistenceFailed)) && styles.buttonDisabled]}
+                  style={[styles.ghostButton, (signingOut || (!hasToken && !signOutFailed)) && styles.buttonDisabled]}
                   onPress={() => {
                     void handleClearSession();
                   }}
-                  disabled={isClearingSession || (!hasToken && !logoutPersistenceFailed)}
+                  disabled={signingOut || (!hasToken && !signOutFailed)}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: isClearingSession || (!hasToken && !logoutPersistenceFailed) }}
+                  accessibilityState={{ disabled: signingOut || (!hasToken && !signOutFailed) }}
                 >
                   <Text style={styles.ghostButtonText}>
-                    {isClearingSession ? copy.signingOut : logoutPersistenceFailed ? copy.retrySignOut : copy.signOut}
+                    {signingOut ? copy.signingOut : signOutFailed ? copy.retrySignOut : copy.signOut}
                   </Text>
                 </TouchableOpacity>
               </>

@@ -112,9 +112,8 @@ describe('Isolated native UI smoke', () => {
     await guest.tap();
     await waitFor(element(by.label('Buscar en el directorio musical'))).toBeVisible().withTimeout(30000);
     await device.takeScreenshot('guest-directory');
-    const label = by.label('Concierto de prueba, Quito');
-    const event = element(device.getPlatform() === 'android'
-      ? label.and(by.type('com.facebook.react.views.view.ReactViewGroup')) : label);
+    // Tap the visible title rather than the image occupying the link container's center.
+    const event = element(by.text('Concierto de prueba'));
     await waitFor(event).toBeVisible(100)
       .whileElement(by.id('directoryResults')).scroll(200, 'down');
     await event.tap();
@@ -143,9 +142,9 @@ describe('Isolated native UI smoke', () => {
     await expect(element(by.text(/^(Apellido|Last name)$/))).not.toExist();
     const question = element(by.text(/^(¿Qué quieres hacer primero\?|What do you want to do first\?)$/));
     await expect(question).not.toExist();
-    const label = by.label(/^(Vengo por otra cosa|I came for something else)$/);
-    const change = element(device.getPlatform() === 'android'
-      ? label.and(by.type('com.facebook.react.views.view.ReactViewGroup')) : label);
+    // This inline action has a Text child; Android does not synthesize its
+    // parent's contentDescription the way iOS synthesizes accessibility labels.
+    const change = element(by.text(/^(Vengo por otra cosa|I came for something else)$/));
     await waitFor(change).toBeVisible(100)
       .whileElement(by.id('authScroll')).scroll(200, 'down');
     await device.takeScreenshot('known-intent-signup-folded');

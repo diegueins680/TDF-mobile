@@ -1399,7 +1399,7 @@ function EventDetailContent() {
   return (
     <ScreenErrorBoundary>
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView testID="eventDetailScroll" contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>← Volver</Text>
         </TouchableOpacity>
@@ -1425,6 +1425,7 @@ function EventDetailContent() {
           </View>
         ) : null}
         <TicketPurchaseCard
+          requiresSignInForAvailability={!token?.trim()}
           tiers={ticketTiersQuery.data ?? []}
           fallbackPrice={event.ticketPrice}
           fallbackCurrency={event.currency ?? displayCurrency}
@@ -1432,7 +1433,9 @@ function EventDetailContent() {
           canBuyInternally={isEventTicketPurchaseEligible(event)}
           isLoading={ticketTiersQuery.isLoading}
           isError={ticketTiersQuery.isError}
-          onBuy={() => router.push({ pathname: '/ticketCheckout', params: { eventId: String(event.id) } })}
+          onBuy={() => router.push(token?.trim()
+            ? { pathname: '/ticketCheckout', params: { eventId: String(event.id) } }
+            : { pathname: '/auth', params: { returnTo: `/ticketCheckout?eventId=${encodeURIComponent(String(event.id))}` } })}
           onOpenExternal={() => handleOpenTicketUrl(event.ticketUrl)}
           onRetry={() => void ticketTiersQuery.refetch()}
         />

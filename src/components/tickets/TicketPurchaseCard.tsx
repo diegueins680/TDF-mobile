@@ -18,6 +18,7 @@ type Props = {
   canBuyInternally?: boolean;
   isLoading?: boolean;
   isError?: boolean;
+  requiresSignInForAvailability?: boolean;
   onBuy: () => void;
   onOpenExternal: () => void;
   onRetry: () => void;
@@ -31,6 +32,7 @@ export function TicketPurchaseCard({
   canBuyInternally = true,
   isLoading = false,
   isError = false,
+  requiresSignInForAvailability = false,
   onBuy,
   onOpenExternal,
   onRetry,
@@ -49,6 +51,31 @@ export function TicketPurchaseCard({
   });
 
   const renderAction = () => {
+    if (requiresSignInForAvailability) {
+      const publicPrice = typeof fallbackPrice === 'number' ? Math.round(fallbackPrice * 100) : null;
+      return (
+        <View style={styles.messageGroup}>
+          {publicPrice !== null ? (
+            <Text style={[styles.price, { color: colors.textPrimary }]}>
+              {publicPrice === 0 ? 'Gratis' : formatTicketMoney(publicPrice, fallbackCurrency)}
+            </Text>
+          ) : null}
+          <Text style={[styles.message, { color: colors.textSecondary }]}>
+            Inicia sesión para consultar disponibilidad y comprar.
+          </Text>
+          <TouchableOpacity
+            testID="guestTicketSignIn"
+            style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }]}
+            onPress={onBuy}
+            accessibilityRole="button"
+            accessibilityLabel="Consultar entradas"
+          >
+            <Text style={[styles.primaryButtonText, { color: colors.actionPrimaryContrast }]}>Consultar entradas</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     if (isLoading) {
       return <ActivityIndicator color={colors.actionPrimary} accessibilityLabel="Cargando entradas" />;
     }
@@ -75,7 +102,7 @@ export function TicketPurchaseCard({
         <>
           <View style={styles.priceGroup}>
             <Text style={[styles.eyebrow, { color: colors.actionPrimary }]}>{isFree ? 'ENTRADAS' : 'DESDE'}</Text>
-            <Text style={[styles.price, { color: colors.selected }]}>
+            <Text style={[styles.price, { color: colors.textPrimary }]}>
               {isFree ? 'Gratis' : formatTicketMoney(startingPrice.amountCents, startingPrice.currency)}
             </Text>
             <Text style={[styles.message, { color: colors.textSecondary }]}>
@@ -101,7 +128,7 @@ export function TicketPurchaseCard({
     if (upcomingTier) {
       return (
         <View style={styles.messageGroup}>
-          <Text style={[styles.stateTitle, { color: colors.selected }]}>Venta próximamente</Text>
+          <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Venta próximamente</Text>
           <Text style={[styles.message, { color: colors.textSecondary }]}>{ticketTierSaleStateLabel(upcomingTier)}</Text>
         </View>
       );
@@ -112,9 +139,9 @@ export function TicketPurchaseCard({
       return (
         <>
           <View style={styles.priceGroup}>
-            <Text style={[styles.stateTitle, { color: colors.selected }]}>Venta en sitio externo</Text>
+            <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>Venta en sitio externo</Text>
             {fallbackCents !== null ? (
-              <Text style={[styles.price, { color: colors.selected }]}>
+              <Text style={[styles.price, { color: colors.textPrimary }]}>
                 {fallbackCents === 0 ? 'Gratis' : formatTicketMoney(fallbackCents, fallbackCurrency)}
               </Text>
             ) : null}
@@ -134,7 +161,7 @@ export function TicketPurchaseCard({
 
     return (
       <View style={styles.messageGroup}>
-        <Text style={[styles.stateTitle, { color: colors.selected }]}>{soldOut ? 'Entradas agotadas' : 'Venta no disponible'}</Text>
+        <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>{soldOut ? 'Entradas agotadas' : 'Venta no disponible'}</Text>
         <Text style={[styles.message, { color: colors.textSecondary }]}>
           {soldOut
             ? 'No quedan entradas disponibles en este momento.'
@@ -151,7 +178,7 @@ export function TicketPurchaseCard({
           <MaterialCommunityIcons name="ticket-confirmation-outline" size={24} color={colors.actionPrimary} />
         </View>
         <View style={styles.headingCopy}>
-          <Text style={[styles.title, { color: colors.selected }]}>Entradas</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Entradas</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Compra segura dentro de TDF Records</Text>
         </View>
       </View>

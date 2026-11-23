@@ -194,7 +194,7 @@ export function DirectoryPublicDetailScreen({ kind, identifier }: { kind: Direct
           <Pressable
             accessibilityRole="button"
             style={[styles.primaryButton, { backgroundColor: colors.actionPrimary }]}
-            onPress={() => router.push({ pathname: '/eventDetail', params: { eventId: id } })}
+            onPress={() => router.push({ pathname: '/eventos/[eventId]', params: { eventId: id } })}
           >
             <Text style={{ color: colors.actionPrimaryContrast, fontWeight: '800' }}>Ver evento y entradas</Text>
           </Pressable>

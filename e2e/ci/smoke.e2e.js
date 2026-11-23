@@ -105,7 +105,7 @@ describe('Isolated native UI smoke', () => {
     await device.takeScreenshot('cold-restart-login');
   });
 
-  it('lets a guest browse an event summary and find the ticket entry', async () => {
+  it('lets a guest open full event information and requires sign-in for tickets', async () => {
     const guest = element(by.id('exploreGuestButton'));
     await waitFor(guest).toBeVisible(100)
       .whileElement(by.id('onboardingScroll')).scroll(200, 'down');
@@ -123,6 +123,18 @@ describe('Isolated native UI smoke', () => {
     await expect(element(by.id('usernameInput'))).not.toExist();
     assert(fixture.requests.some(request => request.pathname === '/directory/events/42')).toBe(true);
     await device.takeScreenshot('guest-event-ticket-entry');
+    await element(by.text('Ver evento y entradas')).tap();
+    await waitFor(element(by.id('guestTicketSignIn'))).toBeVisible(100)
+      .whileElement(by.id('eventDetailScroll')).scroll(200, 'down');
+    await expect(element(by.text('Inicia sesión para consultar disponibilidad y comprar.'))).toBeVisible();
+    await expect(element(by.id('usernameInput'))).not.toExist();
+    await device.takeScreenshot('guest-full-event-tickets');
+    await element(by.id('guestTicketSignIn')).tap();
+    await waitFor(element(by.id('usernameInput'))).toBeVisible().withTimeout(15000);
+    await expectSubmissionEnabled(false);
+    // Public browsing must not fetch authenticated event or ticket endpoints.
+    assert(fixture.requests.some(request => request.pathname.startsWith('/social-events/'))).toBe(false);
+    await device.takeScreenshot('guest-ticket-sign-in-required');
   });
 
   it('keeps a known signup intention folded until the person changes it', async () => {

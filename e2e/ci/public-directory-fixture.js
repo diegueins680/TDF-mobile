@@ -25,7 +25,7 @@ function createPublicDirectoryFixture() {
     } else if (pathname === '/directory/events/42') {
       body = { id: 42, title: 'Concierto de prueba', description: 'Evento sintético para comprobar la navegación pública.',
         startTime: '2030-04-10T20:00:00Z', endTime: '2030-04-10T22:00:00Z', timezone: 'UTC',
-        location, canonicalUrl: '/eventos/42' };
+        priceCents: 2500, location, canonicalUrl: '/eventos/42' };
     } else {
       response.statusCode = 404;
       body = { error: 'No fixture for this path' };

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -98,6 +99,7 @@ export default function AuthScreen() {
     returnTo?: string | string[];
     intent?: string | string[];
     roles?: string | string[];
+    confirmSignOut?: string | string[];
   }>();
   const { token, loading, setToken, clearTokenPersisted } = useAuth();
   const analytics = useAnalytics();
@@ -608,7 +610,7 @@ export default function AuthScreen() {
     }
   };
 
-  const handleClearSession = async () => {
+  const handleClearSession = useCallback(async () => {
     if (clearingSessionRef.current) return;
     clearingSessionRef.current = true;
     setIsClearingSession(true);
@@ -631,7 +633,19 @@ export default function AuthScreen() {
       clearingSessionRef.current = false;
       if (mountedRef.current) setIsClearingSession(false);
     }
-  };
+  }, [clearTokenPersisted, copy.sessionClosed, googleSigninModule]);
+
+  // Keep confirmation and the durable sign-out result on the same screen.
+  // Profile is protected and unmounts as soon as the in-memory token is cleared.
+  const signOutPromptedRef = useRef(false);
+  useEffect(() => {
+    if (params.confirmSignOut !== '1' || loading || !hasToken || signOutPromptedRef.current) return;
+    signOutPromptedRef.current = true;
+    Alert.alert(english ? 'Sign out?' : '¿Cerrar sesión?', undefined, [
+      { text: english ? 'Cancel' : 'Cancelar', style: 'cancel' },
+      { text: copy.signOut, style: 'destructive', onPress: () => { void handleClearSession(); } },
+    ]);
+  }, [copy.signOut, english, handleClearSession, hasToken, loading, params.confirmSignOut]);
 
   const handleForgotPassword = async () => {
     if (!canSubmitForgotPassword) return;
@@ -656,7 +670,7 @@ export default function AuthScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
       >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView testID="authScroll" contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
             <View style={styles.languageRow} accessibilityRole="radiogroup">
               {(['es', 'en'] as const).map((code) => (

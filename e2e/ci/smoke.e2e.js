@@ -3,9 +3,22 @@ const { expect: assert } = require('@jest/globals');
 const { execFileSync } = require('node:child_process');
 const { writeFileSync } = require('node:fs');
 const path = require('node:path');
+const { createPublicDirectoryFixture } = require('./public-directory-fixture');
 let accessibilitySnapshot = 0;
 // UI-only smoke: no provider consent, backend login or production data.
 describe('Isolated native UI smoke', () => {
+  const fixture = createPublicDirectoryFixture();
+  beforeAll(async () => {
+    await new Promise((resolve, reject) => {
+      fixture.server.once('error', reject);
+      fixture.server.listen(18128, '127.0.0.1', resolve);
+    });
+  });
+  afterAll(async () => {
+    await new Promise(resolve => fixture.server.close(resolve));
+    writeFileSync(path.join(process.env.TDF_UI_EVIDENCE, 'fixture-requests.json'), JSON.stringify(fixture.requests, null, 2));
+    assert(fixture.requests.filter(request => request.method !== 'GET')).toEqual([]);
+  });
   beforeEach(async () => {
     // The runner creates a fresh simulator per run; these tests never submit credentials.
     // clearKeychain unloads securityd and destabilized SpringBoard on iOS 26.2.
@@ -89,5 +102,42 @@ describe('Isolated native UI smoke', () => {
     await expect(element(by.id('passwordInput'))).toHaveText('');
     await expectSubmissionEnabled(false);
     await device.takeScreenshot('cold-restart-login');
+  });
+
+  it('lets a guest browse an event summary and find the ticket entry', async () => {
+    const guest = element(by.id('exploreGuestButton'));
+    await waitFor(guest).toBeVisible(100)
+      .whileElement(by.id('onboardingScroll')).scroll(200, 'down');
+    await guest.tap();
+    await waitFor(element(by.label('Buscar en el directorio musical'))).toBeVisible().withTimeout(30000);
+    await device.takeScreenshot('guest-directory');
+    const label = by.label('Concierto de prueba, Quito');
+    const event = element(device.getPlatform() === 'android'
+      ? label.and(by.type('com.facebook.react.views.view.ReactViewGroup')) : label);
+    await waitFor(event).toBeVisible(100)
+      .whileElement(by.id('directoryResults')).scroll(200, 'down');
+    await event.tap();
+    await waitFor(element(by.text('Ver evento y entradas'))).toBeVisible().withTimeout(15000);
+    await expect(element(by.text('Concierto de prueba'))).toBeVisible();
+    await expect(element(by.id('usernameInput'))).not.toExist();
+    assert(fixture.requests.some(request => request.pathname === '/directory/events/42')).toBe(true);
+    await device.takeScreenshot('guest-event-ticket-entry');
+  });
+
+  it('keeps a known signup intention folded until the person changes it', async () => {
+    await device.openURL({ url: 'tdf://auth?mode=signup&intent=events' });
+    await waitFor(element(by.id('signupButton'))).toExist().withTimeout(15000);
+    await expect(element(by.text(/^(Apellido|Last name)$/))).not.toExist();
+    const question = element(by.text(/^(¿Qué quieres hacer primero\?|What do you want to do first\?)$/));
+    await expect(question).not.toExist();
+    const label = by.label(/^(Vengo por otra cosa|I came for something else)$/);
+    const change = element(device.getPlatform() === 'android'
+      ? label.and(by.type('com.facebook.react.views.view.ReactViewGroup')) : label);
+    await waitFor(change).toBeVisible(100)
+      .whileElement(by.id('authScroll')).scroll(200, 'down');
+    await device.takeScreenshot('known-intent-signup-folded');
+    await change.tap();
+    await waitFor(question).toBeVisible().withTimeout(5000);
+    await device.takeScreenshot('signup-intent-choices');
   });
 });

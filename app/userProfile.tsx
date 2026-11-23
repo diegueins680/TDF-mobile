@@ -31,7 +31,7 @@ import { Toast } from '../src/components/Toast';
 export default function UserProfileScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { token, partyId, session, clearToken } = useAuth();
+  const { token, partyId, session } = useAuth();
   const analytics = useAnalytics();
   const ownsParty = usePartyOwnership(partyId);
   const {
@@ -745,10 +745,7 @@ export default function UserProfileScreen() {
             <TouchableOpacity
               style={styles.accountRow}
               accessibilityRole="button"
-              onPress={() => Alert.alert('¿Cerrar sesión?', undefined, [
-                { text: 'Cancelar', style: 'cancel' },
-                { text: 'Cerrar sesión', style: 'destructive', onPress: () => { clearToken(); router.replace('/auth'); } },
-              ])}
+              onPress={() => router.push({ pathname: '/auth', params: { confirmSignOut: '1' } })}
             >
               <Text style={styles.accountRowText}>Cerrar sesión</Text>
             </TouchableOpacity>
@@ -756,7 +753,11 @@ export default function UserProfileScreen() {
               style={styles.accountRow}
               accessibilityRole="link"
               accessibilityHint="Abre la página de eliminación de cuenta en el navegador"
-              onPress={() => { void Linking.openURL('https://www.tdfrecords.net/cuenta/eliminar'); }}
+              onPress={() => {
+                void Linking.openURL('https://www.tdfrecords.net/cuenta/eliminar').catch(() => {
+                  Alert.alert('No pudimos abrir la página', 'Comprueba tu conexión e inténtalo otra vez.');
+                });
+              }}
             >
               <Text style={[styles.accountRowText, styles.accountRowDanger]}>Eliminar mi cuenta</Text>
             </TouchableOpacity>

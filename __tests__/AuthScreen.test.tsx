@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Linking, Platform, Text, TouchableOpacity } from 'react-native';
+import { Alert, Linking, Platform, Text, TouchableOpacity } from 'react-native';
 
 const mockSetToken = jest.fn();
 const mockClearToken = jest.fn();
@@ -1000,6 +1000,47 @@ describe('Auth screen', () => {
       }));
       await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('apple-linked-token', 93, { roles: [], modules: [] }));
     });
+  });
+
+  it('keeps profile sign-out pending and offers a retry when durable storage fails', async () => {
+    mockSearchParams = { confirmSignOut: '1' };
+    const provider = jest.mocked(require('../src/providers/AuthProvider').useAuth);
+    provider.mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearTokenPersisted: mockClearToken });
+    let finish: (saved: boolean) => void = () => undefined;
+    mockClearToken.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+    const alert = jest.spyOn(Alert, 'alert');
+    try {
+      const view = render(<AuthScreen />);
+      await waitFor(() => expect(alert).toHaveBeenCalledWith('¿Cerrar sesión?', undefined, expect.any(Array)));
+      expect(mockClearToken).not.toHaveBeenCalled();
+      const confirm = alert.mock.calls[0][2]?.find(button => button.style === 'destructive');
+      act(() => { confirm?.onPress?.(); });
+      expect(screen.getByRole('button', { name: 'Cerrando sesión…' })).toBeTruthy();
+      provider.mockReturnValue({ token: null, partyId: null, loading: false, setToken: mockSetToken, clearTokenPersisted: mockClearToken });
+      view.rerender(<AuthScreen />);
+      await act(async () => { finish(false); });
+      expect(screen.getByRole('button', { name: 'Reintentar cierre' })).toBeTruthy();
+      expect(screen.queryByText('Sesión cerrada en este dispositivo.')).toBeNull();
+      fireEvent.press(screen.getByRole('button', { name: 'Reintentar cierre' }));
+      await waitFor(() => expect(screen.getByText('Sesión cerrada en este dispositivo.')).toBeTruthy());
+      expect(alert).toHaveBeenCalledTimes(1);
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('does not clear a session when profile sign-out confirmation is cancelled', async () => {
+    mockSearchParams = { confirmSignOut: '1' };
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearTokenPersisted: mockClearToken });
+    const alert = jest.spyOn(Alert, 'alert');
+    try {
+      render(<AuthScreen />);
+      await waitFor(() => expect(alert).toHaveBeenCalled());
+      expect(alert.mock.calls[0][2]).toEqual(expect.arrayContaining([expect.objectContaining({ text: 'Cancelar', style: 'cancel' })]));
+      expect(mockClearToken).not.toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
   });
 
   it('offers a retry when local sign-out cannot be persisted', async () => {

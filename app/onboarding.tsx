@@ -19,6 +19,7 @@ import { setOnboardingSeen } from '../src/lib/onboarding';
 import { MOBILE_LANDING_ROUTE } from '../src/navigation/mobileSurface';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { onboardingCopy, onboardingLanguage } from '../src/localization/onboardingCopy';
+import { BrandLogo } from '../src/components/BrandLogo';
 
 const AnimatedView = Animated.createAnimatedComponent(View) as ComponentType<Animated.AnimatedProps<ViewProps>>;
 
@@ -92,7 +93,7 @@ export default function OnboardingScreen() {
               },
             ]}
           >
-            <Text style={styles.kicker}>{copy.kicker}</Text>
+            <BrandLogo />
             <Text accessibilityRole="header" style={styles.title}>{copy.title}</Text>
             <Text style={styles.subtitle}>{copy.subtitle}</Text>
           </AnimatedView>
@@ -167,7 +168,6 @@ const styles = StyleSheet.create({
   languageText: { color: '#cbd5e1', fontWeight: '700' },
   languageTextActive: { color: '#ffffff' },
   hero: { gap: 12, paddingVertical: 8 },
-  kicker: { color: '#93c5fd', fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
   title: { color: '#f8fafc', fontSize: 32, lineHeight: 38, fontWeight: '900' },
   subtitle: { color: '#cbd5e1', fontSize: 17, lineHeight: 25 },
   valueCard: {

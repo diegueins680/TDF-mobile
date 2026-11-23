@@ -25,6 +25,7 @@ describe('Isolated native UI smoke', () => {
     // Reinstall app data between cases without disrupting system security services.
     await device.launchApp({ delete: true, newInstance: true });
     await waitFor(element(by.id('onboardingScroll'))).toBeVisible().withTimeout(30000);
+    await waitFor(element(by.id('tdfBrandLogo'))).toBeVisible().withTimeout(5000);
   });
 
   async function expectSubmissionEnabled(enabled) {

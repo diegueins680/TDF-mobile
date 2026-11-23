@@ -112,8 +112,9 @@ describe('Isolated native UI smoke', () => {
     await guest.tap();
     await waitFor(element(by.label('Buscar en el directorio musical'))).toBeVisible().withTimeout(30000);
     await device.takeScreenshot('guest-directory');
-    // Tap the visible title rather than the image occupying the link container's center.
-    const event = element(by.text('Concierto de prueba'));
+    // On Android, tap the title rather than the image at the container's center.
+    const event = element(device.getPlatform() === 'android'
+      ? by.text('Concierto de prueba') : by.label('Concierto de prueba, Quito'));
     await waitFor(event).toBeVisible(100)
       .whileElement(by.id('directoryResults')).scroll(200, 'down');
     await event.tap();
@@ -144,7 +145,9 @@ describe('Isolated native UI smoke', () => {
     await expect(question).not.toExist();
     // This inline action has a Text child; Android does not synthesize its
     // parent's contentDescription the way iOS synthesizes accessibility labels.
-    const change = element(by.text(/^(Vengo por otra cosa|I came for something else)$/));
+    const intentChange = /^(Vengo por otra cosa|I came for something else)$/;
+    const change = element(device.getPlatform() === 'android'
+      ? by.text(intentChange) : by.label(intentChange));
     await waitFor(change).toBeVisible(100)
       .whileElement(by.id('authScroll')).scroll(200, 'down');
     await device.takeScreenshot('known-intent-signup-folded');

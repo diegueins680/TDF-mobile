@@ -462,6 +462,28 @@ describe('AuthProvider', () => {
     expect(getMock).not.toHaveBeenCalled();
   });
 
+  it('does not replace a newer login with a late failed sign-out status', async () => {
+    const { result } = renderAuthProvider();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.setToken('old-account', 10));
+    await waitFor(() => expect(removeLegacyItemMock).toHaveBeenCalledWith('tdf-auth-logout-intent-v1'));
+    const removal = createDeferred<void>();
+    deleteSecureItemMock.mockReturnValueOnce(removal.promise);
+    setLegacyItemMock.mockRejectedValue(new Error('synthetic write failure'));
+    removeLegacyItemMock.mockRejectedValue(new Error('synthetic remove failure'));
+    let pending!: Promise<boolean>;
+    act(() => { pending = result.current.clearTokenPersisted(); });
+    expect(result.current.logoutState).toBe('pending');
+    act(() => result.current.setToken('new-account', 20));
+    await act(async () => { removal.resolve(); expect(await pending).toBe(false); });
+    expect(result.current.token).toBe('Bearer new-account');
+    expect(result.current.logoutState).toBe('idle');
+    // Release the module's durable logout barrier before the next cold-start test.
+    setLegacyItemMock.mockResolvedValue();
+    removeLegacyItemMock.mockResolvedValue();
+    await act(async () => { expect(await result.current.clearTokenPersisted()).toBe(true); });
+  });
+
   it('reports an unpersisted logout and blocks restoration in this process when all writes fail', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     getSecureItemMock.mockResolvedValue('Bearer retained-native-token');

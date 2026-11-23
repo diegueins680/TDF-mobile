@@ -272,6 +272,7 @@ export default function DirectoryScreen() {
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.canvas }]}>
       <FlatList
+        testID="directoryResults"
         key={viewMode}
         data={items}
         keyExtractor={(item) => `${item.type}:${item.id}`}

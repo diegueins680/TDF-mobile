@@ -60,12 +60,13 @@ export default function EventsScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
   const [discoveryScope, setDiscoveryScope] = useState<DiscoveryScope>('subscribed');
+  const [scopeChosenByUser, setScopeChosenByUser] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(() => toLocalDateKey(new Date(), timezone));
   const [searchFilter, setSearchFilter] = useState('');
   const [showCityModal, setShowCityModal] = useState(false);
   const [draftCities, setDraftCities] = useState<EventCityInput[]>([]);
   const [newCityName, setNewCityName] = useState('');
-  const [newCountryCode, setNewCountryCode] = useState(countryCode ?? 'US');
+  const [newCountryCode, setNewCountryCode] = useState(countryCode ?? 'EC');
   const debouncedSearch = useDebouncedValue(searchFilter, 250);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -78,6 +79,13 @@ export default function EventsScreen() {
     queryKey: ['event-city-subscriptions'],
     queryFn: Events.getCitySubscriptions,
   });
+
+  // Someone who follows no city yet would land on an empty list; start them on
+  // all events until they pick a scope themselves.
+  const followsNoCity = citySubscriptionsQuery.data?.length === 0;
+  useEffect(() => {
+    if (followsNoCity && !scopeChosenByUser) setDiscoveryScope('all');
+  }, [followsNoCity, scopeChosenByUser]);
 
   const savedEventIdsQuery = useQuery({
     queryKey: ['saved-event-ids', partyId],
@@ -419,7 +427,7 @@ export default function EventsScreen() {
       <View style={[styles.toggleContainer, { backgroundColor: colors.surface }]}>
         <TouchableOpacity
           style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, discoveryScope === 'subscribed' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
-          onPress={() => setDiscoveryScope('subscribed')}
+          onPress={() => { setScopeChosenByUser(true); setDiscoveryScope('subscribed'); }}
           accessibilityRole="tab"
           accessibilityLabel="Ver eventos de mis ciudades"
           accessibilityState={{ selected: discoveryScope === 'subscribed' }}
@@ -430,7 +438,7 @@ export default function EventsScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, discoveryScope === 'all' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
-          onPress={() => setDiscoveryScope('all')}
+          onPress={() => { setScopeChosenByUser(true); setDiscoveryScope('all'); }}
           accessibilityRole="tab"
           accessibilityLabel="Explorar eventos de todas las ciudades"
           accessibilityState={{ selected: discoveryScope === 'all' }}

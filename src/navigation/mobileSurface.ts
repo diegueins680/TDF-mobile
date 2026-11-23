@@ -4,14 +4,16 @@ export const MOBILE_LANDING_ROUTE = '/(tabs)/directory' as const;
 
 export const NEW_USER_VISIBLE_TABS = [
   { name: 'directory', title: t('tabs.directory'), titleKey: 'tabs.directory', icon: 'magnify' },
+  // Events and tickets are what most people open the app for (audit item 19).
+  { name: 'events', title: t('tabs.events'), titleKey: 'tabs.events', icon: 'calendar-star' },
   { name: 'social', title: t('tabs.social'), titleKey: 'tabs.social', icon: 'account-heart' },
   { name: 'more', title: t('tabs.explore'), titleKey: 'tabs.explore', icon: 'compass-outline' },
-  { name: 'create', title: t('tabs.create'), titleKey: 'tabs.create', icon: 'plus-circle-outline' },
   { name: 'profile', title: t('tabs.profile'), titleKey: 'tabs.profile', icon: 'account-circle' },
 ];
 
+// "Crear" is opened from the top of Explorar, and only for accounts that can start something.
 export const HIDDEN_INTERNAL_TABS = [
-  'events',
+  'create',
   'parties',
   'bookings',
   'pipelines',

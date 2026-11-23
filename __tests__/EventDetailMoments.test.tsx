@@ -812,10 +812,17 @@ describe('EventDetail moments tab', () => {
 
     fireEvent.press(screen.getByText('En Vivo (1)'));
 
-    expect(screen.getByText('Fanclub en vivo')).toBeTruthy();
-    expect(screen.getAllByText('Demo Artist').length).toBeGreaterThan(0);
+    // Watching comes first; the broadcast form stays out of the way until asked for.
     expect(screen.getByText('Front row')).toBeTruthy();
     expect(screen.getByText('En vivo')).toBeTruthy();
     expect(screen.getByText('Terminar')).toBeTruthy();
+    expect(screen.queryByText('Fanclub en vivo')).toBeNull();
+    expect(screen.queryByText('Iniciar en vivo')).toBeNull();
+
+    fireEvent.press(screen.getByText('Transmitir desde este evento'));
+
+    expect(screen.getByText('Fanclub en vivo')).toBeTruthy();
+    expect(screen.getByText('Iniciar en vivo')).toBeTruthy();
+    expect(screen.getAllByText('Demo Artist').length).toBeGreaterThan(0);
   });
 });

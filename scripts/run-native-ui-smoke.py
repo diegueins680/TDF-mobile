@@ -15,10 +15,10 @@ def run(args, *, timeout=120, env=None):
 
 
 def check_results(result):
-    if not (result.get('success') is True and result.get('numPassedTests') == 3
-            and result.get('numTotalTests') == 3 and result.get('numFailedTests') == 0
+    if not (result.get('success') is True and result.get('numPassedTests') == 5
+            and result.get('numTotalTests') == 5 and result.get('numFailedTests') == 0
             and result.get('numPendingTests') == 0 and result.get('numTodoTests', 0) == 0):
-        raise ValueError('Expected exactly three executed, passing UI tests; skips are not a pass')
+        raise ValueError('Expected exactly five executed, passing UI tests; skips are not a pass')
 
 
 def digest(path):

@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 
 import { Social } from '../../src/api/social';
+import { isSocialLegacyRetiredError, resolveSocialMode, socialModeQueryKey } from '../../src/api/socialV2';
+import { SocialV2Network } from '../../src/features/social/SocialV2Network';
 import { FanArtists } from '../../src/api/fanArtists';
 import type { FanArtist, FanArtistFollow, PartyFollow } from '../../src/types';
 import { useAuth } from '../../src/providers/AuthProvider';
@@ -40,15 +42,28 @@ export default function SocialScreen() {
   const hasToken = Boolean(token?.trim());
   const canUseSocial = !loading && hasToken;
 
+  // Runtime gate: the server decides whether social v2 is live (GET /social/v2/me).
+  // Legacy reads/writes are used only while v2 is not active yet.
+  const modeQuery = useQuery({
+    queryKey: socialModeQueryKey(effectivePartyId),
+    queryFn: resolveSocialMode,
+    enabled: canUseSocial,
+    retry: 1,
+  });
+  const socialMode = modeQuery.data?.mode ?? (canUseSocial && modeQuery.isLoading ? 'pending' : 'legacy');
+  const v2Profile = modeQuery.data?.mode === 'v2' ? modeQuery.data.me : null;
+  const usesLegacyLists = socialMode === 'legacy' || socialMode === 'paused';
+  const legacyWritesOpen = socialMode === 'legacy';
+
   const followersQuery = useQuery({
     queryKey: ['social-followers'],
     queryFn: Social.listFollowers,
-    enabled: canUseSocial
+    enabled: canUseSocial && usesLegacyLists
   });
   const followingQuery = useQuery({
     queryKey: ['social-following'],
     queryFn: Social.listFollowing,
-    enabled: canUseSocial
+    enabled: canUseSocial && usesLegacyLists
   });
   const artistCandidatesQuery = useQuery({
     queryKey: ['onboarding', 'artist-candidates', effectivePartyId],
@@ -68,6 +83,7 @@ export default function SocialScreen() {
     setRefreshing(true);
     try {
       await Promise.all([
+        modeQuery.refetch(),
         followersQuery.refetch(),
         followingQuery.refetch(),
         artistCandidatesQuery.refetch(),
@@ -81,6 +97,16 @@ export default function SocialScreen() {
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['social-followers'] });
     qc.invalidateQueries({ queryKey: ['social-following'] });
+  };
+
+  const handleLegacyWriteError = (err: unknown, fallback: string) => {
+    if (isSocialLegacyRetiredError(err)) {
+      // The server retired legacy friend writes (410): switch this screen to v2.
+      qc.invalidateQueries({ queryKey: socialModeQueryKey(effectivePartyId) });
+      Alert.alert('Vista social actualizada', err.message);
+      return;
+    }
+    Alert.alert('Error', err instanceof Error ? err.message : fallback);
   };
 
   const followMutation = useMutation<void, Error, { targetId: number; ownerPartyId: string }>({
@@ -97,8 +123,7 @@ export default function SocialScreen() {
     },
     onError: (err, { ownerPartyId }) => {
       if (!ownsParty(ownerPartyId)) return;
-      const msg = err instanceof Error ? err.message : 'No pudimos seguir a esta persona.';
-      Alert.alert('Error', msg);
+      handleLegacyWriteError(err, 'No pudimos seguir a esta persona.');
     }
   });
 
@@ -146,8 +171,7 @@ export default function SocialScreen() {
       showToast('Dejaste de seguir a esta persona.');
     },
     onError: (err) => {
-      const msg = err instanceof Error ? err.message : 'No pudimos actualizar tus conexiones.';
-      Alert.alert('Error', msg);
+      handleLegacyWriteError(err, 'No pudimos actualizar tus conexiones.');
     }
   });
 
@@ -170,7 +194,7 @@ export default function SocialScreen() {
           <Text maxFontSizeMultiplier={1.5} style={[styles.itemMeta, { color: colors.textSecondary }]}>Desde {item.pfStartedAt}</Text>
           {item.pfViaNfc && <Text maxFontSizeMultiplier={1.5} style={[styles.tag, { color: colors.actionPrimary }]}>Intercambio NFC</Text>}
         </View>
-        {activeTab === 'followers' ? (
+        {!legacyWritesOpen ? null : activeTab === 'followers' ? (
           isFollowing ? (
             <View style={[styles.followingBadge, { backgroundColor: colors.success }]} accessibilityRole="text" accessibilityLabel="Ya lo sigues">
               <Text maxFontSizeMultiplier={1.5} style={[styles.followingBadgeText, { color: colors.success }]}>{'Ya lo sigues'}</Text>
@@ -228,7 +252,7 @@ export default function SocialScreen() {
     );
   };
 
-  const showList = canUseSocial && !followersQuery.isLoading && !followingQuery.isLoading && activeData.length > 0;
+  const showList = canUseSocial && usesLegacyLists && !followersQuery.isLoading && !followingQuery.isLoading && activeData.length > 0;
 
   return (
     <View style={styles.screen}>
@@ -307,9 +331,20 @@ export default function SocialScreen() {
           </View>
 
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+            {v2Profile ? (
+              <SocialV2Network me={v2Profile} ownerPartyId={effectivePartyId ?? null} />
+            ) : socialMode === 'pending' ? (
+              <Text maxFontSizeMultiplier={1.5} style={[styles.helper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">Cargando conexiones…</Text>
+            ) : (
+            <>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} accessibilityRole="header">
               {english ? 'Your network of people' : 'Tu red de personas'}
             </Text>
+            {socialMode === 'paused' ? (
+              <Text maxFontSizeMultiplier={1.5} style={[styles.helper, { color: colors.textSecondary }]} accessibilityRole="alert">
+                Estamos actualizando la red social. Por ahora solo puedes consultar tus conexiones; vuelve a intentarlo en unos minutos.
+              </Text>
+            ) : null}
             <View style={[styles.tabs, { borderColor: colors.borderSubtle }]}>
               <TouchableOpacity
                 style={[styles.tab, { backgroundColor: colors.canvas }, activeTab === 'following' && [styles.tabActive, { backgroundColor: colors.selected }]]}
@@ -346,6 +381,8 @@ export default function SocialScreen() {
                 <Text maxFontSizeMultiplier={1.5} style={[styles.helper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">{tabData[activeTab].empty}</Text>
               ) : null
             ) : null}
+            </>
+            )}
           </View>
         </>
       }

@@ -2,8 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import { CameraView, type BarcodeScanningResult, useCameraPermissions } from 'expo-camera';
 import QRCode from 'react-native-qrcode-svg';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { buildVCardSharePayload, exchangeVCard, parseVCardPayload, type ScannedVCard } from '../../src/api/social';
+import {
+  applySocialV2Intent,
+  createSocialRequestKey,
+  describeSocialV2Intent,
+  isSocialLegacyRetiredError,
+  resolveSocialMode,
+  socialModeQueryKey,
+  socialV2ActionErrorMessage,
+  socialV2QueryRoot,
+  type SocialV2Intent,
+} from '../../src/api/socialV2';
 import { useAuth } from '../../src/providers/AuthProvider';
 
 type ScanEvent = Pick<BarcodeScanningResult, 'data'>;
@@ -29,6 +41,18 @@ export default function VCardScreen() {
   const [scanned, setScanned] = useState<ScannedVCard | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isRequestingCamera, setIsRequestingCamera] = useState(false);
+  const qc = useQueryClient();
+  const hasToken = Boolean(token?.trim());
+  // Runtime gate: social v2 (consent-based Seguir/Conectar) replaces the legacy
+  // server-side vCard exchange once the API activates it.
+  const modeQuery = useQuery({
+    queryKey: socialModeQueryKey(effectivePartyId),
+    queryFn: resolveSocialMode,
+    enabled: hasToken,
+    retry: 1,
+  });
+  const socialMode = modeQuery.data?.mode ?? (hasToken && modeQuery.isLoading ? 'pending' : 'legacy');
+  const ownPartyId = parsePositivePartyId(effectivePartyId);
 
   useEffect(() => {
     if (!displayName || hydratedDefaultsRef.current.name) return;
@@ -87,6 +111,32 @@ export default function VCardScreen() {
     setScanned(parsed);
   }, []);
 
+  const handleV2Intent = async (intent: SocialV2Intent) => {
+    if (!scanned?.partyId) {
+      Alert.alert('Falta ID', 'El QR escaneado no incluye una identidad TDF.');
+      return;
+    }
+    if (!token) {
+      Alert.alert('Acceso requerido', 'Inicia sesión para seguir o conectar con esta persona.');
+      return;
+    }
+    if (scanned.partyId === ownPartyId) {
+      Alert.alert('Es tu código', 'Escanea el código de otra persona para conectar.');
+      return;
+    }
+    try {
+      setIsSending(true);
+      const { state, changed } = await applySocialV2Intent(scanned.partyId, intent, createSocialRequestKey());
+      void qc.invalidateQueries({ queryKey: socialModeQueryKey(effectivePartyId) });
+      void qc.invalidateQueries({ queryKey: socialV2QueryRoot(effectivePartyId) });
+      Alert.alert('Listo', describeSocialV2Intent(state, intent, changed));
+    } catch (err) {
+      Alert.alert('Error', socialV2ActionErrorMessage(err));
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const handleExchange = async () => {
     if (!scanned?.partyId) {
       Alert.alert('Falta ID', 'El QR escaneado no incluye un partyId.');
@@ -101,6 +151,12 @@ export default function VCardScreen() {
       await exchangeVCard(scanned.partyId);
       Alert.alert('Listo', 'Intercambio enviado. Ambas partes verán el contacto en CRM.');
     } catch (err) {
+      if (isSocialLegacyRetiredError(err)) {
+        // The server retired the legacy exchange (410): switch to Seguir/Conectar.
+        void qc.invalidateQueries({ queryKey: socialModeQueryKey(effectivePartyId) });
+        Alert.alert('Vista social actualizada', 'El intercambio de vCard ya no se envía al servidor. Usa Conectar o Seguir con este contacto.');
+        return;
+      }
       const message = err instanceof Error ? err.message : 'No pudimos enviar el intercambio.';
       Alert.alert('Error', message);
     } finally {
@@ -123,8 +179,9 @@ export default function VCardScreen() {
     <ScrollView contentContainerStyle={styles.wrap}>
       <Text style={styles.title}>Intercambio de vCard</Text>
       <Text style={styles.subtitle}>
-        Muestra tu QR para compartir tu contacto o escanea el de otra persona. Si tienes acceso, envía el intercambio al
-        CRM desde aquí.
+        {socialMode === 'legacy'
+          ? 'Muestra tu QR para compartir tu contacto o escanea el de otra persona. Si tienes acceso, envía el intercambio al CRM desde aquí.'
+          : 'Muestra tu QR o escanea el de otra persona para seguirla o pedirle conectar. Tus datos de contacto viajan solo dentro del QR; no se guardan en el servidor.'}
       </Text>
 
       <View style={styles.card}>
@@ -170,11 +227,35 @@ export default function VCardScreen() {
             {scanned.name && <Text style={styles.rowText}>{scanned.name}</Text>}
             {scanned.email && <Text style={styles.rowText}>{scanned.email}</Text>}
             {scanned.phone && <Text style={styles.rowText}>{scanned.phone}</Text>}
-            <Button
-              title={isSending ? 'Enviando…' : 'Enviar intercambio al CRM'}
-              onPress={() => void handleExchange()}
-              disabled={isSending}
-            />
+            {socialMode === 'v2' ? (
+              <>
+                <Button
+                  title={isSending ? 'Enviando…' : 'Conectar'}
+                  onPress={() => void handleV2Intent('request')}
+                  disabled={isSending || !scanned.partyId}
+                  accessibilityLabel={`Conectar con ${scanned.name ?? 'este contacto'}`}
+                />
+                <Button
+                  title="Seguir"
+                  onPress={() => void handleV2Intent('follow')}
+                  disabled={isSending || !scanned.partyId}
+                  accessibilityLabel={`Seguir a ${scanned.name ?? 'este contacto'}`}
+                />
+                <Text style={styles.identityHint}>Conectar envía una solicitud: la otra persona debe aceptarla.</Text>
+              </>
+            ) : socialMode === 'legacy' ? (
+              <Button
+                title={isSending ? 'Enviando…' : 'Enviar intercambio al CRM'}
+                onPress={() => void handleExchange()}
+                disabled={isSending}
+              />
+            ) : (
+              <Text style={styles.identityHint} accessibilityRole="alert">
+                {socialMode === 'pending'
+                  ? 'Comprobando la red social…'
+                  : 'Estamos actualizando la red social. Guarda este contacto y vuelve a intentarlo en unos minutos.'}
+              </Text>
+            )}
           </View>
         )}
       </View>

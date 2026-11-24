@@ -1,4 +1,5 @@
 import { del, get, post, put } from './client';
+import { appendTaxonomyParams, type TaxonomySelection } from './taxonomy';
 import { Platform } from 'react-native';
 import type { components } from './generated/types';
 import type {
@@ -445,6 +446,8 @@ export const Events = {
     venueId?: ID;
     eventTypeId?: string;
     scope?: 'subscribed' | 'all';
+    /** TAX-FILTER-001: venue place and lineup genre filters. */
+    taxonomy?: Partial<TaxonomySelection> | null;
   }): Promise<SocialEvent[]> => {
     const query = new URLSearchParams();
     const city = filters?.city?.trim();
@@ -473,6 +476,7 @@ export const Events = {
     if (artistId) query.append('artistId', artistId);
     if (venueId) query.append('venueId', venueId);
     if (eventTypeId) query.append('event_type_id', eventTypeId);
+    appendTaxonomyParams(query, filters?.taxonomy);
 
     const url = `/social-events/events${query.toString() ? `?${query.toString()}` : ''}`;
     const events = await get<BackendEventDTO[]>(url);

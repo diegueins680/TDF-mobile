@@ -81,7 +81,7 @@ describe('Genre suggestion modal', () => {
     await waitFor(() => expect(check).toHaveBeenCalled());
     fireEvent.changeText(screen.getByLabelText('Nombre en español'), 'jazz');
     await act(async () => { finish(checkResult({ verdict: 'approve' })); });
-    expect(await screen.findByRole('button', { name: 'Revisar' })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Revisar' }).props.accessibilityState.disabled).toBe(false));
     expect(submit).not.toHaveBeenCalled();
   });
 

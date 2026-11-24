@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Linking, Platform, Text, TouchableOpacity } from 'react-native';
+import { Alert, Linking, Platform, Text, TouchableOpacity } from 'react-native';
 
 const mockSetToken = jest.fn();
 const mockClearToken = jest.fn();
@@ -23,6 +23,7 @@ const mockPersistOnboardingIntent = jest.fn();
 const mockReadPendingOnboardingIntent = jest.fn(() => Promise.resolve(null));
 const mockUpdateOnboardingIntent = jest.fn();
 const mockIsCurrentAuthToken = jest.fn();
+let mockApiAuthToken: string | undefined;
 const mockOpenURL = jest.spyOn(Linking, 'openURL');
 let mockAuthConfig = {
   GOOGLE_WEB_CLIENT_ID: 'web-client-id.apps.googleusercontent.com',
@@ -39,7 +40,7 @@ jest.mock('../src/providers/AuthProvider', () => ({
     partyId: null,
     loading: false,
     setToken: mockSetToken,
-    clearToken: mockClearToken,
+    clearToken: mockClearToken, clearTokenPersisted: mockClearToken,
   })),
 }));
 
@@ -95,6 +96,7 @@ jest.mock('../src/api/onboarding', () => ({
 
 jest.mock('../src/api/client', () => ({
   ...jest.requireActual('../src/api/client'),
+  getAuthToken: () => mockApiAuthToken,
   isCurrentAuthToken: (...args: unknown[]) => mockIsCurrentAuthToken(...args),
 }));
 
@@ -175,6 +177,8 @@ describe('Auth screen', () => {
     process.env.EXPO_PUBLIC_APPLE_SIGN_IN_ENABLED = 'true';
   mockLocale = 'es';
     jest.clearAllMocks();
+    mockClearToken.mockResolvedValue(true);
+    mockApiAuthToken = undefined;
     mockStoredValues = new Map();
     jest.mocked(AsyncStorage.getItem).mockReset().mockImplementation(async (key) =>
       mockStoredValues.get(key) ?? null);
@@ -364,7 +368,7 @@ describe('Auth screen', () => {
 
     expect(emailInput).toBeTruthy();
     expect(passwordInput.props.accessibilityHint).toBe(
-      'Usa al menos 8 caracteres y como máximo 72 bytes UTF-8, sin caracteres de control ni formato oculto.',
+      'Usa al menos 8 caracteres y no más de 72 (los acentos y emojis cuentan como varios).',
     );
 
     fireEvent.changeText(emailInput, 'correo-invalido');
@@ -372,7 +376,7 @@ describe('Auth screen', () => {
 
     expect(screen.getByText('Ingresa un correo electrónico válido.').props.accessibilityRole).toBe('alert');
     expect(screen.getByText(
-      'Usa al menos 8 caracteres y como máximo 72 bytes UTF-8, sin caracteres de control ni formato oculto.',
+      'Usa al menos 8 caracteres y no más de 72 (los acentos y emojis cuentan como varios).',
     ).props.accessibilityRole).toBe('alert');
   });
 
@@ -433,7 +437,7 @@ describe('Auth screen', () => {
     render(<AuthScreen />);
     fireEvent.press(screen.getByText('Crear cuenta'));
     fireEvent.changeText(screen.getByPlaceholderText('Tu nombre'), 'Ana');
-    fireEvent.changeText(screen.getByPlaceholderText('Tu apellido'), 'Paz');
+    expect(screen.queryByPlaceholderText('Tu apellido')).toBeNull();
     fireEvent.changeText(screen.getByPlaceholderText('tu@correo.com'), 'ANA@example.com');
     fireEvent.changeText(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password-seguro');
     fireEvent.press(screen.getByTestId('termsCheckbox'));
@@ -441,7 +445,7 @@ describe('Auth screen', () => {
 
     await waitFor(() => expect(mockSignupRequest).toHaveBeenCalledWith({
       firstName: 'Ana',
-      lastName: 'Paz',
+      lastName: '',
       email: 'ana@example.com',
       password: 'password-seguro',
       marketingOptIn: false,
@@ -472,15 +476,27 @@ describe('Auth screen', () => {
     expect(mockReplace).toHaveBeenCalledWith('/createArtistProfile');
   });
 
+  it('skips the intention question when the entry point already gave the reason', async () => {
+    mockSearchParams = { mode: 'signup', intent: 'events' };
+    render(<AuthScreen />);
+    expect(screen.queryByText('¿Qué quieres hacer primero?')).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Buscar prácticas' })).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'Vengo por otra cosa' }));
+    expect(screen.getByText('¿Qué quieres hacer primero?')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Buscar prácticas' })).toBeTruthy();
+  });
+
   it('restores an interrupted signup intent from bounded local storage', async () => {
     mockSearchParams = { mode: 'signup' };
     mockReadPendingOnboardingIntent.mockResolvedValueOnce('artist_profile');
     mockSignupRequest.mockResolvedValue({ token: 'token', partyId: 92, roles: ['Customer'], modules: [] });
     render(<AuthScreen />);
 
-    await waitFor(() => expect(
+    // A known reason for coming keeps the question folded; it opens on request with that reason selected.
+    fireEvent.press(await screen.findByRole('button', { name: 'Vengo por otra cosa' }));
+    expect(
       screen.getByRole('radio', { name: 'Crear perfil de artista' }).props.accessibilityState,
-    ).toEqual({ selected: true }));
+    ).toEqual({ selected: true });
     fireEvent.changeText(screen.getByPlaceholderText('Tu nombre'), 'Lina');
     fireEvent.changeText(screen.getByPlaceholderText('tu@correo.com'), 'lina@example.com');
     fireEvent.changeText(screen.getByPlaceholderText(/Mínimo 8 caracteres/i), 'password-seguro');
@@ -752,7 +768,7 @@ describe('Auth screen', () => {
       partyId: null,
       loading: true,
       setToken: mockSetToken,
-      clearToken: mockClearToken,
+      clearToken: mockClearToken, clearTokenPersisted: mockClearToken,
     });
 
     render(<AuthScreen />);
@@ -763,13 +779,29 @@ describe('Auth screen', () => {
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
   });
 
+  it('shows no session status card to someone who is signed out', async () => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({
+      token: null,
+      partyId: null,
+      loading: false,
+      setToken: mockSetToken,
+      clearToken: mockClearToken,
+    });
+
+    render(<AuthScreen />);
+
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
+    expect(screen.queryByText(/Estado de sesión/i)).toBeNull();
+    expect(screen.queryByText(/Cerrar sesión/i)).toBeNull();
+  });
+
   it('clears the current session', async () => {
     jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({
       token: 'Bearer existing-token',
       partyId: '99',
       loading: false,
       setToken: mockSetToken,
-      clearToken: mockClearToken,
+      clearToken: mockClearToken, clearTokenPersisted: mockClearToken,
     });
 
     render(<AuthScreen />);
@@ -795,6 +827,7 @@ describe('Auth screen', () => {
         loading: false,
         setToken: mockSetToken,
         clearToken: mockClearToken,
+        clearTokenPersisted: mockClearToken,
       });
     });
 
@@ -967,5 +1000,111 @@ describe('Auth screen', () => {
       }));
       await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith('apple-linked-token', 93, { roles: [], modules: [] }));
     });
+  });
+
+  it('keeps profile sign-out pending and offers a retry when durable storage fails', async () => {
+    mockSearchParams = { confirmSignOut: '1' };
+    const provider = jest.mocked(require('../src/providers/AuthProvider').useAuth);
+    provider.mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearTokenPersisted: mockClearToken });
+    let finish: (saved: boolean) => void = () => undefined;
+    mockClearToken.mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve; }));
+    const alert = jest.spyOn(Alert, 'alert');
+    try {
+      const view = render(<AuthScreen />);
+      await waitFor(() => expect(alert).toHaveBeenCalledWith('¿Cerrar sesión?', undefined, expect.any(Array)));
+      expect(mockClearToken).not.toHaveBeenCalled();
+      const confirm = alert.mock.calls[0][2]?.find(button => button.style === 'destructive');
+      act(() => { confirm?.onPress?.(); });
+      expect(screen.getByRole('button', { name: 'Cerrando sesión…' })).toBeTruthy();
+      provider.mockReturnValue({ token: null, partyId: null, loading: false, setToken: mockSetToken, clearTokenPersisted: mockClearToken });
+      view.rerender(<AuthScreen />);
+      await act(async () => { finish(false); });
+      expect(screen.getByRole('button', { name: 'Reintentar cierre' })).toBeTruthy();
+      expect(screen.queryByText('Sesión cerrada en este dispositivo.')).toBeNull();
+      fireEvent.press(screen.getByRole('button', { name: 'Reintentar cierre' }));
+      await waitFor(() => expect(screen.getByText('Sesión cerrada en este dispositivo.')).toBeTruthy());
+      expect(alert).toHaveBeenCalledTimes(1);
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('does not clear a session when profile sign-out confirmation is cancelled', async () => {
+    mockSearchParams = { confirmSignOut: '1' };
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearTokenPersisted: mockClearToken });
+    const alert = jest.spyOn(Alert, 'alert');
+    try {
+      render(<AuthScreen />);
+      await waitFor(() => expect(alert).toHaveBeenCalled());
+      expect(alert.mock.calls[0][2]).toEqual(expect.arrayContaining([expect.objectContaining({ text: 'Cancelar', style: 'cancel' })]));
+      expect(mockClearToken).not.toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it.each([
+    ['pending', 'Cerrando sesión…'],
+    ['failed', 'Reintentar cierre'],
+    ['complete', 'Sesión cerrada en este dispositivo.'],
+  ])('restores the provider sign-out state %s after the auth screen remounts', (logoutState, text) => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: null, partyId: null, loading: false, setToken: mockSetToken, clearTokenPersisted: mockClearToken, logoutState });
+    render(<AuthScreen />);
+    expect(screen.getByText(text)).toBeTruthy();
+    if (logoutState === 'pending') expect(screen.queryByTestId('loginButton')).toBeNull();
+  });
+
+  it('offers a retry when local sign-out cannot be persisted', async () => {
+    const provider = jest.mocked(require('../src/providers/AuthProvider').useAuth);
+    provider.mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });
+    mockClearToken.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const view = render(<AuthScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    await waitFor(() => expect(screen.getByText(/No pudimos confirmar el cierre guardado/)).toBeTruthy());
+    expect(screen.queryByText('Sesión cerrada en este dispositivo.')).toBeNull();
+    provider.mockReturnValue({ token: null, partyId: null, loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });
+    view.rerender(<AuthScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Reintentar cierre' }));
+    await waitFor(() => expect(screen.getByText('Sesión cerrada en este dispositivo.')).toBeTruthy());
+    expect(mockClearToken).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/No pudimos confirmar el cierre guardado/)).toBeNull();
+  });
+
+  it('waits for local persistence without waiting for Google provider cleanup', async () => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });
+    let resolvePersistence: (value: boolean) => void = () => undefined;
+    mockClearToken.mockImplementationOnce(() => new Promise<boolean>((resolve) => { resolvePersistence = resolve; }));
+    mockGoogleSignOut.mockImplementationOnce(() => new Promise(() => undefined));
+    render(<AuthScreen />);
+    await waitFor(() => expect(mockLoadNativeGoogleSignin).toHaveBeenCalled());
+    fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cerrando sesión…' })).toBeTruthy());
+    expect(screen.queryByText('Sesión cerrada en este dispositivo.')).toBeNull();
+    await act(async () => { resolvePersistence(true); });
+    await waitFor(() => expect(screen.getByText('Sesión cerrada en este dispositivo.')).toBeTruthy());
+  });
+
+  it('does not overwrite a newer authenticated session with a late sign-out result', async () => {
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });
+    let resolvePersistence: (value: boolean) => void = () => undefined;
+    mockClearToken.mockImplementationOnce(() => new Promise<boolean>((resolve) => { resolvePersistence = resolve; }));
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    await waitFor(() => expect(mockClearToken).toHaveBeenCalled());
+    mockApiAuthToken = 'Bearer new-token';
+    await act(async () => { resolvePersistence(false); });
+    await waitFor(() => expect(screen.queryByText('Cerrando sesión…')).toBeNull());
+    expect(screen.queryByText(/No pudimos confirmar el cierre guardado/)).toBeNull();
+    expect(screen.queryByText('Sesión cerrada en este dispositivo.')).toBeNull();
+  });
+
+  it('explains unconfirmed local persistence in English', async () => {
+    mockLocale = 'en';
+    jest.mocked(require('../src/providers/AuthProvider').useAuth).mockReturnValue({ token: 'Bearer old-token', partyId: '99', loading: false, setToken: mockSetToken, clearToken: mockClearToken, clearTokenPersisted: mockClearToken });
+    mockClearToken.mockRejectedValueOnce(new Error('synthetic persistence failure'));
+    render(<AuthScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(screen.getByText(/We could not confirm the saved sign-out/)).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Retry sign-out' })).toBeTruthy();
   });
 });

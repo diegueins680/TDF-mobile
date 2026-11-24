@@ -1,0 +1,158 @@
+const { device, element, by, waitFor, expect } = require('detox');
+const { expect: assert } = require('@jest/globals');
+const { execFileSync } = require('node:child_process');
+const { writeFileSync } = require('node:fs');
+const path = require('node:path');
+const { createPublicDirectoryFixture } = require('./public-directory-fixture');
+let accessibilitySnapshot = 0;
+// UI-only smoke: no provider consent, backend login or production data.
+describe('Isolated native UI smoke', () => {
+  const fixture = createPublicDirectoryFixture();
+  beforeAll(async () => {
+    await new Promise((resolve, reject) => {
+      fixture.server.once('error', reject);
+      fixture.server.listen(18128, '127.0.0.1', resolve);
+    });
+  });
+  afterAll(async () => {
+    await new Promise(resolve => fixture.server.close(resolve));
+    writeFileSync(path.join(process.env.TDF_UI_EVIDENCE, 'fixture-requests.json'), JSON.stringify(fixture.requests, null, 2));
+    assert(fixture.requests.filter(request => request.method !== 'GET')).toEqual([]);
+  });
+  beforeEach(async () => {
+    // The runner creates a fresh simulator per run; these tests never submit credentials.
+    // clearKeychain unloads securityd and destabilized SpringBoard on iOS 26.2.
+    // Reinstall app data between cases without disrupting system security services.
+    await device.launchApp({ delete: true, newInstance: true });
+    await waitFor(element(by.id('onboardingScroll'))).toBeVisible().withTimeout(30000);
+    await waitFor(element(by.id('tdfBrandLogo'))).toBeVisible().withTimeout(5000);
+  });
+
+  async function expectSubmissionEnabled(enabled) {
+    await expect(element(by.id('loginButton'))).toExist();
+    if (device.getPlatform() === 'ios') {
+      // Fabric exposes accessibilityState.disabled as a trait, not UIControl.enabled.
+      const disabledButton = element(by.id('loginButton').and(by.traits(['notEnabled'])));
+      if (enabled) await expect(disabledButton).not.toExist();
+      else await expect(disabledButton).toExist();
+      return;
+    }
+    // RN maps accessibilityState.disabled to AccessibilityNodeInfo, not View.isEnabled.
+    // Read that native state and retain the exact hierarchy used by the assertion.
+    const evidence = process.env.TDF_UI_EVIDENCE;
+    if (!evidence) throw new Error('TDF_UI_EVIDENCE is required');
+    const remote = '/data/local/tmp/tdf-login-accessibility.xml';
+    const adb = (...args) => execFileSync('adb', ['-s', device.id, ...args], {
+      encoding: 'utf8', timeout: 15000,
+    });
+    assert(device.id).toBe('emulator-5554');
+    adb('shell', 'rm', '-f', remote);
+    adb('shell', 'uiautomator', 'dump', remote);
+    const xml = adb('exec-out', 'cat', remote);
+    writeFileSync(path.join(evidence, `android-accessibility-${++accessibilitySnapshot}.xml`), xml);
+    const nodes = (xml.match(/<node\b[^>]*>/g) || [])
+      .filter(node => /\bresource-id="loginButton"/.test(node));
+    assert(nodes).toHaveLength(1);
+    const state = nodes[0].match(/\benabled="(true|false)"/);
+    assert(state).not.toBeNull();
+    assert(state[1]).toBe(String(enabled));
+  }
+
+  async function openLogin() {
+    // The historical goToLoginButton ID belongs to Create account.
+    const label = by.label(/^(Ya tengo cuenta|I already have an account)$/);
+    // Android matches both the accessible button and its TextView child by label.
+    const login = element(device.getPlatform() === 'android'
+      ? label.and(by.type('com.facebook.react.views.view.ReactViewGroup'))
+      : label);
+    // Require the whole touch target to clear the clipped viewport and system bars.
+    await waitFor(login).toBeVisible(100)
+      .whileElement(by.id('onboardingScroll')).scroll(200, 'down');
+    await login.tap();
+    await waitFor(element(by.id('usernameInput'))).toBeVisible().withTimeout(15000);
+  }
+
+  it('opens login from fresh onboarding with empty fields', async () => {
+    await openLogin();
+    await expect(element(by.id('usernameInput'))).toHaveText('');
+    await expect(element(by.id('passwordInput'))).toHaveText('');
+    await expectSubmissionEnabled(false);
+    await device.takeScreenshot('fresh-login');
+  });
+
+  it('requires both credentials before enabling password submission', async () => {
+    await openLogin();
+    await element(by.id('usernameInput')).replaceText('ui-fixture-not-an-account');
+    await expectSubmissionEnabled(false);
+    await element(by.id('passwordInput')).replaceText('synthetic-not-a-secret');
+    await expectSubmissionEnabled(true);
+    // Deliberately do not submit: backend behavior is a separate qualification.
+  });
+
+  it('does not persist unsubmitted credentials after a cold restart', async () => {
+    await openLogin();
+    await element(by.id('usernameInput')).replaceText('ui-fixture-not-an-account');
+    await element(by.id('passwordInput')).replaceText('synthetic-not-a-secret');
+    await device.terminateApp();
+    await device.launchApp({ newInstance: true });
+    // Expo Linking consumes the native URL callback, not Detox's launch-option override.
+    // This checks process-restart form state plus an explicit URL event, not external cold links.
+    await device.openURL({ url: 'tdf://auth' });
+    await waitFor(element(by.id('usernameInput'))).toBeVisible().withTimeout(15000);
+    await expect(element(by.id('usernameInput'))).toHaveText('');
+    await expect(element(by.id('passwordInput'))).toHaveText('');
+    await expectSubmissionEnabled(false);
+    await device.takeScreenshot('cold-restart-login');
+  });
+
+  it('lets a guest open full event information and requires sign-in for tickets', async () => {
+    const guest = element(by.id('exploreGuestButton'));
+    await waitFor(guest).toBeVisible(100)
+      .whileElement(by.id('onboardingScroll')).scroll(200, 'down');
+    await guest.tap();
+    await waitFor(element(by.label('Buscar en el directorio musical'))).toBeVisible().withTimeout(30000);
+    await device.takeScreenshot('guest-directory');
+    // On Android, tap the title rather than the image at the container's center.
+    const event = element(device.getPlatform() === 'android'
+      ? by.text('Concierto de prueba') : by.label('Concierto de prueba, Quito'));
+    await waitFor(event).toBeVisible(100)
+      .whileElement(by.id('directoryResults')).scroll(200, 'down');
+    await event.tap();
+    await waitFor(element(by.text('Ver evento y entradas'))).toBeVisible().withTimeout(15000);
+    await expect(element(by.text('Concierto de prueba'))).toBeVisible();
+    await expect(element(by.id('usernameInput'))).not.toExist();
+    assert(fixture.requests.some(request => request.pathname === '/directory/events/42')).toBe(true);
+    await device.takeScreenshot('guest-event-ticket-entry');
+    await element(by.text('Ver evento y entradas')).tap();
+    await waitFor(element(by.id('guestTicketSignIn'))).toBeVisible(100)
+      .whileElement(by.id('eventDetailScroll')).scroll(200, 'down');
+    await expect(element(by.text('Inicia sesión para consultar disponibilidad y comprar.'))).toBeVisible();
+    await expect(element(by.id('usernameInput'))).not.toExist();
+    await device.takeScreenshot('guest-full-event-tickets');
+    await element(by.id('guestTicketSignIn')).tap();
+    await waitFor(element(by.id('usernameInput'))).toBeVisible().withTimeout(15000);
+    await expectSubmissionEnabled(false);
+    // Public browsing must not fetch authenticated event or ticket endpoints.
+    assert(fixture.requests.some(request => request.pathname.startsWith('/social-events/'))).toBe(false);
+    await device.takeScreenshot('guest-ticket-sign-in-required');
+  });
+
+  it('keeps a known signup intention folded until the person changes it', async () => {
+    await device.openURL({ url: 'tdf://auth?mode=signup&intent=events' });
+    await waitFor(element(by.id('signupButton'))).toExist().withTimeout(15000);
+    await expect(element(by.text(/^(Apellido|Last name)$/))).not.toExist();
+    const question = element(by.text(/^(¿Qué quieres hacer primero\?|What do you want to do first\?)$/));
+    await expect(question).not.toExist();
+    // This inline action has a Text child; Android does not synthesize its
+    // parent's contentDescription the way iOS synthesizes accessibility labels.
+    const intentChange = /^(Vengo por otra cosa|I came for something else)$/;
+    const change = element(device.getPlatform() === 'android'
+      ? by.text(intentChange) : by.label(intentChange));
+    await waitFor(change).toBeVisible(100)
+      .whileElement(by.id('authScroll')).scroll(200, 'down');
+    await device.takeScreenshot('known-intent-signup-folded');
+    await change.tap();
+    await waitFor(question).toBeVisible().withTimeout(5000);
+    await device.takeScreenshot('signup-intent-choices');
+  });
+});

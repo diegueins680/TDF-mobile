@@ -70,11 +70,11 @@ export default function CreateVenueScreen() {
     onSuccess: () => {
       setIsDirty(false);
       qc.invalidateQueries({ queryKey: ['venues'] });
-      Alert.alert('Success', 'Venue created!');
+      Alert.alert('Lugar creado', 'El lugar ya está disponible para tus eventos.');
       router.back();
     },
     onError: () => {
-      Alert.alert('Error', 'Failed to create venue');
+      Alert.alert('No pudimos crear el lugar', 'Inténtalo de nuevo.');
     }
   });
 
@@ -165,16 +165,16 @@ export default function CreateVenueScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Create Venue</Text>
+        <Text style={styles.title}>Crear lugar</Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Venue Name *</Text>
+          <Text style={styles.label}>Nombre del lugar *</Text>
           <TextInput
             ref={nameRef}
             returnKeyType="next"
             onSubmitEditing={() => addressRef.current?.focus()}
             blurOnSubmit={false}
-            placeholder="Club, Bar, Theater, etc."
+            placeholder="Club, bar, teatro…"
             value={name}
             onChangeText={(text) => { setName(text); setNameError(''); setIsDirty(true); }}
             style={styles.input}
@@ -184,13 +184,13 @@ export default function CreateVenueScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Address *</Text>
+          <Text style={styles.label}>Dirección *</Text>
           <TextInput
             ref={addressRef}
             returnKeyType="next"
             onSubmitEditing={() => cityRef.current?.focus()}
             blurOnSubmit={false}
-            placeholder="Street address"
+            placeholder="Calle y número"
             value={address}
             onChangeText={(text) => { setAddress(text); setAddressError(''); setIsDirty(true); }}
             style={styles.input}
@@ -201,13 +201,13 @@ export default function CreateVenueScreen() {
 
         <View style={styles.row}>
           <View style={[styles.field, styles.flex]}>
-            <Text style={styles.label}>City *</Text>
+            <Text style={styles.label}>Ciudad *</Text>
             <TextInput
               ref={cityRef}
               returnKeyType="next"
               onSubmitEditing={() => stateRef.current?.focus()}
               blurOnSubmit={false}
-              placeholder="City"
+              placeholder="Ciudad"
               value={city}
               onChangeText={(text) => { setCity(text); setCityError(''); setIsDirty(true); }}
               style={styles.input}
@@ -216,13 +216,13 @@ export default function CreateVenueScreen() {
             {cityError ? <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }} accessibilityRole="alert">{cityError}</Text> : null}
           </View>
           <View style={[styles.field, styles.flex]}>
-            <Text style={styles.label}>State</Text>
+            <Text style={styles.label}>Provincia</Text>
             <TextInput
               ref={stateRef}
               returnKeyType="next"
               onSubmitEditing={() => countryRef.current?.focus()}
               blurOnSubmit={false}
-              placeholder="State"
+              placeholder="Provincia"
               value={state}
               onChangeText={(text) => { setState(text); setIsDirty(true); }}
               style={styles.input}
@@ -233,7 +233,7 @@ export default function CreateVenueScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Country Code *</Text>
+          <Text style={styles.label}>País (código) *</Text>
           <TextInput
             ref={countryRef}
             returnKeyType="next"
@@ -251,13 +251,13 @@ export default function CreateVenueScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Zip Code</Text>
+          <Text style={styles.label}>Código postal</Text>
           <TextInput
             ref={zipCodeRef}
             returnKeyType="next"
             onSubmitEditing={() => latitudeRef.current?.focus()}
             blurOnSubmit={false}
-            placeholder="Postal code"
+            placeholder="Código postal"
             value={zipCode}
             onChangeText={(text) => { setZipCode(text); setIsDirty(true); }}
             style={styles.input}
@@ -267,7 +267,7 @@ export default function CreateVenueScreen() {
 
         <View style={styles.row}>
           <View style={[styles.field, styles.flex]}>
-            <Text style={styles.label}>Latitude *</Text>
+            <Text style={styles.label}>Latitud *</Text>
             <TextInput
               ref={latitudeRef}
               returnKeyType="next"
@@ -283,7 +283,7 @@ export default function CreateVenueScreen() {
             {latitudeError ? <Text style={{ color: colors.danger, fontSize: 12, marginTop: 4 }} accessibilityRole="alert">{latitudeError}</Text> : null}
           </View>
           <View style={[styles.field, styles.flex]}>
-            <Text style={styles.label}>Longitude *</Text>
+            <Text style={styles.label}>Longitud *</Text>
             <TextInput
               ref={longitudeRef}
               returnKeyType="next"
@@ -301,13 +301,13 @@ export default function CreateVenueScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Capacity</Text>
+          <Text style={styles.label}>Capacidad</Text>
           <TextInput
             ref={capacityRef}
             returnKeyType="next"
             onSubmitEditing={() => phoneNumberRef.current?.focus()}
             blurOnSubmit={false}
-            placeholder="Number of people"
+            placeholder="Número de personas"
             value={capacity}
             onChangeText={(text) => { setCapacity(text); setCapacityError(''); setIsDirty(true); }}
             style={styles.input}
@@ -318,7 +318,7 @@ export default function CreateVenueScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Phone Number</Text>
+          <Text style={styles.label}>Teléfono</Text>
           <TextInput
             ref={phoneNumberRef}
             returnKeyType="next"
@@ -334,7 +334,7 @@ export default function CreateVenueScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Website</Text>
+          <Text style={styles.label}>Sitio web</Text>
           <TextInput
             ref={websiteRef}
             returnKeyType="next"
@@ -351,7 +351,7 @@ export default function CreateVenueScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Image URL</Text>
+          <Text style={styles.label}>Enlace a una imagen</Text>
           <TextInput
             ref={imageUrlRef}
             returnKeyType="done"
@@ -373,7 +373,7 @@ export default function CreateVenueScreen() {
           {createMutation.isPending ? (
             <ActivityIndicator color={colors.actionPrimaryContrast} />
           ) : (
-            <Text style={styles.createButtonText}>Create Venue</Text>
+            <Text style={styles.createButtonText}>Crear lugar</Text>
           )}
         </TouchableOpacity>
       </ScrollView>

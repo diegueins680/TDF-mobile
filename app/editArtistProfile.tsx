@@ -26,7 +26,7 @@ export default function EditArtistProfileScreen() {
   const analytics = useAnalytics();
   const artistId = normalizeRouteParam(rawArtistId);
   const { getCatalogItems, catalogSyncing, locale } = useUserSettings();
-  const genreOptions = getCatalogItems('genres');
+  const catalogGenres = getCatalogItems('genres');
   const language = resolveTaxonomyLanguage(locale);
 
   const [name, setName] = useState('');
@@ -40,6 +40,11 @@ export default function EditArtistProfileScreen() {
   // TAX-GENRE-SUGGESTION-001: genres added through a suggestion (new, or an
   // existing match) may not be in the synced catalog yet.
   const [readyGenres, setReadyGenres] = useState<ReadyGenre[]>([]);
+
+  const genreOptions = React.useMemo(() => {
+    const catalogIds = new Set(catalogGenres.map((genre) => genre.id));
+    return [...catalogGenres, ...readyGenres.filter((genre) => !catalogIds.has(genre.id))];
+  }, [catalogGenres, readyGenres]);
 
   const nameRef = useRef<TextInput>(null);
   const bioRef = useRef<TextInput>(null);
@@ -115,7 +120,7 @@ export default function EditArtistProfileScreen() {
       Alert.alert('Validación', 'El nombre artístico es obligatorio');
       return;
     }
-    const activeGenreIds = new Set([...genreOptions.map((genre) => genre.id), ...readyGenres.map((genre) => genre.id)]);
+    const activeGenreIds = new Set(genreOptions.map((genre) => genre.id));
     const unavailableGenreIds = selectedGenreIds.filter((genreId) => !activeGenreIds.has(genreId));
     if (unavailableGenreIds.length > 0) {
       Alert.alert(
@@ -133,7 +138,7 @@ export default function EditArtistProfileScreen() {
       instagramHandle: instagramHandle.trim() || null,
       spotifyUrl: spotifyUrl.trim() || null
     });
-  }, [name, bio, imageUrl, selectedGenreIds, genreOptions, readyGenres, instagramHandle, spotifyUrl, updateMutation]);
+  }, [name, bio, imageUrl, selectedGenreIds, genreOptions, instagramHandle, spotifyUrl, updateMutation]);
 
   if (!artistId) {
     return (
@@ -279,8 +284,7 @@ export default function EditArtistProfileScreen() {
 
           <View style={styles.selectedGenresContainer}>
             {selectedGenreIds.map((genreId, idx) => {
-              const activeGenre = genreOptions.find((genre) => genre.id === genreId)
-                ?? readyGenres.find((genre) => genre.id === genreId);
+              const activeGenre = genreOptions.find((genre) => genre.id === genreId);
               const historicalName = artistQuery.data?.genres?.[idx];
               return (
               <View key={genreId} style={styles.selectedGenreTag}>

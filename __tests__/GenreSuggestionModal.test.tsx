@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
 import { Taxonomy } from '../src/api/taxonomy';
@@ -71,6 +71,18 @@ describe('Genre suggestion modal', () => {
       countries: [], regions: [], cities: [],
       genres: [{ id: ROCK, parentId: null, code: 'rock', nameEs: 'Rock', nameEn: 'Rock' }],
     });
+  });
+
+  it('requires a new check if the draft changes before the verdict arrives', async () => {
+    let finish!: (value: ReturnType<typeof checkResult>) => void;
+    check.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    renderModal();
+    fillAndCheck('rock');
+    await waitFor(() => expect(check).toHaveBeenCalled());
+    fireEvent.changeText(screen.getByLabelText('Nombre en español'), 'jazz');
+    await act(async () => { finish(checkResult({ verdict: 'approve' })); });
+    expect(await screen.findByRole('button', { name: 'Revisar' })).toBeEnabled();
+    expect(submit).not.toHaveBeenCalled();
   });
 
   it('offers the near match or a confirmed distinct submission for a probable typo', async () => {

@@ -20,6 +20,7 @@ import { t } from '../../i18n';
 import { useAppTheme } from '../../theme/ThemeProvider';
 import {
   countTaxonomyValues,
+  emptyTaxonomySelection,
   genreOptions,
   locationOptions,
   removeTaxonomyValue,
@@ -87,6 +88,7 @@ export function TaxonomyFilterBar({
     } satisfies Record<TaxonomyDimension, TaxonomyOption[]>;
   }, [facets, language, options, selection]);
 
+  const clear = () => filters.setSelection(emptyTaxonomySelection(), keepLocal);
   const toggle = (dimension: TaxonomyDimension, id: string) =>
     filters.setSelection(toggleTaxonomyValue(selection, dimension, id), keepLocal);
 
@@ -108,7 +110,7 @@ export function TaxonomyFilterBar({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('taxonomy.clearAll', undefined, language)}
-            onPress={filters.clearAll}
+            onPress={clear}
             style={styles.textButton}
           >
             <Text style={{ color: colors.actionPrimary, fontWeight: '700' }}>{t('taxonomy.clearAll', undefined, language)}</Text>
@@ -158,7 +160,7 @@ export function TaxonomyFilterBar({
             </View>
             {isOverride ? <OverrideNotice filters={filters} language={language} /> : null}
             {activeCount ? (
-              <Pressable accessibilityRole="button" accessibilityLabel={t('taxonomy.clearAll', undefined, language)} onPress={filters.clearAll} style={styles.textButton}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t('taxonomy.clearAll', undefined, language)} onPress={clear} style={styles.textButton}>
                 <Text style={{ color: colors.actionPrimary, fontWeight: '700' }}>{t('taxonomy.clearAll', undefined, language)}</Text>
               </Pressable>
             ) : null}

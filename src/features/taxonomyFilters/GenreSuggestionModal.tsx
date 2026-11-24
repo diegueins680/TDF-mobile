@@ -5,7 +5,7 @@
 // and a name made of known words is published on submit.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -83,12 +83,17 @@ export function GenreSuggestionModal({
   }, [language, parentSearch, parents]);
   const parentLabel = parents.find((parent) => parent.id === parentGenreId)?.label;
 
-  const resetCheck = () => { setCheck(null); setResult(null); setError(null); };
+  const revision = useRef(0);
+  const resetCheck = () => { revision.current += 1; setCheck(null); setResult(null); setError(null); };
 
   const checkMutation = useMutation({
-    mutationFn: () => Taxonomy.checkGenreSuggestion(request),
-    onSuccess: (value) => { setCheck(value); setError(null); },
-    onError: (failure: Error) => setError(failure.message || tr('taxonomy.genre.failed')),
+    mutationFn: (input: { draft: GenreSuggestionRequest; revision: number }) => Taxonomy.checkGenreSuggestion(input.draft),
+    onSuccess: (value, input) => {
+      if (input.revision === revision.current) setCheck(value);
+    },
+    onError: (failure: Error, input) => {
+      if (input.revision === revision.current) setError(failure.message || tr('taxonomy.genre.failed'));
+    },
   });
 
   const submitMutation = useMutation({
@@ -202,7 +207,7 @@ export function GenreSuggestionModal({
                 <PrimaryButton
                   label={checkMutation.isPending ? tr('taxonomy.genre.checking') : tr('taxonomy.genre.check')}
                   disabled={busy || tooShort}
-                  onPress={() => checkMutation.mutate()}
+                  onPress={() => checkMutation.mutate({ draft: request, revision: revision.current })}
                 />
               ) : null}
               {check?.verdict === 'duplicate' && check.match ? (

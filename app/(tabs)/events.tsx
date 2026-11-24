@@ -1,5 +1,5 @@
 import { eventExperienceLanguage, savedEventCopy } from '../../src/localization/eventExperienceCopy';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
@@ -31,6 +31,14 @@ import { EventListSkeleton } from '../../src/components/skeletons/EventListSkele
 import { impactLight } from '../../src/utils/haptics';
 import { recordFirstValueCompletion } from '../../src/lib/firstValueCompletion';
 import { usePartyOwnership } from '../../src/hooks/usePartyOwnership';
+import { Taxonomy } from '../../src/api/taxonomy';
+import { TaxonomyFilterBar } from '../../src/features/taxonomyFilters/TaxonomyFilterBar';
+import {
+  resolveTaxonomyLanguage,
+  taxonomySelectionKey,
+  type TaxonomyRouteParams,
+} from '../../src/features/taxonomyFilters/taxonomyFilterModel';
+import { useSurfaceTaxonomyFilters, useTaxonomyFilterOptions } from '../../src/features/taxonomyFilters/useTaxonomyFilters';
 
 type ViewMode = 'calendar' | 'list';
 type EventScope = 'all' | 'saved';
@@ -53,31 +61,56 @@ export default function EventsScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const analytics = useAnalytics();
-  const { partyId } = useAuth();
+  const { partyId, token } = useAuth();
   const ownsParty = usePartyOwnership(partyId);
   const { locale, timezone, countryCode } = useUserSettings();
   const savedCopy = savedEventCopy[eventExperienceLanguage(locale)];
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [eventScope, setEventScope] = useState<EventScope>('all');
   const [discoveryScope, setDiscoveryScope] = useState<DiscoveryScope>('subscribed');
+  const [scopeChosenByUser, setScopeChosenByUser] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(() => toLocalDateKey(new Date(), timezone));
   const [searchFilter, setSearchFilter] = useState('');
   const [showCityModal, setShowCityModal] = useState(false);
   const [draftCities, setDraftCities] = useState<EventCityInput[]>([]);
   const [newCityName, setNewCityName] = useState('');
-  const [newCountryCode, setNewCountryCode] = useState(countryCode ?? 'US');
+  const [newCountryCode, setNewCountryCode] = useState(countryCode ?? 'EC');
   const debouncedSearch = useDebouncedValue(searchFilter, 250);
   const [refreshing, setRefreshing] = useState(false);
 
+  // TAX-FILTER-001: place and genre filters shared with the other sections.
+  const routeParams = useLocalSearchParams() as TaxonomyRouteParams;
+  const taxonomyLanguage = resolveTaxonomyLanguage(locale);
+  const taxonomyOptions = useTaxonomyFilterOptions();
+  const taxonomyFilters = useSurfaceTaxonomyFilters({ routeParams });
+  const taxonomySelection = taxonomyFilters.selection;
+  const taxonomyKey = taxonomySelectionKey(taxonomySelection);
+
   const { data: events, isLoading, isError, isFetching, refetch } = useQuery({
-    queryKey: ['events', 'buyer-upcoming', discoveryScope],
-    queryFn: () => Events.list({ upcomingOnly: true, scope: discoveryScope })
+    queryKey: ['events', 'buyer-upcoming', discoveryScope, taxonomyKey],
+    enabled: taxonomyFilters.ready,
+    queryFn: () => Events.list({ upcomingOnly: true, scope: discoveryScope, taxonomy: taxonomySelection })
+  });
+
+  // Per-value counts need a session; signed-out viewers see the lists without counts.
+  const eventFacetsQuery = useQuery({
+    queryKey: ['events', 'taxonomy-facets', discoveryScope, taxonomyKey],
+    enabled: taxonomyFilters.ready && Boolean(token?.trim()),
+    queryFn: () => Taxonomy.eventFacets(taxonomySelection, { scope: discoveryScope, startAfter: new Date().toISOString() }),
+    staleTime: 60_000,
   });
 
   const citySubscriptionsQuery = useQuery({
     queryKey: ['event-city-subscriptions'],
     queryFn: Events.getCitySubscriptions,
   });
+
+  // Someone who follows no city yet would land on an empty list; start them on
+  // all events until they pick a scope themselves.
+  const followsNoCity = citySubscriptionsQuery.data?.length === 0;
+  useEffect(() => {
+    if (followsNoCity && !scopeChosenByUser) setDiscoveryScope('all');
+  }, [followsNoCity, scopeChosenByUser]);
 
   const savedEventIdsQuery = useQuery({
     queryKey: ['saved-event-ids', partyId],
@@ -333,7 +366,7 @@ export default function EventsScreen() {
 
   const listLoading = eventScope === 'saved'
     ? (savedEventIdsQuery.isLoading || (savedEventIds.length > 0 && savedEventsQuery.isLoading))
-    : isLoading;
+    : isLoading || !taxonomyFilters.ready;
 
   const listError = eventScope === 'saved'
     ? (savedEventIdsQuery.isError || savedEventsQuery.isError)
@@ -415,11 +448,22 @@ export default function EventsScreen() {
         {isFetching && !isLoading ? <ActivityIndicator size="small" color={colors.actionPrimary} /> : null}
       </View>
 
+      <View style={[styles.taxonomyContainer, { backgroundColor: colors.surface }]}>
+        <TaxonomyFilterBar
+          filters={taxonomyFilters}
+          options={taxonomyOptions.data}
+          optionsLoading={taxonomyOptions.isLoading}
+          optionsError={taxonomyOptions.isError}
+          facets={eventFacetsQuery.data}
+          language={taxonomyLanguage}
+        />
+      </View>
+
       {/* View Mode Toggle */}
       <View style={[styles.toggleContainer, { backgroundColor: colors.surface }]}>
         <TouchableOpacity
           style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, discoveryScope === 'subscribed' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
-          onPress={() => setDiscoveryScope('subscribed')}
+          onPress={() => { setScopeChosenByUser(true); setDiscoveryScope('subscribed'); }}
           accessibilityRole="tab"
           accessibilityLabel="Ver eventos de mis ciudades"
           accessibilityState={{ selected: discoveryScope === 'subscribed' }}
@@ -430,7 +474,7 @@ export default function EventsScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.toggleBtn, { borderColor: colors.borderSubtle }, discoveryScope === 'all' && [styles.toggleBtnActive, { backgroundColor: colors.actionPrimary, borderColor: colors.actionPrimary }]]}
-          onPress={() => setDiscoveryScope('all')}
+          onPress={() => { setScopeChosenByUser(true); setDiscoveryScope('all'); }}
           accessibilityRole="tab"
           accessibilityLabel="Explorar eventos de todas las ciudades"
           accessibilityState={{ selected: discoveryScope === 'all' }}
@@ -712,6 +756,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 12
   },
+  taxonomyContainer: { paddingHorizontal: 16, paddingBottom: 8 },
   searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,

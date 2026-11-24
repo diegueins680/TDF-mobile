@@ -14,6 +14,8 @@ import { impactMedium } from '../../src/utils/haptics';
 import { recordFirstValueCompletion } from '../../src/lib/firstValueCompletion';
 import { usePartyOwnership } from '../../src/hooks/usePartyOwnership';
 import { useSessionOwnership } from '../../src/hooks/useSessionOwnership';
+import { useToast } from '../../src/hooks/useToast';
+import { Toast } from '../../src/components/Toast';
 
 type TabKey = 'following' | 'followers';
 
@@ -33,6 +35,8 @@ export default function SocialScreen() {
 
   const [activeTab, setActiveTab] = useState<TabKey>('following');
   const [refreshing, setRefreshing] = useState(false);
+  const toast = useToast();
+  const showToast = toast.show;
   const hasToken = Boolean(token?.trim());
   const canUseSocial = !loading && hasToken;
 
@@ -89,7 +93,7 @@ export default function SocialScreen() {
       if (!ownsParty(ownerPartyId)) return;
       invalidateAll();
       void impactMedium();
-      Alert.alert('Listo', 'Ahora sigues a esta persona.');
+      showToast('Ahora sigues a esta persona.');
     },
     onError: (err, { ownerPartyId }) => {
       if (!ownsParty(ownerPartyId)) return;
@@ -139,7 +143,7 @@ export default function SocialScreen() {
       invalidateAll();
       void impactMedium();
       analytics.capture('artist_unfollowed', { platform: 'mobile', target_party_id: targetId });
-      Alert.alert('Listo', 'Dejaste de seguir a esta persona.');
+      showToast('Dejaste de seguir a esta persona.');
     },
     onError: (err) => {
       const msg = err instanceof Error ? err.message : 'No pudimos actualizar tus conexiones.';
@@ -227,6 +231,7 @@ export default function SocialScreen() {
   const showList = canUseSocial && !followersQuery.isLoading && !followingQuery.isLoading && activeData.length > 0;
 
   return (
+    <View style={styles.screen}>
     <FlatList
       data={showList ? activeData : []}
       keyExtractor={(item) => `${activeTab}-${item.pfFollowerId}-${item.pfFollowingId}`}
@@ -346,10 +351,13 @@ export default function SocialScreen() {
       }
       ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
     />
+    <Toast opacity={toast.opacity} message={toast.message} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
   wrap: { padding: 16, gap: 12 },
   card: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 10 },
   title: { fontSize: 20, fontWeight: '800' },

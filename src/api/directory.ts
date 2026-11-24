@@ -36,14 +36,24 @@ export interface DirectorySearchQuery {
   dateTo?: string;
   cursor?: string;
   limit?: number;
+  /** TAX-FILTER-001: repeatable taxonomy filters (`cityIds=a&cityIds=b`). */
+  countryIds?: string[];
+  regionIds?: string[];
+  cityIds?: string[];
+  genreIds?: string[];
 }
 
-const queryString = (query: DirectorySearchQuery): string => {
-  const entries = Object.entries(query).flatMap(([key, value]) => (
-    value === undefined || value === null || value === ''
-      ? []
-      : [`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`]
-  ));
+type QueryValue = string | number | boolean | null | undefined | ReadonlyArray<string>;
+
+const queryString = (query: Record<string, QueryValue>): string => {
+  const entries = Object.entries(query).flatMap(([key, value]) => {
+    const values = Array.isArray(value) ? value : [value];
+    return values.flatMap((item) => (
+      item === undefined || item === null || item === ''
+        ? []
+        : [`${encodeURIComponent(key)}=${encodeURIComponent(String(item))}`]
+    ));
+  });
   return entries.length ? `?${entries.join('&')}` : '';
 };
 
@@ -55,7 +65,7 @@ const idempotencyConfig = (key?: string) => ({
 
 export const Directory = {
   search: (query: DirectorySearchQuery = {}) =>
-    get<DirectorySearchResponse>(`/directory/search${queryString(query)}`),
+    get<DirectorySearchResponse>(`/directory/search${queryString({ ...query })}`),
   taxonomies: (locale = 'es') =>
     get<DirectoryTaxonomies>(`/directory/taxonomies?locale=${encodeURIComponent(locale)}`),
   profile: (slug: string) =>

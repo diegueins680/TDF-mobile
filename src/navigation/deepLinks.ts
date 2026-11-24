@@ -170,6 +170,11 @@ export function mobileDeepLinkTarget(url: string, currentPathname: string): stri
     if (safeSegments.length === 1 && safeSegments[0] === 'directory') {
       return appendQuery('/(tabs)/directory', parsed.searchParams);
     }
+    // TAX-FILTER-001: `tdf://events?f.city=<id>&f.genre=<id>` opens the events
+    // tab with those place and genre filters (repeatable `f.*` keys survive).
+    if (safeSegments.length === 1 && safeSegments[0] === 'events') {
+      return appendQuery('/(tabs)/events', parsed.searchParams);
+    }
 
     const merchTarget = merchDeepLinkTarget(safeSegments.join('/'));
     if (merchTarget) return safeInternalRoute(merchTarget);

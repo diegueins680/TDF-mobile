@@ -1,8 +1,7 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import * as Location from 'expo-location';
-import { useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -30,8 +29,16 @@ import { useAuth } from '../../src/providers/AuthProvider';
 import { useUserSettings } from '../../src/providers/UserSettingsProvider';
 import { useAppTheme } from '../../src/theme/ThemeProvider';
 import { DirectoryPreviewImage } from '../../src/components/DirectoryPreviewImage';
+import { TaxonomyFilterBar } from '../../src/features/taxonomyFilters/TaxonomyFilterBar';
+import {
+  resolveTaxonomyLanguage,
+  taxonomyName,
+  taxonomySelectionKey,
+  type TaxonomyRouteParams,
+} from '../../src/features/taxonomyFilters/taxonomyFilterModel';
+import { useSharedCityDefault } from '../../src/features/taxonomyFilters/useSharedCityDefault';
+import { useSurfaceTaxonomyFilters, useTaxonomyFilterOptions } from '../../src/features/taxonomyFilters/useTaxonomyFilters';
 
-const CITY_STORAGE_KEY = 'tdf-mobile/directory-city-id';
 type ViewMode = 'list' | 'grid' | 'map';
 type EntityFilter = 'all' | DirectoryEntityType;
 
@@ -61,21 +68,20 @@ export default function DirectoryScreen() {
   const analytics = useAnalytics();
   const { token } = useAuth();
   const { locale } = useUserSettings();
+  const language = resolveTaxonomyLanguage(locale);
   const { colors } = useAppTheme();
+  const routeParams = useLocalSearchParams() as TaxonomyRouteParams;
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 300);
   const [entityType, setEntityType] = useState<EntityFilter>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [cityId, setCityId] = useState<string | undefined>();
   const [location, setLocation] = useState<{ latitude: number; longitude: number }>();
   const [radiusKm, setRadiusKm] = useState(25);
   const [professionId, setProfessionId] = useState<string>();
   const [serviceId, setServiceId] = useState<string>();
   const [instrumentId, setInstrumentId] = useState<string>();
-  const [genreId, setGenreId] = useState<string>();
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [availableOnly, setAvailableOnly] = useState(false);
-  const cityInitialized = useRef(false);
 
   const taxonomies = useQuery({
     queryKey: ['directory-taxonomies', locale],
@@ -83,36 +89,37 @@ export default function DirectoryScreen() {
     staleTime: 30 * 60 * 1000,
   });
 
-  useEffect(() => {
-    if (!taxonomies.data || cityInitialized.current) return;
-    cityInitialized.current = true;
-    void AsyncStorage.getItem(CITY_STORAGE_KEY).then((stored) => {
-      const available = taxonomies.data?.cities ?? [];
-      const selected = available.find((city) => city.id === stored)
-        ?? available.find((city) => city.code === 'quito-ec-p')
-        ?? available.find((city) => city.name.trim().toLocaleLowerCase().includes('quito'))
-        ?? available[0];
-      if (selected) setCityId(selected.id);
-    });
-  }, [taxonomies.data]);
+  // TAX-FILTER-001: country, region, city and genre come from the shared
+  // filter set (or this section's own override, e.g. from a deep link).
+  const taxonomyOptions = useTaxonomyFilterOptions();
+  useSharedCityDefault(taxonomyOptions.data);
+  const taxonomyFilters = useSurfaceTaxonomyFilters({ routeParams });
+  const taxonomySelection = taxonomyFilters.selection;
+  const cityIds = taxonomySelection.cityIds;
+  const firstCityId = cityIds[0];
 
   const search = useInfiniteQuery({
     queryKey: [
-      'directory-search', debouncedQuery, entityType, cityId,
+      'directory-search', debouncedQuery, entityType, taxonomySelectionKey(taxonomySelection),
       location?.latitude, location?.longitude, radiusKm, professionId, serviceId,
-      instrumentId, genreId, remoteOnly, availableOnly,
+      instrumentId, remoteOnly, availableOnly,
     ],
+    enabled: taxonomyFilters.ready,
+    // Keep the current results (and the open filter sheet) while new filters load.
+    placeholderData: keepPreviousData,
     queryFn: ({ pageParam }) => Directory.search({
       q: debouncedQuery.trim() || undefined,
       entityType: entityType === 'all' ? undefined : entityType,
-      cityId,
+      countryIds: taxonomySelection.countryIds,
+      regionIds: taxonomySelection.regionIds,
+      cityIds: taxonomySelection.cityIds,
+      genreIds: taxonomySelection.genreIds,
       latitude: location?.latitude,
       longitude: location?.longitude,
       radiusKm: location ? radiusKm : undefined,
       professionId,
       serviceId,
       instrumentId,
-      genreId,
       remote: remoteOnly || undefined,
       available: availableOnly || undefined,
       cursor: pageParam,
@@ -124,7 +131,8 @@ export default function DirectoryScreen() {
 
   const items = useMemo(() => search.data?.pages.flatMap((page) => page.items) ?? [], [search.data]);
   const sponsored = search.data?.pages[0]?.sponsoredItems ?? [];
-  const selectedCity = taxonomies.data?.cities.find((city) => city.id === cityId);
+  const firstCity = taxonomyOptions.data?.cities.find((city) => city.id === firstCityId);
+  const selectedCityName = firstCity ? taxonomyName(firstCity, language) : undefined;
 
   useEffect(() => {
     if (!search.isFetched || items.length || !debouncedQuery.trim()) return;
@@ -132,16 +140,9 @@ export default function DirectoryScreen() {
       platform: 'mobile',
       query_length: debouncedQuery.trim().length,
       entity_type: entityType,
-      city_id: cityId,
+      city_id: firstCityId,
     });
-  }, [analytics, cityId, debouncedQuery, entityType, items.length, search.isFetched]);
-
-  const chooseCity = useCallback((nextCityId: string) => {
-    setCityId(nextCityId);
-    setLocation(undefined);
-    void AsyncStorage.setItem(CITY_STORAGE_KEY, nextCityId);
-    analytics.capture('directory_city_selected', { platform: 'mobile', city_id: nextCityId });
-  }, [analytics]);
+  }, [analytics, firstCityId, debouncedQuery, entityType, items.length, search.isFetched]);
 
   const requestLocation = useCallback(async () => {
     const permission = await Location.requestForegroundPermissionsAsync();
@@ -161,10 +162,12 @@ export default function DirectoryScreen() {
     }
     try {
       await Directory.saveSearch({
-        name: debouncedQuery.trim() || `Oportunidades en ${selectedCity?.name ?? 'mi ciudad'}`,
+        name: debouncedQuery.trim() || `Oportunidades en ${selectedCityName ?? 'mi ciudad'}`,
         canonicalQuery: {
-          q: debouncedQuery.trim(), entityType, cityId, radiusKm: location ? radiusKm : undefined,
-          professionId, serviceId, instrumentId, genreId,
+          q: debouncedQuery.trim(), entityType, radiusKm: location ? radiusKm : undefined,
+          professionId, serviceId, instrumentId,
+          countryIds: taxonomySelection.countryIds, regionIds: taxonomySelection.regionIds,
+          cityIds: taxonomySelection.cityIds, genreIds: taxonomySelection.genreIds,
           remote: remoteOnly, available: availableOnly,
         },
         alertsEnabled: true,
@@ -174,7 +177,7 @@ export default function DirectoryScreen() {
     } catch (error) {
       Alert.alert('No pudimos guardarla', error instanceof Error ? error.message : 'Inténtalo nuevamente.');
     }
-  }, [availableOnly, cityId, debouncedQuery, entityType, genreId, instrumentId, location, professionId, radiusKm, remoteOnly, router, selectedCity?.name, serviceId, token]);
+  }, [availableOnly, debouncedQuery, entityType, instrumentId, location, professionId, radiusKm, remoteOnly, router, selectedCityName, serviceId, taxonomySelection, token]);
 
   const openItem = useCallback((item: DirectorySearchItem) => {
     analytics.capture('directory_result_opened', {
@@ -200,12 +203,14 @@ export default function DirectoryScreen() {
         returnKeyType="search"
         style={[styles.searchInput, { color: colors.textPrimary, backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}
       />
-      <Text style={[styles.label, { color: colors.textPrimary }]}>Ciudad</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-        {(taxonomies.data?.cities ?? []).map((city) => (
-          <FilterChip key={city.id} label={city.name} selected={city.id === cityId} onPress={() => chooseCity(city.id)} />
-        ))}
-      </ScrollView>
+      <TaxonomyFilterBar
+        filters={taxonomyFilters}
+        options={taxonomyOptions.data}
+        optionsLoading={taxonomyOptions.isLoading}
+        optionsError={taxonomyOptions.isError}
+        facets={search.data?.pages[0]?.facets.taxonomy}
+        language={language}
+      />
       <View style={styles.actionsRow}>
         <Pressable accessibilityRole="button" style={[styles.secondaryButton, { borderColor: colors.border }]} onPress={() => void requestLocation()}>
           <Text style={{ color: colors.textPrimary }}>{location ? 'Ubicación activa' : 'Usar mi ubicación'}</Text>
@@ -237,7 +242,6 @@ export default function DirectoryScreen() {
       <TaxonomyFilterRow label="Profesión" items={taxonomies.data?.professions ?? []} selectedId={professionId} onSelect={setProfessionId} />
       <TaxonomyFilterRow label="Servicio" items={taxonomies.data?.serviceOfferings ?? []} selectedId={serviceId} onSelect={setServiceId} />
       <TaxonomyFilterRow label="Instrumento" items={taxonomies.data?.instruments ?? []} selectedId={instrumentId} onSelect={setInstrumentId} />
-      <TaxonomyFilterRow label="Género" items={taxonomies.data?.genres ?? []} selectedId={genreId} onSelect={setGenreId} />
       <View style={styles.chipRow}>
         <FilterChip label="Remoto" selected={remoteOnly} onPress={() => setRemoteOnly((value) => !value)} />
         <FilterChip label="Disponible" selected={availableOnly} onPress={() => setAvailableOnly((value) => !value)} />
@@ -257,7 +261,7 @@ export default function DirectoryScreen() {
     </View>
   );
 
-  if (search.isLoading || taxonomies.isLoading) {
+  if (!taxonomyFilters.ready || search.isLoading || taxonomies.isLoading) {
     return <SafeAreaView style={[styles.centered, { backgroundColor: colors.canvas }]}><ActivityIndicator accessibilityLabel="Buscando" color={colors.actionPrimary} /></SafeAreaView>;
   }
 
@@ -272,6 +276,7 @@ export default function DirectoryScreen() {
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.canvas }]}>
       <FlatList
+        testID="directoryResults"
         key={viewMode}
         data={items}
         keyExtractor={(item) => `${item.type}:${item.id}`}

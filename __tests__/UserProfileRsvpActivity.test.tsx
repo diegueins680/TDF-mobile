@@ -113,6 +113,12 @@ describe('User profile RSVP activity', () => {
     jest.clearAllMocks();
   });
 
+  it('opens the durable sign-out screen from the account action', () => {
+    render(<UserProfileScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/auth', params: { confirmSignOut: '1' } });
+  });
+
   it('renders the typed feed and exposes safe open, copy, remove, and pagination actions', async () => {
     render(<UserProfileScreen />);
 

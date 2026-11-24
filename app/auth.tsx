@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -98,8 +99,9 @@ export default function AuthScreen() {
     returnTo?: string | string[];
     intent?: string | string[];
     roles?: string | string[];
+    confirmSignOut?: string | string[];
   }>();
-  const { token, loading, setToken, clearTokenPersisted } = useAuth();
+  const { token, loading, setToken, clearTokenPersisted, logoutState } = useAuth();
   const analytics = useAnalytics();
   const { locale, getCatalogItems, setRegionalPreferences } = useUserSettings();
   const language = onboardingLanguage(locale);
@@ -120,14 +122,14 @@ export default function AuthScreen() {
   const [appleConnectionRequired, setAppleConnectionRequired] = useState(false);
   useEffect(() => { setAppleConnectionRequired(false); }, [mode]);
   const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [selectedIntent, setSelectedIntent] = useState<OnboardingIntent>(initialIntent);
+  // The six-option question is for people whose entry point did not already say why they came.
+  const [showIntentQuestion, setShowIntentQuestion] = useState(!requestedIntent);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [policyError, setPolicyError] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const lastNameInputRef = useRef<TextInput>(null);
   const emailInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const forgotPasswordEmailInputRef = useRef<TextInput>(null);
@@ -172,6 +174,9 @@ export default function AuthScreen() {
   };
 
   const hasToken = Boolean(token?.trim());
+  const signingOut = isClearingSession || logoutState === 'pending';
+  const signOutFailed = logoutPersistenceFailed || logoutState === 'failed';
+  const sessionFeedback = logoutState === 'complete' ? copy.sessionClosed : feedbackMessage;
   const canSubmitPassword = username.trim().length > 0 && password.length > 0 && !isPasswordSubmitting;
   const canSubmitForgotPassword =
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotPasswordEmail.trim()) && !isForgotPasswordSubmitting;
@@ -193,7 +198,7 @@ export default function AuthScreen() {
     Boolean(googleSigninModule) &&
     Boolean(GOOGLE_WEB_CLIENT_ID) &&
     (Platform.OS !== 'ios' || Boolean(GOOGLE_IOS_URL_SCHEME));
-  const showLoginActions = !loading && !hasToken && !isClearingSession;
+  const showLoginActions = !loading && !hasToken && !signingOut;
   const showGoogleLogin = showLoginActions && isGoogleLoginAvailable;
   const showAppleLogin = showLoginActions && isAppleSignInEnabled() && Platform.OS === 'ios' && appleAuthModule !== null;
   const showSocialLogin = (showGoogleLogin || showAppleLogin) && (mode !== 'signup' || termsAccepted);
@@ -219,6 +224,7 @@ export default function AuthScreen() {
       const entryIntent = restoredIntent ?? DEFAULT_ONBOARDING_INTENT;
       if (!active) return;
       setSelectedIntent(entryIntent);
+      if (restoredIntent) setShowIntentQuestion(false);
       analytics.capture('auth_mode_viewed', {
         platform: 'mobile',
         mode: requestedMode === 'signup' ? 'signup' : 'login',
@@ -352,7 +358,8 @@ export default function AuthScreen() {
     try {
       const session = await signupRequest({
         firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        // The form asks for one name, as the web signup does; the contract field stays.
+        lastName: '',
         email: signupEmail.trim().toLowerCase(),
         password,
         marketingOptIn,
@@ -606,7 +613,7 @@ export default function AuthScreen() {
     }
   };
 
-  const handleClearSession = async () => {
+  const handleClearSession = useCallback(async () => {
     if (clearingSessionRef.current) return;
     clearingSessionRef.current = true;
     setIsClearingSession(true);
@@ -629,7 +636,19 @@ export default function AuthScreen() {
       clearingSessionRef.current = false;
       if (mountedRef.current) setIsClearingSession(false);
     }
-  };
+  }, [clearTokenPersisted, copy.sessionClosed, googleSigninModule]);
+
+  // Keep confirmation and the durable sign-out result on the same screen.
+  // Profile is protected and unmounts as soon as the in-memory token is cleared.
+  const signOutPromptedRef = useRef(false);
+  useEffect(() => {
+    if (params.confirmSignOut !== '1' || loading || !hasToken || signOutPromptedRef.current) return;
+    signOutPromptedRef.current = true;
+    Alert.alert(english ? 'Sign out?' : '¿Cerrar sesión?', undefined, [
+      { text: english ? 'Cancel' : 'Cancelar', style: 'cancel' },
+      { text: copy.signOut, style: 'destructive', onPress: () => { void handleClearSession(); } },
+    ]);
+  }, [copy.signOut, english, handleClearSession, hasToken, loading, params.confirmSignOut]);
 
   const handleForgotPassword = async () => {
     if (!canSubmitForgotPassword) return;
@@ -654,7 +673,7 @@ export default function AuthScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
       >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView testID="authScroll" contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
             <View style={styles.languageRow} accessibilityRole="radiogroup">
               {(['es', 'en'] as const).map((code) => (
@@ -727,25 +746,6 @@ export default function AuthScreen() {
                       autoCapitalize="words"
                       autoComplete="given-name"
                       textContentType="givenName"
-                      maxLength={80}
-                      returnKeyType="next"
-                      blurOnSubmit={false}
-                      onSubmitEditing={() => lastNameInputRef.current?.focus()}
-                    />
-                    <FormField
-                      ref={lastNameInputRef}
-                      label={copy.lastName}
-                      optional
-                      containerStyle={styles.nameField}
-                      value={lastName}
-                      onChangeText={(value) => {
-                        setLastName(value);
-                        setErrorMessage(null);
-                      }}
-                      placeholder={copy.lastNamePlaceholder}
-                      autoCapitalize="words"
-                      autoComplete="family-name"
-                      textContentType="familyName"
                       maxLength={80}
                       returnKeyType="next"
                       blurOnSubmit={false}
@@ -832,6 +832,16 @@ export default function AuthScreen() {
 
               {mode === 'signup' ? (
                 <>
+                  {!showIntentQuestion ? (
+                    <TouchableOpacity
+                      style={styles.inlineControl}
+                      onPress={() => setShowIntentQuestion(true)}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: false }}
+                    >
+                      <Text style={styles.inlineControlText}>{copy.intentChange}</Text>
+                    </TouchableOpacity>
+                  ) : (
                   <View style={styles.intentSelectorContainer}>
                     <Text style={[styles.label, { color: colors.textPrimary }]}>{copy.intentTitle}</Text>
                     <Text style={styles.intentHint}>{copy.intentHint}</Text>
@@ -864,6 +874,7 @@ export default function AuthScreen() {
                       ))}
                     </View>
                   </View>
+                  )}
 
                   <TouchableOpacity
                     testID="termsCheckbox"
@@ -1110,7 +1121,8 @@ export default function AuthScreen() {
             </View>
           ) : null}
 
-          <View style={styles.card}>
+          {/* Only someone already signed in needs the session state and the way out. */}
+          {(loading || hasToken || sessionFeedback || signingOut || signOutFailed) ? <View style={styles.card}>
             <Text style={styles.label}>{copy.sessionStatus}</Text>
             {loading ? (
               <View style={styles.loadingRow}>
@@ -1122,32 +1134,32 @@ export default function AuthScreen() {
                 <Text style={styles.statusText}>
                   {copy.session}: {hasToken ? copy.sessionActive : copy.sessionInactive}
                 </Text>
-                {feedbackMessage ? (
+                {sessionFeedback ? (
                   <Text style={styles.successText} accessibilityLiveRegion="polite">
-                    {feedbackMessage}
+                    {sessionFeedback}
                   </Text>
                 ) : null}
-                {logoutPersistenceFailed ? (
+                {signOutFailed ? (
                   <Text style={styles.errorText} accessibilityLiveRegion="polite">
                     {copy.sessionStorageUnconfirmed}
                   </Text>
                 ) : null}
                 <TouchableOpacity
-                  style={[styles.ghostButton, (isClearingSession || (!hasToken && !logoutPersistenceFailed)) && styles.buttonDisabled]}
+                  style={[styles.ghostButton, (signingOut || (!hasToken && !signOutFailed)) && styles.buttonDisabled]}
                   onPress={() => {
                     void handleClearSession();
                   }}
-                  disabled={isClearingSession || (!hasToken && !logoutPersistenceFailed)}
+                  disabled={signingOut || (!hasToken && !signOutFailed)}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: isClearingSession || (!hasToken && !logoutPersistenceFailed) }}
+                  accessibilityState={{ disabled: signingOut || (!hasToken && !signOutFailed) }}
                 >
                   <Text style={styles.ghostButtonText}>
-                    {isClearingSession ? copy.signingOut : logoutPersistenceFailed ? copy.retrySignOut : copy.signOut}
+                    {signingOut ? copy.signingOut : signOutFailed ? copy.retrySignOut : copy.signOut}
                   </Text>
                 </TouchableOpacity>
               </>
             )}
-          </View>
+          </View> : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

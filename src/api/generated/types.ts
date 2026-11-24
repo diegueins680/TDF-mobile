@@ -4,6 +4,58 @@
  */
 
 export interface paths {
+    "/productions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return projects with member-filtered tasks, immutable audio review history and current schedule */
+        get: operations["listProductions"];
+        put?: never;
+        /** Create a private production and reverse-schedule its songs from a template */
+        post: operations["createProduction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/productions/{project}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply one project-scoped transition under the project transaction lock */
+        post: operations["updateProduction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/productions/{project}/versions/{version}/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read private audio for this exact version */
+        get: operations["readProductionAudio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/event-crm/events/{eventId}": {
         parameters: {
             query?: never;
@@ -1434,6 +1486,23 @@ export interface paths {
         post?: never;
         /** Delete the authenticated user's RSVP */
         delete: operations["deleteMyEventRsvp"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/social-events/events/{eventId}/attendees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List visible attendee profiles for one RSVP status */
+        get: operations["listEventAttendees"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3411,6 +3480,91 @@ export interface paths {
         patch: operations["updateLabelProjectNote"];
         trace?: never;
     };
+    "/studio-submissions/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start or resume a batch using the unlisted invitation */
+        post: operations["createStudioPhotoBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/studio-submissions/upload/{position}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit one photo using the invitation as a bearer token */
+        post: operations["uploadStudioSubmissionPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/studio-submissions/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read status using one private batch receipt */
+        post: operations["getStudioPhotoBatchStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/studio-submissions/images/{id}/{size}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an approved JPEG currently visible in the published gallery */
+        get: operations["getPublishedStudioPhoto"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cms/admin/studio-submissions/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manage invitations and review private photos as an administrator or webmaster */
+        post: operations["manageStudioSubmissions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cms/content": {
         parameters: {
             query?: never;
@@ -4328,6 +4482,86 @@ export interface paths {
          * @description Sends a message to the thread as the authenticated party.
          */
         post: operations["sendChatMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat/threads/{threadId}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threadId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record that the caller read a conversation
+         * @description Stores a recipient read receipt up to a message and marks that conversation's chat notices read. External email/push reminders are not sent for messages already read.
+         */
+        post: operations["markChatThreadRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get chat reminder channels
+         * @description Email and phone reminder preferences for chat notices. The in-app notice is always on.
+         */
+        get: operations["getNotificationChannels"];
+        /** Update chat reminder channels */
+        put: operations["updateNotificationChannels"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/push-subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register this device for push notifications
+         * @description Registers an Expo push token for the caller. The token is stored encrypted; a token registered by another account moves to the caller.
+         */
+        post: operations["registerPushSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/push-subscriptions/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop push notifications on this device */
+        post: operations["revokePushSubscription"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9883,6 +10117,24 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ChatThreadReadRequest: {
+            /** Format: int64 */
+            lastMessageId: number;
+        };
+        NotificationChannels: {
+            email: boolean;
+            push: boolean;
+        };
+        PushSubscriptionRegister: {
+            /** @description Push provider; the backend accepts `expo`. */
+            provider: string;
+            token: string;
+            /** @description Device platform; the backend accepts `ios` or `android`. */
+            platform: string;
+        };
+        PushSubscriptionRevoke: {
+            token: string;
+        };
         VideoCampaignWrite: {
             /** Format: int64 */
             expectedRevision: number;
@@ -18089,6 +18341,19 @@ export interface components {
                 "application/json": components["schemas"]["ApiError"];
             };
         };
+        /** @description The persisted result identifier */
+        Receipt: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    id: string;
+                    kind?: string;
+                };
+            };
+        };
     };
     parameters: {
         /** @description Defaults to authenticated party; another party requires strict administrator access */
@@ -18147,6 +18412,7 @@ export interface components {
         TargetId: string;
         "parameters-TargetKind": components["schemas"]["ExperienceReviewTargetKind"];
         "parameters-TargetId": string;
+        Project: string;
     };
     requestBodies: never;
     headers: never;
@@ -18154,6 +18420,191 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listProductions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Client projections contain only expressly shared versions and their tasks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Active TDF session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createProduction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                    /** @enum {string} */
+                    format: "Sencillo" | "EP" | "Álbum";
+                    /** Format: date */
+                    delivery: string;
+                    songs: {
+                        title?: string;
+                        /** Format: uuid */
+                        track?: string;
+                    }[];
+                    template: {
+                        name: string;
+                        days: number;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Receipt"];
+            /** @description Invalid template or song */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Active TDF session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateProduction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    op: "invite" | "task" | "edit" | "dependency" | "block" | "progress" | "publish" | "feedback" | "propose" | "backplan" | "confirm";
+                    /** Format: uuid */
+                    task?: string;
+                    /** @description Required except for version feedback and proposal confirmation */
+                    revision?: number;
+                    /** Format: uuid */
+                    version?: string;
+                    /** @enum {string} */
+                    kind?: "comment" | "changes" | "approve";
+                    /**
+                     * Format: uuid
+                     * @description Idempotency key for the exact version and feedback payload
+                     */
+                    request?: string;
+                    /**
+                     * Format: uuid
+                     * @description Completed private TDF audio owned by the authenticated uploader
+                     */
+                    file?: string;
+                    /** Format: uuid */
+                    proposal?: string;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["Receipt"];
+            /** @description Invalid transition input */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Active TDF session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project role or assignment does not allow the transition */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Project or version unavailable to this account */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale plan */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readProductionAudio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: components["parameters"]["Project"];
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Immutable file bytes, private cache disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Active TDF session required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No visible version at this project path */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getEventCrm: {
         parameters: {
             query?: {
@@ -23836,6 +24287,59 @@ export interface operations {
             };
         };
     };
+    listEventAttendees: {
+        parameters: {
+            query: {
+                status: "accepted" | "maybe";
+                after?: number;
+            };
+            header?: never;
+            path: {
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 20 profiles visible to the viewer, ordered by stable RSVP identifier */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        nextCursor: string | null;
+                        items: {
+                            id: string;
+                            name: string;
+                            avatarUrl: string | null;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid status or cursor */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Event is missing or inaccessible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getEventRsvpSummary: {
         parameters: {
             query?: never;
@@ -27887,6 +28391,246 @@ export interface operations {
             };
         };
     };
+    createStudioPhotoBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    /** Format: uuid */
+                    receipt: string;
+                    credit?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Batch is ready */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invitation disabled or replaced */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hourly batch quota reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    uploadStudioSubmissionPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: uuid */
+                    receipt: string;
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Received or matched to an existing photo in this batch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        duplicate?: boolean;
+                    };
+                };
+            };
+            /** @description Invitation disabled or replaced */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Position conflict or storage quota reached */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description File too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid image */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Retry later */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getStudioPhotoBatchStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    receipt: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Status rows for this receipt in contributor order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        position?: number;
+                        name?: string;
+                        /** @enum {string} */
+                        state?: "pending" | "accepted" | "rejected" | "expired";
+                    }[];
+                };
+            };
+        };
+    };
+    getPublishedStudioPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                size: "small" | "large";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Optimized, correctly oriented image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description Photo is unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    manageStudioSubmissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: "link" | "replace" | "disable" | "queue" | "preview" | "review";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uuid
+                     * @description Photo to preview
+                     */
+                    id?: string;
+                    ids?: string[];
+                    /** @enum {string} */
+                    state?: "accepted" | "rejected";
+                };
+            };
+        };
+        responses: {
+            /** @description Invitation, queue, private JPEG preview, or review confirmation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        token?: string | null;
+                        /** Format: byte */
+                        jpeg?: string;
+                    } | {
+                        /** Format: uuid */
+                        id?: string;
+                        batch?: number;
+                        position?: number;
+                        name?: string;
+                        credit?: string;
+                        /** @enum {string} */
+                        state?: "pending" | "accepted";
+                    }[];
+                };
+            };
+            /** @description Sign in required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Staff role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Review decision conflicts with an existing decision */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getPublicCmsContent: {
         parameters: {
             query: {
@@ -29671,6 +30415,153 @@ export interface operations {
             };
             /** @description Not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    markChatThreadRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                threadId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatThreadReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Receipt stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid identifiers */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a participant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getNotificationChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current channels */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannels"];
+                };
+            };
+        };
+    };
+    updateNotificationChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannels"];
+            };
+        };
+        responses: {
+            /** @description Saved channels */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannels"];
+                };
+            };
+        };
+    };
+    registerPushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionRegister"];
+            };
+        };
+        responses: {
+            /** @description Registered */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported provider, platform or token */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Push notifications are not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revokePushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionRevoke"];
+            };
+        };
+        responses: {
+            /** @description Revoked (or already inactive) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid token */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

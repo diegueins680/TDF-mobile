@@ -24,6 +24,7 @@ type AuthContextValue = {
   modules: string[];
   featureFlags: string[];
   loading: boolean;
+  logoutState: 'idle' | 'pending' | 'failed' | 'complete';
   setToken: (
     next: string | null,
     nextPartyId?: string | number | null,
@@ -168,6 +169,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [partyId, setPartyIdState] = useState<string | null>(null);
   const [session, setSessionState] = useState<AuthSessionSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  // This provider survives the query/account boundary that remounts screens.
+  const [logoutState, setLogoutState] = useState<AuthContextValue['logoutState']>('idle');
   const isMountedRef = useRef(true);
   const profileLookupIdRef = useRef(0);
   const authVersionRef = useRef(0);
@@ -413,10 +416,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [applyAuthState, persistStoredToken, refreshPartyId]);
 
   const setToken = useCallback<AuthContextValue['setToken']>((next, nextPartyId, nextSession) => {
+    setLogoutState('idle');
     void updateToken(next, nextPartyId, nextSession);
   }, [updateToken]);
   const clearToken = useCallback(() => setToken(null), [setToken]);
-  const clearTokenPersisted = useCallback(() => updateToken(null), [updateToken]);
+  const clearTokenPersisted = useCallback(async () => {
+    setLogoutState('pending');
+    const persistence = updateToken(null);
+    const logoutVersion = authVersionRef.current;
+    try {
+      const durable = await persistence;
+      if (isMountedRef.current && authVersionRef.current === logoutVersion) {
+        setLogoutState(durable ? 'complete' : 'failed');
+      }
+      return durable;
+    } catch (error) {
+      if (isMountedRef.current && authVersionRef.current === logoutVersion) setLogoutState('failed');
+      throw error;
+    }
+  }, [updateToken]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -428,12 +446,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
       modules: session?.modules ?? [],
       featureFlags: session?.featureFlags ?? [],
       loading,
+      logoutState,
       setToken,
       clearToken,
       clearTokenPersisted,
       refreshSession,
     }),
-    [sessionEpoch, token, partyId, session, loading, setToken, clearToken, clearTokenPersisted, refreshSession]
+    [sessionEpoch, token, partyId, session, loading, logoutState, setToken, clearToken, clearTokenPersisted, refreshSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

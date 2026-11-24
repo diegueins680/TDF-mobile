@@ -44,17 +44,17 @@ export default function About() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <Text style={{ fontSize: 24, fontWeight: '600' }}>About TDF</Text>
-      <Text>API Base: {API_BASE}</Text>
-      <Text>Health: {health?.status ?? 'unknown'}</Text>
+      <Text style={{ fontSize: 24, fontWeight: '600' }}>Acerca de TDF</Text>
+      <Text>Servidor: {API_BASE}</Text>
+      <Text>Estado del servicio: {health?.status === 'ok' ? 'disponible' : health?.status ?? 'desconocido'}</Text>
       {version && (
         <View style={{ marginTop: 8 }}>
           <Text>
-            Backend: {version.name} v{version.version}
+            Versión del servicio: {version.name} v{version.version}
           </Text>
           {version.commit && <Text>Commit: {version.commit}</Text>}
           {version.buildTime && (
-            <Text>Built: {new Date(version.buildTime).toUTCString()}</Text>
+            <Text>Compilado: {new Date(version.buildTime).toUTCString()}</Text>
           )}
         </View>
       )}

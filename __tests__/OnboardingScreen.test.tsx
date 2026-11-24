@@ -57,6 +57,13 @@ describe('Onboarding screen', () => {
     expect(screen.queryByText(/vCards|streaming|inventario|bookings|pipelines|parties/i)).toBeNull();
   });
 
+  it('lets a visitor explore the public directory without an account', () => {
+    render(<OnboardingScreen />);
+    fireEvent.press(screen.getByRole('button', { name: 'Explorar sin cuenta' }));
+    expect(mockSetOnboardingSeen).toHaveBeenCalledWith(true);
+    expect(mockReplace).toHaveBeenCalledWith('/(tabs)/directory');
+  });
+
   it('routes new and returning users through authentication', () => {
     render(<OnboardingScreen />);
 

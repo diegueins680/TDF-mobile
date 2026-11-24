@@ -16,8 +16,10 @@ import { StatusBar } from 'expo-status-bar';
 
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { setOnboardingSeen } from '../src/lib/onboarding';
+import { MOBILE_LANDING_ROUTE } from '../src/navigation/mobileSurface';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
 import { onboardingCopy, onboardingLanguage } from '../src/localization/onboardingCopy';
+import { BrandLogo } from '../src/components/BrandLogo';
 
 const AnimatedView = Animated.createAnimatedComponent(View) as ComponentType<Animated.AnimatedProps<ViewProps>>;
 
@@ -47,9 +49,10 @@ export default function OnboardingScreen() {
     };
   }, [analytics, entryLanguage, fadeAnim]);
 
-  const complete = (path: Href, action: 'create_account' | 'login') => {
+  const complete = (path: Href, action: 'create_account' | 'login' | 'explore_guest') => {
     analytics.capture('onboarding_primary_clicked', { platform: 'mobile', action });
     if (action === 'login') analytics.capture('onboarding_skipped', { platform: 'mobile', reason: 'existing_account' });
+    if (action === 'explore_guest') analytics.capture('onboarding_skipped', { platform: 'mobile', reason: 'explore_guest' });
     void setOnboardingSeen(true);
     router.replace(path);
   };
@@ -90,7 +93,7 @@ export default function OnboardingScreen() {
               },
             ]}
           >
-            <Text style={styles.kicker}>{copy.kicker}</Text>
+            <BrandLogo />
             <Text accessibilityRole="header" style={styles.title}>{copy.title}</Text>
             <Text style={styles.subtitle}>{copy.subtitle}</Text>
           </AnimatedView>
@@ -117,6 +120,16 @@ export default function OnboardingScreen() {
               accessibilityLabel={copy.login}
             >
               <Text style={styles.secondaryText}>{copy.login}</Text>
+            </TouchableOpacity>
+            {/* The directory and event pages are public; an account is asked for when it is needed (audit item 20). */}
+            <TouchableOpacity
+              testID="exploreGuestButton"
+              style={styles.textButton}
+              onPress={() => complete(MOBILE_LANDING_ROUTE, 'explore_guest')}
+              accessibilityRole="button"
+              accessibilityLabel={copy.exploreGuest}
+            >
+              <Text style={styles.textButtonText}>{copy.exploreGuest}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -155,7 +168,6 @@ const styles = StyleSheet.create({
   languageText: { color: '#cbd5e1', fontWeight: '700' },
   languageTextActive: { color: '#ffffff' },
   hero: { gap: 12, paddingVertical: 8 },
-  kicker: { color: '#93c5fd', fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
   title: { color: '#f8fafc', fontSize: 32, lineHeight: 38, fontWeight: '900' },
   subtitle: { color: '#cbd5e1', fontSize: 17, lineHeight: 25 },
   valueCard: {
@@ -188,4 +200,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   secondaryText: { color: '#f8fafc', fontSize: 15, fontWeight: '700' },
+  textButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  textButtonText: { color: '#93c5fd', fontSize: 15, fontWeight: '700', textDecorationLine: 'underline' },
 });

@@ -30,3 +30,19 @@ it('opens full event information on a registered route that permits a guest', ()
   expect(features.length).toBeGreaterThan(0);
   expect(features.some(feature => evaluateFeatureAccess(feature, { authenticated: false }, feature.routeAction).state === 'allowed')).toBe(true);
 });
+
+it('renders six ordered feed images on the public studio profile as a guest', () => {
+  const files = Array.from({ length: 6 }, (_, i) => 'synthetic-' + i);
+  const { useQuery } = jest.requireMock('@tanstack/react-query');
+  useQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => {
+    if (queryKey[0] === 'directory-detail') return { data: {
+      id: 'fixture', kind: 'studio', name: 'TDF Estudio', feed: [{ id: 'post', caption: 'Seis fotos', images: files }],
+    } };
+    if (queryKey[0] === 'directory-feed-image') return { data: 'data:image/png;base64,' + queryKey[2] };
+    return { data: [] };
+  });
+  render(<DirectoryPublicDetailScreen kind="profile" identifier="tdf-records-estudio" />);
+  expect(screen.getByText('Seis fotos')).toBeTruthy();
+  files.forEach((file, i) => expect(screen.getByLabelText(`Foto ${i + 1} de TDF Estudio`).props.source.uri).toContain(file));
+  expect(screen.queryByText('Administrar el Feed en la web')).toBeNull();
+});

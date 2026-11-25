@@ -7096,6 +7096,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/directory/profiles/{profile}/feed/{resource}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Public slug for reads or managed profile UUID for writes. */
+                profile: string;
+                /** @description Image ID for reads or client-generated post ID for writes. */
+                resource: string;
+            };
+            cookie?: never;
+        };
+        get: operations["readDirectoryFeedImage"];
+        put: operations["publishDirectoryFeedPost"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["editDirectoryFeedPost"];
+        trace?: never;
+    };
     "/directory/profiles/{slug}": {
         parameters: {
             query?: never;
@@ -17555,6 +17576,12 @@ export interface components {
             kind: components["schemas"]["DirectoryProfileKind"];
             name: string;
             slug: string;
+            feed?: {
+                /** Format: uuid */
+                id: string;
+                caption: string;
+                images: string[];
+            }[];
             bio?: string | null;
             experience?: string | null;
             creditsSummary?: string | null;
@@ -36670,6 +36697,98 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TaxonomyFacets"];
                 };
+            };
+        };
+    };
+    readDirectoryFeedImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Public slug for reads or managed profile UUID for writes. */
+                profile: string;
+                /** @description Image ID for reads or client-generated post ID for writes. */
+                resource: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Raster image data URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                };
+            };
+            /** @description Image unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    publishDirectoryFeedPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Public slug for reads or managed profile UUID for writes. */
+                profile: string;
+                /** @description Image ID for reads or client-generated post ID for writes. */
+                resource: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    caption: string;
+                    images: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    editDirectoryFeedPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Public slug for reads or managed profile UUID for writes. */
+                profile: string;
+                /** @description Image ID for reads or client-generated post ID for writes. */
+                resource: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    caption: string;
+                    published: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

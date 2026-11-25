@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import appManifest from '../../app.json';
 import { useQuery } from '@tanstack/react-query';
 import { fetchHealth, API_BASE, UPLOAD_BASE } from '../../src/lib/api';
 import { DEFAULT_TZ } from '../../src/lib/time';
@@ -16,7 +17,7 @@ export default function About() {
   const extra = Constants.expoConfig?.extra as ExpoExtra | undefined;
   const appEnvironment =
     typeof extra?.appEnvironment === 'string' ? extra.appEnvironment : 'development';
-  const supportEmail = extra?.supportEmail ?? 'soporte@tdfrecords.com';
+  const supportEmail = extra?.supportEmail ?? appManifest.expo.extra.supportEmail;
   const appVersion = Constants.expoConfig?.version ?? 'unknown';
   const iosBuild = Constants.expoConfig?.ios?.buildNumber;
   const androidVersionCode = Constants.expoConfig?.android?.versionCode;

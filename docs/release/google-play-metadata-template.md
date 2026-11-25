@@ -40,7 +40,7 @@ Verify the real backend retention and sharing behavior before answering the fina
 
 ## Contact details
 
-Support email: `soporte@tdfrecords.com`
+Support email: `info@tdfrecords.net`
 
 Website: `https://www.tdfrecords.net/mobile-app/support.html`
 

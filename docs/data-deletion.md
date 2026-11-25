@@ -2,7 +2,7 @@
 
 Last updated: 2026-03-13
 
-To request deletion of account-linked mobile app data, email `soporte@tdfrecords.com` with the subject line `Mobile Data Deletion Request`.
+To request deletion of account-linked mobile app data, email `info@tdfrecords.net` with the subject line `Mobile Data Deletion Request`.
 
 ## Include
 

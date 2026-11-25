@@ -209,7 +209,7 @@ export function DirectoryPublicDetailScreen({ kind, identifier }: { kind: Direct
             <Text style={{ color: colors.actionPrimaryContrast, fontWeight: '800' }}>Ver evento y entradas</Text>
           </Pressable>
         ) : null}
-        {kind === 'profile' && data.kind === 'studio' && <View>
+        {kind === 'profile' && data.kind === 'studio' && Array.isArray(data.feed) && <View>
           <Text accessibilityRole="header" style={{ color: colors.textPrimary }}>Feed</Text>
           {arrayValue(data.feed).map(post => <View key={textValue(post.id)}>
             <Text style={{ color: colors.textPrimary }}>{textValue(post.caption)}</Text>

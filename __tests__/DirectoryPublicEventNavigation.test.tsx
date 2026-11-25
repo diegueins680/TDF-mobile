@@ -46,3 +46,14 @@ it('renders six ordered feed images on the public studio profile as a guest', ()
   files.forEach((file, i) => expect(screen.getByLabelText(`Foto ${i + 1} de TDF Estudio`).props.source.uri).toContain(file));
   expect(screen.queryByText('Administrar el Feed en la web')).toBeNull();
 });
+
+it('keeps the guest studio profile usable with the previous API', () => {
+  const { useQuery } = jest.requireMock('@tanstack/react-query');
+  useQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => ({
+    data: queryKey[0] === 'directory-detail' ? { id: 'fixture', kind: 'studio', name: 'Estudio anterior' } : [],
+  }));
+  render(<DirectoryPublicDetailScreen kind="profile" identifier="tdf-records-estudio" />);
+  expect(screen.getByText('Estudio anterior')).toBeTruthy();
+  expect(screen.queryByText('Feed')).toBeNull();
+  expect(screen.queryByText('Administrar el Feed en la web')).toBeNull();
+});

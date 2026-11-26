@@ -32,7 +32,7 @@ canónica; se verificaron sus títulos y contenido, no sólo el código HTTP.
 - Privacy policy URL: `https://www.tdfrecords.net/mobile-app/privacy.html`
 - Marketing site: `https://www.tdfrecords.net/mobile-app/`
 - Public data deletion URL: `https://www.tdfrecords.net/mobile-app/data-deletion.html`
-- Contact email: `soporte@tdfrecords.com`
+- Contact email: `info@tdfrecords.net`
 
 ## Google Play
 
@@ -50,7 +50,7 @@ The app connects to the TDF Records backend and is intended for authorized users
 
 - Application type: `App`
 - Category: `Business`
-- Contact email: `soporte@tdfrecords.com`
+- Contact email: `info@tdfrecords.net`
 - Release track suggestion for first rollout: `Internal testing`
 
 ## Apple App Store

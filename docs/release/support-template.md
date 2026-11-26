@@ -6,7 +6,7 @@ Publish this content to the public support URL referenced in the store listings.
 
 Product: `TDF Records`
 
-Support email: `soporte@tdfrecords.com`
+Support email: `info@tdfrecords.net`
 
 Support URL: `https://www.tdfrecords.net/mobile-app/support.html`
 
@@ -26,7 +26,7 @@ Response target: publish a real SLA only if the support team has agreed one; oth
 - Privacy policy: `https://www.tdfrecords.net/mobile-app/privacy.html`
 - Terms of service: `https://www.tdfrecords.net/mobile-app/terms.html`
 - Data deletion: `https://www.tdfrecords.net/mobile-app/data-deletion.html`
-- Security contact: `security@tdfrecords.com`
+- For a security concern, request a private reporting channel through the support page above.
 
 ## App review notes landing page
 

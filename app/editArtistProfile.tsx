@@ -11,6 +11,13 @@ import { Artists } from '../src/api/artists';
 import { normalizeRouteParam } from '../src/lib/routeParams';
 import { useAnalytics } from '../src/analytics/AnalyticsProvider';
 import { useUserSettings } from '../src/providers/UserSettingsProvider';
+import { t } from '../src/i18n';
+import { resolveTaxonomyLanguage } from '../src/features/taxonomyFilters/taxonomyFilterModel';
+import {
+  GenreSuggestionModal,
+  MyGenreSuggestions,
+  type ReadyGenre,
+} from '../src/features/taxonomyFilters/GenreSuggestionModal';
 
 export default function EditArtistProfileScreen() {
   const { artistId: rawArtistId } = useLocalSearchParams<{ artistId?: string | string[] }>();
@@ -18,8 +25,9 @@ export default function EditArtistProfileScreen() {
   const qc = useQueryClient();
   const analytics = useAnalytics();
   const artistId = normalizeRouteParam(rawArtistId);
-  const { getCatalogItems, catalogSyncing } = useUserSettings();
-  const genreOptions = getCatalogItems('genres');
+  const { getCatalogItems, catalogSyncing, locale } = useUserSettings();
+  const catalogGenres = getCatalogItems('genres');
+  const language = resolveTaxonomyLanguage(locale);
 
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -28,6 +36,15 @@ export default function EditArtistProfileScreen() {
   const [instagramHandle, setInstagramHandle] = useState('');
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [showGenreSelect, setShowGenreSelect] = useState(false);
+  const [showGenreSuggestion, setShowGenreSuggestion] = useState(false);
+  // TAX-GENRE-SUGGESTION-001: genres added through a suggestion (new, or an
+  // existing match) may not be in the synced catalog yet.
+  const [readyGenres, setReadyGenres] = useState<ReadyGenre[]>([]);
+
+  const genreOptions = React.useMemo(() => {
+    const catalogIds = new Set(catalogGenres.map((genre) => genre.id));
+    return [...catalogGenres, ...readyGenres.filter((genre) => !catalogIds.has(genre.id))];
+  }, [catalogGenres, readyGenres]);
 
   const nameRef = useRef<TextInput>(null);
   const bioRef = useRef<TextInput>(null);
@@ -89,6 +106,12 @@ export default function EditArtistProfileScreen() {
         ? prev.filter(id => id !== genreId)
         : [...prev, genreId]
     );
+    setIsDirty(true);
+  }, []);
+
+  const handleGenreReady = useCallback((genre: ReadyGenre) => {
+    setReadyGenres(prev => (prev.some(item => item.id === genre.id) ? prev : [...prev, genre]));
+    setSelectedGenreIds(prev => (prev.includes(genre.id) ? prev : [...prev, genre.id]));
     setIsDirty(true);
   }, []);
 
@@ -272,6 +295,22 @@ export default function EditArtistProfileScreen() {
               );
             })}
           </View>
+
+          <TouchableOpacity
+            style={styles.suggestGenreButton}
+            onPress={() => setShowGenreSuggestion(true)}
+            accessibilityRole="button"
+            accessibilityLabel={t('taxonomy.genre.suggest', undefined, language)}
+          >
+            <Text style={styles.suggestGenreButtonText}>{t('taxonomy.genre.suggest', undefined, language)}</Text>
+          </TouchableOpacity>
+          <MyGenreSuggestions language={language} />
+          <GenreSuggestionModal
+            visible={showGenreSuggestion}
+            onClose={() => setShowGenreSuggestion(false)}
+            onGenreReady={handleGenreReady}
+            language={language}
+          />
         </View>
 
         <View style={styles.field}>
@@ -351,6 +390,8 @@ const styles = StyleSheet.create({
   selectedGenreTag: { backgroundColor: '#e0e7ff', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16 },
   selectedGenreText: { fontSize: 12, fontWeight: '600', color: '#2563eb' },
   catalogStatus: { marginTop: 8, color: '#6b7280', fontSize: 13 },
+  suggestGenreButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', marginTop: 8, paddingHorizontal: 4 },
+  suggestGenreButtonText: { color: '#2563eb', fontSize: 14, fontWeight: '700' },
   updateButton: { backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginTop: 16 },
   updateButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' }
 });

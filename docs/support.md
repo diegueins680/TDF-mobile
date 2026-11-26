@@ -4,7 +4,7 @@ Last updated: 2026-03-13
 
 ## Contact
 
-- Email: `soporte@tdfrecords.com`
+- Email: `info@tdfrecords.net`
 - Repository: `https://github.com/diegueins680/TDF-mobile`
 - Issue tracker: `https://github.com/diegueins680/TDF-mobile/issues`
 

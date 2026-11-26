@@ -22,7 +22,6 @@ const PUBLIC_SUPPORT_URL = `${PUBLIC_SITE_URL}/support.html`;
 const PUBLIC_PRIVACY_POLICY_URL = `${PUBLIC_SITE_URL}/privacy.html`;
 const PUBLIC_TERMS_OF_SERVICE_URL = `${PUBLIC_SITE_URL}/terms.html`;
 const PUBLIC_DATA_DELETION_URL = `${PUBLIC_SITE_URL}/data-deletion.html`;
-const SUPPORT_EMAIL = 'soporte@tdfrecords.com';
 const BRAND_BACKGROUND = '#0f172a';
 const LOCAL_API_BASE = 'http://localhost:8080';
 const LOCAL_UPLOAD_URL = `${LOCAL_API_BASE}/drive/upload`;
@@ -197,7 +196,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     uploadUrl: UPLOAD_URL,
     appEnvironment: EAS_BUILD_PROFILE,
     defaultTimeZone: DEFAULT_TZ,
-    supportEmail: SUPPORT_EMAIL,
+    supportEmail: appManifest.expo.extra.supportEmail,
     ...(Object.keys(googleAuthExtra).length > 0 ? { googleAuth: googleAuthExtra } : {}),
     urls: {
       support: PUBLIC_SUPPORT_URL,

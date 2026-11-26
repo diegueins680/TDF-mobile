@@ -31,4 +31,4 @@ Access may be removed at any time if a user is no longer authorized or violates 
 
 ## Contact
 
-Questions about these terms can be sent to `soporte@tdfrecords.com`.
+Questions about these terms can be sent to `info@tdfrecords.net`.

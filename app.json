@@ -15,7 +15,7 @@
     ],
     "extra": {
       "apiBase": "http://localhost:8080",
-      "supportEmail": "soporte@tdfrecords.com",
+      "supportEmail": "info@tdfrecords.net",
       "urls": {
         "support": "https://www.tdfrecords.net/mobile-app/support.html",
         "privacyPolicy": "https://www.tdfrecords.net/mobile-app/privacy.html",

@@ -1,3 +1,4 @@
+import { assertAuthSession, captureAuthSession, getAuthToken, type AuthSessionBinding } from './client';
 import { Social } from './social';
 import {
   SOCIAL_PAUSED_MESSAGE,
@@ -11,8 +12,8 @@ import {
 
 export type SocialConnectResult = { message: string; via: 'v2' | 'legacy'; switchedToV2: boolean };
 
-async function connectV2(partyId: number, requestKey: string, switchedToV2: boolean): Promise<SocialConnectResult> {
-  const { state, changed } = await applySocialV2Intent(partyId, 'request', requestKey);
+async function connectV2(partyId: number, requestKey: string, switchedToV2: boolean, binding: AuthSessionBinding): Promise<SocialConnectResult> {
+  const { state, changed } = await applySocialV2Intent(partyId, 'request', requestKey, binding);
   const message = describeSocialV2Intent(state, 'request', changed);
   return {
     message: switchedToV2 ? `Actualizamos tu vista social. ${message}` : message,
@@ -29,20 +30,24 @@ async function connectV2(partyId: number, requestKey: string, switchedToV2: bool
  */
 export async function connectWithParty(
   partyId: number,
-  mode: SocialMode['mode'] | 'pending',
-  options: { resolveMode?: () => Promise<SocialMode>; requestKey?: string } = {},
+  mode: SocialMode['mode'],
+  options: { resolveMode?: () => Promise<SocialMode>; requestKey?: string; binding?: AuthSessionBinding } = {},
 ): Promise<SocialConnectResult> {
+  const binding = options.binding ?? captureAuthSession(getAuthToken());
+  assertAuthSession(binding);
   const resolveMode = options.resolveMode ?? resolveSocialMode;
   const requestKey = options.requestKey ?? createSocialRequestKey();
-  if (mode === 'v2') return connectV2(partyId, requestKey, false);
+  if (mode === 'v2') return connectV2(partyId, requestKey, false, binding);
   if (mode === 'paused') throw new Error(SOCIAL_PAUSED_MESSAGE);
   try {
     await Social.addFriend(partyId);
     return { message: 'Agregaste este contacto a tu red.', via: 'legacy', switchedToV2: false };
   } catch (error) {
     if (!isSocialLegacyRetiredError(error)) throw error;
+    assertAuthSession(binding);
     const next = await resolveMode();
-    if (next.mode === 'v2') return connectV2(partyId, requestKey, true);
+    assertAuthSession(binding);
+    if (next.mode === 'v2') return connectV2(partyId, requestKey, true, binding);
     throw error;
   }
 }

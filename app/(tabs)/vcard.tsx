@@ -51,7 +51,7 @@ export default function VCardScreen() {
     enabled: hasToken,
     retry: 1,
   });
-  const socialMode = modeQuery.data?.mode ?? (hasToken && modeQuery.isLoading ? 'pending' : 'legacy');
+  const socialMode = modeQuery.isError ? 'error' : modeQuery.data?.mode ?? 'pending';
   const ownPartyId = parsePositivePartyId(effectivePartyId);
 
   useEffect(() => {
@@ -251,7 +251,7 @@ export default function VCardScreen() {
               />
             ) : (
               <Text style={styles.identityHint} accessibilityRole="alert">
-                {socialMode === 'pending'
+                {socialMode === 'error' ? 'No se pudo comprobar el estado de la red social.' : socialMode === 'pending'
                   ? 'Comprobando la red social…'
                   : 'Estamos actualizando la red social. Guarda este contacto y vuelve a intentarlo en unos minutos.'}
               </Text>

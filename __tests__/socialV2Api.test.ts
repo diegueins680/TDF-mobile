@@ -1,8 +1,10 @@
 jest.mock('../src/api/client', () => ({
+  ...jest.requireActual('../src/api/client'),
   http: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
 }));
 jest.mock('expo-crypto', () => ({ randomUUID: jest.fn(() => 'uuid-1') }));
 
+import { setAuthToken } from '../src/api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   SocialLegacyRetiredError,
@@ -36,6 +38,7 @@ const meBody = {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  setAuthToken('demo');
   resetSocialV2ActivationMemo();
   await AsyncStorage.clear();
 });
@@ -46,7 +49,7 @@ describe('SocialV2 API helpers', () => {
     await expect(SocialV2.command(9, 'follow', 3, 'key-1')).resolves.toMatchObject({ following: true, revision: 4 });
     expect(http.post).toHaveBeenCalledWith('/social/v2/relationships/9', {
       operation: 'follow', expectedRevision: 3, requestKey: 'key-1',
-    });
+    }, expect.objectContaining({ headers: { Authorization: 'Bearer demo' } }));
   });
 
   it('rejects invalid ids, revisions, request keys and operations before calling the API', async () => {
@@ -142,10 +145,19 @@ describe('one-tap v2 intents', () => {
     http.get.mockResolvedValueOnce({ data: state({ revision: 5 }) });
     http.post.mockResolvedValueOnce({ data: state({ revision: 6, requested: true }) });
     const result = await applySocialV2Intent(9, 'request', 'k-1');
-    expect(http.get).toHaveBeenCalledWith('/social/v2/relationships/9');
-    expect(http.post).toHaveBeenCalledWith('/social/v2/relationships/9', { operation: 'request', expectedRevision: 5, requestKey: 'k-1' });
+    expect(http.get).toHaveBeenCalledWith('/social/v2/relationships/9', expect.any(Object));
+    expect(http.post).toHaveBeenCalledWith('/social/v2/relationships/9', { operation: 'request', expectedRevision: 5, requestKey: 'k-1' }, expect.any(Object));
     expect(result.changed).toBe(true);
     expect(describeSocialV2Intent(result.state, 'request', true)).toContain('debe aceptarla');
+  });
+
+  it('stops the command if the account changes during the relationship read', async () => {
+    http.get.mockImplementationOnce(async () => {
+      setAuthToken('another-account');
+      return { data: state() };
+    });
+    await expect(applySocialV2Intent(9, 'request')).rejects.toThrow('sesión cambió');
+    expect(http.post).not.toHaveBeenCalled();
   });
 
   it('accepts an incoming request instead of sending a duplicate', async () => {
@@ -188,7 +200,7 @@ describe('connectWithParty fallback', () => {
     const result = await connectWithParty(9, 'legacy', { resolveMode, requestKey: 'k' });
     expect(result).toMatchObject({ via: 'v2', switchedToV2: true });
     expect(result.message).toContain('Actualizamos tu vista social.');
-    expect(http.post.mock.calls[1]).toEqual(['/social/v2/relationships/9', { operation: 'request', expectedRevision: 3, requestKey: 'k' }]);
+    expect(http.post.mock.calls[1]).toEqual(['/social/v2/relationships/9', { operation: 'request', expectedRevision: 3, requestKey: 'k' }, expect.objectContaining({ headers: { Authorization: 'Bearer demo' } })]);
   });
 
   it('shows the retirement message when v2 is not reachable after a 410', async () => {

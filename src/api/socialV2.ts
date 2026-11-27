@@ -3,7 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import { z } from 'zod';
 
 import { API_BASE } from '../lib/api';
-import { http } from './client';
+import { assertAuthSession, authSessionRequestConfig, captureAuthSession, getAuthToken, http } from './client';
 import type { components } from './generated/types';
 
 // Social v2 contract (tdf-hq TDF.Social.API / Server). Every route answers 404
@@ -50,13 +50,14 @@ export const createSocialRequestKey = (): string => randomUUID();
 
 export const SocialV2 = {
   me: async (): Promise<SocialV2Me> => me.parse((await http.get<unknown>('/social/v2/me')).data),
-  relationship: async (partyId: number): Promise<SocialV2Relationship> => relationship.parse(
-    (await http.get<unknown>(`/social/v2/relationships/${id.parse(partyId)}`)).data),
+  relationship: async (partyId: number, binding = captureAuthSession(getAuthToken())): Promise<SocialV2Relationship> => relationship.parse(
+    (await http.get<unknown>(`/social/v2/relationships/${id.parse(partyId)}`, authSessionRequestConfig(binding))).data),
   command: async (
     partyId: number,
     operation: SocialV2Operation,
     expectedRevision: number,
     requestKey: string = createSocialRequestKey(),
+    binding = captureAuthSession(getAuthToken()),
   ): Promise<SocialV2Relationship> => {
     if (!SOCIAL_V2_OPERATIONS.includes(operation)) throw new Error('Operación social inválida.');
     const body: components['schemas']['SocialV2Command'] = {
@@ -64,7 +65,7 @@ export const SocialV2 = {
       expectedRevision: revision.parse(expectedRevision),
       requestKey: z.string().min(1).max(80).parse(requestKey),
     };
-    return relationship.parse((await http.post<unknown>(`/social/v2/relationships/${id.parse(partyId)}`, body)).data);
+    return relationship.parse((await http.post<unknown>(`/social/v2/relationships/${id.parse(partyId)}`, body, authSessionRequestConfig(binding))).data);
   },
   preferences: async (
     value: Pick<SocialV2Me, 'discoverable' | 'personalized'>,
@@ -194,12 +195,16 @@ export async function applySocialV2Intent(
   partyId: number,
   intent: SocialV2Intent,
   requestKey: string = createSocialRequestKey(),
+  binding = captureAuthSession(getAuthToken()),
 ): Promise<{ state: SocialV2Relationship; changed: boolean }> {
-  const current = await SocialV2.relationship(partyId);
+  assertAuthSession(binding);
+  const current = await SocialV2.relationship(partyId, binding);
+  assertAuthSession(binding);
   if (current.blocked) throw new Error('Desbloquea a esta persona antes de conectar.');
   if (intentSatisfied(current, intent)) return { state: current, changed: false };
   const operation: SocialV2Operation = intent === 'request' && current.incoming ? 'accept' : intent;
-  const state = await SocialV2.command(partyId, operation, current.revision, requestKey);
+  const state = await SocialV2.command(partyId, operation, current.revision, requestKey, binding);
+  assertAuthSession(binding);
   return { state, changed: true };
 }
 

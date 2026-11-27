@@ -32,6 +32,7 @@ jest.mock('../src/api/fanArtists', () => ({
   FanArtists: { list: jest.fn(async () => []), listFollows: jest.fn(async () => []), follow: jest.fn() },
 }));
 
+import { setAuthToken } from '../src/api/client';
 import { resetSocialV2ActivationMemo } from '../src/api/socialV2';
 
 const SocialScreen = require('../app/(tabs)/social').default;
@@ -75,6 +76,7 @@ let alertSpy: jest.SpyInstance;
 beforeEach(async () => {
   jest.clearAllMocks();
   mockScan = null;
+  setAuthToken('demo');
   resetSocialV2ActivationMemo();
   await AsyncStorage.clear();
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -86,6 +88,14 @@ afterEach(() => {
 });
 
 describe('Social screen runtime cutover', () => {
+  it('shows a mode error without reading legacy relationships on an invalid response', async () => {
+    routeGets({ '/social/v2/me': () => ({}) });
+    renderWithClient(<SocialScreen />);
+    await screen.findByText(/No se pudo comprobar el estado/, {}, { timeout: 4000 });
+    expect(http.get.mock.calls.map(([url]) => url)).not.toContain('/social/friends');
+    expect(http.get.mock.calls.map(([url]) => url)).not.toContain('/social/followers');
+  });
+
   it('keeps the legacy network while v2 answers 404 (before server activation)', async () => {
     routeGets({
       '/social/followers': () => [legacyFollow],
@@ -139,7 +149,7 @@ describe('Social screen runtime cutover', () => {
     fireEvent.press(screen.getByLabelText('Conectar: Ana'));
     await waitFor(() => expect(http.post).toHaveBeenCalledWith('/social/v2/relationships/9', {
       operation: 'request', expectedRevision: 2, requestKey: 'uuid-test',
-    }));
+    }, expect.any(Object)));
     const legacyCalls = http.get.mock.calls.map(([url]) => url).filter((url: string) => !url.startsWith('/social/v2/'));
     expect(legacyCalls).toEqual([]);
   });
@@ -171,6 +181,15 @@ describe('vCard screen runtime cutover', () => {
     act(() => mockScan?.({ data: JSON.stringify({ kind: 'vcard-exchange', name: 'Ana', partyId: 9, ts: 1 }) }));
   };
 
+  it('keeps the CRM exchange closed when the mode lookup fails', async () => {
+    routeGets({ '/social/v2/me': () => { throw httpError(401); } });
+    renderWithClient(<VCardScreen />);
+    await scanAna();
+    await screen.findByText(/No se pudo comprobar el estado/, {}, { timeout: 4000 });
+    expect(screen.queryByText('Enviar intercambio al CRM')).toBeNull();
+    expect(http.post).not.toHaveBeenCalled();
+  });
+
   it('replaces the server vCard exchange with a v2 connection request', async () => {
     routeGets({
       '/social/v2/me': () => ({ discoverable: false, personalized: true, revision: 0, relationships: [] }),
@@ -183,7 +202,7 @@ describe('vCard screen runtime cutover', () => {
     fireEvent.press(await screen.findByText('Conectar'));
     await waitFor(() => expect(http.post).toHaveBeenCalledWith('/social/v2/relationships/9', {
       operation: 'request', expectedRevision: 2, requestKey: 'uuid-test',
-    }));
+    }, expect.any(Object)));
     expect(http.post).not.toHaveBeenCalledWith('/social/vcard-exchange', expect.anything());
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Listo', expect.stringContaining('debe aceptarla')));
   });

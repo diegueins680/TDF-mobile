@@ -50,8 +50,8 @@ export default function SocialScreen() {
     enabled: canUseSocial,
     retry: 1,
   });
-  const socialMode = modeQuery.data?.mode ?? (canUseSocial && modeQuery.isLoading ? 'pending' : 'legacy');
-  const v2Profile = modeQuery.data?.mode === 'v2' ? modeQuery.data.me : null;
+  const socialMode = modeQuery.isError ? 'error' : modeQuery.data?.mode ?? 'pending';
+  const v2Profile = !modeQuery.isError && modeQuery.data?.mode === 'v2' ? modeQuery.data.me : null;
   const usesLegacyLists = socialMode === 'legacy' || socialMode === 'paused';
   const legacyWritesOpen = socialMode === 'legacy';
 
@@ -333,6 +333,8 @@ export default function SocialScreen() {
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
             {v2Profile ? (
               <SocialV2Network me={v2Profile} ownerPartyId={effectivePartyId ?? null} />
+            ) : socialMode === 'error' ? (
+              <Text accessibilityRole="alert">No se pudo comprobar el estado de la red social. Actualiza para volver a intentarlo.</Text>
             ) : socialMode === 'pending' ? (
               <Text maxFontSizeMultiplier={1.5} style={[styles.helper, { color: colors.textSecondary }]} accessibilityLiveRegion="polite">Cargando conexiones…</Text>
             ) : (

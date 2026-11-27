@@ -27,7 +27,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
-import { getAuthSessionVersion } from '../src/api/client';
+import { captureAuthSession, getAuthSessionVersion } from '../src/api/client';
 import { Artists } from '../src/api/artists';
 import { connectWithParty } from '../src/api/socialConnect';
 import { resolveSocialMode, socialModeQueryKey, socialV2QueryRoot } from '../src/api/socialV2';
@@ -878,12 +878,13 @@ function EventDetailContent() {
       const numericPartyId = parsePositivePartyId(partyId);
       if (numericPartyId === null) throw new Error('Este perfil ya no está disponible para conectar.');
       // Runtime gate: v2 connection request when social v2 is live, legacy otherwise.
+      const binding = captureAuthSession(token);
       const socialMode = await qc.fetchQuery({
         queryKey: socialModeQueryKey(normalizedPartyId),
         queryFn: resolveSocialMode,
         staleTime: 60_000,
       });
-      return connectWithParty(numericPartyId, socialMode.mode);
+      return connectWithParty(numericPartyId, socialMode.mode, { binding });
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['social-friends'] });

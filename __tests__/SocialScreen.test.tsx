@@ -20,6 +20,7 @@ const mockMutationOptions: Array<{
   onSuccess?: (result: unknown, variables: unknown) => void;
 }> = [];
 const mockUseQuery = jest.fn(({ queryKey }: { queryKey: unknown[] }) => {
+  if (queryKey[0] === 'social-mode') return { data: { mode: 'legacy' }, isLoading: false, isError: false };
   if (queryKey[0] === 'social-following') {
     return {
       data: [{

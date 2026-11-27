@@ -27,9 +27,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Events } from '../src/api/events';
-import { getAuthSessionVersion } from '../src/api/client';
+import { captureAuthSession, getAuthSessionVersion } from '../src/api/client';
 import { Artists } from '../src/api/artists';
-import { Social } from '../src/api/social';
+import { connectWithParty } from '../src/api/socialConnect';
+import { resolveSocialMode, socialModeQueryKey, socialV2QueryRoot } from '../src/api/socialV2';
 import { EventLiveBroadcastCard } from '../src/components/EventLiveBroadcastCard';
 import { EventMomentCard } from '../src/components/EventMomentCard';
 import { TicketPurchaseCard } from '../src/components/tickets/TicketPurchaseCard';
@@ -876,14 +877,24 @@ function EventDetailContent() {
     mutationFn: async (partyId: string) => {
       const numericPartyId = parsePositivePartyId(partyId);
       if (numericPartyId === null) throw new Error('Este perfil ya no está disponible para conectar.');
-      return Social.addFriend(numericPartyId);
+      // Runtime gate: v2 connection request when social v2 is live, legacy otherwise.
+      const binding = captureAuthSession(token);
+      const socialMode = await qc.fetchQuery({
+        queryKey: socialModeQueryKey(normalizedPartyId),
+        queryFn: resolveSocialMode,
+        staleTime: 60_000,
+      });
+      return connectWithParty(numericPartyId, socialMode.mode, { binding });
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['social-friends'] });
       qc.invalidateQueries({ queryKey: ['social-suggestions'] });
-      showToast('Agregaste este contacto a tu red.');
+      qc.invalidateQueries({ queryKey: socialModeQueryKey(normalizedPartyId) });
+      qc.invalidateQueries({ queryKey: socialV2QueryRoot(normalizedPartyId) });
+      showToast(result.message);
     },
     onError: (error) => {
+      qc.invalidateQueries({ queryKey: socialModeQueryKey(normalizedPartyId) });
       const message = error instanceof Error ? error.message : 'No pudimos crear la conexión.';
       Alert.alert('Error', message);
     },

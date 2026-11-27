@@ -1,5 +1,6 @@
 import { http } from './client';
 import type { PartyFollow, SuggestedFriend } from '../types';
+import { SocialLegacyRetiredError, rememberSocialV2Activation, responseStatus } from './socialV2';
 
 export interface VCardExchangePayload {
   vcerPartyId: number;
@@ -22,9 +23,25 @@ const requirePositivePartyId = (value: unknown, action: string): number => {
   return normalized;
 };
 
+// Legacy relationship writes are permanently retired (410) once social v2 was
+// activated on the server. Translate that into a typed error and remember the
+// activation so screens switch to the v2 flow instead of showing a generic error.
+async function legacyWrite<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    if (responseStatus(error) === 410) {
+      await rememberSocialV2Activation();
+      throw new SocialLegacyRetiredError();
+    }
+    throw error;
+  }
+}
+
+/** Legacy contact exchange. Only used while social v2 is not active. */
 export async function exchangeVCard(targetPartyId: number): Promise<void> {
   const normalizedPartyId = requirePositivePartyId(targetPartyId, 'intercambio de vCard');
-  await http.post('/social/vcard-exchange', { vcerPartyId: normalizedPartyId } satisfies VCardExchangePayload);
+  await legacyWrite(() => http.post('/social/vcard-exchange', { vcerPartyId: normalizedPartyId } satisfies VCardExchangePayload));
 }
 
 const normalizeTextField = (value: unknown): string | null => {
@@ -107,13 +124,15 @@ export const Social = {
     const res = await http.get<SuggestedFriend[]>('/social/suggestions');
     return res.data;
   },
+  /** Legacy mutual friend edge. Only used while social v2 is not active. */
   addFriend: async (partyId: number): Promise<PartyFollow[]> => {
     const normalizedPartyId = requirePositivePartyId(partyId, 'agregar amistad');
-    const res = await http.post<PartyFollow[]>(`/social/friends/${normalizedPartyId}`, {});
+    const res = await legacyWrite(() => http.post<PartyFollow[]>(`/social/friends/${normalizedPartyId}`, {}));
     return res.data;
   },
+  /** Legacy friend edge removal. Only used while social v2 is not active. */
   removeFriend: async (partyId: number): Promise<void> => {
     const normalizedPartyId = requirePositivePartyId(partyId, 'eliminar amistad');
-    await http.delete(`/social/friends/${normalizedPartyId}`);
+    await legacyWrite(() => http.delete(`/social/friends/${normalizedPartyId}`));
   }
 };

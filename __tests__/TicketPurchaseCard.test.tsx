@@ -28,6 +28,17 @@ const callbacks = () => ({
 });
 
 describe('TicketPurchaseCard', () => {
+  it('shows public pricing without claiming availability and requests sign-in only for tickets', () => {
+    const handlers = callbacks();
+    render(<TicketPurchaseCard tiers={[]} fallbackPrice={25} requiresSignInForAvailability {...handlers} />);
+    expect(screen.getByText('Inicia sesión para consultar disponibilidad y comprar.')).toBeTruthy();
+    expect(screen.queryByText('Venta no disponible')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Comprar entradas' })).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'Consultar entradas' }));
+    expect(handlers.onBuy).toHaveBeenCalledTimes(1);
+    expect(handlers.onOpenExternal).not.toHaveBeenCalled();
+  });
+
   it('puts the internal purchase action above event details', () => {
     const handlers = callbacks();
     render(<TicketPurchaseCard tiers={[tier()]} {...handlers} />);

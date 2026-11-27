@@ -15,23 +15,28 @@ describe('mobile new-user surface', () => {
   it('keeps the directory as the first visible tab', () => {
     expect(NEW_USER_VISIBLE_TABS.map((tab) => tab.name)).toEqual([
       'directory',
+      'events',
       'social',
       'more',
-      'create',
       'profile',
     ]);
     expect(NEW_USER_VISIBLE_TABS.map((tab) => tab.title)).toEqual([
       'Directorio',
+      'Eventos',
       'Seguir',
       'Explorar',
-      'Crear',
       'Perfil',
     ]);
   });
 
+  it('opens Crear from Explorar instead of the tab bar', () => {
+    expect(NEW_USER_VISIBLE_TABS.some((tab) => tab.name === 'create')).toBe(false);
+    expect(HIDDEN_INTERNAL_TABS).not.toContain('events');
+  });
+
   it('keeps internal ops modules hidden from the mobile tab bar', () => {
     expect(HIDDEN_INTERNAL_TABS).toEqual(
-      expect.arrayContaining(['events', 'parties', 'bookings', 'pipelines', 'inventory', 'vcard', 'about'])
+      expect.arrayContaining(['create', 'parties', 'bookings', 'pipelines', 'inventory', 'vcard', 'about'])
     );
   });
 

@@ -6,6 +6,8 @@ import { useAuth } from '../src/providers/AuthProvider';
 import Screen from '../app/(tabs)/more';
 import { get, put, post } from '../src/api/client';
 import type { NavigationPreference } from '../src/api/navigationPreferences';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(async () => null), setItem: jest.fn(), removeItem: jest.fn(),
@@ -69,6 +71,39 @@ async function harness() {
 }
 
 beforeEach(() => { jest.clearAllMocks(); });
+
+it('retains pending, failed and completed sign-out across production query-boundary remounts', async () => {
+  const h = await harness();
+  try {
+    await waitFor(() => expect(h.auth.loading).toBe(false));
+    act(() => h.auth.setToken('synthetic-A', 101));
+    await waitFor(() => expect(h.reads).toEqual(['101']));
+    await act(async () => { await Promise.resolve(); });
+    const signedInClient = h.client;
+    const removal = deferred<void>();
+    jest.mocked(AsyncStorage.setItem).mockRejectedValue(new Error('synthetic write failure'));
+    jest.mocked(AsyncStorage.removeItem).mockRejectedValue(new Error('synthetic remove failure'));
+    jest.mocked(SecureStore.deleteItemAsync).mockReturnValueOnce(removal.promise);
+    let pending!: Promise<boolean>;
+    act(() => { pending = h.auth.clearTokenPersisted(); });
+    expect(h.auth.token).toBeNull();
+    expect(h.client).not.toBe(signedInClient);
+    expect(h.auth.logoutState).toBe('pending');
+    await act(async () => { removal.resolve(); expect(await pending).toBe(false); });
+    expect(h.auth.logoutState).toBe('failed');
+    jest.mocked(AsyncStorage.setItem).mockResolvedValue();
+    jest.mocked(AsyncStorage.removeItem).mockResolvedValue();
+    await act(async () => { expect(await h.auth.clearTokenPersisted()).toBe(true); });
+    expect(h.auth.logoutState).toBe('complete');
+    act(() => h.auth.setToken('synthetic-B', 202));
+    await waitFor(() => expect(h.auth.partyId).toBe('202'));
+    expect(h.auth.logoutState).toBe('idle');
+  } finally {
+    jest.mocked(AsyncStorage.setItem).mockResolvedValue();
+    jest.mocked(AsyncStorage.removeItem).mockResolvedValue();
+    h.close();
+  }
+});
 
 it.each(['favorite', 'visit'] as const)('isolates a late %s response after actual screen unmount, logout and another account login', async (kind) => {
   const pending = deferred<NavigationPreference>();

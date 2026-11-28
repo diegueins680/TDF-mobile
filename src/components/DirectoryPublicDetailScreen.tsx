@@ -1,9 +1,10 @@
+import { get } from '../api/client';
 import { InteractionBar } from '../features/interactions/InteractionBar';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Directory, type DirectoryEntityType } from '../api/directory';
@@ -25,6 +26,15 @@ const dateValue = (value: unknown): string | undefined => {
     : parsed.toLocaleString('es', { weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 };
 const arrayValue = (value: unknown): DetailValue[] => Array.isArray(value) ? value.filter((item): item is DetailValue => Boolean(item) && typeof item === 'object') : [];
+
+function FeedImage({ slug, file, label }: { slug: string; file: string; label: string }) {
+  const photo = useQuery({
+    queryKey: ['directory-feed-image', slug, file],
+    queryFn: () => get<string>('/directory/profiles/' + encodeURIComponent(slug) + '/feed/' + encodeURIComponent(file)),
+    gcTime: 0,
+  });
+  return photo.data ? <Image accessibilityLabel={label} source={{ uri: photo.data }} resizeMode="contain" style={{ width: '100%', height: 240 }} /> : null;
+}
 
 const loadDetail = async (kind: DirectoryEntityType, identifier: string): Promise<DetailValue> => {
   if (kind === 'profile') return await Directory.profile(identifier) as unknown as DetailValue;
@@ -199,6 +209,18 @@ export function DirectoryPublicDetailScreen({ kind, identifier }: { kind: Direct
             <Text style={{ color: colors.actionPrimaryContrast, fontWeight: '800' }}>Ver evento y entradas</Text>
           </Pressable>
         ) : null}
+        {kind === 'profile' && data.kind === 'studio' && Array.isArray(data.feed) && <View>
+          <Text accessibilityRole="header" style={{ color: colors.textPrimary }}>Feed</Text>
+          {arrayValue(data.feed).map(post => <View key={textValue(post.id)}>
+            <Text style={{ color: colors.textPrimary }}>{textValue(post.caption)}</Text>
+            {Array.isArray(post.images) && post.images.filter((file): file is string => typeof file === 'string').map((file, index) =>
+              <FeedImage key={file} slug={identifier} file={file} label={`Foto ${index + 1} de ${title}`} />)}
+          </View>)}
+          {token && profiles.data?.some(p => p.id === id && p.capabilities.edit && p.capabilities.publish) &&
+            <Pressable accessibilityRole="link" onPress={() => void Linking.openURL('https://www.tdfrecords.net/directorio/' + encodeURIComponent(identifier))}>
+              <Text style={{ color: colors.actionPrimary }}>Administrar el Feed en la web</Text>
+            </Pressable>}
+        </View>}
         {sourceProfileSlug ? (
           <Pressable
             accessibilityRole="link"
